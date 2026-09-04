@@ -162,7 +162,8 @@ type TemplateKey =
   | 'contract'
   | 'partner'
   | 'investor-metrics'
-  | 'contacts';
+  | 'contacts'
+  | 'task';
 
 type StageTrack = 'build' | 'run' | 'capital' | 'general';
 type StageOutcome = 'open' | 'won' | 'lost';
@@ -842,6 +843,15 @@ const pitchStages: StageConfig[] = [
   { id: 'not-selected', label: 'Not Selected', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
 ];
 
+const taskStages: StageConfig[] = [
+  { id: 'backlog', label: 'Backlog', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'todo', label: 'To Do', probability: 20, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'in-progress', label: 'In Progress', probability: 55, track: 'run', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'blocked', label: 'Blocked', probability: 35, track: 'run', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { id: 'done', label: 'Done', probability: 100, track: 'run', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100', outcome: 'won' },
+  { id: 'paused', label: 'Paused', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
 const templateCatalog: Record<
   TemplateKey,
   {
@@ -908,6 +918,13 @@ const templateCatalog: Record<
     accent: 'bg-neutral-500',
     stages: contactStages,
   },
+  task: {
+    label: 'Task List',
+    defaultName: 'Tasks',
+    description: 'A flexible task list with owners, due dates, notes, and a kanban board.',
+    accent: 'bg-violet-500',
+    stages: taskStages,
+  },
 };
 
 const isFundSizeList = (list: Pick<PipeList, 'templateKey'>) => list.templateKey === 'vc';
@@ -917,8 +934,13 @@ const isInvestorUpdateContactList = (list: Pick<PipeList, 'templateKey' | 'name'
   list.templateKey === 'investor-metrics' || list.name.trim().toLowerCase() === 'investor update contacts';
 const isContactList = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
   list.templateKey === 'contacts' || isInvestorUpdateContactList(list);
-const listItemNoun = (list: Pick<PipeList, 'templateKey' | 'name'>) => (isContactList(list) ? 'contact' : 'opportunity');
+const isTaskList = (list: Pick<PipeList, 'templateKey'>) => list.templateKey === 'task';
+const listItemNoun = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
+  isContactList(list) ? 'contact' : isTaskList(list) ? 'task' : 'opportunity';
 const defaultListObjective = (templateKey: TemplateKey, listName: string) => {
+  if (templateKey === 'task') {
+    return `Track tasks for ${listName}, keep ownership clear, and move work from backlog through completion.`;
+  }
   if (templateKey === 'university-pilot') {
     return `Identify universities where PulseCheck can earn a pilot conversation, prove athlete engagement, and convert into a paid team or department agreement.`;
   }
@@ -929,6 +951,9 @@ const defaultListObjective = (templateKey: TemplateKey, listName: string) => {
   return `Track and qualify opportunities for ${listName}.`;
 };
 const defaultLeadDefinition = (templateKey: TemplateKey) => {
+  if (templateKey === 'task') {
+    return 'A strong task has a clear owner, status, due date when needed, and a concrete next step.';
+  }
   if (templateKey === 'university-pilot') {
     return 'A strong university lead has athletics, student wellbeing, sports medicine, counseling, performance, or innovation stakeholders who could sponsor or influence a PulseCheck pilot.';
   }
@@ -941,6 +966,13 @@ const defaultLeadDefinition = (templateKey: TemplateKey) => {
 const defaultResearchBriefForList = (list: Pick<PipeList, 'templateKey' | 'name' | 'objective' | 'leadDefinition' | 'description'>) => {
   const objective = list.objective || defaultListObjective(list.templateKey, list.name);
   const leadDefinition = list.leadDefinition || defaultLeadDefinition(list.templateKey);
+  if (list.templateKey === 'task') {
+    return [
+      `PipeList objective: ${objective}`,
+      `Ideal task definition: ${leadDefinition}`,
+      'Keep each task concrete, owned, and actionable. Include blockers, source context, and the next useful step when available.',
+    ].join('\n\n');
+  }
   return [
     `PipeList objective: ${objective}`,
     `Ideal lead definition: ${leadDefinition}`,
@@ -950,7 +982,7 @@ const defaultResearchBriefForList = (list: Pick<PipeList, 'templateKey' | 'name'
 const itemPrimaryDate = (
   list: Pick<PipeList, 'templateKey' | 'name'>,
   item: Pick<PipelineItem, 'dueDate' | 'expectedCloseDate' | 'pilotEnd'>,
-) => (isContactList(list) ? item.dueDate : item.expectedCloseDate || item.dueDate || item.pilotEnd);
+) => (isContactList(list) || isTaskList(list) ? item.dueDate || item.expectedCloseDate : item.expectedCloseDate || item.dueDate || item.pilotEnd);
 const reminderDateFields = ['expectedCloseDate', 'dueDate', 'pilotEnd'] as const;
 const hasReminderDate = (item: Pick<PipelineItem, (typeof reminderDateFields)[number]>) =>
   reminderDateFields.some((field) => item[field]?.trim());
@@ -2929,6 +2961,7 @@ const PipelinePage: NextPage = () => {
   const canManageActiveList = canManageWorkspace && !sharedListIds.has(activeList.id);
   const isContactListActive = isContactList(activeList);
   const isInvestorUpdateContactsList = isInvestorUpdateContactList(activeList);
+  const isTaskListActive = isTaskList(activeList);
   const canAttemptAuth = authReady || authReadyTimedOut;
 
   const setViewMode = (nextViewMode: ViewMode) => {
@@ -4446,7 +4479,7 @@ const PipelinePage: NextPage = () => {
   const openLeadUrlModal = () => {
     if (!canModify) return;
     setLeadUrl('');
-    setIsManualLeadEntry(false);
+    setIsManualLeadEntry(isTaskListActive);
     setManualLeadDraft(defaultManualLeadDraft(activeList.stages[0]?.id));
     setLeadExtractMessage(null);
     setIsLeadUrlModalOpen(true);
@@ -5912,20 +5945,20 @@ Rules:
       ['Title', item.title],
       ['PipeList', activeList.name],
       ['Template', templateCatalog[activeList.templateKey].label],
-      ['Organization', item.organization],
+      [isTaskListActive ? 'Project / Area' : 'Organization', item.organization],
       ['Description', item.description],
       isInvestorUpdateContactsList
         ? ['Email Status', emailStatusLabel(item)]
         : ['Stage', `${stage.label} (${item.stage})`],
       ['Importance', importanceLabel(item.priority)],
-      ...(isContactListActive ? [] : [[isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText] as [string, string | number | undefined]]),
+      ...(isContactListActive || isTaskListActive ? [] : [[isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText] as [string, string | number | undefined]]),
       [isContactListActive ? 'Relationship Owner' : 'Owner', item.owner],
       ['Contact Emails', item.contactEmails.join(', ')],
       ...(isContactListActive ? [['Phone', item.contactPhone], ['LinkedIn', item.linkedinUrl]] as [string, string | number | undefined][] : []),
-      ['Segment', item.segment],
-      [isContactListActive ? 'Relationship Context' : 'Decision Maker', item.decisionMaker],
+      [isTaskListActive ? 'Category' : 'Segment', item.segment],
+      [isContactListActive ? 'Relationship Context' : isTaskListActive ? 'Context' : 'Decision Maker', item.decisionMaker],
       ['Next Step', item.nextStep],
-      ['Source URL', item.sourceUrl],
+      [isTaskListActive ? 'Reference URL' : 'Source URL', item.sourceUrl],
       ['Image URL', item.imageUrl],
     ];
     const timelineRows: Array<[string, string | number | undefined]> = isContactListActive
@@ -5936,7 +5969,14 @@ Rules:
           ['Last Contacted', item.pilotEnd],
           ...(isInvestorUpdateContactsList ? [['Update Cadence', item.athleteCount] as [string, string | number | undefined]] : []),
         ]
-      : [
+      : isTaskListActive
+        ? [
+            ['Due Date', item.dueDate],
+            ['Target Date', item.expectedCloseDate],
+            ['Start Date', item.pilotStart],
+            ['Completed Date', item.pilotEnd],
+          ]
+        : [
           ['ACV', item.acv],
           [amountFieldLabelForList(activeList), item.amount],
           ['Expected Close', item.expectedCloseDate],
@@ -5948,8 +5988,8 @@ Rules:
         ];
 
     return [
-      formatClipboardSection(isContactListActive ? 'Contact Details' : 'Lead Details', detailRows),
-      formatClipboardSection(isContactListActive ? 'Relationship Dates' : 'Financials & Dates', timelineRows),
+      formatClipboardSection(isContactListActive ? 'Contact Details' : isTaskListActive ? 'Task Details' : 'Lead Details', detailRows),
+      formatClipboardSection(isContactListActive ? 'Relationship Dates' : isTaskListActive ? 'Task Dates' : 'Financials & Dates', timelineRows),
       formatClipboardSection('Scope & Expansion', [
         ['Scope', item.pilotScope],
         ['Count', item.athleteCount],
@@ -6295,7 +6335,11 @@ Rules:
     if (!title && !organization) {
       setLeadExtractMessage({
         type: 'error',
-        text: isContactListActive ? 'Add a contact name, email, or organization.' : 'Add a lead name or organization.',
+        text: isContactListActive
+          ? 'Add a contact name, email, or organization.'
+          : isTaskListActive
+            ? 'Add a task name or project area.'
+            : 'Add a lead name or organization.',
       });
       return;
     }
@@ -6352,7 +6396,7 @@ Rules:
     setViewMode('pipeline');
     setToastMessage({
       type: 'success',
-      text: `${isContactListActive ? 'Contact' : 'Lead'} added to ${activeList.name}.`,
+      text: `${isContactListActive ? 'Contact' : isTaskListActive ? 'Task' : 'Lead'} added to ${activeList.name}.`,
     });
     closeLeadUrlModal();
   };
@@ -6868,7 +6912,7 @@ Rules:
 
         const newItemBase = createItem({
           ...draftToSave,
-          title: draftToSave.title.trim() || 'Untitled opportunity',
+          title: draftToSave.title.trim() || (isTaskListActive ? 'Untitled task' : 'Untitled opportunity'),
           organization: draftToSave.organization.trim(),
         });
         const newItem: PipelineItem = {
@@ -8174,6 +8218,18 @@ Rules:
               ['linkedinUrl', 'LinkedIn URL', 'https://linkedin.com/in/...'],
               ['sourceUrl', 'Source URL', 'https://example.com'],
             ]
+          : isTaskListActive
+            ? [
+                ['title', 'Task Name', 'Task name'],
+                ['organization', 'Project / Area', 'PipeLists, onboarding, customer success'],
+                ['owner', 'Owner', 'Owner'],
+                ['segment', 'Category', 'Product, sales, ops'],
+                ['decisionMaker', 'Context', 'Why this matters'],
+                ['expectedCloseDate', 'Target Date', 'date'],
+                ['pilotStart', 'Start Date', 'date'],
+                ['pilotEnd', 'Completed Date', 'date'],
+                ['sourceUrl', 'Reference URL', 'https://example.com'],
+              ]
           : [
               ['title', 'Opportunity Name', 'Opportunity name'],
               ['organization', 'Organization', 'Company, school, fund'],
@@ -9309,6 +9365,13 @@ Rules:
                       {renderMetricCard('Follow-Ups', String(dueSoonItems), 'Contacts due soon', <ClipboardList className="h-4 w-4" />, 'bg-amber-50 text-amber-700')}
                       {renderMetricCard('Emailed', String(sentEmailItems), 'Contacts with an email sent', <Mail className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
                     </>
+                  ) : isTaskListActive ? (
+                    <>
+                      {renderMetricCard('Tasks', String(activeListItems.length), 'All tasks in this list', <ClipboardList className="h-4 w-4" />)}
+                      {renderMetricCard('Active', String(activeItems), 'Tasks not done or paused', <Clock className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
+                      {renderMetricCard('Done', String(wonItems), 'Completed tasks', <CheckCircle2 className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
+                      {renderMetricCard('Due Soon', String(dueSoonItems), 'Tasks due in the next week', <Calendar className="h-4 w-4" />, 'bg-amber-50 text-amber-700')}
+                    </>
                   ) : (
                     <>
                       {renderMetricCard('Total', String(activeListItems.length), 'All opportunities in this list', <FileText className="h-4 w-4" />)}
@@ -9325,8 +9388,8 @@ Rules:
                   )}
                 </div>
 
-                <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm xl:flex-row xl:items-center">
-                  <div className="relative min-w-0 flex-1">
+                <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm xl:flex-row xl:flex-wrap xl:items-center">
+                  <div className="relative min-w-[220px] flex-[1_1_260px] xl:max-w-xs">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                     <input
                       value={query}
@@ -9336,7 +9399,7 @@ Rules:
                     />
                   </div>
 
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                     {!isInvestorUpdateContactsList && (
                       <div className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-stone-500">
                         <Filter className="h-4 w-4" />
@@ -9443,14 +9506,16 @@ Rules:
                             {isBulkSelectionMode ? 'Done' : 'Select'}
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={openLeadGenModal}
-                          className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
-                        >
-                          <Search className="h-4 w-4" />
-                          Find leads
-                        </button>
+                        {!isTaskListActive && (
+                          <button
+                            type="button"
+                            onClick={openLeadGenModal}
+                            className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                          >
+                            <Search className="h-4 w-4" />
+                            Find leads
+                          </button>
+                        )}
                         {isContactListActive && (
                           <button
                             type="button"
@@ -9467,7 +9532,7 @@ Rules:
                           className="inline-flex h-11 items-center gap-2 rounded-md bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
                         >
                           <Plus className="h-4 w-4" />
-                          {isContactListActive ? 'Add contact' : 'Add new lead'}
+                          {isContactListActive ? 'Add contact' : isTaskListActive ? 'Add task' : 'Add new lead'}
                         </button>
                       </>
                     )}
@@ -9592,8 +9657,8 @@ Rules:
                           : 'min-w-[1280px] grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
                     }`}
                   >
-                    {renderSortableHeader(isContactListActive ? 'Contact' : 'Item', 'item')}
-                    {renderSortableHeader('Organization', 'organization')}
+                    {renderSortableHeader(isContactListActive ? 'Contact' : isTaskListActive ? 'Task' : 'Item', 'item')}
+                    {renderSortableHeader(isTaskListActive ? 'Project / Area' : 'Organization', 'organization')}
                     {isInvestorUpdateContactsList ? (
                       <span>Email Status</span>
                     ) : isContactListActive ? (
@@ -9604,7 +9669,7 @@ Rules:
                     ) : (
                       <>
                         {renderSortableHeader('Stage', 'stage')}
-                        {renderSortableHeader(isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', 'value')}
+                        {isTaskListActive ? <span>Importance</span> : renderSortableHeader(isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', 'value')}
                       </>
                     )}
                     {renderSortableHeader(isContactListActive ? 'Follow-Up' : 'Due Date', 'dueDate')}
@@ -9617,7 +9682,7 @@ Rules:
                       {filteredItems.map((item, itemIndex) => {
                         const stage = getStage(activeList, item.stage);
                         const itemValueText = itemAmountDisplay(activeList, item);
-                        const tableValueText = isContactListActive ? item.contactEmails[0] || '' : itemValueText;
+                        const tableValueText = isContactListActive ? item.contactEmails[0] || '' : isTaskListActive ? importanceLabel(item.priority) : itemValueText;
                         const hasItemValue = Boolean(tableValueText);
                         const dueDate = itemPrimaryDate(activeList, item);
                         const nextStepText = item.nextStep || item.notes || item.expansionPath;
@@ -9835,7 +9900,7 @@ Rules:
                                       handleEditItem(item);
                                     }}
                                     className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
-                                    title="Edit opportunity"
+                                    title={isContactListActive ? 'Edit contact' : isTaskListActive ? 'Edit task' : 'Edit opportunity'}
                                   >
                                     <Edit className="h-4 w-4" />
                                   </button>
@@ -9846,7 +9911,7 @@ Rules:
                                       handleDeleteItem(item.id);
                                     }}
                                     className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
-                                    title="Delete opportunity"
+                                    title={isContactListActive ? 'Delete contact' : isTaskListActive ? 'Delete task' : 'Delete opportunity'}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </button>
@@ -9859,9 +9924,15 @@ Rules:
                     </div>
                   ) : (
                     <div className="px-4 py-16 text-center">
-                      <p className="text-sm font-semibold text-stone-900">{isContactListActive ? 'No contacts found' : 'No items found'}</p>
+                      <p className="text-sm font-semibold text-stone-900">
+                        {isContactListActive ? 'No contacts found' : isTaskListActive ? 'No tasks found' : 'No items found'}
+                      </p>
                       <p className="mt-1 text-sm text-stone-500">
-                        {isContactListActive ? 'Adjust the filter or add a new contact.' : 'Adjust the filter or add a new item.'}
+                        {isContactListActive
+                          ? 'Adjust the filter or add a new contact.'
+                          : isTaskListActive
+                            ? 'Adjust the filter or add a new task.'
+                            : 'Adjust the filter or add a new item.'}
                       </p>
                       {canModify && (
                         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
@@ -9876,14 +9947,16 @@ Rules:
                               {isImportingFriends ? 'Importing...' : 'Import contacts'}
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={openLeadGenModal}
-                            className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
-                          >
-                            <Search className="h-4 w-4" />
-                            Find leads
-                          </button>
+                          {!isTaskListActive && (
+                            <button
+                              type="button"
+                              onClick={openLeadGenModal}
+                              className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                            >
+                              <Search className="h-4 w-4" />
+                              Find leads
+                            </button>
+                          )}
                           {isContactListActive && (
                             <button
                               type="button"
@@ -9900,7 +9973,7 @@ Rules:
                             className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
                           >
                             <Plus className="h-4 w-4" />
-                            {isContactListActive ? 'Add contact' : 'Add new lead'}
+                            {isContactListActive ? 'Add contact' : isTaskListActive ? 'Add task' : 'Add new lead'}
                           </button>
                         </div>
                       )}
@@ -9936,7 +10009,11 @@ Rules:
                                   const dueDate = itemPrimaryDate(activeList, item);
                                   const nextStepText = item.nextStep || item.notes || item.expansionPath;
                                   const isSelectedForBulkAction = selectedBulkItemIds.includes(item.id);
-                                  const cardDetailText = isContactListActive ? item.contactEmails[0] || item.contactPhone : itemValueText;
+                                  const cardDetailText = isContactListActive
+                                    ? item.contactEmails[0] || item.contactPhone
+                                    : isTaskListActive
+                                      ? item.owner || item.segment
+                                      : itemValueText;
 
                                   return (
                                     <article
@@ -10062,7 +10139,7 @@ Rules:
                                                 handleEditItem(item);
                                               }}
                                               className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
-                                              title={isContactListActive ? 'Edit contact' : 'Edit opportunity'}
+                                              title={isContactListActive ? 'Edit contact' : isTaskListActive ? 'Edit task' : 'Edit opportunity'}
                                             >
                                               <Edit className="h-4 w-4" />
                                             </button>
@@ -10073,7 +10150,7 @@ Rules:
                                                 handleDeleteItem(item.id);
                                               }}
                                               className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
-                                              title={isContactListActive ? 'Delete contact' : 'Delete opportunity'}
+                                              title={isContactListActive ? 'Delete contact' : isTaskListActive ? 'Delete task' : 'Delete opportunity'}
                                             >
                                               <Trash2 className="h-4 w-4" />
                                             </button>
@@ -10844,7 +10921,9 @@ Rules:
                 </div>
                 <h3 className="text-xl font-bold text-stone-950">{activeList.name} Profile</h3>
                 <p className="mt-1 text-sm leading-6 text-stone-500">
-                  Define what this list is trying to do. Find leads uses this profile to prefill the research brief.
+                  {isTaskListActive
+                    ? 'Define what this list is trying to do so tasks stay focused and consistent.'
+                    : 'Define what this list is trying to do. Find leads uses this profile to prefill the research brief.'}
                 </p>
               </div>
               <button
@@ -10881,7 +10960,9 @@ Rules:
               </label>
 
               <label className="block" htmlFor="pipe-list-profile-lead-definition">
-                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Ideal lead definition</span>
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                  {isTaskListActive ? 'Ideal task definition' : 'Ideal lead definition'}
+                </span>
                 <textarea
                   id="pipe-list-profile-lead-definition"
                   value={listProfileDraft.leadDefinition}
@@ -10946,7 +11027,7 @@ Rules:
                   Delete PipeList
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-stone-500">
-                  Delete {activeList.name} and its {formatCount(activeListItems.length, 'active lead')}. This removes the full list from your workspace.
+                  Delete {activeList.name} and its {formatCount(activeListItems.length, `active ${listItemNoun(activeList)}`)}. This removes the full list from your workspace.
                 </p>
               </div>
               <button
@@ -11014,7 +11095,9 @@ Rules:
                   {isManualLeadEntry
                     ? isContactListActive
                       ? 'Add contact manually'
-                      : 'Add lead manually'
+                      : isTaskListActive
+                        ? 'Add task'
+                        : 'Add lead manually'
                     : isContactListActive
                       ? 'Add contact'
                       : 'Add new lead'}
@@ -11041,7 +11124,7 @@ Rules:
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block" htmlFor="pipe-manual-title">
                   <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                    {isContactListActive ? 'Contact name' : 'Lead name'}
+                    {isContactListActive ? 'Contact name' : isTaskListActive ? 'Task name' : 'Lead name'}
                   </span>
                   <input
                     id="pipe-manual-title"
@@ -11049,13 +11132,13 @@ Rules:
                     value={manualLeadDraft.title}
                     onChange={(event) => setManualLeadDraft((current) => ({ ...current, title: event.target.value }))}
                     className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                    placeholder={isContactListActive ? 'Jane Doe' : 'Wisdom Ventures'}
+                    placeholder={isContactListActive ? 'Jane Doe' : isTaskListActive ? 'Follow up on pilot agreement' : 'Wisdom Ventures'}
                     autoFocus
                   />
                 </label>
                 <label className="block" htmlFor="pipe-manual-organization">
                   <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
-                    {isContactListActive ? 'Role / Organization' : 'Organization'}
+                    {isContactListActive ? 'Role / Organization' : isTaskListActive ? 'Project / Area' : 'Organization'}
                   </span>
                   <input
                     id="pipe-manual-organization"
@@ -11063,7 +11146,7 @@ Rules:
                     value={manualLeadDraft.organization}
                     onChange={(event) => setManualLeadDraft((current) => ({ ...current, organization: event.target.value }))}
                     className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                    placeholder="Organization or role"
+                    placeholder={isTaskListActive ? 'University Pilots' : 'Organization or role'}
                   />
                 </label>
                 <label className="block" htmlFor="pipe-manual-email">
@@ -11104,7 +11187,7 @@ Rules:
                   </select>
                 </label>
                 <label className="block" htmlFor="pipe-manual-source-url">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Source URL</span>
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isTaskListActive ? 'Reference URL' : 'Source URL'}</span>
                   <input
                     id="pipe-manual-source-url"
                     type="url"
@@ -11147,10 +11230,10 @@ Rules:
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={isManualLeadEntry ? () => setIsManualLeadEntry(false) : closeLeadUrlModal}
+                onClick={isManualLeadEntry && !isTaskListActive ? () => setIsManualLeadEntry(false) : closeLeadUrlModal}
                 className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
               >
-                {isManualLeadEntry ? 'Back' : 'Cancel'}
+                {isManualLeadEntry && !isTaskListActive ? 'Back' : 'Cancel'}
               </button>
               {!isManualLeadEntry && (
                 <button
@@ -11167,7 +11250,7 @@ Rules:
                 className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
               >
                 {isManualLeadEntry ? <Plus className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                {isManualLeadEntry ? (isContactListActive ? 'Save contact' : 'Save lead') : 'Analyze lead'}
+                {isManualLeadEntry ? (isContactListActive ? 'Save contact' : isTaskListActive ? 'Save task' : 'Save lead') : 'Analyze lead'}
               </button>
             </div>
           </form>
@@ -11691,7 +11774,9 @@ Rules:
                 </label>
 
                 <label className="block" htmlFor="modal-log-item">
-                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Lead</span>
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                    {isTaskList(logTargetList) ? 'Task' : isContactList(logTargetList) ? 'Contact' : 'Lead'}
+                  </span>
                   <select
                     id="modal-log-item"
                     value={logTargetItem?.id || ''}
@@ -11706,7 +11791,9 @@ Rules:
                         </option>
                       ))
                     ) : (
-                      <option value="">No leads in this PipeList</option>
+                      <option value="">
+                        No {isTaskList(logTargetList) ? 'tasks' : isContactList(logTargetList) ? 'contacts' : 'leads'} in this PipeList
+                      </option>
                     )}
                   </select>
                 </label>
@@ -11863,10 +11950,10 @@ Rules:
                     </span>
                   </div>
                   <h3 id="pipe-detail-title" className="break-words text-2xl font-bold tracking-normal text-stone-950">
-                    {selectedDetailIsEditing ? 'Edit Item' : selectedDetailItem.title}
+                    {selectedDetailIsEditing ? (isTaskListActive ? 'Edit Task' : 'Edit Item') : selectedDetailItem.title}
                   </h3>
                   <p className="mt-1 text-sm leading-6 text-stone-500">
-                    {selectedDetailItem.organization || 'No organization'} · {activeList.name}
+                    {selectedDetailItem.organization || (isTaskListActive ? 'No project area' : 'No organization')} · {activeList.name}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -11896,17 +11983,17 @@ Rules:
                           type="button"
                           onClick={() => createOrUpdateLeadShareLink(selectedDetailItem)}
                           className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
-                          title="Share lead"
+                          title={isTaskListActive ? 'Share task' : 'Share lead'}
                         >
                           <Share2 className="h-4 w-4" />
-                          <span className="hidden sm:inline">Share lead</span>
+                          <span className="hidden sm:inline">{isTaskListActive ? 'Share task' : 'Share lead'}</span>
                         </button>
                       )}
                       <button
                         type="button"
                         onClick={() => handleCopyLeadDetails(selectedDetailItem, selectedDetailStage)}
                         className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
-                        title="Copy lead details"
+                        title={isTaskListActive ? 'Copy task details' : 'Copy lead details'}
                       >
                         <Copy className="h-4 w-4" />
                         <span className="hidden sm:inline">Copy details</span>
@@ -12009,7 +12096,7 @@ Rules:
                 {canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && !isLeadSharedView && moveTargetLists.length > 0 && (
                   <label className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition focus-within:border-stone-400 hover:text-stone-950">
                     <ListPlus className="h-4 w-4" />
-                    <span className="sr-only">Move lead to another PipeList</span>
+                    <span className="sr-only">Move {isTaskListActive ? 'task' : 'lead'} to another PipeList</span>
                     <select
                       value={moveTargetListId}
                       onChange={(event) => {
@@ -12366,7 +12453,7 @@ Rules:
                   <div className="mb-4">
                     <h4 className="text-sm font-semibold text-stone-950">Ask about {selectedDetailItem.title}</h4>
                     <p className="mt-1 text-sm leading-6 text-stone-500">
-                      Ask for a draft, recommendation, summary, or next step using this lead’s context.
+                      Ask for a draft, recommendation, summary, or next step using this {isTaskListActive ? 'task' : 'lead'}’s context.
                     </p>
                   </div>
 
@@ -12378,7 +12465,7 @@ Rules:
                         value={itemAskPrompt}
                         onChange={(event) => setItemAskPrompt(event.target.value)}
                         className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
-                        placeholder="Draft a short LinkedIn note to Rich that mentions Atlanta Track Club and asks for a brief conversation."
+                        placeholder={isTaskListActive ? 'Summarize what should happen next and flag any blockers.' : 'Draft a short LinkedIn note to Rich that mentions Atlanta Track Club and asks for a brief conversation.'}
                         autoFocus
                       />
                     </label>
@@ -12655,14 +12742,25 @@ Rules:
                           value: selectedDetailItem.contactEmails.join(', '),
                         },
                       ]
-                    : [
+                    : isTaskListActive
+                      ? [
+                          {
+                            label: 'Stage',
+                            value: selectedDetailStage.label,
+                          },
+                          {
+                            label: 'Owner',
+                            value: selectedDetailItem.owner,
+                          },
+                        ]
+                      : [
                         {
                           label: isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value',
                           value: itemAmountDisplay(activeList, selectedDetailItem),
                         },
                       ]),
                   {
-                    label: isContactListActive ? 'Follow-Up Date' : 'Next Date',
+                    label: isContactListActive ? 'Follow-Up Date' : isTaskListActive ? 'Due Date' : 'Next Date',
                     value: itemPrimaryDate(activeList, selectedDetailItem),
                   },
                 ])}
@@ -12672,7 +12770,7 @@ Rules:
                   { label: 'Next Step', value: selectedDetailItem.nextStep, wide: true },
                   { label: 'Notes', value: selectedDetailItem.notes, wide: true },
                   {
-                    label: 'Source URL',
+                    label: isTaskListActive ? 'Reference URL' : 'Source URL',
                     value: selectedDetailItem.sourceUrl ? (
                       <a
                         href={selectedDetailItem.sourceUrl}
