@@ -51,7 +51,9 @@ import {
   ExternalLink,
   FileText,
   Filter,
+  Kanban,
   Layers,
+  LayoutList,
   Link2,
   ListPlus,
   LogOut,
@@ -87,6 +89,7 @@ type PipelinePriority = 'high' | 'medium' | 'low';
 
 type SortColumn = 'item' | 'organization' | 'stage' | 'value' | 'dueDate' | 'nextStep';
 type ViewMode = 'pipeline' | 'metrics' | 'logs' | 'runbook';
+type PipelineDisplayMode = 'list' | 'kanban';
 type DetailModalMode = 'details' | 'logs' | 'email' | 'research' | 'ask';
 type MessageTone = 'success' | 'error' | 'info';
 type ShareAccess = 'read' | 'edit';
@@ -1793,20 +1796,6 @@ const getLeadSearchBridgeUrl = () => {
   return isLocalHost ? `${PIPELISTS_REMOTE_BRIDGE_ORIGIN}/api/openai/v1/responses` : '/api/openai/v1/responses';
 };
 
-const getEasternDate = () => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/New_York',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-
-  const year = parts.find((part) => part.type === 'year')?.value || '';
-  const month = parts.find((part) => part.type === 'month')?.value || '';
-  const day = parts.find((part) => part.type === 'day')?.value || '';
-  return `${year}-${month}-${day}`;
-};
-
 const isPitchCompetitionList = (list: PipeList) =>
   list.id === PITCH_COMPETITIONS_LIST_ID ||
   list.templateKey === 'pitch' ||
@@ -2745,6 +2734,7 @@ const PipelinePage: NextPage = () => {
   const [activeListId, setActiveListId] = useState(initialLists[0].id);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [viewMode, setViewModeState] = useState<ViewMode>('pipeline');
+  const [pipelineDisplayMode, setPipelineDisplayMode] = useState<PipelineDisplayMode>('list');
   const [runbookHasUnsavedChanges, setRunbookHasUnsavedChanges] = useState(false);
   const [query, setQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('all');
@@ -3963,6 +3953,23 @@ const PipelinePage: NextPage = () => {
   ]);
 
   const filteredItemIds = useMemo(() => filteredItems.map((item) => item.id), [filteredItems]);
+  const visibleKanbanStages = useMemo(
+    () =>
+      !isInvestorUpdateContactsList && stageFilter !== 'all'
+        ? activeList.stages.filter((stage) => stage.id === stageFilter)
+        : activeList.stages,
+    [activeList.stages, isInvestorUpdateContactsList, stageFilter],
+  );
+  const kanbanItemsByStage = useMemo(() => {
+    const stageIds = new Set(activeList.stages.map((stage) => stage.id));
+    const fallbackStageId = activeList.stages[0]?.id || 'uncategorized';
+
+    return filteredItems.reduce<Record<string, PipelineItem[]>>((accumulator, item) => {
+      const stageId = stageIds.has(item.stage) ? item.stage : fallbackStageId;
+      accumulator[stageId] = [...(accumulator[stageId] || []), item];
+      return accumulator;
+    }, {});
+  }, [activeList.stages, filteredItems]);
   const filteredItemIdSet = useMemo(() => new Set(filteredItemIds), [filteredItemIds]);
   const selectedVisibleItemIds = useMemo(
     () => selectedBulkItemIds.filter((itemId) => filteredItemIdSet.has(itemId)),
@@ -9363,6 +9370,28 @@ Rules:
                       Clear
                     </button>
 
+                    <div className="inline-flex h-11 items-center rounded-md border border-stone-200 bg-[#FAFAF7] p-1" aria-label="Pipeline display">
+                      {[
+                        { id: 'list' as const, label: 'List', icon: <LayoutList className="h-4 w-4" /> },
+                        { id: 'kanban' as const, label: 'Kanban', icon: <Kanban className="h-4 w-4" /> },
+                      ].map((displayOption) => (
+                        <button
+                          key={displayOption.id}
+                          type="button"
+                          onClick={() => setPipelineDisplayMode(displayOption.id)}
+                          className={`inline-flex h-9 items-center gap-2 rounded px-3 text-sm font-semibold transition ${
+                            pipelineDisplayMode === displayOption.id
+                              ? 'bg-white text-stone-950 shadow-sm'
+                              : 'text-stone-500 hover:text-stone-900'
+                          }`}
+                          aria-pressed={pipelineDisplayMode === displayOption.id}
+                        >
+                          {displayOption.icon}
+                          {displayOption.label}
+                        </button>
+                      ))}
+                    </div>
+
                     {isContactListActive && (
                       <>
                         <button
@@ -9552,6 +9581,7 @@ Rules:
                   </div>
                 )}
 
+                {pipelineDisplayMode === 'list' ? (
                 <div className="overflow-x-auto overflow-y-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
                   <div
                     className={`hidden gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid ${
@@ -9877,6 +9907,194 @@ Rules:
                     </div>
                   )}
                 </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                    <div className="flex min-w-max gap-3">
+                      {visibleKanbanStages.map((stage) => {
+                        const stageItems = kanbanItemsByStage[stage.id] || [];
+
+                        return (
+                          <section
+                            key={stage.id}
+                            className="flex w-[280px] shrink-0 flex-col rounded-lg border border-stone-200 bg-[#FAFAF7] md:w-[304px]"
+                          >
+                            <header className="border-b border-stone-200 px-3 py-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className={`inline-flex min-w-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${stage.tone}`}>
+                                  <span className="truncate">{stage.label}</span>
+                                </span>
+                                <span className="shrink-0 text-xs font-semibold text-stone-400">
+                                  {formatCount(stageItems.length, listItemNoun(activeList))}
+                                </span>
+                              </div>
+                            </header>
+
+                            <div className="flex min-h-[180px] flex-1 flex-col gap-2 p-2">
+                              {stageItems.length > 0 ? (
+                                stageItems.map((item) => {
+                                  const itemValueText = itemAmountDisplay(activeList, item);
+                                  const dueDate = itemPrimaryDate(activeList, item);
+                                  const nextStepText = item.nextStep || item.notes || item.expansionPath;
+                                  const isSelectedForBulkAction = selectedBulkItemIds.includes(item.id);
+                                  const cardDetailText = isContactListActive ? item.contactEmails[0] || item.contactPhone : itemValueText;
+
+                                  return (
+                                    <article
+                                      key={item.id}
+                                      role="button"
+                                      tabIndex={0}
+                                      aria-label={isBulkSelectionMode ? `Select ${item.title}` : `Open details for ${item.title}`}
+                                      onClick={() => {
+                                        if (isBulkSelectionMode) {
+                                          toggleBulkItemSelection(item.id);
+                                        } else {
+                                          setSelectedDetailItemId(item.id);
+                                          setDetailModalMode('details');
+                                        }
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                          event.preventDefault();
+                                          if (isBulkSelectionMode) {
+                                            toggleBulkItemSelection(item.id);
+                                          } else {
+                                            setSelectedDetailItemId(item.id);
+                                            setDetailModalMode('details');
+                                          }
+                                        }
+                                      }}
+                                      className={`rounded-md border bg-white p-3 shadow-sm transition hover:border-stone-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-stone-300 ${
+                                        isSelectedForBulkAction ? 'border-stone-900 ring-1 ring-inset ring-stone-900' : 'border-stone-200'
+                                      }`}
+                                    >
+                                      <div className="flex items-start gap-2">
+                                        {isBulkSelectionMode && (
+                                          <button
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              toggleBulkItemSelection(item.id);
+                                            }}
+                                            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${
+                                              isSelectedForBulkAction
+                                                ? 'border-stone-900 bg-stone-900 text-white'
+                                                : 'border-stone-200 bg-white text-stone-500 hover:border-stone-300 hover:text-stone-900'
+                                            }`}
+                                            title={isSelectedForBulkAction ? 'Unselect item' : 'Select item'}
+                                            aria-pressed={isSelectedForBulkAction}
+                                          >
+                                            {isSelectedForBulkAction ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                                          </button>
+                                        )}
+                                        {item.imageUrl && (
+                                          <img
+                                            src={item.imageUrl}
+                                            alt={item.imageName || `${item.title} image`}
+                                            className="h-10 w-10 shrink-0 rounded-md border border-stone-200 object-cover"
+                                          />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex items-center gap-1.5">
+                                            <span
+                                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                                item.priority === 'high'
+                                                  ? 'bg-rose-500'
+                                                  : item.priority === 'medium'
+                                                    ? 'bg-amber-500'
+                                                    : 'bg-emerald-500'
+                                              }`}
+                                              title={importanceLabel(item.priority)}
+                                            />
+                                            <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
+                                          </div>
+                                          {item.organization && (
+                                            <p className="mt-1 truncate text-xs font-medium text-stone-500">{item.organization}</p>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                        {cardDetailText && (
+                                          <span className="max-w-full truncate rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 font-semibold text-stone-600">
+                                            {cardDetailText}
+                                          </span>
+                                        )}
+                                        {dueDate && (
+                                          <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-stone-200 bg-white px-2.5 py-1 font-semibold text-stone-600">
+                                            <Calendar className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+                                            <span className="truncate">{dueDate}</span>
+                                          </span>
+                                        )}
+                                        <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 font-semibold text-stone-500">
+                                          {item.weeklyLogs.length > 0 ? formatCount(item.weeklyLogs.length, 'log') : 'No logs'}
+                                        </span>
+                                      </div>
+
+                                      {nextStepText && (
+                                        <p
+                                          onMouseEnter={(event) => showNextStepTooltip(event, nextStepText)}
+                                          onMouseLeave={() => setNextStepTooltip(null)}
+                                          className="mt-3 line-clamp-2 text-sm leading-5 text-stone-600"
+                                        >
+                                          {nextStepText}
+                                        </p>
+                                      )}
+
+                                      <div className="mt-3 flex items-center justify-end gap-2 border-t border-stone-100 pt-3">
+                                        <button
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            setSelectedLogItemId(item.id);
+                                            setViewMode('logs');
+                                          }}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                                          title="Open logs"
+                                        >
+                                          <ClipboardList className="h-4 w-4" />
+                                        </button>
+                                        {canModify && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                handleEditItem(item);
+                                              }}
+                                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                                              title={isContactListActive ? 'Edit contact' : 'Edit opportunity'}
+                                            >
+                                              <Edit className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                handleDeleteItem(item.id);
+                                              }}
+                                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
+                                              title={isContactListActive ? 'Delete contact' : 'Delete opportunity'}
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </article>
+                                  );
+                                })
+                              ) : (
+                                <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-stone-200 bg-white/70 px-3 py-8 text-center">
+                                  <p className="text-sm font-medium text-stone-400">No visible items</p>
+                                </div>
+                              )}
+                            </div>
+                          </section>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="mt-4 text-sm text-stone-500">
                   {dueSoonItems} due soon · {loggedItems} with logs.
