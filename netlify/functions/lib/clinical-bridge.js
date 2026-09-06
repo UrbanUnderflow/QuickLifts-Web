@@ -116,8 +116,9 @@ function normalizeCreateEscalationResult(response) {
 }
 
 class AuntEdnaClinicalBridge {
-  constructor(config = resolveClinicalBridgeConfig()) {
+  constructor(config = resolveClinicalBridgeConfig(), transport = null) {
     this.config = config;
+    this.transport = transport;
   }
 
   get providerName() {
@@ -147,7 +148,7 @@ class AuntEdnaClinicalBridge {
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     let response;
     try {
-      response = await fetch(url, {
+      response = await (this.transport || fetch)(url, {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,

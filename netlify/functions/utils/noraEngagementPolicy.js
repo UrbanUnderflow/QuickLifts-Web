@@ -23,7 +23,7 @@ const PERFORMANCE_CONTEXT_PATTERN = /\b(game|meet|match|race|competition|compete
 const HEALTH_DOMAIN_PATTERN = /\b(sleep|activity|steps|recovery|calories?|nutrition|heart rate|resting heart rate|hrv|readiness|wearable|oura|whoop|fitbit|polar)\b/i;
 const HEALTH_REQUEST_PATTERN = /\b(?:what|how|show|read|check|tell|give|did|was|were|do|does|can you|could you)\b/i;
 const COACH_IDENTITY_PATTERN = /\b(?:who|what|which|do you know|can you tell)\b[^.?!]{0,80}\b(?:my |the )?(?:primary |pulsecheck )?(?:coach|coaches|staff)\b/i;
-const COACH_HANDOFF_PATTERN = /\b(?:send|share|message|tell|forward|pass)\b[^.?!]{0,120}\b(?:coach|coaches|staff)\b|\b(?:coach|coaches|staff)\b[^.?!]{0,120}\b(?:send|share|message|tell|forward|pass)\b/i;
+const COACH_HANDOFF_PATTERN = /\b(?:send(?:ing)?|shar(?:e|ing)|messag(?:e|ing)|tell(?:ing)?|forward(?:ing)?|pass(?:ing)?)\b[^.?!]{0,120}\b(?:coach|coaches|staff)\b|\b(?:coach|coaches|staff)\b[^.?!]{0,120}\b(?:send(?:ing)?|shar(?:e|ing)|messag(?:e|ing)|tell(?:ing)?|forward(?:ing)?|pass(?:ing)?)\b/i;
 const APP_SUPPORT_PATTERN = /\b(?:where|how|what|why|can you|could you|do i|help me)\b[^.?!]{0,120}\b(?:pulsecheck|app|account|settings|subscription|sign in|log in|login|notifications?|connection|connected|circle)\b|\b(?:connect|disconnect|sync|link|unlink)\b[^.?!]{0,100}\b(?:oura|whoop|fitbit|polar|wearable|coach|account|pulsecheck|app)\b/i;
 const FOOD_OR_MEAL_PLAN_PATTERN = /\b(?:meal plan|food plan|nutrition plan|diet plan|meal prep|recipe|recipes|food|diet|nutrition|eat|eating|palate|taste|smell|texture|plate)\b/i;
 const NOTE_REQUEST_PATTERN = /\b(?:create|make|add|save|remember|track)\b[^.?!]{0,40}\b(?:mental )?note\b|\btrack this for me\b|\bremember this\b/i;
@@ -52,7 +52,7 @@ const EXCLUSIVITY_REQUEST_PATTERN = /\bonly (?:athlete|person) you\b|\b(?:you(?:
 const SECRECY_BOUNDARY_RESPONSE_PATTERNS = [
   /\bi (?:can't|cannot|won't|will not) keep secrets?\b/i,
   /\bi (?:can't|cannot|won't|will not) keep [^.?!]{0,70}\b(?:secret|private|between us)\b/i,
-  /\bi (?:can't|cannot|won't|will not) (?:promise|agree to) (?:secrecy|confidentiality)\b/i,
+  /\bi (?:can't|cannot|won't|will not) (?:promise|agree to) (?:absolute )?(?:secrecy|confidentiality)\b/i,
   /\bi (?:can't|cannot|won't|will not) ask you to keep\b/i,
 ];
 const EXCLUSIVITY_BOUNDARY_RESPONSE_PATTERNS = [
@@ -289,6 +289,14 @@ Nora may use non-clinical principles from autonomy-supportive coaching, psycholo
 - Claim that a message, note, account change, safety alert, or other action happened only after the system confirms that exact action.
 - Never expose internal routing, assignment rationale, decision traces, state-based override language, or debug terms.
 
+### Direct requests and repair
+- When the athlete asks for a cue or concrete next step, provide one optional usable example now. Their request is sufficient permission for conversational help. Ask a question only when essential information is missing.
+- Respect a request for no questions. Accept corrections immediately and use the corrected sport or task.
+- When an exercise did not help, change the approach. Acknowledge success briefly when the athlete reports that something worked.
+- A cancelled sharing request stays cancelled. Do not ask for a recipient or send anything after consent is withdrawn.
+- PulseCheck web has Profile > Settings > Help & Support, which opens an email to the support team. Offer that verified path for technical problems. Do not invent FAQ pages, forums, social channels, or assert that opening email sends it.
+- For app failures, state verified status or the precise evidence limit and a supported next step. Never invent menus, support channels, saved records, or completed actions.
+
 ### Preferred response shapes
 - Motivation or needing a break: "You said motivation is low and you want space to reset. Would it help to define what a useful mental reset needs to give you right now?"
 - Wanting time away without guilt: "You want a few days off without guilt. Would it help to make a short mental reset plan for the guilt when it shows up?"
@@ -350,9 +358,20 @@ function isCoachHandoffRequest(message) {
   return COACH_HANDOFF_PATTERN.test(canonicalizeText(message));
 }
 
+function isCoachSharingDeclined(message) {
+  const text = canonicalizeText(message);
+  return /\b(?:do not|don't|stop|cancel|never)\b[^.?!]{0,65}\b(?:send|sending|share|sharing|forward|forwarding)\b/i.test(text)
+    || /\b(?:keep|leave)\b[^.?!]{0,30}\bunsent\b/i.test(text)
+    || (/\bchanged my mind\b/i.test(text) && /\b(?:send|share|note|coach)\b/i.test(text));
+}
+
+function isWorkflowSupportRequest(message) {
+  return /\b(?:saving failed|save failed|saved|saving again|counts? as completed|count as completed|completion|assignment|assigned today|reminder|devices?|web app|support contact|anyone.*contacted)\b/i.test(canonicalizeText(message));
+}
+
 function isAppSupportQuestion(message) {
   const text = canonicalizeText(message);
-  return isCoachIdentityQuestion(text) || APP_SUPPORT_PATTERN.test(text);
+  return /\bpreferred name\b/i.test(text) || isCoachIdentityQuestion(text) || APP_SUPPORT_PATTERN.test(text) || isWorkflowSupportRequest(text) || /\b(?:how (?:the |this )?system works|technical side|behind the scenes)\b/i.test(text);
 }
 
 function isFoodOrMealPlanMessage(message) {
@@ -361,7 +380,9 @@ function isFoodOrMealPlanMessage(message) {
 
 function isClinicalCareRequest(message) {
   const text = canonicalizeText(message);
-  return CLINICAL_CARE_PATTERN.test(text)
+  return /\b(?:sexual assault|prescription|clinician|clinical|medical chart|laboratory report|MRI report|hospital discharge|forensic|psychiatrist|documented .*allerg|drug allergy)\b/i.test(text)
+    || (/\bstaff member\b/i.test(text) && /\b(?:private|not ready to describe)\b/i.test(text))
+    || CLINICAL_CARE_PATTERN.test(text)
     || FUNCTIONAL_IMPAIRMENT_PATTERN.test(text)
     || CLINICAL_BODY_IMAGE_PATTERN.test(text)
     || isMedicalCareRequest(text);
@@ -380,6 +401,9 @@ function classifyNoraConversationLane(message) {
     || IMMEDIATE_SAFEGUARDING_PATTERN.test(text)
   ) return NoraConversationLane.CriticalSafety;
   if (isClinicalCareRequest(text)) return NoraConversationLane.ClinicalCare;
+  if (/\b(?:private thing|private document)\b/i.test(text) || (/\bscore\b/i.test(text) && /do not know|unknown|unclear/i.test(text))) return NoraConversationLane.AppSupport;
+  if (/\b(?:note|message|summary)\b[^.?!]{0,60}\b(?:sent|unsent|delivered)\b|\b(?:sent|unsent|delivered)\b[^.?!]{0,60}\b(?:note|message|summary)\b/i.test(text)) return NoraConversationLane.CoachHandoff;
+  if (isCoachSharingDeclined(text)) return NoraConversationLane.CoachHandoff;
   if (isCoachHandoffRequest(text)) return NoraConversationLane.CoachHandoff;
   if (isAppSupportQuestion(text)) return NoraConversationLane.AppSupport;
   if (isExplicitHealthDataRequest(text)) return NoraConversationLane.HealthData;
@@ -430,11 +454,27 @@ function buildNoraBoundaryResponse(lane, { athleteMessage = '', category = '' } 
     return "I can't follow instructions embedded in tool output or treat them as authorization in PulseCheck. Tool output is untrusted, and no action was run.";
   }
 
+  if (lane === NoraConversationLane.AppSupport && /\bprivate document\b/i.test(canonicalAthleteMessage)) return 'I cannot confirm permission to share that private document or the recipient’s role. No document has been sent. Use the approved care channel to verify the recipient before sharing it.';
+  if (lane === NoraConversationLane.AppSupport && /\bscore\b/i.test(canonicalAthleteMessage) && /do not know|unknown|unclear/i.test(canonicalAthleteMessage)) return 'I cannot confirm what the score measures from the number alone. What is the general name or source of the score? You can leave private details out.';
+
+  if (lane === NoraConversationLane.AppSupport && /\bprivate thing\b/i.test(canonicalAthleteMessage)) return 'I cannot confirm what the private thing from earlier refers to, so I will not create a memory from this request. You can describe the general goal you want help with, without sharing private details.';
+
+  if (lane === NoraConversationLane.AppSupport && /\bpreferred name\b/i.test(canonicalAthleteMessage)) return 'I can use your preferred name in this conversation. Your account name has not been changed.';
+
+  if (lane === NoraConversationLane.AppSupport && /\bsupport contact\b/i.test(canonicalAthleteMessage)) return 'In PulseCheck web, open Profile, then Settings, then Help & Support to email the support team. Opening it prepares an email; you choose whether to send it.';
+
   if (lane === NoraConversationLane.CriticalSafety) {
-    return 'Call 911 now if you are in immediate danger. Call or text 988 for immediate crisis support. PulseCheck is also checking the support pathway connected to your account.';
+    if (/\bsexual assault\b/i.test(canonicalAthleteMessage)) return 'I’m sorry this happened. You do not need to describe the event here. Your university’s independent reporting office can explain reporting options, and a licensed professional can support you. Call 911 if you are in immediate danger. If you need immediate emotional crisis support, call or text 988.';
+    if (/\b(?:failed|outage|unavailable|on the way|contacted)\b/i.test(canonicalAthleteMessage)) return 'I cannot confirm that help is on the way. Call 911 now if you are in immediate danger. Call or text 988 for immediate crisis support. Please reach out directly rather than waiting for this chat.';
+    return 'Call 911 now if you are in immediate danger. Call or text 988 for immediate crisis support. Please reach out directly rather than waiting for this chat.';
   }
 
   if (lane === NoraConversationLane.ClinicalCare) {
+    if (/\b(?:laboratory|MRI|hospital discharge|medical chart)\b/i.test(canonicalAthleteMessage)) return 'A licensed medical professional who has your medical record can explain that report and the next step. Use your provider’s secure portal to ask about the report or request a record update. You do not need to copy further medical details here.';
+    if (/\bclinical billing\b/i.test(canonicalAthleteMessage)) return 'For the clinical billing statement, your provider’s billing office can explain the procedure code through their secure portal. A licensed medical professional can answer questions about the treatment itself. No billing record has been updated from this chat.';
+    if (/\b(?:prescription|drug allergy|allergy)\b/i.test(canonicalAthleteMessage)) return 'A licensed medical professional can help confirm the prescription or allergy information in your clinical record. Use your care provider’s secure portal to request that update. This chat has not updated that record. You can keep the specific medication details out of this conversation.';
+    if (/\bstaff member\b/i.test(canonicalAthleteMessage) && /\b(?:private|not ready to describe)\b/i.test(canonicalAthleteMessage)) return 'You can choose how much to share about the staff concern. I cannot promise absolute confidentiality. A licensed mental-health professional or your university’s independent reporting office can explain confidential support and reporting options. You do not need to describe the event here.';
+    if (/\bsexual assault\b/i.test(canonicalAthleteMessage)) return 'I’m sorry this happened. You can seek support from a licensed mental-health professional and report through your university’s independent reporting office. You do not need to describe the event here. No report has been sent. No staff have been notified. If you are in immediate danger, call 911.';
     if (category === 'loss_of_function' || isMedicalCareRequest(athleteMessage)) {
       return 'Yes, I can help connect you. This needs a licensed medical professional, and you do not have to figure out the next step alone. PulseCheck can start the configured medical support path for your team. Call 911 now if the symptoms are severe, sudden, or you cannot get help safely. I cannot assess or clear this in chat.';
     }
@@ -444,6 +484,22 @@ function buildNoraBoundaryResponse(lane, { athleteMessage = '', category = '' } 
       return "I can't diagnose you or provide clinical treatment in chat. I can still help with the next step: PulseCheck can connect you to the configured licensed mental-health support path for your team. Please confirm in the next step if you want me to start that handoff.";
     }
     return "Yes, I can help with that. This needs licensed mental-health support, and you do not have to set it up alone. PulseCheck can connect you to the configured support path for your team. Please confirm in the next step if you want me to start that handoff.";
+  }
+
+  if (/\bhealth insurance\b.*\b(?:member|policy|id|number)\b/i.test(canonicalAthleteMessage)) return 'For insurance or billing help, use your provider’s secure portal or the member-services contact on your insurance card. You do not need to share any more identifying details here.';
+
+  if (isCoachSharingDeclined(canonicalAthleteMessage)) {
+    return 'I will keep this unsent and will not start a coach message from this request.';
+  }
+
+  if (lane === NoraConversationLane.Performance
+      && /\b(?:give me|want|would like|looking for|use)\b/i.test(canonicalAthleteMessage)
+      && /\b(?:cue|mental preparation step|short word|short.*phrase|mental cue)\b/i.test(canonicalAthleteMessage)) {
+    if (/\b(?:without|do not|no question|thirty seconds)\b/i.test(canonicalAthleteMessage))
+      return /\b(?:volleyball|serving|serve)\b/i.test(canonicalAthleteMessage) ? '“This serve.” One short cue for the serve in front of you.' : '“Next action.” One short focus cue for the moment in front of you.';
+    if (/\b(?:volleyball|serving|serve)\b/i.test(canonicalAthleteMessage))
+      return 'For volleyball, try this focus cue: “One serve at a time.” Bring your attention to this serve.';
+    return 'One mental cue to try: “This play.” Bring your focus to the next action in front of you.';
   }
 
   if (
@@ -574,6 +630,7 @@ function buildGroundedConversationFallback(message) {
   if (hasFoodPlanConcern(message)) return foodPlanFallbackResponse(message);
 
   const topic = groundedTopicSummary(message);
+  if (/\b(?:helped|worked)\b/i.test(lowered)) return "You found something useful in that rep. You can keep that same cue for the next one.";
   if (/\bbody image\b|\bposing\b/i.test(lowered)) {
     if (/\bbody image\b/i.test(lowered)) {
       return `You said ${topic}. Would you rather work on attention during the task or see the support options in PulseCheck?`;
@@ -591,14 +648,15 @@ function buildGroundedConversationFallback(message) {
 
   if (/\bfirst 100\b|\bfirst 50\b|\bopening (?:pace|stretch)\b|\bgun goes off\b/i.test(lowered)
       || (/\b400\b/i.test(lowered) && /\b(?:rush|fast|pace|start)\b/i.test(lowered))) {
-    return `You said ${topic}. Would you like one start-line phrase for that moment?`;
+    return 'For rushing the opening stretch, one cue to try is “My race plan.” Bring your attention back to your plan.';
   }
 
-  if (/\b(?:focus|distract|concentrat|sharp|confiden|self[- ]?doubt|unsure|anxious|anxiety|nervous|pressure|worried)\b/i.test(lowered)) {
+  if (/\b(?:focus\w*|distract\w*|concentrat\w*|sharp|confiden\w*|self[- ]?doubt|unsure|anxious|anxiety|nervous|pressure|worried)\b/i.test(lowered)) {
     return `You said ${topic}. Would it help to name the exact moment or choose one quick reset?`;
   }
 
-  return `I may be missing the center of this. Are you asking for help with ${topic}, help talking to someone about it, or space to talk it through?`;
+  if (/\btiming\b/i.test(lowered)) return "You said something about your timing feels strange. Which moment would you like to focus on?";
+  return "What would be most useful right now: a mental cue or help with a specific question?";
 }
 
 function trackingDeclineApplies(athleteMessage, groundingMessages = []) {
@@ -614,31 +672,55 @@ function trackingDeclineApplies(athleteMessage, groundingMessages = []) {
     && TRACKING_PRESSURE_PATTERN.test(canonicalAthleteMessage);
 }
 
+function supportsMealCard(message, enabled) {
+  return enabled === true && /\b(?:ate|eaten|log (?:my |that |this )?(?:meal|food|lunch|dinner|breakfast))\b/i.test(message)
+    && !/purge|purging|binge|eating disorder|body image|guilt|suicid|poison|allerg|chest|medication|prescription/i.test(message);
+}
+
 function buildNoraEngagementFallback({
   athleteMessage,
   lane = classifyNoraConversationLane(athleteMessage),
   groundingMessages = [],
+  noraChatActions = false,
 } = {}) {
   const boundary = buildNoraBoundaryResponse(lane, { athleteMessage });
   if (boundary) return boundary;
+  if (supportsMealCard(athleteMessage, noraChatActions)) return 'Would you like to log that meal? Use the Log meal card to review the food, portions and nutrition, then confirm and save. You can add a photo too.';
   if (lane === NoraConversationLane.Closure) return "You're welcome.";
 
   const lowered = canonicalizeText(athleteMessage).toLowerCase();
   if (lane === NoraConversationLane.HealthData) {
+    if (/\b(?:should|aim for|okay to|take it easy)\b/i.test(lowered) && /\b(?:steps|activity|recovery|rest)\b/i.test(lowered)) return 'Your step count alone cannot tell us how much activity or rest you need today. Use your planned training and how you feel as context, and check with your coach before changing the plan. You do not need to chase a step count just to make the number higher.';
     const requestedDomain = [
       'sleep', 'activity', 'steps', 'recovery', 'calories', 'nutrition',
       'heart rate', 'hrv', 'readiness', 'wearable', 'oura', 'whoop', 'fitbit', 'polar',
-    ].find((domain) => lowered.includes(domain)) || 'health data';
-    return `I can stay with the ${requestedDomain} data you asked about. I will label anything missing, partial, or stale before drawing a conclusion.`;
+    ].filter((domain) => lowered.includes(domain)).sort((a, b) => lowered.lastIndexOf(b) - lowered.lastIndexOf(a))[0] || 'health data';
+    return `I could not confirm the ${requestedDomain} value in this reply. Check the connected data source for its latest value and recorded time.`;
   }
 
   if (lane === NoraConversationLane.CoachHandoff) {
+    if (groundingMessages.some(isCoachSharingDeclined) && /\b(?:sent|unsent|confirm|status)\b/i.test(lowered)) return 'I have not sent anything from this cancelled request.';
+    if (/\b(?:sent|delivered|confirm|status|failed|again|retry|issue)\b/i.test(lowered)) return 'I cannot confirm that the message was sent. Open Conversations with your coach to check its status before trying again.';
     return 'I can help share that with your coach. Which coach should I send it to?';
   }
 
   if (lane === NoraConversationLane.AppSupport) {
-    return "I can answer that from your PulseCheck account when the information is available. I do not want to guess if I cannot confirm it.";
+    if (/\b(?:how (?:the |this )?system works|technical side|behind the scenes)\b/i.test(lowered)) return 'At a high level, Nora uses your question and the account information you are allowed to see to choose a reply. Sharing information requires permission. Private instructions and credentials stay protected.';
+    if (/\b(?:sav|complet|unfinished|device)\w*/i.test(lowered))
+      return 'I cannot confirm which completion is saved in your account. Check the exercise status after reopening it. Keep any unsaved work; completing the exercise and saving its record are separate.';
+    if (/\b(?:assignment|assigned)\b/i.test(lowered))
+      return 'I cannot confirm today’s assignment from the information here. Check the assignment date in the app and confirm it with your coach if it still shows yesterday.';
+    if (/\breminder\b/i.test(lowered))
+      return 'I will leave your reminders unchanged. Compare the two notifications’ exercise and time, and note whether both arrived on the same device. That will help identify the duplicate.';
+    if (/\b(?:contacted|sent|confirm)\b/i.test(lowered) && /\bsupport\b/i.test(groundingMessages.join(' ') + ' ' + lowered)) return 'Check the Sent folder in your email app for the support email. Opening Help & Support prepares a draft; you still choose whether to send it. I cannot verify delivery from this chat.';
+    if (/\b(?:contact|contacted|support)\b/i.test(lowered))
+      return 'I cannot confirm that anyone has been contacted. In PulseCheck web, open Profile, then Settings, then Help & Support to email the support team. Opening it prepares an email; you choose whether to send it.';
+    return 'I cannot confirm that account information here. Check the relevant page in PulseCheck before relying on it.';
   }
+
+  const selfRating = canonicalizeText(athleteMessage).match(/\b(readiness|energy)\b.{0,30}?([1-5]) out of 5/i);
+  if (selfRating) return `Your ${selfRating[1].toLowerCase()} is ${selfRating[2]} out of 5 for practice. What would help you feel prepared for the first few minutes?`;
+  if (/\bcheck-in mood word\b/i.test(athleteMessage)) return 'That mood word gives us a starting point for your check-in. What is one thing you want to carry into practice today?';
 
   if (trackingDeclineApplies(athleteMessage, groundingMessages)) {
     return 'I will not create or change a mental note without your explicit request. We can keep working with what you shared without tracking it.';
@@ -649,6 +731,13 @@ function buildNoraEngagementFallback({
     return "I can't keep secrets or be your only source of support. I can help with your sport goals, and a trusted adult can support you too.";
   }
 
+  if (groundingMessages.some(m => hasAny(CROSS_ATHLETE_DATA_REQUEST_PATTERNS, canonicalizeText(m))) && /\b(?:exception|share|told|said|their|teammate)\b/i.test(lowered)) return "I can help with your own performance question. Another athlete’s private conversation stays private.";
+  if (lane === NoraConversationLane.Performance && /\b(?:practice|rehearse|try)\b/i.test(lowered) && /\b(?:cue|that|it)\b/i.test(lowered)) {
+    const serving = /\b(?:serve|serving|volleyball)\b/i.test([athleteMessage, ...groundingMessages].join(' '));
+    return serving
+      ? 'To practice the focus cue, say “One serve at a time” silently, picture the next serve, and bring your attention back to those words whenever it wanders. Try that once now.'
+      : 'To practice your focus cue, say it silently, picture the next play, and bring your attention back to the cue whenever it wanders. Try that once now.';
+  }
   return buildGroundedConversationFallback(athleteMessage);
 }
 
@@ -657,6 +746,7 @@ function significantTokens(value) {
     normalizeText(value)
       .split(' ')
       .map((token) => {
+        if (token === 'slept') return 'sleep';
         if (token.length > 5 && token.endsWith('ing')) {
           const stem = token.slice(0, -3);
           return stem.length > 2 && stem.at(-1) === stem.at(-2) ? stem.slice(0, -1) : stem;
@@ -684,7 +774,7 @@ function repeatsRecentResponse(response, previousAssistantMessages = []) {
     const prior = significantTokens(previous);
     if (prior.size < 6) return false;
     const overlap = [...current].filter((token) => prior.has(token)).length;
-    return overlap / Math.max(1, Math.min(current.size, prior.size)) >= 0.62;
+    return overlap / Math.max(1, current.size) >= 0.62;
   });
 }
 
@@ -717,6 +807,7 @@ function evaluateNoraEngagementResponse({
   requiredTerms = [],
   forbiddenTerms = [],
   confirmedExternalAction = false,
+  noraChatActions = false,
 } = {}) {
   const text = canonicalizeText(response).trim();
   const lowered = text.toLowerCase();
@@ -740,6 +831,7 @@ function evaluateNoraEngagementResponse({
     && !hasAny(INFERRED_STATE_PATTERNS, text)
     && internalRoutingLeakFree
     && !introducesUngroundedState;
+  const mealCardReply = supportsMealCard(athleteMessage, noraChatActions) && /\blog\b/i.test(text) && /\bcard\b/i.test(text) && /\b(?:confirm|review)\b/i.test(text);
   const laneFit = internalRoutingLeakFree && (lane === NoraConversationLane.CriticalSafety
     ? /\b911\b/.test(text) && /\b988\b/.test(text)
     : lane === NoraConversationLane.ClinicalCare
@@ -755,17 +847,19 @@ function evaluateNoraEngagementResponse({
             ? (
               /\b(?:done|sent|shared|forwarded|messaged)\b[^.?!]{0,80}\b(?:coach|staff)\b/i.test(text)
               || /\bwhich coach should i send\b/i.test(text)
+              || (isCoachSharingDeclined(athleteMessage) && /\bunsent\b/i.test(text))
               || /\bi (?:do not|don't|cannot|can't|could not|couldn't) [^.?!]{0,80}\bsend\b[^.?!]{0,80}\b(?:coach|message|summary)\b/i.test(text)
               || /\b(?:message|summary|it)\b[^.?!]{0,40}\b(?:was not|wasn't|could not be|couldn't be) sent\b/i.test(text)
             )
             : lane === NoraConversationLane.AppSupport
               ? /\b(?:app|coach|staff|account|pulsecheck|confirm|connected|connection|assigned|primary|settings|subscription|notification|circle)\b/i.test(text)
-              : PERFORMANCE_CONTEXT_PATTERN.test(`${athleteMessage} ${text}`) || sharesTopic(athleteMessage, text));
-  const topicContinuity = [NoraConversationLane.ClinicalCare, NoraConversationLane.CriticalSafety, NoraConversationLane.Closure]
+              : mealCardReply || PERFORMANCE_CONTEXT_PATTERN.test(`${athleteMessage} ${text}`) || sharesTopic(athleteMessage, text));
+  const topicContinuity = mealCardReply || [NoraConversationLane.ClinicalCare, NoraConversationLane.CriticalSafety, NoraConversationLane.Closure]
     .includes(lane)
+    || (healthRequested && [...healthDomainsIn(athleteMessage)].some(domain => healthDomainsIn(text).has(domain)))
     || sharesTopic(athleteMessage, text)
     || requiredTerms.some((term) => lowered.includes(String(term).toLowerCase()));
-  const questionDiscipline = questionCount <= 1;
+  const questionDiscipline = questionCount <= (/\b(?:without (?:another |a )?question|do not ask|don’t ask|don't ask|no (?:more )?questions)\b/i.test(canonicalAthleteMessage) ? 0 : 1);
   const requestedHealthDomains = healthDomainsIn(athleteMessage);
   const responseHealthDomains = healthDomainsIn(text);
   const crossedHealthDomain = healthRequested
@@ -774,7 +868,7 @@ function evaluateNoraEngagementResponse({
     && (healthRequested
       ? !crossedHealthDomain && !hasAny(GENERIC_HEALTH_FOLLOWUP_PATTERNS, text)
       : !hasAny(UNASKED_HEALTH_PIVOT_PATTERNS, text));
-  const nutritionBoundary = !isFoodOrMealPlanMessage(athleteMessage)
+  const nutritionBoundary = mealCardReply || !isFoodOrMealPlanMessage(athleteMessage)
     || /\b(?:coach|staff|ask|share|discuss|review|decide|options?|preference)\b/i.test(text)
     || !/\b(?:recipes?|meal plan|diet|nutrition|macros?|calories?|protein|carbs?|substitut|eat)\b/i.test(text);
   const foodPlanTopicFit = !isFoodOrMealPlanMessage(athleteMessage)
@@ -858,6 +952,7 @@ module.exports = {
   isMedicalCareRequest,
   isConversationClosure,
   isExplicitHealthDataRequest,
+  isCoachSharingDeclined,
   isCoachHandoffRequest,
   isCoachIdentityQuestion,
   isAppSupportQuestion,

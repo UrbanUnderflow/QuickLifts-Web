@@ -10,7 +10,11 @@ async function main() {
     throw new Error('NORA_RED_TEAM_RELEASE_GATE_TOKEN is required. The release check fails closed.');
   }
 
-  const response = await fetch(url, {
+  const build = process.env.NORA_RED_TEAM_RELEASE_BUILD || process.env.GITHUB_SHA || '';
+  if (!/^[a-f0-9]{40}$/i.test(build)) throw new Error('The exact release commit is required.');
+  const endpoint = new URL(url);
+  endpoint.searchParams.set('build', build);
+  const response = await fetch(endpoint, {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,

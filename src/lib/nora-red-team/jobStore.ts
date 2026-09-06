@@ -9,6 +9,7 @@ export const NORA_RED_TEAM_JOB_COLLECTION = 'nora-red-team-run-jobs';
 export const NORA_RED_TEAM_JOB_RETENTION_MS = 2 * 60 * 60 * 1000;
 
 export interface NoraRedTeamJobRecord extends NoraRedTeamJob {
+  scenarioSnapshot?: import('./types').NoraRedTeamScenario;
   ownerEmail: string;
   workerTokenHash: string;
   firebaseMode: 'prod' | 'dev';

@@ -123,7 +123,7 @@
     "test:pulsecheck:sport-content-packs": "node --import tsx --test tests/unit/sport-scenario-packs.test.ts",
     "test:pulsecheck:mental-skills-baseline": "node --import tsx --test tests/unit/mental-skills-baseline.test.ts",
     "test:nora:engagement": "node --test tests/api/pulsecheck/nora-engagement-policy.test.cjs tests/api/pulsecheck/pulsecheck-chat.runtime.test.cjs tests/api/pulsecheck/pulsecheck-escalation.runtime.test.cjs && node --import tsx --test tests/unit/nora-voice-rubric.test.ts",
-    "test:nora:red-team": "node --test tests/api/firebase-admin/firebase-admin-impersonation.runtime.test.cjs && node --import tsx --test tests/unit/nora-red-team-v0.test.ts tests/unit/nora-red-team-synthetic-auth.test.ts",
+    "test:nora:red-team": "node --test tests/api/firebase-admin/firebase-admin-impersonation.runtime.test.cjs && node --import tsx --test tests/unit/nora-red-team-v0.test.ts tests/unit/nora-red-team-synthetic-auth.test.ts tests/unit/nora-red-team-workflow.test.ts",
     "test:nora:ci": "npm run test:nora:engagement && npm run test:nora:red-team && npm run typecheck",
     "test:nora:release-gate": "node scripts/check-nora-red-team-release-gate.cjs",
     "test:nora:live": "node scripts/evaluate-nora-engagement.cjs",

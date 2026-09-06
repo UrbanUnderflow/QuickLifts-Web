@@ -1,3 +1,4 @@
+import { NoraScenarioLibrary } from '../../../../../lib/nora-red-team/library';
 import { randomUUID } from 'node:crypto';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getFirebaseAdminApp } from '../../../../../lib/firebase-admin';
@@ -20,7 +21,7 @@ import type {
   NoraRedTeamJobResponse,
   NoraRedTeamRunRequest,
 } from '../../../../../lib/nora-red-team/types';
-import { requireAdminRequest } from '../../_auth';
+import { requireNoraTestingRequest } from '../../../../../lib/nora-red-team/access';
 
 type ErrorResponse = {
   error: string;
@@ -135,7 +136,7 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed.', code: 'METHOD_NOT_ALLOWED' });
   }
 
-  const adminIdentity = await requireAdminRequest(req);
+  const adminIdentity = await requireNoraTestingRequest(req);
   if (!adminIdentity) {
     return res.status(401).json({ error: 'Admin authorization is required.', code: 'ADMIN_AUTH_REQUIRED' });
   }
@@ -197,9 +198,11 @@ export default async function handler(
     }
 
     const body = (req.body || {}) as Partial<NoraRedTeamRunRequest>;
-    const scenario = typeof body.scenarioId === 'string'
+    const library = new NoraScenarioLibrary(getFirebaseAdminApp(firebase.mode === 'dev').firestore());
+    const draft = typeof body.scenarioId === 'string' && /^custom-[a-f0-9-]{36}$/.test(body.scenarioId) ? await library.get(body.scenarioId) : null;
+    const scenario = draft?.scenario || (typeof body.scenarioId === 'string'
       ? getNoraRedTeamScenario(body.scenarioId)
-      : null;
+      : null);
     if (!scenario) {
       return res.status(400).json({ error: 'Choose a valid red-team scenario.', code: 'INVALID_SCENARIO' });
     }
@@ -210,6 +213,7 @@ export default async function handler(
     if (!['policy_sandbox', 'staging_chat'].includes(target)) {
       return res.status(400).json({ error: 'Choose a valid red-team target.', code: 'INVALID_TARGET' });
     }
+    if (draft?.status === 'draft' && target !== 'policy_sandbox') return res.status(409).json({ error: 'Draft trials use the policy sandbox.', code: 'DRAFT_SANDBOX_ONLY' });
     if (target === 'staging_chat' && firebase.mode !== 'dev') {
       return res.status(409).json({
         error: 'Staging chat runs require the development database.',
@@ -218,7 +222,7 @@ export default async function handler(
     }
 
     const targetModel = process.env.NORA_RED_TEAM_TARGET_MODEL?.trim() || 'gpt-4o-mini';
-    const agentModel = process.env.NORA_RED_TEAM_AGENT_MODEL?.trim() || 'gpt-4o-mini';
+    const agentModel = process.env.NORA_RED_TEAM_AGENT_MODEL?.trim() || 'gpt-4o';
     const build = process.env.COMMIT_REF?.trim()
       || process.env.NEXT_PUBLIC_COMMIT_SHA?.trim()
       || process.env.VERCEL_GIT_COMMIT_SHA?.trim()
@@ -240,6 +244,7 @@ export default async function handler(
       limits: getNoraRedTeamRunLimits(),
       storage: store.kind,
     });
+    job.scenarioSnapshot = scenario;
     await store.create(job);
 
     if (isLocalRequest(req)) {

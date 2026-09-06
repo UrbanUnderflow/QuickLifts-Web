@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null && request.auth.uid != 'nora-local-synthetic-tester';
     }
 
     function hasEmail() {
@@ -153,8 +153,11 @@ service cloud.firestore {
     }
 
     function isExplicitlyRuledCollection(collectionName) {
-      return collectionName in [
+      return collectionName.matches('nora-red-team-.*') || collectionName in [
         'admin-settings',
+        'conversations',
+        'conversationSummaries',
+        'user-mental-notes',
         'athletic-mind-hub-change-log',
         'athlete-mental-progress',
         'beta-applications',
@@ -3071,6 +3074,20 @@ service cloud.firestore {
           );
         allow create, update, delete: if false;
       }
+    }
+
+    // Nora text persistence is mediated by the authenticated server storage policy.
+    match /conversations/{conversationId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+    match /conversationSummaries/{conversationId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+    match /user-mental-notes/{userId}/notes/{noteId} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if false;
     }
 
     // Direct messages are never globally visible. Legacy conversations remain

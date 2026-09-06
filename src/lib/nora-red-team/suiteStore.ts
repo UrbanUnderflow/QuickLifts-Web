@@ -5,6 +5,8 @@ export const NORA_RED_TEAM_SUITE_COLLECTION = 'nora-red-team-suite-history';
 
 export interface NoraRedTeamSuiteStoreRecord extends NoraRedTeamSuiteRecord {
   workerTokenHash: string;
+  firebaseMode?: 'prod' | 'dev';
+  scenarios?: import('./suiteRunner').NoraRedTeamSuiteScenario[];
 }
 
 function clean<T>(value: T): T {
@@ -14,7 +16,7 @@ function clean<T>(value: T): T {
 export function toPublicNoraRedTeamSuite(
   record: NoraRedTeamSuiteStoreRecord,
 ): NoraRedTeamSuiteRecord {
-  const { workerTokenHash: _workerTokenHash, ...suite } = record;
+  const { workerTokenHash: _workerTokenHash, scenarios: _scenarios, firebaseMode: _firebaseMode, ...suite } = record;
   return suite;
 }
 

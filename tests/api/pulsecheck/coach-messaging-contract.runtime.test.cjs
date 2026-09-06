@@ -347,15 +347,17 @@ test('committed indexes cover native thread and web scoped lookup queries', () =
 test('notification trigger validates the shared contract before push', () => {
   const source = read('functions/coachAthleteMessageNotifications.js');
   const indexSource = read('functions/index.js');
+  const pushTargetsSource = read('functions/utils/pulsecheckPushTargets.js');
   assert.match(source, /resolveCoachAthleteMessageEnvelope/);
   assert.match(source, /if \(!envelope\)/);
   assert.match(source, /buildCoachAthletePushData/);
   assert.match(source, /sendEachForMulticast/);
-  assert.match(source, /pulsecheckPushTokens/);
-  assert.match(source, /pulsecheck-push-installations/);
+  assert.match(source, /loadPulseCheckPushTargets/);
+  assert.match(pushTargetsSource, /pulsecheckPushTokens/);
+  assert.match(pushTargetsSource, /pulsecheck-push-installations/);
   assert.match(source, /cleanupStalePushTargets/);
   assert.match(source, /logPushSendFailures/);
-  assert.ok(source.includes('messaging/third-party-auth-error'));
+  assert.ok(pushTargetsSource.includes('messaging/third-party-auth-error'));
   assert.match(source, /resolvePulseCheckSenderName/);
   assert.match(indexSource, /exports\.sendCoachAthleteMessageNotification/);
 });

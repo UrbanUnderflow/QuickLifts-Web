@@ -1371,3 +1371,24 @@ test('care-state clear requires an explicit successful provider clear state', as
   assert.equal(state.safetyState.crisisWallActive, false);
   assert.equal(state.safetyState.crisisWallReason, null);
 });
+
+test('safeguarding never auto-selects or notifies a connected coach', async () => {
+  const { runtimeHelpers } = loadEscalationModule();
+  const writes = [];
+  const record = { userId: 'athlete-test', category: 'Abuse Disclosure (immediate danger)', tier: 3 };
+  const ref = { async set(value) { writes.push(value); }, async get() { return { exists: true, data: () => record, ref }; } };
+  const db = { collection(name) { assert.equal(name, 'escalation-records', 'Must not access coaches, notifications or delivery collections'); return { doc: () => ref }; } };
+  const response = await runtimeHelpers.notifyCoach({ escalationId: 'test', userId: 'athlete-test', coachId: 'implicated-coach' }, db);
+  assert.equal(JSON.parse(response.body).reason, 'independent_safeguarding_recipient_required');
+  assert.equal(writes[0].coachNotificationStatus, 'blocked_safeguarding');
+});
+
+for (const exclusions of [{ excludedRecipientIds: ['coach-test'] }, { implicatedCoachId: 'coach-test' }]) {
+  test(`coach delivery blocks an excluded recipient: ${Object.keys(exclusions)[0]}`, async () => {
+    const { runtimeHelpers } = loadEscalationModule();
+    const record = { userId: 'athlete-test', category: 'general', ...exclusions };
+    const db = { collection(name) { assert.equal(name, 'escalation-records'); return { doc: () => ({ async get() { return { exists: true, data: () => record }; } }) }; } };
+    const response = await runtimeHelpers.notifyCoach({ escalationId: 'test', userId: 'athlete-test', coachId: 'coach-test' }, db);
+    assert.equal(JSON.parse(response.body).reason, 'recipient_excluded');
+  });
+}

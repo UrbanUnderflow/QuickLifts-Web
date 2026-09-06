@@ -58,8 +58,8 @@ test('user management can impersonate a user directly into the PulseCheck coach 
   );
   assert.match(
     remoteLoginSource,
-    /signOutAndClearPulseAuthState\(auth\)/,
-    'remote-login should clear any prior browser auth state before impersonating the target user'
+    /clearStalePulseAuthKeys\(\);\s*await signOut\(auth\);[\s\S]*setPersistence\(auth,\s*browserSessionPersistence\)/,
+    'remote-login should clear stale keys and sign out before changing persistence without deleting the live Auth database'
   );
   assert.match(
     remoteLoginSource,

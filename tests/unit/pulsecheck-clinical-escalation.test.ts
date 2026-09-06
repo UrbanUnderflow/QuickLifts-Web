@@ -110,12 +110,12 @@ test('clinical escalation — required fields are validated', async () => {
   );
 });
 
-test('default pilot consent doc — bumped to v5 with crisis-handoff language', async () => {
+test('default pilot consent doc — v6 preserves with crisis-handoff language', async () => {
   const { types } = await loadModules();
   const pilotConsents = types.getDefaultPulseCheckRequiredConsents('pilot');
   const participation = pilotConsents.find((c) => c.id === 'pulsecheck-pilot-participation-notice-v1');
   assert.ok(participation, 'participation notice must be present');
-  assert.equal(participation?.version, 'v5', 'participation notice version must be bumped to v5');
+  assert.equal(participation?.version, 'v6', 'participation notice version must be v6 preserves');
   assert.ok(
     participation?.body.includes('critical-tier'),
     'participation notice must mention critical-tier',
@@ -134,12 +134,12 @@ test('default pilot consent doc — bumped to v5 with crisis-handoff language', 
   );
 });
 
-test('default pilot consent doc — privacy notice bumped to v5 with crisis-tier sharing language', async () => {
+test('default pilot consent doc — privacy notice v6 preserves with crisis-tier sharing language', async () => {
   const { types } = await loadModules();
   const pilotConsents = types.getDefaultPulseCheckRequiredConsents('pilot');
   const privacy = pilotConsents.find((c) => c.id === 'pulsecheck-pilot-privacy-and-data-use-v1');
   assert.ok(privacy);
-  assert.equal(privacy?.version, 'v5');
+  assert.equal(privacy?.version, 'v6');
   assert.ok(privacy?.body.includes('Crisis-tier escalation sharing'));
   assert.ok(privacy?.body.includes('clinician staff member'));
 });

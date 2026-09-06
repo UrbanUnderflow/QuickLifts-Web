@@ -392,8 +392,8 @@
   schedule = "@hourly"
 
 [functions.nora-red-team-scheduled-suite]
-  # Weekly Monday run. The scheduler only queues work; the background worker executes the suite.
-  schedule = "0 8 * * 1"
+  # Daily check. The scheduler queues work; the background worker executes the suite.
+  schedule = "0 8 * * *"
 
 [functions.nora-red-team-scheduled-suite-background]
   is_background = true

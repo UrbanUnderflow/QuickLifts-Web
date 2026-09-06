@@ -899,6 +899,7 @@ test('recovers today conversation context when message timestamps use Apple refe
   });
 
   const result = await recoverSnapshotFromSavedConversation({
+    assessStorage: async () => ({ restricted: false }),
     db,
     userId: 'athlete-1',
     sourceDate,
@@ -961,6 +962,7 @@ test('recovers today conversation context when message timestamps are stored as 
   });
 
   const result = await recoverSnapshotFromSavedConversation({
+    assessStorage: async () => ({ restricted: false }),
     db,
     userId: 'athlete-1',
     sourceDate,
@@ -1022,6 +1024,7 @@ test('recovers from the most recent material user message instead of only the la
   });
 
   const result = await recoverSnapshotFromSavedConversation({
+    assessStorage: async () => ({ restricted: false }),
     db,
     userId: 'athlete-1',
     sourceDate,
@@ -1428,4 +1431,30 @@ test('dedupes same-conversation escalation records within the merge window', asy
     global.fetch = originalFetch;
     process.env.OPEN_AI_SECRET_KEY = originalOpenAiKey;
   }
+});
+
+
+test('withdrawn consent prevents every coach-message database operation', async () => {
+  const { sendNoraCoachHandoff } = loadRuntimeHelpers();
+  const db = { collection() { throw new Error('Database must not be touched'); } };
+  const result = await sendNoraCoachHandoff({ db, message: 'Do not send the note to my coach. Keep it unsent.', coach: null });
+  assert.equal(result.sent, false);
+  assert.equal(result.reason, 'consent_withdrawn');
+});
+
+test('synthetic runtime preflight proves identity before any data reads', async () => {
+  const runtime=loadAuthBoundaryHandler({decoded:{uid:'nora-red-team-probe',noraRedTeamSynthetic:true}});
+  const response=await runtime.handler({httpMethod:'POST',headers:{authorization:'Bearer synthetic-token','x-pulsecheck-firebase-mode':'dev','x-nora-red-team-synthetic':'true'},body:JSON.stringify({userId:'nora-red-team-probe',runtimeProbe:true})});
+  assert.equal(response.statusCode,200);
+  const payload=JSON.parse(response.body);
+  assert.equal(payload.runtimeEvidence.runtime,'pulsecheck-chat');
+  assert.equal(payload.syntheticRedTeam.externalSideEffects,false);
+  assert.equal(runtime.firestoreReads(),0);
+});
+
+test('production cannot activate the synthetic preflight', async () => {
+  const runtime=loadAuthBoundaryHandler({decoded:{uid:'nora-red-team-probe',noraRedTeamSynthetic:true}});
+  const response=await runtime.handler({httpMethod:'POST',headers:{authorization:'Bearer synthetic-token','x-pulsecheck-firebase-mode':'prod','x-nora-red-team-synthetic':'true'},body:JSON.stringify({userId:'nora-red-team-probe',runtimeProbe:true})});
+  assert.equal(response.statusCode,403);
+  assert.equal(runtime.firestoreReads(),0);
 });

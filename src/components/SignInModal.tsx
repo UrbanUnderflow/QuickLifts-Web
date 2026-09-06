@@ -25,7 +25,7 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import { toggleDevMode } from '../redux/devModeSlice';
-import { initializeFirebase, isUsingDevFirebase } from '../api/firebase/config';
+import { setPreferredFirebaseMode, isUsingDevFirebase } from '../api/firebase/config';
 import { useUser } from '../hooks/useUser';
 import { clearRoundIdRedirect, clearLoginRedirectPath } from '../redux/tempRedirectSlice'; // Import clear actions
 import { showToast } from '../redux/toastSlice'; // Import showToast
@@ -77,10 +77,8 @@ const DevModeToggle: React.FC = () => {
 
   const handleToggle = () => {
     const newMode = !isDevelopment;
-    window.localStorage.setItem('devMode', String(newMode));
-    window.localStorage.setItem('dopplerConfig', newMode ? 'dev_backend' : 'prd_backend');
+    setPreferredFirebaseMode(newMode);
     dispatch(toggleDevMode());
-    initializeFirebase(newMode);
     setTimeout(() => {
       window.location.reload();
     }, 300);

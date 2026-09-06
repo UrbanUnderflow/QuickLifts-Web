@@ -4,15 +4,18 @@ import { adminMethods } from '../../api/firebase/admin/methods';
 import { isDevAuthBypassEnabled } from '../../utils/devAuthBypass';
 import AdminNavBanner from '../admin/AdminNavBanner';
 import SignInModal from '../SignInModal';
-import { auth } from '../../api/firebase/config';
+import { auth, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 import { signOutAndClearPulseAuthState } from '../../utils/authSessionCleanup';
 
 interface AdminRouteGuardProps {
   children: React.ReactNode;
   showAdminBanner?: boolean;
+  scope?: 'nora-testing';
 }
 
-const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children, showAdminBanner = true }) => {
+const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children, showAdminBanner: requestedBanner = true, scope }) => {
+  const [globalAdmin, setGlobalAdmin] = useState(false);
+  const showAdminBanner = requestedBanner && (!scope || globalAdmin);
   const user = useUser();
   const userLoading = useUserLoading();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
@@ -59,7 +62,7 @@ const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children, showAdminBa
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <img src="/pulse-logo.svg" alt="Pulse" className="h-8 shrink-0" />
-            <span className="hidden text-sm font-medium text-stone-500 sm:inline">Group Meet</span>
+            <span className="hidden text-sm font-medium text-stone-500 sm:inline">{scope === 'nora-testing' ? 'Nora Testing' : 'Group Meet'}</span>
           </div>
 
           {user ? (
@@ -79,7 +82,7 @@ const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children, showAdminBa
                 type="button"
                 onClick={async () => {
                   await signOutAndClearPulseAuthState(auth);
-                  window.location.assign('/admin');
+                  window.location.assign(scope === 'nora-testing' ? '/admin/noraRedTeam' : '/admin');
                 }}
                 className="inline-flex h-10 items-center border-l border-stone-200 px-3 text-sm font-semibold text-stone-600 transition hover:bg-stone-50 hover:text-stone-950"
               >
@@ -110,15 +113,24 @@ const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children, showAdminBa
         return;
       }
       try {
-        const result = await adminMethods.isAdmin(user.email);
-        setIsAdmin(result);
+        if (scope === 'nora-testing') {
+          const current = auth.currentUser;
+          if (!current) { setIsAdmin(false); setLoading(false); return; }
+          const response = await fetch('/api/admin/pulsecheck/nora-red-team/access', { headers: { Authorization: `Bearer ${await current.getIdToken()}`, ...getFirebaseModeRequestHeaders() } });
+          const data = await response.json();
+          setIsAdmin(response.ok);
+          setGlobalAdmin(Boolean(data.identity?.isGlobalAdmin));
+        } else {
+          const result = await adminMethods.isAdmin(user.email);
+          setIsAdmin(result);
+        }
       } catch (_e) {
         setIsAdmin(false);
       }
       setLoading(false);
     };
     checkAdmin();
-  }, [user, userLoading]);
+  }, [user, userLoading, scope]);
 
   // Local-only escape hatch: when running the dev server with the bypass flag
   // set, render admin content without requiring a signed-in admin. Hard-gated
@@ -181,10 +193,10 @@ const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children, showAdminBa
         <div className={cardSurfaceClassName}>
           <div className={dangerCardClassName}>
             <div className={`text-lg font-semibold ${showAdminBanner ? 'text-rose-100' : 'text-rose-900'}`}>
-              Admin access required
+              {scope === 'nora-testing' ? 'Nora testing access required' : 'Admin access required'}
             </div>
             <p className={`mt-2 text-sm ${showAdminBanner ? 'text-rose-100/70' : 'text-rose-700'}`}>
-              This signed-in account is not allowed to view admin tools. Use the account control above to sign out and switch accounts.
+              {scope === 'nora-testing' ? 'Ask a Nora testing owner to add your verified sign-in email. You can also sign out and switch accounts.' : 'This signed-in account is not allowed to view admin tools. Use the account control above to sign out and switch accounts.'}
             </p>
           </div>
         </div>

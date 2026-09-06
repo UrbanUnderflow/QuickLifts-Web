@@ -1,3 +1,5 @@
+import { NoraScenarioLibrary } from '../../src/lib/nora-red-team/library';
+import { catalogFingerprint } from '../../src/lib/nora-red-team/catalogIdentity';
 import { randomBytes } from 'node:crypto';
 import type { Handler } from '@netlify/functions';
 import { getFirebaseAdminApp } from '../../src/lib/firebase-admin';
@@ -16,12 +18,14 @@ function deploymentOrigin(): string {
 }
 
 export const handler: Handler = async () => {
-  const app = getFirebaseAdminApp(false);
+  const app = getFirebaseAdminApp(true);
   const firestore = app.firestore();
-  const historyStore = new NoraRedTeamHistoryStore(firestore);
+  // Keep the approved catalog in its existing workspace; execute fixtures in development.
+  const catalogFirestore = getFirebaseAdminApp(false).firestore();
+  const historyStore = new NoraRedTeamHistoryStore(catalogFirestore);
   const suiteStore = new NoraRedTeamSuiteStore(firestore);
   const regressions = await historyStore.listEnabledRegressions();
-  const scenarios = buildNoraRedTeamSuiteScenarios(regressions);
+  const scenarios = buildNoraRedTeamSuiteScenarios(regressions, await new NoraScenarioLibrary(catalogFirestore).approved());
   const now = new Date();
   const build = resolveNoraRedTeamScheduledBuild({
     commitRef: process.env.COMMIT_REF,
@@ -30,14 +34,14 @@ export const handler: Handler = async () => {
   }, now);
   const suiteId = createNoraRedTeamScheduledSuiteId(now, build);
   const workerToken = randomBytes(32).toString('hex');
-  const created = await suiteStore.createIfMissing(createNoraRedTeamSuiteRecord({
+  const created = await suiteStore.createIfMissing({ ...createNoraRedTeamSuiteRecord({
     suiteId,
     scenarioIds: scenarios.map(({ key }) => key),
     workerTokenHash: hashNoraRedTeamWorkerToken(workerToken),
     build,
     scheduled: true,
     now,
-  }));
+  }), scenarios, firebaseMode:'dev', target:'staging_chat', catalogFingerprint:catalogFingerprint(scenarios.map(s=>s.scenario)), targetModel:process.env.NORA_RED_TEAM_TARGET_MODEL || 'gpt-4o-mini', agentModel:process.env.NORA_RED_TEAM_AGENT_MODEL || 'gpt-4o' });
 
   if (!created) {
     console.info('[nora-red-team] Scheduled suite already exists for this date.', { suiteId });
@@ -50,6 +54,7 @@ export const handler: Handler = async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-pulsecheck-firebase-mode': 'dev',
         'x-pulsecheck-internal-worker': workerToken,
       },
       body: JSON.stringify({ suiteId }),

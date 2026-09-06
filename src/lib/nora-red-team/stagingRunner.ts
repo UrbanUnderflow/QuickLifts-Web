@@ -1,3 +1,4 @@
+import { verifyRuntime } from './runtimeIdentity';
 import { createHash, randomUUID } from 'node:crypto';
 import type * as FirebaseAdmin from 'firebase-admin';
 import type { Firestore } from 'firebase-admin/firestore';
@@ -41,6 +42,8 @@ type ChatPayload = {
   stateSnapshot?: { id?: string } | null;
   syntheticRedTeam?: {
     active?: boolean;
+    build?: string;
+    targetModel?: string;
     externalSideEffects?: boolean;
   } | null;
   error?: string;
@@ -262,7 +265,7 @@ async function seedSyntheticStagingData(input: {
   };
 }
 
-async function cleanupSyntheticStagingData(input: {
+export async function cleanupSyntheticStagingData(input: {
   app: FirebaseAdmin.app.App;
   db: Firestore;
   uid: string;
@@ -354,6 +357,7 @@ export async function runNoraStagingScenario(input: {
   scenario: NoraRedTeamScenario;
   randomSeed: number;
   build: string;
+  targetModel?: string;
   signal?: AbortSignal;
   endpoint?: string;
   fetchImpl?: typeof fetch;
@@ -465,6 +469,7 @@ export async function runNoraStagingScenario(input: {
           clientCapabilities: {
             platform: 'red-team-staging',
             noraContractVersion: NORA_RED_TEAM_CONTRACT_VERSION,
+            noraChatActions: true,
           },
         },
         fetchImpl,
@@ -473,10 +478,13 @@ export async function runNoraStagingScenario(input: {
       if (!result.response.ok) {
         throw new Error(`STAGING_CHAT_FAILED: ${result.payload.error || `HTTP ${result.response.status}`}`);
       }
+      verifyRuntime(result.payload, input.build === 'local' ? undefined : input.build);
       if (result.payload.syntheticRedTeam?.active !== true
         || result.payload.syntheticRedTeam?.externalSideEffects !== false) {
         throw new Error('STAGING_ENDPOINT_OUTDATED: The endpoint did not confirm the synthetic no-contact lock.');
       }
+      if (input.build !== 'local' && result.payload.syntheticRedTeam.build !== input.build) throw new Error('STAGING_BUILD_MISMATCH: The chat endpoint is running a different release candidate.');
+      if (input.targetModel && result.payload.syntheticRedTeam.targetModel !== input.targetModel) throw new Error('STAGING_MODEL_MISMATCH: The chat endpoint uses a different target model.');
       const noraResponse = String(result.payload.assistantMessage || '').trim();
       if (!noraResponse) throw new Error('STAGING_CHAT_FAILED: Nora returned an empty response.');
       conversationId = String(result.payload.conversationId || conversationId);
@@ -628,7 +636,7 @@ export async function runNoraStagingScenario(input: {
       randomSeed: input.randomSeed,
       platform: 'web-staging-chat',
       build: input.build || 'local',
-      targetModel: 'production-pulsecheck-chat',
+      targetModel: input.targetModel || 'production-pulsecheck-chat',
       agentModel: 'deterministic-staging-judge',
       promptConfigVersion: 'production-chat-endpoint',
       startedAt,

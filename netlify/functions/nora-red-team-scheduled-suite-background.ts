@@ -33,7 +33,8 @@ export default async function handler(request: Request): Promise<void> {
     throw new Error('Invalid suite worker request.');
   }
 
-  const app = getFirebaseAdminApp(false);
+  const dev=request.headers.get('x-pulsecheck-firebase-mode')==='dev';
+  const app = getFirebaseAdminApp(dev);
   const suiteStore = new NoraRedTeamSuiteStore(app.firestore());
   const suite = await suiteStore.get(suiteId);
   if (!suite || !secureHashMatch(suite.workerTokenHash, hashNoraRedTeamWorkerToken(workerToken))) {
@@ -45,13 +46,13 @@ export default async function handler(request: Request): Promise<void> {
     suiteId,
     bridgeOrigin: bridgeOrigin(),
     featureId: process.env.NORA_RED_TEAM_BRIDGE_FEATURE_ID?.trim() || 'noraRedTeam',
-    firebaseProjectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() || 'quicklifts-dd3f1',
+    firebaseProjectId: dev ? process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID || 'quicklifts-dev-01' : process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'quicklifts-dd3f1',
     firebaseApiKey:
-      process.env.FIREBASE_WEB_API_KEY?.trim() ||
+      (dev ? process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY : process.env.FIREBASE_WEB_API_KEY)?.trim() ||
       process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ||
       '',
     targetModel: process.env.NORA_RED_TEAM_TARGET_MODEL?.trim() || 'gpt-4o-mini',
-    agentModel: process.env.NORA_RED_TEAM_AGENT_MODEL?.trim() || 'gpt-4o-mini',
+    agentModel: process.env.NORA_RED_TEAM_AGENT_MODEL?.trim() || 'gpt-4o',
     build: resolveNoraRedTeamScheduledBuild({
       commitRef: process.env.COMMIT_REF,
       deployId: process.env.DEPLOY_ID,

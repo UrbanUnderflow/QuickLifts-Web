@@ -698,7 +698,7 @@ test('redeemed single-use checkout only self-heals for its original active subsc
           },
         },
       ],
-      'pulsecheck-athlete-app-entitlements': [],
+      'pulsecheck-athlete-app-entitlements': [{id:'team_1_athlete_1',data:{userId:'athlete_1',teamId:'team_1',active:true,status:'active',currentPeriodEndEpochSeconds:nowSec+3600}}],
     },
   });
   delete require.cache[LIB_PATH];
@@ -717,7 +717,7 @@ test('redeemed single-use checkout only self-heals for its original active subsc
     }),
     (error) => error.statusCode === 409 && error.alreadyActive === true
   );
-  await firebase.db.collection('subscriptions').doc('athlete_1').set({ plans: [] }, { merge: true });
+  await firebase.db.collection('pulsecheck-athlete-app-entitlements').doc('team_1_athlete_1').set({ active: false, status: 'expired' }, { merge: true });
   await assert.rejects(
     () => lib.loadCoachPricedInviteCheckout({
       database: firebase.db,

@@ -289,9 +289,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
           <PersistGate loading={null} persistor={persistor}>
             <RouterErrorBoundary>
               <MixpanelInitializer />
-              <AuthWrapper>
-                <Component {...pageProps} />
-              </AuthWrapper>
+              {process.env.NODE_ENV === 'development' && router.pathname === '/admin/noraRedTeam' && pageProps.localTesting === true ? <Component {...pageProps} /> : <AuthWrapper><Component {...pageProps} /></AuthWrapper>}
               <Toast />
               <GlobalLoader />
             </RouterErrorBoundary>

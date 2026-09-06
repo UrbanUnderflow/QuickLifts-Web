@@ -1,3 +1,7 @@
+import { NORA_EVERYDAY_SCENARIOS } from './everydayScenarios';
+import { NORA_OPERATIONAL_SCENARIOS } from './operationalScenarios';
+import { NoraScenarioLibrary } from './library';
+import { NORA_RED_TEAM_VERSION, NORA_RED_TEAM_CONTRACT_VERSION } from './types';
 import type * as FirebaseAdmin from 'firebase-admin';
 import { executeNoraRedTeamRun, getNoraRedTeamRunLimits } from './execution';
 import { NoraRedTeamHistoryStore } from './historyStore';
@@ -7,23 +11,25 @@ import {
   NoraRedTeamSuiteStore,
   type NoraRedTeamSuiteStoreRecord,
 } from './suiteStore';
-import type {
-  NoraRedTeamRegressionCase,
-  NoraRedTeamScenario,
-} from './types';
+import type { NoraRedTeamRegressionCase, NoraRedTeamScenario } from './types';
 
-export const NORA_RED_TEAM_SCHEDULED_OWNER = 'nora-red-team-scheduled@redteam.invalid';
+export const NORA_RED_TEAM_SCHEDULED_OWNER =
+  'nora-red-team-scheduled@redteam.invalid';
 export const NORA_RED_TEAM_SCHEDULED_UID = 'nora-red-team-scheduled-runner';
 const SUITE_MAX_DURATION_MS = 13 * 60 * 1000;
 
-export function resolveNoraRedTeamScheduledBuild(input: {
-  commitRef?: string;
-  deployId?: string;
-  publicCommitSha?: string;
-}, now: Date = new Date()): string {
-  const deployedBuild = input.commitRef?.trim()
-    || input.deployId?.trim()
-    || input.publicCommitSha?.trim();
+export function resolveNoraRedTeamScheduledBuild(
+  input: {
+    commitRef?: string;
+    deployId?: string;
+    publicCommitSha?: string;
+  },
+  now: Date = new Date(),
+): string {
+  const deployedBuild =
+    input.commitRef?.trim() ||
+    input.deployId?.trim() ||
+    input.publicCommitSha?.trim();
   if (deployedBuild) return deployedBuild;
 
   // Netlify's build metadata is not guaranteed to be present in a scheduled
@@ -33,10 +39,18 @@ export function resolveNoraRedTeamScheduledBuild(input: {
 }
 
 function scheduledBuildIdentity(build: string): string {
-  return build.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) || 'scheduled';
+  return (
+    build
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 10) || 'scheduled'
+  );
 }
 
-export function createNoraRedTeamScheduledSuiteId(now: Date, build: string): string {
+export function createNoraRedTeamScheduledSuiteId(
+  now: Date,
+  build: string,
+): string {
   return `nrt-suite-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${scheduledBuildIdentity(build)}`;
 }
 
@@ -47,15 +61,22 @@ export type NoraRedTeamSuiteScenario = {
 
 export function buildNoraRedTeamSuiteScenarios(
   regressions: NoraRedTeamRegressionCase[],
+  approved: NoraRedTeamScenario[] = [],
 ): NoraRedTeamSuiteScenario[] {
-  const canonical = NORA_RED_TEAM_SCENARIOS.map((scenario) => ({
+  const canonical = [
+    ...NORA_RED_TEAM_SCENARIOS,
+    ...NORA_EVERYDAY_SCENARIOS, ...NORA_OPERATIONAL_SCENARIOS,
+    ...approved,
+  ].map((scenario) => ({
     key: `catalog:${scenario.id}`,
     scenario,
   }));
   const promoted = regressions
     .filter((regression) => regression.enabled)
     .map((regression) => {
-      const suffix = regression.sourceRunId.replace(/[^a-z0-9]/gi, '').slice(-10) || 'promoted';
+      const suffix =
+        regression.sourceRunId.replace(/[^a-z0-9]/gi, '').slice(-10) ||
+        'promoted';
       return {
         key: `regression:${regression.scenarioId}:${regression.sourceRunId}`,
         scenario: {
@@ -70,11 +91,13 @@ export function buildNoraRedTeamSuiteScenarios(
 
 function seedForScenario(startedAt: string, index: number): number {
   const date = Number(startedAt.slice(0, 10).replace(/-/g, '')) || 20_260_101;
-  return Math.min(2_147_483_647, (date * 100) + index + 1);
+  return Math.min(2_147_483_647, date * 100 + index + 1);
 }
 
 function safeError(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error)).replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 240);
+  return (error instanceof Error ? error.message : String(error))
+    .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .slice(0, 240);
 }
 
 export async function executeScheduledNoraRedTeamSuite(input: {
@@ -100,12 +123,23 @@ export async function executeScheduledNoraRedTeamSuite(input: {
   let passed = 0;
   let failed = 0;
   let review = 0;
+  const runIds: string[] = [];
+  let persistQueue: Promise<void> = Promise.resolve();
 
   try {
     const regressions = await historyStore.listEnabledRegressions();
-    const scenarios = buildNoraRedTeamSuiteScenarios(regressions);
-    if (scenarios.map(({ key }) => key).join('|') !== suite.scenarioIds.join('|')) {
-      throw new Error('SUITE_CATALOG_CHANGED: Scheduled scenario inputs changed after the suite was queued.');
+    const scenarios =
+      suite.scenarios ||
+      buildNoraRedTeamSuiteScenarios(
+        regressions,
+        await new NoraScenarioLibrary(firestore).approved(),
+      );
+    if (
+      scenarios.map(({ key }) => key).join('|') !== suite.scenarioIds.join('|')
+    ) {
+      throw new Error(
+        'SUITE_CATALOG_CHANGED: Scheduled scenario inputs changed after the suite was queued.',
+      );
     }
 
     const idToken = await createSyntheticFirebaseIdToken({
@@ -122,11 +156,11 @@ export async function executeScheduledNoraRedTeamSuite(input: {
     const authorization = `Bearer ${idToken}`;
     const suiteDeadline = Date.now() + SUITE_MAX_DURATION_MS;
 
-    for (let index = 0; index < scenarios.length; index += 1) {
+    const runOne = async (index: number) => {
       const entry = scenarios[index];
       if (Date.now() >= suiteDeadline) {
         errors.push('The scheduled suite reached its 13-minute time limit.');
-        break;
+        return;
       }
 
       const controller = new AbortController();
@@ -141,14 +175,14 @@ export async function executeScheduledNoraRedTeamSuite(input: {
           authorization,
           bridgeOrigin: input.bridgeOrigin,
           featureId: input.featureId,
-          firebaseMode: 'prod',
+          firebaseMode: suite.firebaseMode || 'prod',
           firebaseProjectId: input.firebaseProjectId,
           scenario: entry.scenario,
           randomSeed: seedForScenario(startedAt, index),
-          targetModel: input.targetModel,
-          agentModel: input.agentModel,
+          targetModel: suite.targetModel || input.targetModel,
+          agentModel: suite.agentModel || input.agentModel,
           build: suite.build || input.build,
-          target: 'policy_sandbox',
+          target: suite.target || 'policy_sandbox',
           limits,
           signal: controller.signal,
         });
@@ -164,11 +198,14 @@ export async function executeScheduledNoraRedTeamSuite(input: {
         await historyStore.saveCompletedRun({
           run: persistedRun,
           ownerEmail: NORA_RED_TEAM_SCHEDULED_OWNER,
-          firebaseMode: 'prod',
+          firebaseMode: suite.firebaseMode || 'prod',
         });
-        if (run.verdict === 'pass') passed += 1;
-        else if (run.verdict === 'fail') failed += 1;
+        if (run.verdict === 'fail') failed += 1;
+        else if (run.humanReviewRequired || run.verdict === 'review')
+          review += 1;
+        else if (run.verdict === 'pass') passed += 1;
         else review += 1;
+        runIds.push(run.runId);
       } catch (error) {
         failed += 1;
         errors.push(`${entry.key}: ${safeError(error)}`);
@@ -177,18 +214,32 @@ export async function executeScheduledNoraRedTeamSuite(input: {
       }
 
       completedScenarioIds = [...completedScenarioIds, entry.key];
-      await suiteStore.update(input.suiteId, {
-        completedScenarioIds,
-        passed,
-        failed,
-        review,
-        error: errors.length ? errors.join(' | ').slice(0, 1_500) : null,
-      });
-    }
+      persistQueue = persistQueue.then(() =>
+        suiteStore.update(input.suiteId, {
+          completedScenarioIds: [...completedScenarioIds],
+          runIds: [...runIds],
+          passed,
+          failed,
+          review,
+          error: errors.length ? errors.join(' | ').slice(0, 1_500) : null,
+        }),
+      );
+      await persistQueue;
+    };
+    let nextIndex = 0;
+    await Promise.all(
+      Array.from({ length: 3 }, async () => {
+        while (nextIndex < scenarios.length) {
+          const index = nextIndex++;
+          await runOne(index);
+        }
+      }),
+    );
 
     const completedAt = new Date().toISOString();
     const openCriticalBlockers = await historyStore.countOpenCriticalBlockers();
-    const allCompleted = completedScenarioIds.length === suite.scenarioIds.length;
+    const allCompleted =
+      completedScenarioIds.length === suite.scenarioIds.length;
     await suiteStore.update(input.suiteId, {
       status: allCompleted ? 'completed' : 'failed',
       completedAt,
@@ -225,8 +276,8 @@ export function createNoraRedTeamSuiteRecord(input: {
   const createdAt = (input.now || new Date()).toISOString();
   return {
     suiteId: input.suiteId,
-    version: '0.4.0',
-    contractVersion: '2026.08.20',
+    version: NORA_RED_TEAM_VERSION,
+    contractVersion: NORA_RED_TEAM_CONTRACT_VERSION,
     status: 'queued',
     scheduled: input.scheduled,
     startedAt: null,

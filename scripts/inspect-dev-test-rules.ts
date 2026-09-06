@@ -1,0 +1,4 @@
+import {loadEnvConfig} from '@next/env';
+import {writeFileSync} from 'node:fs';
+loadEnvConfig(process.cwd());
+async function main(){const {getFirebaseAdminApp}=await import('../src/lib/firebase-admin');const app=getFirebaseAdminApp(false); const token=await app.options.credential!.getAccessToken(); const base='https://firebaserules.googleapis.com/v1/'; const headers={Authorization:`Bearer ${token.access_token}`};const release=await fetch(base+'projects/quicklifts-dev-01/releases/cloud.firestore',{headers}).then(r=>r.json());console.log(JSON.stringify(release)); if(!release.rulesetName)return; const rules=await fetch(base+release.rulesetName,{headers}).then(r=>r.json());writeFileSync('/tmp/nora-dev-current-rules.json',JSON.stringify(rules));console.log(JSON.stringify({release:release.name,files:rules.source?.files?.map((f:any)=>({name:f.name,content:f.content}))}));}void main();

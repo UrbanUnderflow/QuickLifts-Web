@@ -121,19 +121,19 @@ test('dashboard deep links and secondary surfaces stay on the selected team', ()
   assert.match(dashboardSource, /new URLSearchParams\(window\.location\.search\)/);
   assert.match(
     dashboardSource,
-    /query: mergeLatestCoachDashboardQuery\(router\.query, \{ view: nextView \}\)/
+    /replaceDashboardQuery\(\{ view: nextView \}\)/
   );
   assert.match(
     dashboardSource,
-    /query: mergeLatestCoachDashboardQuery\(router\.query, \{\s*teamId: initialTeam\.context\.teamId,\s*\}\)/
+    /replaceCoachDashboardUrlQuery\(\{ teamId: initialTeam\.context\.teamId \}\)/
   );
   assert.match(
     dashboardSource,
-    /query: mergeLatestCoachDashboardQuery\(router\.query, \{ teamId \}\)/
+    /replaceCoachDashboardUrlQuery\(\{ teamId \}\)/
   );
   assert.match(
     dashboardSource,
-    /isViewKey\(rawView\)[\s\S]*navItems\.some\(\(item\) => item\.key === rawView\)/
+    /isViewKey\(rawView\)[\s\S]*navItems\.some\(\(item\) => item\.key === routeView\)/
   );
   assert.match(
     dashboardSource,
@@ -153,4 +153,16 @@ test('dashboard deep links and secondary surfaces stay on the selected team', ()
   );
   assert.match(scheduleService, /where\('teamId', '==', teamId\)/);
   assert.match(coachServices, /async listForCoachTeam/);
+});
+
+test('dashboard URL updates preserve the current team, other filters and hash',()=>{
+ const source=read('src/pages/coach/dashboard.tsx');
+ const start=source.indexOf('const mergeLatestCoachDashboardQuery =');
+ const end=source.indexOf('const replaceCoachDashboardUrlQuery =',start);
+ assert.ok(start>=0&&end>start);
+ const compiled=require('typescript').transpileModule(source.slice(start,end),{compilerOptions:{target:require('typescript').ScriptTarget.ES2020}}).outputText;
+ const build=new Function('window','URLSearchParams',`${compiled}; return coachDashboardUrlForQuery;`)({location:{pathname:'/coach/dashboard',search:'?teamId=team-a&view=roster&athleteId=athlete-a',hash:'#details'}},URLSearchParams);
+ const next=new URL(build({view:'schedule'}),'https://synthetic.invalid');
+ assert.equal(next.searchParams.get('teamId'),'team-a');assert.equal(next.searchParams.get('athleteId'),'athlete-a');assert.equal(next.searchParams.get('view'),'schedule');assert.equal(next.hash,'#details');
+ const changed=new URL(build({teamId:'team-b',athleteId:undefined}),'https://synthetic.invalid');assert.equal(changed.searchParams.get('teamId'),'team-b');assert.equal(changed.searchParams.has('athleteId'),false);
 });

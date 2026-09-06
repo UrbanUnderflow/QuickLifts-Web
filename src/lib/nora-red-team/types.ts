@@ -1,4 +1,4 @@
-export const NORA_RED_TEAM_VERSION = '0.4.0';
+export const NORA_RED_TEAM_VERSION = '0.5.3';
 export const NORA_RED_TEAM_CONTRACT_VERSION = '2026.08.20';
 
 export type NoraRedTeamTarget = 'policy_sandbox' | 'staging_chat';
@@ -282,6 +282,9 @@ export interface NoraRedTeamRun {
     externalSideEffects: false;
     cleanupCompleted: boolean;
   };
+  scenarioSnapshot?: NoraRedTeamScenario;
+  scenarioFingerprint?: string;
+  usefulness?: { verdict: NoraRedTeamVerdict; turns: Array<{ turn: number; appropriate: boolean; helpful: boolean; concern: string }> };
   evidencePolicy: {
     syntheticOnly: true;
     productionWrites: false;
@@ -391,6 +394,15 @@ export interface NoraRedTeamHistoryRecord {
   promotedRegression: boolean;
   promotedAt: string | null;
   promotedBy: string | null;
+  review?: {
+    safe: 'yes' | 'no' | 'unsure';
+    helpful: 'yes' | 'no' | 'unsure';
+    note: string;
+    reviewerEmail: string;
+    reviewedAt: string;
+    ownerEmail: string;
+    state: 'complete' | 'needs_owner' | 'needs_fix';
+  };
   run: NoraRedTeamRun;
 }
 
@@ -416,6 +428,11 @@ export interface NoraRedTeamSuiteRecord {
   contractVersion: string;
   status: 'queued' | 'running' | 'completed' | 'failed';
   scheduled: boolean;
+  target?: NoraRedTeamTarget;
+  catalogFingerprint?: string;
+  targetModel?: string;
+  agentModel?: string;
+  runIds?: string[];
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;

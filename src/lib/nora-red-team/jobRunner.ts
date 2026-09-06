@@ -131,7 +131,7 @@ export async function executeNoraRedTeamJob(input: {
   const startedAt = new Date().toISOString();
   const job = await input.store.claim(input.jobId, startedAt);
   if (!job) return;
-  const scenario = getNoraRedTeamScenario(job.scenarioId);
+  const scenario = job.scenarioSnapshot || getNoraRedTeamScenario(job.scenarioId);
   if (!scenario) {
     await input.store.update(job.jobId, {
       status: 'failed',

@@ -2220,12 +2220,24 @@ function buildCoachEscalationSms({ tier, siteUrl }) {
  * Notify coach of escalation (Tier 1 and above)
  */
 async function notifyCoach(body, runtimeDb = db) {
-  const { sendCoachEscalationEmail } = require('./utils/sendCoachEscalationEmail');
-  const { sendTwilioSms } = require('./utils/sendTwilioSms');
   const { escalationId, userId, coachId } = body;
 
   if (!escalationId || !userId) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) };
+  }
+
+  // Resolve safeguarding from the trusted escalation, before selecting or contacting a coach.
+  const safetySnapshot = await runtimeDb.collection('escalation-records').doc(escalationId).get();
+  if (!safetySnapshot.exists) return { statusCode: 404, headers, body: JSON.stringify({ error: 'Escalation not found' }) };
+  const safetyRecord = safetySnapshot.data() || {};
+  if (safetyRecord.userId && safetyRecord.userId !== userId) return { statusCode: 403, headers, body: JSON.stringify({ error: 'Escalation owner mismatch' }) };
+  const safeguarding = safetyRecord.requiresSafeguarding === true
+    || /abuse|safeguard|harassment|assault/i.test(String(safetyRecord.category || ''));
+  // Without a verified independent recipient, suppress coach delivery for safeguarding.
+  // Licensed/provider handoff runs separately and remains available.
+  if (safeguarding) {
+    await safetySnapshot.ref.set({ coachNotificationStatus: 'blocked_safeguarding', coachNotificationFailureReason: 'An independently verified safeguarding recipient is required.' }, { merge: true });
+    return { statusCode: 200, headers, body: JSON.stringify({ success: false, reason: 'independent_safeguarding_recipient_required' }) };
   }
 
   // Find coach if not provided
@@ -2256,6 +2268,10 @@ async function notifyCoach(body, runtimeDb = db) {
     };
   }
 
+  const excludedRecipients = Array.isArray(safetyRecord.excludedRecipientIds) ? safetyRecord.excludedRecipientIds : [];
+  if (excludedRecipients.includes(targetCoachId) || safetyRecord.implicatedCoachId === targetCoachId) {
+    return { statusCode: 200, headers, body: JSON.stringify({ success: false, reason: 'recipient_excluded' }) };
+  }
   const nowSec = Math.floor(Date.now() / 1000);
 
   // Load tier (for correct coach messaging + email copy)
@@ -2315,6 +2331,9 @@ async function notifyCoach(body, runtimeDb = db) {
     });
 
   await refreshPilotOutcomeRollupsForAthlete(userId, nowSec * 1000, runtimeDb);
+
+  const { sendCoachEscalationEmail } = require('./utils/sendCoachEscalationEmail');
+  const { sendTwilioSms } = require('./utils/sendTwilioSms');
 
   // Create notification for coach
   // Note: This would integrate with your push notification system
@@ -3545,6 +3564,7 @@ async function createEscalationFromTrustedRuntime(body, runtimeDb, runtimeOption
 }
 
 exports.runtimeHelpers = {
+  notifyCoach,
   authorizeEscalationAction,
   buildEscalationSupportOptions,
   createEscalationFromTrustedRuntime,

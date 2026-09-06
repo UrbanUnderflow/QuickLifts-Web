@@ -1,3 +1,5 @@
+import { assessNoraUsefulness } from './usefulness';
+import { scenarioFingerprint } from './catalogIdentity';
 import {
   createBoundedNoraRedTeamModelClient,
   type NoraRedTeamBudgetSnapshot,
@@ -40,7 +42,7 @@ export function getNoraRedTeamRunLimits(): NoraRedTeamRunLimits {
   return {
     maxDurationMs: boundedEnvironmentNumber('NORA_RED_TEAM_MAX_DURATION_MS', 120_000, 30_000, 600_000),
     requestTimeoutMs: boundedEnvironmentNumber('NORA_RED_TEAM_REQUEST_TIMEOUT_MS', 30_000, 5_000, 90_000),
-    maxModelCalls: boundedEnvironmentNumber('NORA_RED_TEAM_MAX_MODEL_CALLS', 12, 4, 30),
+    maxModelCalls: boundedEnvironmentNumber('NORA_RED_TEAM_MAX_MODEL_CALLS', 22, 4, 30),
     maxRetriesPerRequest: boundedEnvironmentNumber('NORA_RED_TEAM_MAX_RETRIES', 1, 0, 2),
     maxTotalTokens: boundedEnvironmentNumber('NORA_RED_TEAM_MAX_TOTAL_TOKENS', 50_000, 10_000, 200_000),
   };
@@ -63,26 +65,6 @@ export async function executeNoraRedTeamRun(input: {
   onProgress?: (progress: NoraRedTeamExecutionProgress) => void | Promise<void>;
   onBudgetUpdate?: (snapshot: NoraRedTeamBudgetSnapshot) => void | Promise<void>;
 }): Promise<NoraRedTeamRun> {
-  if (input.target === 'staging_chat') {
-    if (input.firebaseMode !== 'dev') {
-      throw new Error('STAGING_REQUIRES_DEVELOPMENT: Staging chat runs require the development database.');
-    }
-    return runNoraStagingScenario({
-      scenario: input.scenario,
-      randomSeed: input.randomSeed,
-      build: input.build,
-      signal: input.signal,
-      onProgress: input.onProgress,
-    });
-  }
-
-  await input.onProgress?.({
-    stage: 'loading_policy',
-    percent: 4,
-    message: 'Loading the active production escalation policy.',
-    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-  });
-
   const baseClient = createNoraRedTeamBridgeClient({
     authorization: input.authorization,
     bridgeOrigin: input.bridgeOrigin,
@@ -95,6 +77,28 @@ export async function executeNoraRedTeamRun(input: {
     limits: input.limits,
     onBudgetUpdate: input.onBudgetUpdate,
   });
+  if (input.target === 'staging_chat') {
+    if (input.firebaseMode !== 'dev') {
+      throw new Error('STAGING_REQUIRES_DEVELOPMENT: Staging chat runs require the development database.');
+    }
+    const run = await runNoraStagingScenario({
+      scenario: input.scenario,
+      randomSeed: input.randomSeed,
+      build: input.build,
+      targetModel: input.targetModel,
+      signal: input.signal,
+      onProgress: input.onProgress,
+    });
+    return assessNoraUsefulness(openai, input.agentModel, { ...run, agentModel: input.agentModel, scenarioSnapshot: input.scenario, scenarioFingerprint: scenarioFingerprint(input.scenario) }, input.scenario, input.signal);
+  }
+
+  await input.onProgress?.({
+    stage: 'loading_policy',
+    percent: 4,
+    message: 'Loading the active production escalation policy.',
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+  });
+
   const escalationConditions = await loadActiveProductionEscalationConditions({
     authorization: input.authorization,
     projectId: input.firebaseProjectId,
@@ -106,7 +110,7 @@ export async function executeNoraRedTeamRun(input: {
     model: 'gpt-4o-mini',
   });
 
-  return runNoraRedTeamScenario({
+  const run = await runNoraRedTeamScenario({
     openai,
     classifyEscalation,
     scenario: input.scenario,
@@ -117,4 +121,5 @@ export async function executeNoraRedTeamRun(input: {
     signal: input.signal,
     onProgress: input.onProgress,
   });
+  return assessNoraUsefulness(openai, input.agentModel, { ...run, agentModel: input.agentModel, scenarioSnapshot: input.scenario, scenarioFingerprint: scenarioFingerprint(input.scenario) }, input.scenario, input.signal);
 }
