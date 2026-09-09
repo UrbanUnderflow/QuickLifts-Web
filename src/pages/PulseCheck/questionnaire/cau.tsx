@@ -6,7 +6,7 @@ import source from '../../../content/questionnaires/cau-operational.json';
 const allQuestions = source.questions.filter(q => q.id !== 'cau-operational-04');
 export function getServerSideProps({ res }: any) {
   res.setHeader('Cache-Control', 'no-store');
-  return { props: { collectionEnabled: process.env.CAU_QUESTIONNAIRE_COLLECTION_ENABLED === 'true' && Boolean(process.env.CAU_QUESTIONNAIRE_INVITE_KEY) } };
+  return { props: { collectionEnabled: false } };
 }
 export default function CAUQuestionnaire({ collectionEnabled }: { collectionEnabled: boolean }) {
   const [saving, setSaving] = useState(false);
@@ -66,7 +66,7 @@ export default function CAUQuestionnaire({ collectionEnabled }: { collectionEnab
     <Head><title>CAU baseline questionnaire</title><meta name="robots" content="noindex,nofollow" /><meta name="referrer" content="no-referrer" /></Head>
     <div style={{ maxWidth: 620, margin: '0 auto', display: 'grid', gap: 20 }}>
       <p style={{ letterSpacing: 2, fontSize: 12 }}>PULSECHECK · CAU</p>
-      <p role="status" style={{ color: '#d5dbce' }}>{collectionEnabled ? 'Your name, email, and answers will be stored in a restricted PulseCheck collection pending transfer of designated responses to auntEDNA. Individual answers are restricted from coaches and teammates.' : 'Preview. Responses stay on this page. Submission is not open yet.'}</p>
+      <p role="status" style={{ color: '#d5dbce' }}>{collectionEnabled ? 'Mental Health answers will go directly to auntEDNA. PulseCheck will keep performance answers and restricted references to the auntEDNA records.' : 'Preview. Saving is paused until the direct auntEDNA connection is ready. Keep real personal information out of this preview.'}</p>
       {saved ? <><h1>Your answers are saved.</h1><p>Thank you for sharing your starting point.</p></> : !started ? <form onSubmit={e => { e.preventDefault(); if (!name.trim()) return; setStarted(true); }} style={{ display: 'grid', gap: 20 }}>
         <h1>Hey, I’m Nora. Let’s start with you.</h1>
         <p>These questions help us understand how you’re feeling and where you’d like support. Answer from where you are today. We’ll take it one step at a time.</p>

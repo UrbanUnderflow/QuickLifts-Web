@@ -9,6 +9,7 @@ import {
   resolveNoraRedTeamScheduledBuild,
 } from '../../src/lib/nora-red-team/suiteRunner';
 import { NoraRedTeamSuiteStore } from '../../src/lib/nora-red-team/suiteStore';
+import { resolveNoraFirebaseApiKey } from '../../src/lib/nora-red-team/runtimeConfig';
 
 function secureHashMatch(left: string, right: string): boolean {
   if (!left || !right || left.length !== right.length) return false;
@@ -47,10 +48,7 @@ export default async function handler(request: Request): Promise<void> {
     bridgeOrigin: bridgeOrigin(),
     featureId: process.env.NORA_RED_TEAM_BRIDGE_FEATURE_ID?.trim() || 'noraRedTeam',
     firebaseProjectId: dev ? process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID || 'quicklifts-dev-01' : process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'quicklifts-dd3f1',
-    firebaseApiKey:
-      (dev ? process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY : process.env.FIREBASE_WEB_API_KEY)?.trim() ||
-      process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim() ||
-      '',
+    firebaseApiKey: resolveNoraFirebaseApiKey(dev),
     targetModel: process.env.NORA_RED_TEAM_TARGET_MODEL?.trim() || 'gpt-4o-mini',
     agentModel: process.env.NORA_RED_TEAM_AGENT_MODEL?.trim() || 'gpt-4o',
     build: resolveNoraRedTeamScheduledBuild({

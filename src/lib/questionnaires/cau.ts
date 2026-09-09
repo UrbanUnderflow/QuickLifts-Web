@@ -23,15 +23,34 @@ export function validateSubmission(input: any) {
   }
   return { version: VERSION, completedSections: { performance: input.completedSections?.performance === true, health: input.completedSections?.health === true }, identity: { name: input.name.trim(), email: input.email.trim().toLowerCase(), verification: 'self_reported' }, fields };
 }
-// A verified receiver receipt is required. Call in a transaction against the
-// exported revision; never use a browser-supplied receipt to authorize redaction.
-export function redactMigratedFields(record: any, receipt: { verified: boolean; sourceRevision: number; externalRecordId: string; fieldIds: string[]; receiptId: string }, now: string) {
-  if (!receipt.verified || receipt.sourceRevision !== record.revision || !receipt.externalRecordId || !receipt.receiptId || !receipt.fieldIds.length) throw Error('Verified matching migration receipt required.');
-  const fields = { ...record.fields };
-  for (const id of receipt.fieldIds) {
-    if (!fields[id] || fields[id].state !== 'local') throw Error('Field is not locally stored.');
-    fields[id] = { questionId: id, state: 'external', custodian: 'auntEDNA', externalRecordId: receipt.externalRecordId, receiptId: receipt.receiptId, migratedAt: now };
+// Ownership follows the current questionnaire split. This is a routing map,
+// not a legal determination that every health item is PHI or every other item is not.
+export const OWNERSHIP_VERSION = 'cau-routing-v1';
+export function questionCustodian(id: string): 'auntEDNA' | 'PulseCheck' {
+  if (!questions.some(q => q.id === id)) throw Error('Unknown question.');
+  const n = Number(id.split('-').pop());
+  return (n >= 14 && n <= 32) || (n >= 41 && n <= 51) || n === 62 ? 'auntEDNA' : 'PulseCheck';
+}
+export function splitSubmission(input: any) {
+  const validated = validateSubmission(input);
+  const auntEdnaFields: Record<string, any> = {};
+  const pulseFields: Record<string, any> = {};
+  const references: Record<string, any> = {};
+  for (const [id, field] of Object.entries(validated.fields)) {
+    if (questionCustodian(id) === 'auntEDNA') {
+      auntEdnaFields[id] = field;
+      // Never copy value, free text, scores, or answer hashes into the mirror.
+      references[id] = { questionId: id, questionnaireVersion: VERSION, custodian: 'auntEDNA', state: 'awaiting_receipt' };
+    } else pulseFields[id] = field;
   }
-  const { payloadDigest: _removedDigest, ...retained } = record;
-  return { ...retained, fields, revision: record.revision + 1 };
+  return {
+    auntEdna: { submissionId: input.submissionId, version: VERSION, ownershipVersion: OWNERSHIP_VERSION, identity: validated.identity, fields: auntEdnaFields },
+    pulseCheck: { submissionId: input.submissionId, version: VERSION, ownershipVersion: OWNERSHIP_VERSION, identity: validated.identity, fields: pulseFields, auntEdnaReferences: references }
+  };
+}
+// Receipt must be authenticated by the integration, not trusted from a browser.
+// This constructs the restricted mirror only; no clinical values are accepted.
+export function attachAuntEdnaReceipt(pulseRecord: ReturnType<typeof splitSubmission>['pulseCheck'], receipt: { submissionId: string; recordId: string; receiptId: string }) {
+  if (receipt.submissionId !== pulseRecord.submissionId || !receipt.recordId || !receipt.receiptId) throw Error('Matching auntEDNA receipt required.');
+  return { ...pulseRecord, auntEdnaReferences: Object.fromEntries(Object.entries(pulseRecord.auntEdnaReferences).map(([id, ref]) => [id, { questionId: id, questionnaireVersion: VERSION, custodian: 'auntEDNA', state: 'external', recordId: receipt.recordId, receiptId: receipt.receiptId }])) };
 }

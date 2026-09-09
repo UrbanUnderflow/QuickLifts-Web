@@ -1,5 +1,5 @@
 import { Handler } from '@netlify/functions';
-import { admin, db, headers as corsHeaders } from './config/firebase';
+import { getFirebaseAdminApp, headers as corsHeaders } from './config/firebase';
 import { getFeatureRouting } from '../../src/api/anthropic/featureRouting';
 import {
   buildAdminFallbackLogger,
@@ -144,7 +144,7 @@ const relayToRemoteBridge = async (
       ...(authHeader ? { Authorization: authHeader } : {}),
       'openai-organization': remoteFeatureId,
       'x-pulsecheck-original-openai-organization': featureId,
-      'x-pulsecheck-firebase-mode': 'prod'
+      'x-pulsecheck-firebase-mode': getHeader(event.headers, 'x-pulsecheck-firebase-mode') || 'prod'
     },
     body: event.httpMethod === 'POST' ? event.body || '{}' : undefined
   });
@@ -191,12 +191,16 @@ const verifySimpBudgetAuth = async (idToken: string): Promise<string | null> => 
   }
 };
 
-const verifyAuth = async (authHeader: string | undefined, featureId: string): Promise<string | null> => {
+const bridgeApp = (firebaseMode: string) => getFirebaseAdminApp({
+  headers: { 'x-pulsecheck-firebase-mode': firebaseMode },
+});
+
+const verifyAuth = async (authHeader: string | undefined, featureId: string, firebaseMode: string): Promise<string | null> => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   const idToken = authHeader.split('Bearer ')[1];
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const decodedToken = await bridgeApp(firebaseMode).auth().verifyIdToken(idToken);
     return decodedToken.uid;
   } catch (error) {
     if (SIMPBUDGET_TOKEN_FEATURES.has(featureId)) {
@@ -223,9 +227,10 @@ export const handler: Handler = async (event) => {
   }
 
   const featureId = getHeader(event.headers, 'openai-organization') || 'default';
+  const firebaseMode = (getHeader(event.headers, 'x-pulsecheck-firebase-mode') || 'prod').trim().toLowerCase();
 
   // 1. Verify Authentication Layer
-  const uid = await verifyAuth(getHeader(event.headers, 'authorization'), featureId);
+  const uid = await verifyAuth(getHeader(event.headers, 'authorization'), featureId, firebaseMode);
   if (!uid) {
     return {
       statusCode: 401,
@@ -233,6 +238,8 @@ export const handler: Handler = async (event) => {
       body: JSON.stringify(safeErrorBody('AUTH_REQUIRED', 'Please sign in again.'))
     };
   }
+
+  const db = bridgeApp(firebaseMode).firestore();
 
   // 2. Extract specific path suffix for OpenAI (e.g., /v1/chat/completions)
   // This supports Netlify rewrite rules (from /api/openai/v1/* to /.netlify/functions/openai-bridge)
@@ -341,7 +348,7 @@ export const handler: Handler = async (event) => {
 
   if (isDualPathChatCompletion && featureRouting) {
     try {
-      const logger = buildAdminFallbackLogger(admin.firestore());
+      const logger = buildAdminFallbackLogger(db);
       const { result } = await callWithFallback({
         feature: featureRouting,
         anthropicCall: async () => {

@@ -5,6 +5,7 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { getFirebaseAdminApp } from '../firebase-admin';
 import { evaluateNoraRedTeamScenarioChecks } from './evaluator';
 import { createSyntheticFirebaseIdToken } from './syntheticFirebaseAuth';
+import { resolveNoraFirebaseApiKey, resolveNoraRuntimeOrigin } from './runtimeConfig';
 import type {
   NoraRedTeamCheckResult,
   NoraRedTeamDimension,
@@ -123,14 +124,7 @@ function mapEscalation(payload: ChatPayload, durationMs: number): NoraRedTeamEsc
 }
 
 function stagingEndpoint(): string {
-  const origin = (
-    process.env.NORA_RED_TEAM_STAGING_CHAT_ORIGIN
-    || process.env.PULSECHECK_LOCAL_FUNCTIONS_ORIGIN
-    || process.env.URL
-    || process.env.NEXT_PUBLIC_SITE_URL
-    || 'https://fitwithpulse.ai'
-  ).replace(/\/+$/, '');
-  return `${origin}/.netlify/functions/pulsecheck-chat`;
+  return `${resolveNoraRuntimeOrigin()}/.netlify/functions/pulsecheck-chat`;
 }
 
 function syntheticUid(runId: string): string {
@@ -394,11 +388,7 @@ export async function runNoraStagingScenario(input: {
       app,
       uid,
       email: `${uid}@example.invalid`,
-      apiKey:
-        input.apiKey ||
-        process.env.DEV_FIREBASE_WEB_API_KEY ||
-        process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY ||
-        '',
+      apiKey: input.apiKey || resolveNoraFirebaseApiKey(true),
       claims: { noraRedTeamSynthetic: true, noraRedTeamRunId: runId },
       fetchImpl,
     });

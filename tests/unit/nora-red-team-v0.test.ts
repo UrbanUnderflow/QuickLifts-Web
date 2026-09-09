@@ -1562,7 +1562,8 @@ test('Nora Red Team is admin-only, asynchronous, bounded, dry-run, and wired int
   assert.match(productionEscalation, /productionEscalationRuntime\.classifyEscalation/);
   assert.match(productionEscalation, /production_firestore/);
   assert.match(stagingRunner, /getFirebaseAdminApp\(true\)/);
-  assert.match(stagingRunner, /DEV_FIREBASE_WEB_API_KEY/);
+  assert.match(stagingRunner, /resolveNoraFirebaseApiKey\(true\)/);
+  assert.match(read('src/lib/nora-red-team/runtimeConfig.ts'), /DEV_FIREBASE_WEB_API_KEY/);
   assert.match(stagingRunner, /x-nora-red-team-synthetic/);
   assert.match(stagingRunner, /STAGING_AUTHORIZATION_FAILED/);
   assert.match(stagingRunner, /externalSideEffects !== false/);
@@ -1596,7 +1597,7 @@ test('Nora Red Team is admin-only, asynchronous, bounded, dry-run, and wired int
   assert.match(scheduledSuite, /COMMIT_REF/);
   assert.match(scheduledSuite, /DEPLOY_ID/);
   assert.match(scheduledSuiteWorker, /executeScheduledNoraRedTeamSuite/);
-  assert.match(scheduledSuiteWorker, /FIREBASE_WEB_API_KEY/);
+  assert.match(scheduledSuiteWorker, /resolveNoraFirebaseApiKey\(dev\)/);
   assert.match(scheduledSuiteWorker, /nrt-suite-\\d\{8\}/);
   assert.match(scheduledSuiteWorker, /export default async function handler\(request: Request\)/);
   assert.match(scheduledSuiteWorker, /background: true/);

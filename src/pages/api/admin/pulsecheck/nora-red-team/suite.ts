@@ -11,6 +11,7 @@ import {
   executeScheduledNoraRedTeamSuite,
 } from '../../../../../lib/nora-red-team/suiteRunner';
 import { catalogFingerprint } from '../../../../../lib/nora-red-team/catalogIdentity';
+import { resolveNoraFirebaseApiKey } from '../../../../../lib/nora-red-team/runtimeConfig';
 import { hashNoraRedTeamWorkerToken } from '../../../../../lib/nora-red-team/jobRunner';
 export default async function handler(
   req: NextApiRequest,
@@ -83,10 +84,7 @@ export default async function handler(
         firebaseProjectId:
           app.options.projectId ||
           (dev ? 'quicklifts-dev-01' : 'quicklifts-dd3f1'),
-        firebaseApiKey:
-          (dev
-            ? process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY
-            : process.env.NEXT_PUBLIC_FIREBASE_API_KEY) || '',
+        firebaseApiKey: resolveNoraFirebaseApiKey(dev),
         targetModel,
         agentModel,
         build,

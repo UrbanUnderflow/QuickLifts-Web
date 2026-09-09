@@ -47,7 +47,7 @@ function compileOpenAIBridgeRuntime() {
     throw new Error(`Failed to compile openai-bridge runtime:\n${result.stderr || result.stdout || 'Unknown tsc failure'}`);
   }
 
-  compiledBridgePath = candidatePath;
+  compiledBridgePath = fs.realpathSync(candidatePath);
   return compiledBridgePath;
 }
 
@@ -75,7 +75,7 @@ function loadOpenAIBridgeRuntime(firebaseMock) {
 }
 
 function createFirebaseMock(uid = 'user-1') {
-  return {
+  const mock = {
     admin: {
       auth() {
         return {
@@ -94,6 +94,8 @@ function createFirebaseMock(uid = 'user-1') {
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     },
   };
+  mock.getFirebaseAdminApp = () => ({ ...mock.admin, firestore: () => ({}) });
+  return mock;
 }
 
 async function withPatchedEnvironment(patch, run) {
@@ -129,6 +131,51 @@ async function withPatchedEnvironment(patch, run) {
     }
   }
 }
+
+test('development bridge verifies the dev session and preserves its mode when relaying', async () => {
+  await withPatchedEnvironment({ OPENAI_BRIDGE_FALLBACK_ORIGIN: 'https://fitwithpulse.ai' }, async () => {
+    const modes = [];
+    const mock = createFirebaseMock();
+    mock.getFirebaseAdminApp = (request) => {
+      const mode = request.headers['x-pulsecheck-firebase-mode'];
+      modes.push(mode);
+      return {
+        auth: () => ({ verifyIdToken: async token => {
+          assert.equal(mode, 'dev');
+          assert.equal(token, 'dev-session');
+          return { uid: 'dev-user' };
+        } }),
+        firestore: () => ({}),
+      };
+    };
+    global.fetch = async (_url, init) => {
+      assert.equal(init.headers['x-pulsecheck-firebase-mode'], 'dev');
+      assert.equal(init.headers.Authorization, 'Bearer dev-session');
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'OK' } }] }), { status: 200 });
+    };
+    const { handler } = loadOpenAIBridgeRuntime(mock);
+    const result = await handler({ httpMethod: 'POST', path: '/api/openai/v1/chat/completions',
+      headers: { host: 'localhost:8888', Authorization: 'Bearer dev-session', 'OpenAI-Organization': 'noraRedTeam', 'X-PulseCheck-Firebase-Mode': 'dev' }, body: '{}' });
+    assert.equal(result.statusCode, 200);
+    assert.deepEqual(modes, ['dev', 'dev']);
+  });
+});
+
+test('production bridge rejects a development token without trying the other project', async () => {
+  await withPatchedEnvironment({}, async () => {
+    const modes = [];
+    const mock = createFirebaseMock();
+    mock.getFirebaseAdminApp = request => {
+      modes.push(request.headers['x-pulsecheck-firebase-mode']);
+      return { auth: () => ({ verifyIdToken: async () => { throw Error('Wrong token audience'); } }) };
+    };
+    global.fetch = async () => { throw Error('Provider must not be called'); };
+    const { handler } = loadOpenAIBridgeRuntime(mock);
+    const result = await handler({ httpMethod: 'POST', path: '/api/openai/v1/chat/completions', headers: { Authorization: 'Bearer dev-session' }, body: '{}' });
+    assert.equal(result.statusCode, 401);
+    assert.deepEqual(modes, ['prod']);
+  });
+});
 
 test('openai-bridge returns a clear 500 when no server-side provider key is configured', async () => {
   await withPatchedEnvironment({

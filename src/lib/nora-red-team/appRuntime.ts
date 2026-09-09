@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getFirebaseAdminApp } from '../firebase-admin';
 import { createSyntheticFirebaseIdToken } from './syntheticFirebaseAuth';
+import { resolveNoraFirebaseApiKey, resolveNoraRuntimeOrigin } from './runtimeConfig';
 import { cleanupSyntheticStagingData } from './stagingRunner';
 import { NORA_RED_TEAM_CONTRACT_VERSION } from './types';
 import type { SimulationMessage } from './chatSimulation';
@@ -14,10 +15,8 @@ export type RuntimeResponder = (messages: SimulationMessage[], context?: string,
 
 // Calls the exact app endpoint. There is deliberately no separate reply-model fallback.
 export const respondWithAppRuntime: RuntimeResponder = async (messages, context = '', actions = false) => {
-  const origin = process.env.NORA_RED_TEAM_STAGING_CHAT_ORIGIN || process.env.PULSECHECK_LOCAL_FUNCTIONS_ORIGIN;
-  if (!origin) throw new Error('APP_RUNTIME_UNAVAILABLE: Configure the development Nora endpoint.');
+  const origin = resolveNoraRuntimeOrigin();
   const url = new URL('/.netlify/functions/pulsecheck-chat', origin);
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error('APP_RUNTIME_UNAVAILABLE: Use HTTPS or a loopback development endpoint.');
   const expectedBuild = process.env.NORA_RED_TEAM_EXPECTED_BUILD || process.env.COMMIT_REF || process.env.NEXT_PUBLIC_COMMIT_SHA;
   if (!expectedBuild) throw new Error('APP_RUNTIME_UNAVAILABLE: Select the backend build to test.');
   const app = getFirebaseAdminApp(true);
@@ -25,7 +24,7 @@ export const respondWithAppRuntime: RuntimeResponder = async (messages, context 
   const uid = `nora-red-team-${randomUUID()}`;
   const db = app.firestore();
   try {
-    const token = await createSyntheticFirebaseIdToken({ app, uid, email: `${uid}@example.invalid`, apiKey: process.env.DEV_FIREBASE_WEB_API_KEY || process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY || '', claims: { noraRedTeamSynthetic: true, noraRedTeamRunId: uid } });
+    const token = await createSyntheticFirebaseIdToken({ app, uid, email: `${uid}@example.invalid`, apiKey: resolveNoraFirebaseApiKey(true), claims: { noraRedTeamSynthetic: true, noraRedTeamRunId: uid } });
     const request = async (body: object) => {
       const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'x-pulsecheck-firebase-mode': 'dev', 'x-pulsecheck-dev-firebase': 'true', 'x-nora-red-team-synthetic': 'true', 'x-nora-red-team-run-id': uid }, body: JSON.stringify({ userId: uid, ...body }), signal: AbortSignal.timeout(90000) });
       if (!response.ok) {
