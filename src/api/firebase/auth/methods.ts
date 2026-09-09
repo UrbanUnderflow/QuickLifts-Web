@@ -28,7 +28,23 @@ import { clearStalePulseAuthKeys, signOutAndClearPulseAuthState } from '../../..
 
 const preparePrimaryAuthSignIn = async () => {
   clearStalePulseAuthKeys();
-  await setPersistence(auth, browserLocalPersistence);
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // Stop this attempt before submitting credentials if initialization stalls.
+    // A timeout around the entire sign-in would let this continuation run later.
+    await Promise.race([
+      setPersistence(auth, browserLocalPersistence),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const error = new Error('Sign-in could not start. Refresh this page and try again.');
+          Object.assign(error, { code: 'pulse/auth-timeout' });
+          reject(error);
+        }, 10000);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
 };
 
 export const authMethods: AuthService = {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   getRedirectResult,
   signInWithPopup,
@@ -138,11 +138,12 @@ const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pulse_magic_link_email';
 const MAGIC_LINK_INVITE_CODE_STORAGE_KEY = 'pulse_magic_link_invite_code';
 const MAGIC_LINK_LEGAL_ACCEPTED_STORAGE_KEY = 'pulse_magic_link_legal_accepted';
 const SOCIAL_AUTH_TIMEOUT_MS = 45000;
+const AUTH_STEP_TIMEOUT_MS = 20000;
 
 const withAuthTimeout = async <T,>(
   operation: Promise<T>,
-  timeoutMs: number,
-  message: string,
+  timeoutMs = AUTH_STEP_TIMEOUT_MS,
+  message = 'Loading your account is taking too long. Check your connection and try again.',
 ): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
@@ -194,6 +195,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [showError, setShowError] = useState(false);
   const [isUsernameAvailable, setIsUsernameAvailable] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const authAttemptInProgress = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [isImageUploading, setIsImageUploading] = useState(false);
@@ -214,7 +216,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const { roundIdRedirect, loginRedirectPath } = useSelector((state: RootState) => state.tempRedirect);
   const isPulseCheckPage = router.pathname === '/PulseCheck' || router.asPath === '/PulseCheck' || router.asPath.startsWith('/PulseCheck?') || router.asPath.startsWith('/PulseCheck/');
   const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
-  const isOnAdminPage = router.pathname.startsWith('/admin/')
+  const isOnAdminPage = router.pathname === '/admin'
+    || router.asPath.split('?')[0].split('#')[0] === '/admin'
+    || router.pathname.startsWith('/admin/')
     || router.asPath.startsWith('/admin/')
     || router.pathname === '/curriculum-outline'
     || router.asPath.startsWith('/curriculum-outline');
@@ -513,7 +517,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         timestamp: new Date().toISOString()
       });
 
-      const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+      const firestoreUser = await withAuthTimeout(userService.fetchUserFromFirestore(user.uid));
       
       if (firestoreUser) {
         console.log('[SignInModal] User profile check:', {
@@ -548,7 +552,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
         // --- End onboarding check ---
 
-        const betaUserHasAccess = await userService.getBetaUserAccess(firestoreUser.email, firestoreUser);
+        const betaUserHasAccess = await withAuthTimeout(userService.getBetaUserAccess(firestoreUser.email, firestoreUser));
         console.log('[SignInModal] Access check results:', {
           betaAccess: betaUserHasAccess,
           subscriptionType: firestoreUser.subscriptionType,
@@ -579,10 +583,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
       }
     } catch (err) {
       console.error("[SignInModal] Error in subscription check:", err);
+      setError(err instanceof Error ? err.message : 'Your account could not be loaded. Please try again.');
     }
   };
 
   const handleSocialAuth = async (provider: "google" | "apple") => {
+    if (isLoading || authAttemptInProgress.current) return;
+    authAttemptInProgress.current = true;
     try {
       if (isSignUp && !hasAcceptedLegal) {
         setErrors((prev) => ({
@@ -601,7 +608,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setIsLoading(true);
       setError(null);
       setActiveProvider(provider);
-      const partnerSource = await resolvePartnerSourceFromQuery(router.query);
+      const partnerSource = await withAuthTimeout(resolvePartnerSourceFromQuery(router.query));
    
       if (provider === "apple") {
         // Initialize Apple OAuth provider
@@ -626,10 +633,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
             return;
           }
           let user = result.user;
-          await linkRememberedProviderCredential(user);
-          user = await assertAccountIsCanonical(user);
+          await withAuthTimeout(linkRememberedProviderCredential(user));
+          user = await withAuthTimeout(assertAccountIsCanonical(user));
           // Fetch or create user in Firestore
-          let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+          let firestoreUser = await withAuthTimeout(userService.fetchUserFromFirestore(user.uid));
           if (!firestoreUser) {
             if (!user.email) {
               throw new Error('Apple sign-in did not return an email address.');
@@ -647,7 +654,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
               ...(isAthleticMindHubFlow ? { registrationEntryPoint: 'athletic_council' } : {}),
               ...(partnerSource ? { partnerSource } : {}),
             });
-            await userService.createUser(user.uid, firestoreUser);
+            await withAuthTimeout(userService.createUser(user.uid, firestoreUser));
           }
           
           userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
@@ -719,8 +726,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
           return;
         }
         let user = result.user;
-        await linkRememberedProviderCredential(user);
-        user = await assertAccountIsCanonical(user);
+        await withAuthTimeout(linkRememberedProviderCredential(user));
+        user = await withAuthTimeout(assertAccountIsCanonical(user));
         // Strict email check
         if (!user || !user.email) {
           console.error('[SignInModal] Google sign-in completed but no email was provided. Cannot create user.');
@@ -737,7 +744,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           metadata: user.metadata,
           providerData: user.providerData
         });
-        let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+        let firestoreUser = await withAuthTimeout(userService.fetchUserFromFirestore(user.uid));
         console.log('Google Sign In - Firestore User:', firestoreUser);
         if (firestoreUser) {
           // Log all user properties for debugging
@@ -761,16 +768,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
             ...(isAthleticMindHubFlow ? { registrationEntryPoint: 'athletic_council' } : {}),
             ...(partnerSource ? { partnerSource } : {}),
           });
-          await userService.createUser(user.uid, firestoreUser);
+          await withAuthTimeout(userService.createUser(user.uid, firestoreUser));
           console.log('Google Sign In - Created New User:', firestoreUser);
         } else if (!firestoreUser.email && user.email) {
           // If user exists but email is missing, update it
           console.log('[SignInModal] Firestore user missing email, updating with Firebase user email');
           firestoreUser.email = user.email;
-          await userService.updateUser(user.uid, {
+          await withAuthTimeout(userService.updateUser(user.uid, {
             email: user.email,
             updatedAt: new Date(),
-          });
+          }));
         }
         userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
         console.log('Google Sign In - Current User Set:', userService.nonUICurrentUser); // Use nonUICurrentUser
@@ -886,6 +893,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
       }
     } finally {
+      authAttemptInProgress.current = false;
       setIsLoading(false);
       setActiveProvider(null);
     }
@@ -898,13 +906,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
   };
 
   async function ensureEmailLinkFirestoreUser(firebaseUser: any) {
-    let firestoreUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
+    let firestoreUser = await withAuthTimeout(userService.fetchUserFromFirestore(firebaseUser.uid));
     if (!firestoreUser) {
       if (!firebaseUser.email) {
         throw new Error('Magic link sign-in did not provide an email address.');
       }
 
-      const partnerSource = await resolvePartnerSourceFromQuery(router.query);
+      const partnerSource = await withAuthTimeout(resolvePartnerSourceFromQuery(router.query));
       const storedInviteCode =
         typeof window !== 'undefined'
           ? window.localStorage.getItem(MAGIC_LINK_INVITE_CODE_STORAGE_KEY) || ''
@@ -928,12 +936,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
         ...(partnerSource ? { partnerSource } : {}),
         ...(inviteCode || storedInviteCode ? { gymInviteCode: inviteCode || storedInviteCode } : {}),
       });
-      await userService.createUser(firebaseUser.uid, firestoreUser);
+      await withAuthTimeout(userService.createUser(firebaseUser.uid, firestoreUser));
     } else if (!firestoreUser.email && firebaseUser.email) {
-      await userService.updateUser(firebaseUser.uid, {
+      await withAuthTimeout(userService.updateUser(firebaseUser.uid, {
         email: firebaseUser.email,
         updatedAt: new Date(),
-      });
+      }));
       firestoreUser.email = firebaseUser.email;
     }
 
@@ -971,14 +979,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
    
       try {
         setIsLoading(true);
-        const partnerSource = await resolvePartnerSourceFromQuery(router.query);
+        const partnerSource = await withAuthTimeout(resolvePartnerSourceFromQuery(router.query));
         addLog("Calling getRedirectResult...");
-        const result = await getRedirectResult(auth);
+        const result = await withAuthTimeout(getRedirectResult(auth));
         addLog(`getRedirectResult result: ${JSON.stringify(result)}`);
    
         if (!result) {
           addLog("No result returned by getRedirectResult, checking pending redirect...");
-          const pendingResult = await getRedirectResult(auth).catch((e) => {
+          const pendingResult = await withAuthTimeout(getRedirectResult(auth)).catch((e) => {
             addLog(`Pending redirect error: ${e.message}`);
             return null;
           });
@@ -1000,11 +1008,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
           throw new Error("No user credential found in redirect result");
         }
    
-        const user = await assertAccountIsCanonical(credential.user);
+        const user = await withAuthTimeout(assertAccountIsCanonical(credential.user));
         addLog(`User info: providerId=${credential.providerId}, email=${user.email}, isNewUser=${user.metadata.creationTime === user.metadata.lastSignInTime}`);
    
         const _isAppleSignIn = credential.providerId === "apple.com" || user.providerData.some((provider) => provider.providerId === "apple.com");
-        let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+        let firestoreUser = await withAuthTimeout(userService.fetchUserFromFirestore(user.uid));
    
         if (!firestoreUser && user.metadata.creationTime === user.metadata.lastSignInTime) {
           addLog("New user detected, creating Firestore document");
@@ -1028,7 +1036,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             ...(isAthleticMindHubFlow ? { registrationEntryPoint: 'athletic_council' } : {}),
             ...(partnerSource ? { partnerSource } : {}),
           });
-          await userService.createUser(user.uid, firestoreUser);
+          await withAuthTimeout(userService.createUser(user.uid, firestoreUser));
           addLog(`Created new Firestore user: ${firestoreUser.id}`);
         } else if (firestoreUser) {
           if (!userHasAcceptedCurrentLegal(firestoreUser)) {
@@ -1107,7 +1115,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
       try {
         setIsLoading(true);
         setError(null);
-        const result = await authService.completeMagicLink(storedEmail, window.location.href);
+        const result = await withAuthTimeout(
+          authService.completeMagicLink(storedEmail, window.location.href),
+          AUTH_STEP_TIMEOUT_MS,
+          'Magic link sign-in is taking too long. Check your connection and try again.',
+        );
         if (!isMounted) return;
 
         window.localStorage.removeItem(MAGIC_LINK_EMAIL_STORAGE_KEY);
@@ -1133,6 +1145,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading || authAttemptInProgress.current) return;
+    authAttemptInProgress.current = true;
+    try {
+      await submitForm();
+    } finally {
+      authAttemptInProgress.current = false;
+    }
+  };
+
+  const submitForm = async () => {
     console.log('[SignInModal] Form submission started:', {
       isSignUp,
       signUpStep,
@@ -1410,10 +1432,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
         setIsLoading(true);
         setError(null);
 
-        const result = await authService.signInWithEmail(email, password);
-        await linkRememberedProviderCredential(result.user);
-        const resolvedUser = await assertAccountIsCanonical(result.user);
-        const userDoc = await userService.fetchUserFromFirestore(resolvedUser.uid);
+        const result = await withAuthTimeout(
+          authService.signInWithEmail(email, password),
+          AUTH_STEP_TIMEOUT_MS,
+          'Sign-in is taking too long. Check your connection and try again.',
+        );
+        await withAuthTimeout(linkRememberedProviderCredential(result.user));
+        const resolvedUser = await withAuthTimeout(assertAccountIsCanonical(result.user));
+        const userDoc = await withAuthTimeout(userService.fetchUserFromFirestore(resolvedUser.uid));
         userService.nonUICurrentUser = userDoc;
 
         if (userDoc) {
@@ -1437,7 +1463,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             return;
           }
 
-          const betaUserHasAccess = await userService.getBetaUserAccess(userDoc.email, userDoc);
+          const betaUserHasAccess = await withAuthTimeout(userService.getBetaUserAccess(userDoc.email, userDoc));
           if (betaUserHasAccess || userDoc.subscriptionType !== SubscriptionType.unsubscribed) {
             await handleSignInSuccess(resolvedUser);
             return;
@@ -1469,7 +1495,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
       const normalizedEmail = email.trim().toLowerCase();
       const magicLinkUrl = typeof window !== 'undefined' ? window.location.href : undefined;
-      await authService.sendMagicLink(normalizedEmail, magicLinkUrl);
+      await withAuthTimeout(
+        authService.sendMagicLink(normalizedEmail, magicLinkUrl),
+        AUTH_STEP_TIMEOUT_MS,
+        'Sending the magic link is taking too long. Check your connection and try again.',
+      );
 
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(MAGIC_LINK_EMAIL_STORAGE_KEY, normalizedEmail);
@@ -2871,13 +2901,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
       <div className="flex flex-col gap-4 mb-8">
         <button
           type="button"
-          onClick={() => {
-            setActiveProvider("apple"); // Track the active provider
-            handleSocialAuth("apple"); // Trigger the social auth
-          }}
-          disabled={isLoading && activeProvider === "apple"} // Disable if loading with this provider
+          onClick={() => handleSocialAuth("apple")}
+          disabled={isLoading}
           className={`w-full bg-black text-white font-semibold py-3 px-4 rounded-lg transition-colors font-['HK Grotesk'] border border-zinc-700 flex items-center justify-center gap-3 ${
-            isLoading && activeProvider === "apple" ? "opacity-50 cursor-not-allowed" : "hover:bg-zinc-800"
+            isLoading ? "opacity-50 cursor-not-allowed" : "hover:bg-zinc-800"
           }`}
         >
           {isLoading && activeProvider === "apple" ? (
@@ -3178,6 +3205,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading || authAttemptInProgress.current) return;
+    authAttemptInProgress.current = true;
     setIsLoading(true);
     setError(null);
     console.log('[SignInModal] Forgot password request initiated for:', email);
@@ -3189,13 +3218,18 @@ const SignInModal: React.FC<SignInModalProps> = ({
         return;
       }
       
-      await authService.resetPassword(email);
+      await withAuthTimeout(
+        authService.resetPassword(email),
+        AUTH_STEP_TIMEOUT_MS,
+        'Sending reset instructions is taking too long. Check your connection and try again.',
+      );
       setResetEmailSent(true);
       console.log('[SignInModal] Password reset email sent successfully to:', email);
     } catch (err) {
       console.error("[SignInModal] Error sending password reset email:", err);
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
+      authAttemptInProgress.current = false;
       setIsLoading(false);
     }
   };
@@ -3206,8 +3240,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
     const sessionReturnPath = typeof window !== 'undefined' ? sessionStorage.getItem('pulse_auth_return_path') : null;
 
     try {
-      user = await assertAccountIsCanonical(user);
-      const userDoc = await userService.fetchUserFromFirestore(user.uid);
+      user = await withAuthTimeout(assertAccountIsCanonical(user));
+      const userDoc = await withAuthTimeout(userService.fetchUserFromFirestore(user.uid));
       
       // Enhanced username check with more detailed logging
       if (!userDoc) {
@@ -3322,7 +3356,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
     </div>
   );
 
-  const submitLabel = isSignUp
+  const submitLabel = isLoading && !activeProvider
+    ? (!isSignUp && emailAuthMode === 'password' ? "Signing in..." : "Sending...")
+    : isSignUp
     ? signUpStep === "profile"
       ? "Complete"
       : signUpStep === "password"
@@ -3347,11 +3383,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
       <div className="amh-provider-row">
         <button
           type="button"
-          onClick={() => {
-            setActiveProvider("apple");
-            handleSocialAuth("apple");
-          }}
-          disabled={isLoading && activeProvider === "apple"}
+          onClick={() => handleSocialAuth("apple")}
+          disabled={isLoading}
           className="amh-provider-button dark"
         >
           {isLoading && activeProvider === "apple" ? (
@@ -4299,7 +4332,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
                     ? emailAuthMode === 'password'
                       ? "Sign in with password"
                       : "Send magic link"
-                    : "Sending..."
+                    : emailAuthMode === 'password'
+                      ? "Signing in..."
+                      : "Sending..."
                   : emailAuthMode === 'password'
                   ? "Sign in with password"
                   : "Send magic link"}

@@ -4,6 +4,7 @@ import { getAuth, setPersistence, browserLocalPersistence, browserSessionPersist
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { installPulseE2EHarness } from './mentaltraining/e2eHarness';
+import { initializeBrowserAuth } from './initializeBrowserAuth';
 
 let firebaseApp: FirebaseApp;
 let firebaseAuth: Auth;
@@ -236,7 +237,9 @@ export const initializeFirebase = (isDev = false) => {
 
     // Initialize Firebase
     firebaseApp = initializeApp(config);
-    firebaseAuth = getAuth(firebaseApp);
+    firebaseAuth = typeof window !== 'undefined'
+      ? initializeBrowserAuth(firebaseApp, isRemoteLoginSessionActive())
+      : getAuth(firebaseApp);
     firebaseDb = getFirestore(firebaseApp);
     firebaseStorage = getStorage(firebaseApp);
 
