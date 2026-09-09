@@ -239,6 +239,9 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
   const ogType = ogMeta?.type || (ogMeta ? 'article' : 'website');
   const ogSiteName = ogMeta?.siteName || routeMeta?.siteName || 'Pulse Intelligence Labs';
 
+  // Isolated intake surface: no global tracking, authentication wrapper, or Redux persistence.
+  if (router.pathname === '/PulseCheck/questionnaire/cau') return <Component {...pageProps} />;
+
   return (
     <>
       {/* OG meta tags — rendered at _app level so they survive SSR even

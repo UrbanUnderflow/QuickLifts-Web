@@ -88,7 +88,12 @@ async function runScheduledPolarEndOfDaySync(now = new Date()) {
 exports.handler = schedule('15 * * * *', async (event) => {
   try {
     initializeFirebaseAdmin(event);
-    const summary = await runScheduledPolarEndOfDaySync();
+    // Use the shared durable queue and connection lease on the legacy schedule too.
+    const summary = await require('./utils/deviceBackgroundSync').run({
+      db: admin.firestore(), provider: 'polar', connectionCollection: CONNECTIONS_COLLECTION,
+      resolveTimeZone, sync: args => syncPolarSnapshotForConnection({...args,userId:args.connection.userId,requestedDateKey:args.dateKey}),
+      acceptConnection: connection => true,
+    });
     console.log('[scheduled-polar-end-of-day-sync] complete', JSON.stringify(summary));
     return {
       statusCode: 200,

@@ -62,6 +62,10 @@ function workspaceOwnerEmail() {
   return normalizeEmail(process.env.PIPELISTS_RUNBOOK_OWNER_EMAIL) || DEFAULT_OWNER_EMAIL;
 }
 
+function configuredWorkspaceOwnerUid() {
+  return String(process.env.PIPELISTS_RUNBOOK_OWNER_UID || '').trim();
+}
+
 function initialRunbookActor(): RunbookActor {
   return {
     uid: 'system',
@@ -136,13 +140,30 @@ function serializeRevisionSummary(id: string, data: DocumentData) {
   };
 }
 
-async function hasOwnerEditorAccess(db: Firestore, email: string, ownerEmail: string) {
+async function resolveWorkspaceOwnerUid(auth: Awaited<ReturnType<typeof getSimpBudgetAuth>>) {
+  const configuredUid = configuredWorkspaceOwnerUid();
+  if (configuredUid) return configuredUid;
+
+  try {
+    const owner = await auth.getUserByEmail(workspaceOwnerEmail());
+    return owner.uid;
+  } catch {
+    throw new RunbookHttpError(
+      503,
+      'OWNER_IDENTITY_UNAVAILABLE',
+      'The PipeLists workspace owner could not be verified. Try again in a moment.',
+    );
+  }
+}
+
+async function hasOwnerEditorAccess(db: Firestore, email: string, ownerUid: string) {
   const shares = db.collection(PIPELIST_SHARES_COLLECTION);
   const editorSnapshot = await shares.where('editorEmails', 'array-contains', email).get();
 
-  return editorSnapshot.docs.some(
-    (share) => normalizeEmail(share.data().ownerEmail) === ownerEmail,
-  );
+  return editorSnapshot.docs.some((share) => {
+    const data = share.data();
+    return data.ownerUid === ownerUid && share.id.startsWith(`${ownerUid}-`);
+  });
 }
 
 async function syncMemberRecord(db: Firestore, actor: RunbookActor) {
@@ -208,9 +229,10 @@ async function requireRunbookActor(req: NextApiRequest, db: Firestore): Promise<
     throw new RunbookHttpError(401, 'AUTH_REQUIRED', 'Sign in to open the shared runbook.');
   }
 
+  let auth: Awaited<ReturnType<typeof getSimpBudgetAuth>>;
   let decoded: Awaited<ReturnType<Awaited<ReturnType<typeof getSimpBudgetAuth>>['verifyIdToken']>>;
   try {
-    const auth = await getSimpBudgetAuth();
+    auth = await getSimpBudgetAuth();
     decoded = await auth.verifyIdToken(idToken);
   } catch {
     throw new RunbookHttpError(401, 'INVALID_TOKEN', 'Your session expired. Sign in again to continue.');
@@ -221,9 +243,9 @@ async function requireRunbookActor(req: NextApiRequest, db: Firestore): Promise<
     throw new RunbookHttpError(403, 'EMAIL_REQUIRED', 'This workspace requires an account email.');
   }
 
-  const ownerEmail = workspaceOwnerEmail();
-  const isOwner = email === ownerEmail;
-  const hasShareAccess = isOwner || (await hasOwnerEditorAccess(db, email, ownerEmail));
+  const ownerUid = await resolveWorkspaceOwnerUid(auth);
+  const isOwner = decoded.uid === ownerUid;
+  const hasShareAccess = isOwner || (await hasOwnerEditorAccess(db, email, ownerUid));
 
   if (!hasShareAccess) {
     await revokeStaleMemberRecord(db, decoded.uid).catch(() => undefined);

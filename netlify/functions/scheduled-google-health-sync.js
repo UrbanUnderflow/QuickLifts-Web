@@ -89,7 +89,12 @@ async function runScheduledGoogleHealthSync(now = new Date()) {
 exports.handler = schedule('35 * * * *', async (event) => {
   try {
     initializeFirebaseAdmin(event);
-    const summary = await runScheduledGoogleHealthSync();
+    // Use the shared durable queue and connection lease on the legacy schedule too.
+    const summary = await require('./utils/deviceBackgroundSync').run({
+      db: admin.firestore(), provider: 'google_health', connectionCollection: CONNECTIONS_COLLECTION,
+      resolveTimeZone, sync: args => syncGoogleHealthSnapshotForConnection({...args,userId:args.connection.userId,requestedDateKey:args.dateKey}),
+      acceptConnection: connection => connection.provider === "google_health",
+    });
     console.log('[scheduled-google-health-sync] complete', JSON.stringify(summary));
     return {
       statusCode: 200,

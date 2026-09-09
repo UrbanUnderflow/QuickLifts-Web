@@ -997,6 +997,30 @@ exports.handler = async (event) => {
     const decoded = await verifyAuth(event);
     const body = parseJsonBody(event);
     const userId = decoded.uid;
+    return await syncOuraForUser({userId, body, sendNotification:event.httpMethod==='POST'});
+  } catch (error) {
+    console.error('[oura-sync] Failed:', error);
+    return buildOuraErrorResponse(error, {
+      errorCode: 'OURA_SYNC_FAILED',
+      message: 'We could not refresh your Oura recovery data right now.',
+    });
+  }
+};
+
+exports.__test = {
+  chooseLatestRecord,
+  chooseBestSleepRecord,
+  buildSnapshotDateKeysForOuraProjection,
+  buildSnapshotArtifacts,
+  compareSleepRecords,
+  isUsableSleepRecord,
+  sleepRecordTypePriority,
+  computeSleepMidpointEpochSeconds,
+  mapSleepPayload,
+  mapStressPayload,
+};
+
+async function syncOuraForUser({userId,body,sendNotification=false}) {
     const timezone = resolveTimeZone(body.timezone);
     const includeDebug = body.includeDebug === true;
     const requestedDateKey = typeof body.snapshotDateKey === 'string' && isValidDateKey(body.snapshotDateKey)
@@ -1152,7 +1176,7 @@ exports.handler = async (event) => {
     await batch.commit();
 
     let biometricBriefNotification = { success: false, reason: 'skipped' };
-    if (event.httpMethod === 'POST') {
+    if (sendNotification) {
       try {
         biometricBriefNotification = await maybeSendBiometricBriefReadyNotification({
           userId,
@@ -1203,24 +1227,5 @@ exports.handler = async (event) => {
         } : {}),
       }),
     };
-  } catch (error) {
-    console.error('[oura-sync] Failed:', error);
-    return buildOuraErrorResponse(error, {
-      errorCode: 'OURA_SYNC_FAILED',
-      message: 'We could not refresh your Oura recovery data right now.',
-    });
-  }
-};
-
-exports.__test = {
-  chooseLatestRecord,
-  chooseBestSleepRecord,
-  buildSnapshotDateKeysForOuraProjection,
-  buildSnapshotArtifacts,
-  compareSleepRecords,
-  isUsableSleepRecord,
-  sleepRecordTypePriority,
-  computeSleepMidpointEpochSeconds,
-  mapSleepPayload,
-  mapStressPayload,
-};
+}
+exports.syncOuraForUser=syncOuraForUser;

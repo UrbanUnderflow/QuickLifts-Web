@@ -415,11 +415,20 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
   const baseVersionRef = useRef(0);
   const currentCheckRunningRef = useRef(false);
   const latestVersionRef = useRef(0);
+  const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     editingRef.current = isEditing;
     baseVersionRef.current = baseVersion;
   }, [baseVersion, isEditing]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    const frame = window.requestAnimationFrame(() => {
+      contentEditorRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isEditing]);
 
   const applyLatestSnapshot = useCallback((next: PipeListsRunbookSnapshot) => {
     if (next.runbook.version < latestVersionRef.current) return;
@@ -820,8 +829,8 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
         </div>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <main className="min-w-0 rounded-xl border border-stone-200 bg-white shadow-sm">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
+        <main className="relative min-w-0 max-w-full rounded-xl border border-stone-200 bg-white shadow-sm">
           {isEditing ? (
             <div className="space-y-5 p-5 md:p-7">
               <div>
@@ -837,8 +846,8 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
                 />
               </div>
 
-              <div className="grid gap-4">
-                <div>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
+                <div className="min-w-0">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <label htmlFor="runbook-content" className="text-xs font-semibold uppercase tracking-wide text-stone-500">
                       Markdown editor
@@ -848,15 +857,18 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
                     </span>
                   </div>
                   <textarea
+                    ref={contentEditorRef}
                     id="runbook-content"
+                    data-testid="runbook-content-editor"
                     value={draftContent}
                     maxLength={PIPELISTS_RUNBOOK_CONTENT_MAX_LENGTH}
                     onChange={(event) => setDraftContent(event.target.value)}
                     spellCheck
-                    className="min-h-[680px] w-full resize-y rounded-lg border border-stone-200 bg-stone-950 p-4 font-mono text-sm leading-6 text-stone-100 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+                    wrap="soft"
+                    className="relative z-10 min-h-[680px] w-full min-w-0 max-w-full resize-y rounded-lg border border-stone-200 bg-stone-950 p-4 font-mono text-sm leading-6 text-stone-100 outline-none transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
                   />
                 </div>
-                <div>
+                <div className="min-w-0 max-w-full">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">Safe preview</p>
                   <div className="min-h-[680px] overflow-auto rounded-lg border border-stone-200 bg-white p-5">
                     <SafeRunbookMarkdown content={draftContent} />
@@ -897,7 +909,10 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
           )}
         </main>
 
-        <aside className="min-w-0 space-y-4 xl:sticky xl:top-20 xl:self-start" aria-label="Runbook change history">
+        <aside
+          className="min-w-0 max-w-full space-y-4 overflow-hidden xl:sticky xl:top-20 xl:self-start"
+          aria-label="Runbook change history"
+        >
           <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
             <div className="border-b border-stone-200 px-4 py-4">
               <div className="flex items-center gap-2">

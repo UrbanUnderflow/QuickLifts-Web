@@ -1,0 +1,1094 @@
+{
+  "sourceFile": "W_O IRB CAU_Student_Athlete_Onboarding_Baseline_Questionnaire.docx",
+  "sourceSHA256": "f9b642353ca9952ceb7cda644de7c3e2643fab339267eaf2b4ae47d70d8bfbf7",
+  "title": "Student Athlete Onboarding & Baseline Questionnaire",
+  "purpose": "Screen Demo preview of the uploaded non-IRB questionnaire. Responses are not persisted.",
+  "questions": [
+    {
+      "id": "cau-operational-01",
+      "type": "multiple_choice",
+      "question": "I understand the purpose of this onboarding questionnaire and how my responses will be used.",
+      "required": false,
+      "choices": [
+        "Yes",
+        "I have a question before continuing"
+      ],
+      "sectionTitle": "Privacy and use acknowledgment",
+      "instructions": "Purpose. This questionnaire establishes a starting point for your onboarding and helps the pilot team understand your current well-being, recovery, performance readiness, support awareness, and experience entering the platforms. It is for service delivery and internal pilot evaluation. It is not being presented as an IRB-approved research study and it is not a diagnostic assessment.\n\nAnswer based on how you have felt during the past 7 days unless a question says otherwise.\n\nThere are no right or wrong answers. Honest responses help the platforms provide a more useful experience.\n\nYour individual mental-health and help-seeking responses will not be provided to coaches, teammates, or performance personnel.\n\nCompleting the questionnaire does not replace counseling, medical care, or emergency support.\n\nYou may skip any optional question. Questions marked Required are needed to establish your onboarding baseline.\n\nImportant safety note. This form is not monitored as an emergency service and does not ask crisis or self-harm questions. If you are in immediate danger or need urgent support, call 911 or 988, or contact the emergency or clinical resource identified by Clark Atlanta University.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": true
+    },
+    {
+      "id": "cau-operational-02",
+      "type": "multiple_choice",
+      "question": "I understand that individual mental-health responses will not be shared with coaches, teammates, or performance personnel.",
+      "required": false,
+      "choices": [
+        "Yes",
+        "I have a question before continuing"
+      ],
+      "sectionTitle": "Privacy and use acknowledgment",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": true
+    },
+    {
+      "id": "cau-operational-03",
+      "type": "multiple_choice",
+      "question": "I understand that I can still contact CAU counseling, medical, or emergency services directly when I need help.",
+      "required": false,
+      "choices": [
+        "Yes",
+        "I have a question before continuing"
+      ],
+      "sectionTitle": "Privacy and use acknowledgment",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": true
+    },
+    {
+      "id": "cau-operational-04",
+      "type": "text",
+      "question": "Athlete onboarding ID (do not enter your Social Security number or student ID):",
+      "required": false,
+      "choices": [],
+      "sectionTitle": "1. Onboarding information",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-05",
+      "type": "date",
+      "question": "Date completed:",
+      "required": false,
+      "choices": [],
+      "sectionTitle": "1. Onboarding information",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-06",
+      "type": "date",
+      "question": "Date you first accessed either platform, if known:",
+      "required": false,
+      "choices": [],
+      "sectionTitle": "1. Onboarding information",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-07",
+      "type": "multiple_choice",
+      "question": "Which platform(s) have you used before today?",
+      "required": false,
+      "choices": [
+        "Neither",
+        "auntEDNA",
+        "PulseCheck",
+        "Both",
+        "Not sure"
+      ],
+      "sectionTitle": "1. Onboarding information",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-08",
+      "type": "multiple_choice",
+      "question": "Approximately how many total check-ins have you completed before today?",
+      "required": false,
+      "choices": [
+        "0",
+        "1–2",
+        "3–5",
+        "6–10",
+        "More than 10",
+        "Not sure"
+      ],
+      "sectionTitle": "1. Onboarding information",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-09",
+      "type": "multiple_choice",
+      "question": "Current academic year:",
+      "required": false,
+      "choices": [
+        "First year",
+        "Sophomore",
+        "Junior",
+        "Senior",
+        "Graduate student",
+        "Other"
+      ],
+      "sectionTitle": "1. Onboarding information",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-10",
+      "type": "multiple_choice",
+      "question": "Current volleyball status:",
+      "required": false,
+      "choices": [
+        "Full participation",
+        "Modified participation",
+        "Not currently participating",
+        "Prefer not to answer"
+      ],
+      "sectionTitle": "1. Onboarding information",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-11",
+      "type": "multiple_choice",
+      "question": "Current season phase:",
+      "required": false,
+      "choices": [
+        "Preseason",
+        "In season",
+        "Postseason",
+        "Off-season",
+        "Not sure"
+      ],
+      "sectionTitle": "1. Onboarding information",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-12",
+      "type": "multiple_choice",
+      "question": "Are you currently managing an injury or physical condition that affects training, competition, sleep, or recovery?",
+      "required": false,
+      "choices": [
+        "No",
+        "Yes",
+        "Prefer not to answer"
+      ],
+      "sectionTitle": "1. Onboarding information",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-13",
+      "type": "text",
+      "question": "If yes and you want the platforms to consider it, briefly describe the impact (optional):",
+      "required": false,
+      "choices": [],
+      "sectionTitle": "1. Onboarding information",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-14",
+      "type": "multiple_choice",
+      "question": "I felt emotionally balanced.",
+      "required": false,
+      "choices": [
+        "Never",
+        "Rarely",
+        "Sometimes",
+        "Often",
+        "Almost always"
+      ],
+      "sectionTitle": "2. Overall well-being — auntEDNA only",
+      "instructions": "During the past 7 days, how often has each statement been true for you?",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-15",
+      "type": "multiple_choice",
+      "question": "I was able to manage the demands placed on me.",
+      "required": false,
+      "choices": [
+        "Never",
+        "Rarely",
+        "Sometimes",
+        "Often",
+        "Almost always"
+      ],
+      "sectionTitle": "2. Overall well-being — auntEDNA only",
+      "instructions": "During the past 7 days, how often has each statement been true for you?",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-16",
+      "type": "multiple_choice",
+      "question": "I felt hopeful about the week ahead.",
+      "required": false,
+      "choices": [
+        "Never",
+        "Rarely",
+        "Sometimes",
+        "Often",
+        "Almost always"
+      ],
+      "sectionTitle": "2. Overall well-being — auntEDNA only",
+      "instructions": "During the past 7 days, how often has each statement been true for you?",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-17",
+      "type": "multiple_choice",
+      "question": "I had enough energy for my daily responsibilities.",
+      "required": false,
+      "choices": [
+        "Never",
+        "Rarely",
+        "Sometimes",
+        "Often",
+        "Almost always"
+      ],
+      "sectionTitle": "2. Overall well-being — auntEDNA only",
+      "instructions": "During the past 7 days, how often has each statement been true for you?",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-18",
+      "type": "multiple_choice",
+      "question": "I was able to concentrate on school, volleyball, and daily tasks.",
+      "required": false,
+      "choices": [
+        "Never",
+        "Rarely",
+        "Sometimes",
+        "Often",
+        "Almost always"
+      ],
+      "sectionTitle": "2. Overall well-being — auntEDNA only",
+      "instructions": "During the past 7 days, how often has each statement been true for you?",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-19",
+      "type": "multiple_choice",
+      "question": "Stress interfered with my ability to function the way I wanted.",
+      "required": false,
+      "choices": [
+        "Never",
+        "Rarely",
+        "Sometimes",
+        "Often",
+        "Almost always"
+      ],
+      "sectionTitle": "2. Overall well-being — auntEDNA only",
+      "instructions": "During the past 7 days, how often has each statement been true for you?",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-20",
+      "type": "multi_select",
+      "question": "Which areas have contributed to your stress during the past 7 days? Select all that apply.",
+      "required": false,
+      "choices": [
+        "Academics",
+        "Volleyball/performance",
+        "Playing time or role",
+        "Injury/physical health",
+        "Finances",
+        "Family",
+        "Relationships",
+        "Housing/food/transportation",
+        "Identity/belonging",
+        "Future/career",
+        "Other",
+        "None"
+      ],
+      "sectionTitle": "3. Current sources and effects of stress — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [
+        "None"
+      ],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-21",
+      "type": "multiple_choice",
+      "question": "Stress affected my sleep.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Quite a bit",
+        "A great deal"
+      ],
+      "sectionTitle": "3. Current sources and effects of stress — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-22",
+      "type": "multiple_choice",
+      "question": "Stress affected my academic work.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Quite a bit",
+        "A great deal"
+      ],
+      "sectionTitle": "3. Current sources and effects of stress — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-23",
+      "type": "multiple_choice",
+      "question": "Stress affected my focus during practice or competition.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Quite a bit",
+        "A great deal"
+      ],
+      "sectionTitle": "3. Current sources and effects of stress — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-24",
+      "type": "multiple_choice",
+      "question": "Stress affected my relationships or willingness to connect with others.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Quite a bit",
+        "A great deal"
+      ],
+      "sectionTitle": "3. Current sources and effects of stress — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-25",
+      "type": "multiple_choice",
+      "question": "Stress made it harder to recover physically.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Quite a bit",
+        "A great deal"
+      ],
+      "sectionTitle": "3. Current sources and effects of stress — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-26",
+      "type": "text",
+      "question": "Is there anything about your current stress that would help auntEDNA better support you? (Optional; do not use this space for an emergency.)",
+      "required": false,
+      "choices": [],
+      "sectionTitle": "3. Current sources and effects of stress — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-27",
+      "type": "multiple_choice",
+      "question": "I get enough sleep to meet my daily demands.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "4. Sleep and recovery",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-28",
+      "type": "multiple_choice",
+      "question": "My sleep usually is restful.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "4. Sleep and recovery",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-29",
+      "type": "multiple_choice",
+      "question": "I normally recovered well between practices, workouts, and competitions.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "4. Sleep and recovery",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-30",
+      "type": "multiple_choice",
+      "question": "Soreness, pain, or fatigue affected my performance readiness.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "4. Sleep and recovery",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-31",
+      "type": "multiple_choice",
+      "question": "My schedule allows enough time for recovery.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "4. Sleep and recovery",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-32",
+      "type": "multiple_choice",
+      "question": "On most nights during the past 7 days, about how many hours did you sleep?",
+      "required": false,
+      "choices": [
+        "Less than 5",
+        "5–5.9",
+        "6–6.9",
+        "7–7.9",
+        "8 or more",
+        "Not sure"
+      ],
+      "sectionTitle": "4. Sleep and recovery",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-33",
+      "type": "multiple_choice",
+      "question": "I feel physically ready to train or compete.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "5. Performance readiness",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.\n\nData boundary. These responses are collected as part of the onboarding baseline. They will remain with auntEDNA unless a written, approved data map specifically identifies a nonclinical performance field that may be shared with PulseCheck. Mental-health responses are not included in that sharing.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-34",
+      "type": "multiple_choice",
+      "question": "I feel mentally ready to train or compete.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "5. Performance readiness",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.\n\nData boundary. These responses are collected as part of the onboarding baseline. They will remain with auntEDNA unless a written, approved data map specifically identifies a nonclinical performance field that may be shared with PulseCheck. Mental-health responses are not included in that sharing.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-35",
+      "type": "multiple_choice",
+      "question": "I am able to stay focused during volleyball activities.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "5. Performance readiness",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.\n\nData boundary. These responses are collected as part of the onboarding baseline. They will remain with auntEDNA unless a written, approved data map specifically identifies a nonclinical performance field that may be shared with PulseCheck. Mental-health responses are not included in that sharing.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-36",
+      "type": "multiple_choice",
+      "question": "I feel confident in my current volleyball role.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "5. Performance readiness",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.\n\nData boundary. These responses are collected as part of the onboarding baseline. They will remain with auntEDNA unless a written, approved data map specifically identifies a nonclinical performance field that may be shared with PulseCheck. Mental-health responses are not included in that sharing.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-37",
+      "type": "multiple_choice",
+      "question": "I am able to recover after mistakes or difficult moments.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "5. Performance readiness",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.\n\nData boundary. These responses are collected as part of the onboarding baseline. They will remain with auntEDNA unless a written, approved data map specifically identifies a nonclinical performance field that may be shared with PulseCheck. Mental-health responses are not included in that sharing.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-38",
+      "type": "multiple_choice",
+      "question": "I feel comfortable communicating when I needed support or an adjustment.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "5. Performance readiness",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.\n\nData boundary. These responses are collected as part of the onboarding baseline. They will remain with auntEDNA unless a written, approved data map specifically identifies a nonclinical performance field that may be shared with PulseCheck. Mental-health responses are not included in that sharing.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-39",
+      "type": "multi_select",
+      "question": "What most affected your readiness during the past 7 days? Select up to three.",
+      "required": false,
+      "choices": [
+        "Sleep",
+        "Recovery/fatigue",
+        "Stress",
+        "Confidence",
+        "Injury/pain",
+        "Academics",
+        "Team dynamics",
+        "Personal matters",
+        "Travel/schedule",
+        "Nothing affected it",
+        "Other"
+      ],
+      "sectionTitle": "5. Performance readiness",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.\n\nData boundary. These responses are collected as part of the onboarding baseline. They will remain with auntEDNA unless a written, approved data map specifically identifies a nonclinical performance field that may be shared with PulseCheck. Mental-health responses are not included in that sharing.",
+      "maxSelections": 3,
+      "exclusiveChoices": [
+        "Nothing affected it"
+      ],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-40",
+      "type": "multiple_choice",
+      "question": "How ready do you feel to meet your current volleyball demands?",
+      "required": false,
+      "choices": [
+        "Not ready",
+        "Slightly ready",
+        "Moderately ready",
+        "Very ready",
+        "Fully ready"
+      ],
+      "sectionTitle": "5. Performance readiness",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.\n\nData boundary. These responses are collected as part of the onboarding baseline. They will remain with auntEDNA unless a written, approved data map specifically identifies a nonclinical performance field that may be shared with PulseCheck. Mental-health responses are not included in that sharing.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-41",
+      "type": "multiple_choice",
+      "question": "I feel that I belong on this team.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "6. Team environment and support awareness — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-42",
+      "type": "multiple_choice",
+      "question": "I feel respected within my athletic environment.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "6. Team environment and support awareness — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-43",
+      "type": "multiple_choice",
+      "question": "I can ask for help without being viewed as weak.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "6. Team environment and support awareness — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-44",
+      "type": "multiple_choice",
+      "question": "I know where to go for confidential mental-health support at CAU.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "6. Team environment and support awareness — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-45",
+      "type": "multiple_choice",
+      "question": "I would feel comfortable contacting a counselor or mental-health professional if I needed support.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "6. Team environment and support awareness — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-46",
+      "type": "multiple_choice",
+      "question": "I trust that my individual mental-health information will remain private from coaches and performance personnel.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "6. Team environment and support awareness — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-47",
+      "type": "multi_select",
+      "question": "If you wanted support, which options would you be most likely to use? Select all that apply.",
+      "required": false,
+      "choices": [
+        "CAU counselor",
+        "Athletic trainer/medical provider",
+        "Outside counselor/provider",
+        "auntEDNA",
+        "Trusted teammate",
+        "Coach/athletic staff",
+        "Family/friend",
+        "Faith/community leader",
+        "I am not sure",
+        "I would not seek support"
+      ],
+      "sectionTitle": "7. Help-seeking preferences — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [
+        "I am not sure",
+        "I would not seek support"
+      ],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-48",
+      "type": "multi_select",
+      "question": "What might make it harder for you to seek support? Select all that apply.",
+      "required": false,
+      "choices": [
+        "Privacy concerns",
+        "Time/schedule",
+        "Cost",
+        "Not knowing where to go",
+        "Concern about playing time or role",
+        "Stigma or judgment",
+        "Past negative experience",
+        "Prefer handling things alone",
+        "Services may not understand my identity/culture",
+        "Nothing would prevent me",
+        "Other"
+      ],
+      "sectionTitle": "7. Help-seeking preferences — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [
+        "Nothing would prevent me"
+      ],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-49",
+      "type": "multiple_choice",
+      "question": "How would you prefer auntEDNA to respond when you indicate that you may need additional support?",
+      "required": false,
+      "choices": [
+        "Show resources I can choose from",
+        "Ask whether I want to connect with someone",
+        "Offer a private follow-up option",
+        "Let me decide later",
+        "Not sure"
+      ],
+      "sectionTitle": "7. Help-seeking preferences — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-50",
+      "type": "multiple_choice",
+      "question": "What is the best general way to remind you about a check-in?",
+      "required": false,
+      "choices": [
+        "Text",
+        "Email",
+        "In-app message",
+        "No reminders",
+        "Other"
+      ],
+      "sectionTitle": "7. Help-seeking preferences — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-51",
+      "type": "multiple_choice",
+      "question": "What times generally work best for a brief check-in?",
+      "required": false,
+      "choices": [
+        "Morning",
+        "Midday",
+        "After practice",
+        "Evening",
+        "Varies"
+      ],
+      "sectionTitle": "7. Help-seeking preferences — auntEDNA only",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-52",
+      "type": "multiple_choice",
+      "question": "I understand the difference between performance support and mental-health support.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "8. Platform expectations and trust",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-53",
+      "type": "multiple_choice",
+      "question": "I understand what auntEDNA is intended to help me do.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "8. Platform expectations and trust",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-54",
+      "type": "multiple_choice",
+      "question": "I understand what PulseCheck is intended to help me do.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "8. Platform expectations and trust",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-55",
+      "type": "multiple_choice",
+      "question": "I feel comfortable using a digital platform for regular check-ins.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "8. Platform expectations and trust",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-56",
+      "type": "multiple_choice",
+      "question": "I understand who may and may not see my individual responses.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Neutral",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "8. Platform expectations and trust",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-57",
+      "type": "text",
+      "question": "What would make you more comfortable using the platforms?",
+      "required": false,
+      "choices": [],
+      "sectionTitle": "8. Platform expectations and trust",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-58",
+      "type": "text",
+      "question": "What would make the platforms useful enough for you to continue checking in?",
+      "required": false,
+      "choices": [],
+      "sectionTitle": "8. Platform expectations and trust",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-59",
+      "type": "multiple_choice",
+      "question": "After completing this questionnaire, do you understand how to access auntEDNA and PulseCheck?",
+      "required": false,
+      "choices": [
+        "Yes",
+        "Partly",
+        "No"
+      ],
+      "sectionTitle": "9. Final onboarding check",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-60",
+      "type": "multiple_choice",
+      "question": "Do you know where to ask a question about privacy or how your information is used?",
+      "required": false,
+      "choices": [
+        "Yes",
+        "No",
+        "Not sure"
+      ],
+      "sectionTitle": "9. Final onboarding check",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-61",
+      "type": "multiple_choice",
+      "question": "Would you like someone to follow up with general information about available support?",
+      "required": false,
+      "choices": [
+        "No",
+        "Yes",
+        "Not sure"
+      ],
+      "sectionTitle": "9. Final onboarding check",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-operational-62",
+      "type": "text",
+      "question": "Anything else you would like the onboarding team to know? (Optional; do not use this space for an emergency.)",
+      "required": false,
+      "choices": [],
+      "sectionTitle": "9. Final onboarding check",
+      "instructions": "Answer based on how you have felt during the past 7 days unless a question says otherwise.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    }
+  ]
+}

@@ -284,11 +284,16 @@ async function createOrUpdateLeadShare(args: {
   const origin = (process.env.NEXT_PUBLIC_SITE_URL || process.env.URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
   const leadUrl = `${origin}/PipeLists?leadShare=${encodeURIComponent(shareId)}`;
   const admin = initAdmin();
+  const publicItem = { ...args.item };
+  delete publicItem.customerSuccess;
+  publicItem.weeklyLogs = Array.isArray(publicItem.weeklyLogs)
+    ? publicItem.weeklyLogs.filter((log: Record<string, any>) => log?.type !== 'metrics')
+    : [];
   const leadList = {
     ...args.list,
     name: args.item.title || args.list.name,
     description: `${args.list.name || 'PipeLists'} read-only lead share`,
-    items: [args.item],
+    items: [publicItem],
   };
 
   await args.db.collection(PIPELEAD_SHARES_COLLECTION).doc(shareId).set(
@@ -344,12 +349,24 @@ export const handler: Handler = async () => {
       const owner = await getOwnerIdentity(db, ownerUid, stateData);
       const lists = Array.isArray(stateData.lists) ? stateData.lists : [];
 
-      for (const list of lists) {
-        const items = Array.isArray(list?.items) ? list.items : [];
-        if (!list?.id || !list?.name) continue;
+      for (const storedList of lists) {
+        if (!storedList?.id || !storedList?.name) continue;
 
-        const shareSnapshot = await db.collection('pipeListShares').doc(`${ownerUid}-${list.id}`).get();
+        const shareId = `${ownerUid}-${storedList.id}`;
+        const shareSnapshot = await db.collection('pipeListShares').doc(shareId).get();
         const shareData = shareSnapshot.data() || {};
+        let list = storedList;
+        const protectedDetails =
+          shareData.protectedDetails === true ||
+          (Array.isArray(shareData.editorEmails) && shareData.editorEmails.length > 0) ||
+          storedList.templateKey === 'university-pilot' ||
+          (Array.isArray(storedList.items) && storedList.items.some((item: Record<string, any>) => Boolean(item?.customerSuccess)));
+        if (protectedDetails) {
+          const protectedSnapshot = await db.collection('pipeListProtectedShares').doc(shareId).get();
+          const protectedList = protectedSnapshot.data()?.list;
+          if (protectedList?.id === storedList.id) list = protectedList;
+        }
+        const items = Array.isArray(list?.items) ? list.items : [];
         const recipientMap = new Map<string, { email: string; name?: string }>();
 
         const addRecipient = (emailValue: unknown, name?: string) => {

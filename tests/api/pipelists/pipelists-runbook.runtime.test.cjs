@@ -15,8 +15,11 @@ const rulesSource = fs.readFileSync(path.join(repoRoot, 'firestore.simpbudget.ru
 test('runbook API derives the actor and workspace access from verified SimpBudget identity', () => {
   assert.match(apiSource, /getSimpBudgetAuth/);
   assert.match(apiSource, /verifyIdToken\(idToken\)/);
+  assert.match(apiSource, /PIPELISTS_RUNBOOK_OWNER_UID/);
+  assert.match(apiSource, /getUserByEmail\(workspaceOwnerEmail\(\)\)/);
   assert.match(apiSource, /editorEmails', 'array-contains', email/);
-  assert.match(apiSource, /normalizeEmail\(share\.data\(\)\.ownerEmail\) === ownerEmail/);
+  assert.match(apiSource, /data\.ownerUid === ownerUid && share\.id\.startsWith\(`\$\{ownerUid\}-`\)/);
+  assert.match(apiSource, /const isOwner = decoded\.uid === ownerUid/);
   assert.match(apiSource, /membershipSource: isOwner \? 'workspace-owner' : 'pipe-list-editor'/);
   assert.doesNotMatch(apiSource, /viewerEmails', 'array-contains', email/);
   assert.doesNotMatch(apiSource, /resource\.data\.publicRead|data\(\)\.publicRead/);
@@ -48,8 +51,18 @@ test('runbook UI provides safe preview and exact side-panel change history', () 
   assert.match(apiSource, /\.select\([\s\S]*'changeSummary'/);
 });
 
+test('runbook edit mode keeps the editor interactive and the history rail out of its way', () => {
+  assert.match(componentSource, /contentEditorRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(componentSource, /data-testid="runbook-content-editor"/);
+  assert.match(componentSource, /onChange=\{\(event\) => setDraftContent\(event\.target\.value\)\}/);
+  assert.match(componentSource, /xl:grid-cols-\[minmax\(0,1fr\)_minmax\(0,320px\)\]/);
+  assert.match(componentSource, /grid min-w-0 grid-cols-\[minmax\(0,1fr\)\] gap-4/);
+  assert.match(componentSource, /min-w-0 max-w-full resize-y/);
+  assert.doesNotMatch(componentSource, /<textarea[\s\S]{0,500}(disabled|readOnly)=/);
+});
+
 test('runbook is a signed-in workspace tab and direct client Firestore access stays denied', () => {
-  assert.match(pageSource, /type ViewMode = 'pipeline' \| 'metrics' \| 'logs' \| 'runbook'/);
+  assert.match(pageSource, /type ViewMode = 'pipeline' \| 'success' \| 'metrics' \| 'logs' \| 'runbook'/);
   assert.match(pageSource, /runbookAvailable = !isSharedView/);
   assert.match(pageSource, /isOwner \|\| editableListIds\.size > 0/);
   assert.match(pageSource, /<PipeListsRunbook user=\{user\}/);
@@ -57,4 +70,6 @@ test('runbook is a signed-in workspace tab and direct client Firestore access st
   assert.match(pageSource, /Discard your unsaved runbook changes/);
   assert.match(rulesSource, /match \/\{document=\*\*\}[\s\S]*allow read, write: if false/);
   assert.doesNotMatch(rulesSource, /match \/pipeListWorkspaces/);
+  assert.match(rulesSource, /request\.resource\.data\.ownerEmail == request\.auth\.token\.email/);
+  assert.match(rulesSource, /request\.resource\.data\.ownerUid == resource\.data\.ownerUid/);
 });

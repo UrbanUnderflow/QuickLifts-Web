@@ -23,6 +23,7 @@ import {
   getDocs,
   onSnapshot,
   query as firestoreQuery,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -51,6 +52,7 @@ import {
   ExternalLink,
   FileText,
   Filter,
+  HeartPulse,
   Kanban,
   Layers,
   LayoutList,
@@ -84,12 +86,29 @@ import {
   type SyncedEmailEventSummary,
 } from '../utils/pipelistsEmailEventSync';
 import PipeListsRunbook from '../components/pipelists/PipeListsRunbook';
+import PipeListsCustomerSuccess, {
+  PipeListsSuccessPlanEditor,
+  type PipeListsSuccessAccount,
+} from '../components/pipelists/PipeListsCustomerSuccess';
+import {
+  isUniversityCustomerSuccessStage,
+  normalizeUniversityCustomerSuccess,
+  type UniversityCustomerSuccess,
+} from '../utils/pipelistsCustomerSuccess';
+import {
+  addPipeListMemberAccess,
+  mergePipeListSnapshotsThreeWay,
+  planPipeListAccessAdditions,
+} from '../utils/pipelistsCollaboration';
+import { matchesPipelineFilters, toggleFilterSelection } from '../utils/pipelistsFilters';
 
 type PipelinePriority = 'high' | 'medium' | 'low';
 
 type SortColumn = 'item' | 'organization' | 'stage' | 'value' | 'dueDate' | 'nextStep';
-type ViewMode = 'pipeline' | 'metrics' | 'logs' | 'runbook';
+type ViewMode = 'pipeline' | 'success' | 'metrics' | 'logs' | 'runbook';
 type PipelineDisplayMode = 'list' | 'kanban';
+type MetricsScope = 'selected-list' | 'workspace';
+type MetricsPeriod = '30' | '90' | 'all';
 type DetailModalMode = 'details' | 'logs' | 'email' | 'research' | 'ask';
 type MessageTone = 'success' | 'error' | 'info';
 type ShareAccess = 'read' | 'edit';
@@ -252,6 +271,9 @@ type ActivityLog = {
   noraSessions: string;
   escalations: string;
   staffFeedbackScore: string;
+  reportingPeriodStart?: string;
+  reportingPeriodEnd?: string;
+  metricSource?: string;
   notes: string;
   createdAt: string;
   systemAction?: 'item-created' | 'item-deleted' | 'item-restored' | 'item-moved' | 'email-sent';
@@ -321,11 +343,13 @@ type PipelineItem = {
   imageSize: number;
   attachments: LeadAttachment[];
   weeklyLogs: ActivityLog[];
+  customerSuccess?: UniversityCustomerSuccess;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
   deletedByLogId?: string;
   restorableUntil?: string;
+  movedToListId?: string;
 };
 
 type PipeList = {
@@ -349,9 +373,27 @@ type PipeListShare = {
   list: PipeList;
   access: ShareAccess;
   publicRead: boolean;
+  protectedDetails: boolean;
   viewerEmails: string[];
   editorEmails: string[];
   inviteStatuses: Record<string, InviteStatus>;
+  lastEditedBy?: {
+    uid: string;
+    email: string;
+    displayName: string;
+    photoURL: string;
+  };
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+type PipeListProtectedShare = {
+  id: string;
+  ownerUid: string;
+  ownerEmail: string;
+  listId: string;
+  list: PipeList;
+  lastEditedBy?: PipeListShare['lastEditedBy'];
   createdAt?: unknown;
   updatedAt?: unknown;
 };
@@ -393,7 +435,10 @@ type FriendOfBusinessContact = {
   lastEmailClickedLink?: string;
 };
 
-type ItemDraft = Omit<PipelineItem, 'id' | 'createdAt' | 'updatedAt' | 'weeklyLogs' | 'deletedAt' | 'deletedByLogId' | 'restorableUntil'>;
+type ItemDraft = Omit<
+  PipelineItem,
+  'id' | 'createdAt' | 'updatedAt' | 'weeklyLogs' | 'deletedAt' | 'deletedByLogId' | 'restorableUntil' | 'movedToListId'
+>;
 type ActivityLogDraft = Omit<ActivityLog, 'id' | 'createdAt' | 'systemAction' | 'relatedItemId' | 'restorableUntil'>;
 type GeneratedLead = ItemDraft & {
   rationale: string;
@@ -427,6 +472,7 @@ const SIMPBUDGET_USERS_COLLECTION = 'simpbudget-users';
 const PIPELISTS_SUBCOLLECTION = 'pipeLists';
 const PIPELISTS_STATE_DOCUMENT_ID = 'state';
 const PIPELIST_SHARES_COLLECTION = 'pipeListShares';
+const PIPELIST_PROTECTED_SHARES_COLLECTION = 'pipeListProtectedShares';
 const PIPELEAD_SHARES_COLLECTION = 'pipeLeadShares';
 const PIPELIST_PROFILES_COLLECTION = 'pipeListProfiles';
 const PIPELISTS_LEAD_SEARCH_FEATURE_ID = 'pipeListsLeadGeneration';
@@ -982,7 +1028,12 @@ const defaultResearchBriefForList = (list: Pick<PipeList, 'templateKey' | 'name'
 const itemPrimaryDate = (
   list: Pick<PipeList, 'templateKey' | 'name'>,
   item: Pick<PipelineItem, 'dueDate' | 'expectedCloseDate' | 'pilotEnd'>,
-) => (isContactList(list) || isTaskList(list) ? item.dueDate || item.expectedCloseDate : item.expectedCloseDate || item.dueDate || item.pilotEnd);
+) => {
+  if (list.templateKey === 'university-pilot') return item.dueDate || item.expectedCloseDate || item.pilotEnd;
+  return isContactList(list) || isTaskList(list)
+    ? item.dueDate || item.expectedCloseDate
+    : item.expectedCloseDate || item.dueDate || item.pilotEnd;
+};
 const reminderDateFields = ['expectedCloseDate', 'dueDate', 'pilotEnd'] as const;
 const hasReminderDate = (item: Pick<PipelineItem, (typeof reminderDateFields)[number]>) =>
   reminderDateFields.some((field) => item[field]?.trim());
@@ -1340,8 +1391,126 @@ const defaultLogDraft = (templateKey: TemplateKey = 'partner'): ActivityLogDraft
   noraSessions: '',
   escalations: '',
   staffFeedbackScore: '',
+  reportingPeriodStart: '',
+  reportingPeriodEnd: '',
+  metricSource: '',
   notes: '',
 });
+
+const metricLogFields = [
+  ['rosteredAthletes', 'Rostered athletes', 'count', undefined],
+  ['completedCheckIns', 'Completed check-in events', 'count', undefined],
+  ['checkInRate', 'Verified check-in rate', '%', 100],
+  ['biometricSyncRate', 'Biometric sync rate', '%', 100],
+  ['signalEvents', 'Signal events', 'count', undefined],
+  ['noraEngagementRate', 'Verified Nora engagement rate', '%', 100],
+  ['noraSessions', 'Nora sessions', 'count', undefined],
+  ['escalations', 'Escalations', 'count', undefined],
+  ['staffFeedbackScore', 'Staff feedback score', 'score /10', 10],
+] as const;
+
+const MetricLogFields = ({
+  draft,
+  onChange,
+  idPrefix,
+}: {
+  draft: ActivityLogDraft;
+  onChange: (nextDraft: ActivityLogDraft) => void;
+  idPrefix: string;
+}) => {
+  if (draft.type !== 'metrics') return null;
+
+  return (
+    <section className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-4">
+      <div className="mb-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Aggregate success evidence</p>
+        <p className="mt-1 text-sm leading-6 text-stone-500">
+          Blank means missing. Enter 0 when the measured result is zero. Enter rates only when the denominator is known and documented in the source or notes. Keep athlete identities and private details out of logs.
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <label className="block" htmlFor={`${idPrefix}-period-start`}>
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Period start</span>
+          <input
+            id={`${idPrefix}-period-start`}
+            type="date"
+            value={draft.reportingPeriodStart}
+            onChange={(event) => onChange({ ...draft, reportingPeriodStart: event.target.value })}
+            className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none transition focus:border-stone-400"
+          />
+        </label>
+        <label className="block" htmlFor={`${idPrefix}-period-end`}>
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Period end</span>
+          <input
+            id={`${idPrefix}-period-end`}
+            type="date"
+            value={draft.reportingPeriodEnd}
+            onChange={(event) => onChange({ ...draft, reportingPeriodEnd: event.target.value })}
+            className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none transition focus:border-stone-400"
+          />
+        </label>
+        <label className="block md:col-span-2" htmlFor={`${idPrefix}-metric-source`}>
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Evidence source</span>
+          <input
+            id={`${idPrefix}-metric-source`}
+            value={draft.metricSource}
+            onChange={(event) => onChange({ ...draft, metricSource: event.target.value })}
+            className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400"
+            placeholder="Customer report, roster export, or manual aggregate"
+          />
+        </label>
+        {metricLogFields.map(([key, label, unit, maximum]) => (
+          <label key={key} className="block" htmlFor={`${idPrefix}-${key}`}>
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
+            <div className="relative">
+              <input
+                id={`${idPrefix}-${key}`}
+                type="number"
+                min="0"
+                max={maximum}
+                step="any"
+                value={draft[key]}
+                onChange={(event) => onChange({ ...draft, [key]: event.target.value })}
+                className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 pr-14 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400"
+                placeholder="Missing"
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-stone-400">
+                {unit}
+              </span>
+            </div>
+          </label>
+        ))}
+      </div>
+    </section>
+  );
+};
+
+const MetricLogSummary = ({ log }: { log: ActivityLog }) => {
+  if (log.type !== 'metrics') return null;
+  const populatedMetrics = metricLogFields.filter(([key]) => String(log[key] || '').trim() !== '');
+  const period = [log.reportingPeriodStart, log.reportingPeriodEnd].filter(Boolean).join(' to ');
+
+  if (populatedMetrics.length === 0 && !period && !log.metricSource) return null;
+
+  return (
+    <div className="mt-3 rounded-md border border-stone-200 bg-stone-50 p-3">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500">
+        {period && <span>Reporting period: {period}</span>}
+        {log.metricSource && <span>Source: {log.metricSource}</span>}
+      </div>
+      {populatedMetrics.length > 0 && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {populatedMetrics.map(([key, label, unit]) => (
+            <div key={key} className="rounded-md bg-white px-3 py-2 text-xs ring-1 ring-stone-100">
+              <p className="font-medium text-stone-500">{label}</p>
+              <p className="mt-0.5 font-semibold text-stone-900">{log[key]}{unit === '%' ? '%' : ''}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const stripAiConfidenceNote = (value?: string) =>
   String(value || '')
@@ -1862,8 +2031,13 @@ const mergeRecommendedPitchCompetitions = (lists: PipeList[]) => {
 
 const addDays = (date: Date, days: number) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 const isItemDeleted = (item: Pick<PipelineItem, 'deletedAt'>) => Boolean(item.deletedAt);
-const canRestoreDeletedItem = (item: Pick<PipelineItem, 'deletedAt' | 'restorableUntil'>) =>
-  Boolean(item.deletedAt && item.restorableUntil && new Date(item.restorableUntil).getTime() >= Date.now());
+const canRestoreDeletedItem = (item: Pick<PipelineItem, 'deletedAt' | 'restorableUntil' | 'movedToListId'>) =>
+  Boolean(
+    item.deletedAt &&
+      !item.movedToListId &&
+      item.restorableUntil &&
+      new Date(item.restorableUntil).getTime() >= Date.now(),
+  );
 
 const createSystemLog = (
   item: Pick<PipelineItem, 'id' | 'title' | 'organization'>,
@@ -1901,6 +2075,8 @@ const stripUndefined = <T,>(value: T): T => {
   }
 
   if (value && typeof value === 'object') {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return value;
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
         .filter(([, entryValue]) => entryValue !== undefined)
@@ -1910,6 +2086,46 @@ const stripUndefined = <T,>(value: T): T => {
 
   return value;
 };
+
+const collaboratorSafePipeListSnapshot = (list: PipeList): PipeList => ({
+  ...list,
+  items: list.items.map((item) =>
+    item.customerSuccess
+      ? {
+          ...item,
+          customerSuccess: {
+            ...item.customerSuccess,
+            linkage: {
+              organizationId: '',
+              teamId: '',
+              pilotId: '',
+              customerAccountId: '',
+            },
+          },
+        }
+      : item,
+  ),
+});
+
+const publicSafePipeListSnapshot = (list: PipeList): PipeList => {
+  const snapshot = collaboratorSafePipeListSnapshot(list);
+  return {
+    ...snapshot,
+    items: snapshot.items.map((item) => {
+      if (list.templateKey !== 'university-pilot' && !item.customerSuccess) return item;
+      const publicItem = { ...item };
+      delete publicItem.customerSuccess;
+      publicItem.weeklyLogs = publicItem.weeklyLogs.filter((log) => log.type !== 'metrics');
+      return publicItem;
+    }),
+  };
+};
+
+const pipeListRequiresAccountAccess = (list: PipeList) =>
+  list.templateKey === 'university-pilot' || list.items.some((item) => Boolean(item.customerSuccess));
+
+const pipeListShareRequiresAccountAccess = (share: Pick<PipeListShare, 'list' | 'protectedDetails'>) =>
+  share.protectedDetails || pipeListRequiresAccountAccess(share.list);
 
 const createList = (
   templateKey: TemplateKey,
@@ -2061,6 +2277,9 @@ const initialLists: PipeList[] = [
             noraSessions: '9',
             escalations: '1',
             staffFeedbackScore: '8',
+            reportingPeriodStart: '2026-06-27',
+            reportingPeriodEnd: '2026-07-03',
+            metricSource: 'Manual pilot summary',
             notes: 'Early adherence is above the AuntEDNA floor. Staff asked for a weekly summary.',
             createdAt: '2026-07-03T00:00:00.000Z',
           },
@@ -2152,6 +2371,9 @@ const normalizeActivityLog = (log: Partial<ActivityLog>): ActivityLog => {
     noraSessions: log.noraSessions || '',
     escalations: log.escalations || '',
     staffFeedbackScore: log.staffFeedbackScore || '',
+    reportingPeriodStart: log.reportingPeriodStart || '',
+    reportingPeriodEnd: log.reportingPeriodEnd || '',
+    metricSource: log.metricSource || '',
     notes: log.notes || '',
     createdAt,
     ...(log.systemAction ? { systemAction: log.systemAction } : {}),
@@ -2238,11 +2460,24 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
           .filter((attachment): attachment is LeadAttachment => Boolean(attachment))
       : [],
     weeklyLogs: Array.isArray(item.weeklyLogs) ? item.weeklyLogs.map(normalizeActivityLog) : [],
+    ...(item.customerSuccess
+      ? {
+          customerSuccess: normalizeUniversityCustomerSuccess(item.customerSuccess, {
+            stage,
+            owner: item.owner,
+            nextStep: item.nextStep,
+            dueDate: item.dueDate,
+            pilotStart: item.pilotStart,
+            pilotEnd: item.pilotEnd,
+          }),
+        }
+      : {}),
     createdAt: item.createdAt || now,
     updatedAt: item.updatedAt || now,
     deletedAt: item.deletedAt || '',
     deletedByLogId: item.deletedByLogId || '',
     restorableUntil: item.restorableUntil || '',
+    movedToListId: item.movedToListId || '',
   };
 };
 
@@ -2361,19 +2596,324 @@ const normalizePipeListShare = (id: string, data: Partial<PipeListShare>, index 
   const viewerEmails = normalizeShareEmails(data.viewerEmails);
   const editorEmails = normalizeShareEmails(data.editorEmails);
 
+  const normalizedList = normalizeList(data.list, index);
   return {
     id,
     ownerUid: data.ownerUid || '',
     ownerEmail: data.ownerEmail || '',
-    list: normalizeList(data.list, index),
+    list: normalizedList,
     access: data.access === 'edit' ? 'edit' : 'read',
     publicRead: data.publicRead === true,
+    protectedDetails:
+      data.protectedDetails === true ||
+      editorEmails.length > 0 ||
+      normalizedList.templateKey === 'university-pilot' ||
+      normalizedList.items.some((item) => Boolean(item.customerSuccess)),
     viewerEmails,
     editorEmails,
     inviteStatuses: normalizeInviteStatuses(data.inviteStatuses, viewerEmails, editorEmails),
+    lastEditedBy: data.lastEditedBy
+      ? {
+          uid: data.lastEditedBy.uid || '',
+          email: data.lastEditedBy.email || '',
+          displayName: data.lastEditedBy.displayName || '',
+          photoURL: data.lastEditedBy.photoURL || '',
+        }
+      : undefined,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
+};
+
+const mergeCollaboratorListSnapshot = (personalList: PipeList, sharedList: PipeList): PipeList => {
+  if (personalList.id !== sharedList.id) return personalList;
+
+  const mergedItems = new Map(personalList.items.map((item) => [item.id, item]));
+  sharedList.items.forEach((sharedItem) => {
+    const personalItem = mergedItems.get(sharedItem.id);
+    if (!personalItem) {
+      mergedItems.set(sharedItem.id, sharedItem);
+      return;
+    }
+
+    const personalUpdatedAt = new Date(personalItem.updatedAt || personalItem.createdAt).getTime();
+    const sharedUpdatedAt = new Date(sharedItem.updatedAt || sharedItem.createdAt).getTime();
+    if (Number.isFinite(sharedUpdatedAt) && (!Number.isFinite(personalUpdatedAt) || sharedUpdatedAt > personalUpdatedAt)) {
+      mergedItems.set(sharedItem.id, {
+        ...sharedItem,
+        ...(personalItem.customerSuccess
+          ? {
+              customerSuccess: sharedItem.customerSuccess
+                ? {
+                    ...sharedItem.customerSuccess,
+                    linkage: personalItem.customerSuccess.linkage,
+                  }
+                : personalItem.customerSuccess,
+            }
+          : {}),
+      });
+    }
+  });
+
+  const itemOrder = Array.from(new Set([...sharedList.items.map((item) => item.id), ...personalList.items.map((item) => item.id)]));
+  return {
+    ...personalList,
+    ...sharedList,
+    id: personalList.id,
+    items: itemOrder.flatMap((itemId) => {
+      const item = mergedItems.get(itemId);
+      return item ? [item] : [];
+    }),
+  };
+};
+
+const reconcilePipeListSnapshotsForWrite = (
+  remoteList: PipeList,
+  localList: PipeList,
+  baseList?: PipeList,
+): PipeList => {
+  if (remoteList.id !== localList.id) return localList;
+  if (baseList?.id === localList.id) {
+    return mergePipeListSnapshotsThreeWay(baseList, remoteList, localList);
+  }
+
+  const mergedItems = new Map(remoteList.items.map((item) => [item.id, item]));
+  localList.items.forEach((localItem) => {
+    const remoteItem = mergedItems.get(localItem.id);
+    if (!remoteItem) {
+      mergedItems.set(localItem.id, localItem);
+      return;
+    }
+    const remoteUpdatedAt = new Date(remoteItem.updatedAt || remoteItem.createdAt).getTime();
+    const localUpdatedAt = new Date(localItem.updatedAt || localItem.createdAt).getTime();
+    if (!Number.isFinite(remoteUpdatedAt) || localUpdatedAt > remoteUpdatedAt) {
+      mergedItems.set(localItem.id, localItem);
+    }
+  });
+
+  const itemOrder = Array.from(new Set([...localList.items.map((item) => item.id), ...remoteList.items.map((item) => item.id)]));
+  return {
+    ...remoteList,
+    ...localList,
+    id: localList.id,
+    items: itemOrder.flatMap((itemId) => {
+      const item = mergedItems.get(itemId);
+      return item ? [item] : [];
+    }),
+  };
+};
+
+type PipeListShareActor = NonNullable<PipeListShare['lastEditedBy']>;
+
+const persistCollaborativePipeList = async ({
+  shareId,
+  ownerUid,
+  ownerEmail,
+  list,
+  actor,
+  protectedDetails,
+  baseList,
+  publicSharePatch,
+}: {
+  shareId: string;
+  ownerUid: string;
+  ownerEmail: string;
+  list: PipeList;
+  actor: PipeListShareActor;
+  protectedDetails?: boolean;
+  baseList?: PipeList;
+  publicSharePatch?: Partial<PipeListShare>;
+}) => {
+  const isProtected = protectedDetails === true || pipeListRequiresAccountAccess(list);
+  const canonicalRef = doc(
+    simpBudgetDb,
+    isProtected ? PIPELIST_PROTECTED_SHARES_COLLECTION : PIPELIST_SHARES_COLLECTION,
+    shareId,
+  );
+  const publicShareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
+  let mergedList = collaboratorSafePipeListSnapshot(list);
+
+  await runTransaction(simpBudgetDb, async (transaction) => {
+    const snapshot = await transaction.get(canonicalRef);
+    if (!snapshot.exists() && !isProtected) throw new Error('This shared PipeList is no longer available.');
+
+    if (snapshot.exists()) {
+      const data = snapshot.data() as Partial<PipeListShare & PipeListProtectedShare>;
+      if (!data.list) throw new Error('This shared PipeList is no longer available.');
+      const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
+      mergedList = collaboratorSafePipeListSnapshot(
+        reconcilePipeListSnapshotsForWrite(remoteList, mergedList, baseList),
+      );
+    }
+
+    transaction.set(
+      canonicalRef,
+      stripUndefined(
+        isProtected
+          ? {
+              ownerUid,
+              ownerEmail,
+              listId: mergedList.id,
+              list: mergedList,
+              lastEditedBy: actor,
+              ...(!snapshot.exists() ? { createdAt: serverTimestamp() } : {}),
+              updatedAt: serverTimestamp(),
+            }
+          : {
+              list: mergedList,
+              lastEditedBy: actor,
+              updatedAt: serverTimestamp(),
+            },
+      ),
+      { merge: true },
+    );
+    if (isProtected && actor.uid === ownerUid) {
+      transaction.set(
+        publicShareRef,
+        {
+          ...publicSharePatch,
+          list: publicSafePipeListSnapshot(mergedList),
+          protectedDetails: true,
+          lastEditedBy: deleteField(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+  });
+
+  return mergedList;
+};
+
+const persistPipeListMemberAccessAddition = async ({
+  shareId,
+  ownerUid,
+  ownerEmail,
+  list,
+  actor,
+  memberEmail,
+  access,
+  inviteStatus,
+  baseList,
+}: {
+  shareId: string;
+  ownerUid: string;
+  ownerEmail: string;
+  list: PipeList;
+  actor: PipeListShareActor;
+  memberEmail: string;
+  access: ShareAccess;
+  inviteStatus: InviteStatus;
+  baseList?: PipeList;
+}): Promise<{ added: boolean; list: PipeList; share: PipeListShare }> => {
+  const publicShareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
+  const protectedShareRef = doc(simpBudgetDb, PIPELIST_PROTECTED_SHARES_COLLECTION, shareId);
+  const normalizedMemberEmail = memberEmail.trim().toLowerCase();
+  let added = false;
+  let mergedList = collaboratorSafePipeListSnapshot(list);
+  let resolvedShare: PipeListShare | null = null;
+
+  await runTransaction(simpBudgetDb, async (transaction) => {
+    const publicSnapshot = await transaction.get(publicShareRef);
+    const publicData = publicSnapshot.exists() ? publicSnapshot.data() as Partial<PipeListShare> : {};
+
+    if (publicSnapshot.exists() && publicData.ownerUid && publicData.ownerUid !== ownerUid) {
+      throw new Error('This PipeList belongs to a different workspace owner.');
+    }
+
+    const currentViewerEmails = normalizeShareEmails(publicData.viewerEmails);
+    const currentEditorEmails = normalizeShareEmails(publicData.editorEmails);
+    const accessMerge = addPipeListMemberAccess({
+      viewerEmails: currentViewerEmails,
+      editorEmails: currentEditorEmails,
+      memberEmail: normalizedMemberEmail,
+      access,
+    });
+    const protectedDetails =
+      publicData.protectedDetails === true ||
+      currentEditorEmails.length > 0 ||
+      access === 'edit' ||
+      pipeListRequiresAccountAccess(list);
+    const protectedSnapshot = protectedDetails ? await transaction.get(protectedShareRef) : null;
+    const canonicalData = protectedSnapshot?.exists()
+      ? protectedSnapshot.data() as Partial<PipeListProtectedShare>
+      : publicData;
+
+    if (canonicalData.list) {
+      const remoteList = purgeExpiredDeletedItems([normalizeList(canonicalData.list, 0)])[0];
+      mergedList = collaboratorSafePipeListSnapshot(
+        reconcilePipeListSnapshotsForWrite(remoteList, mergedList, baseList),
+      );
+    } else if (publicSnapshot.exists()) {
+      throw new Error('This shared PipeList is no longer available.');
+    }
+
+    if (!accessMerge.added) {
+      const currentShare = normalizePipeListShare(shareId, publicData, 0);
+      if (!currentShare) throw new Error('This shared PipeList is no longer available.');
+      resolvedShare = { ...currentShare, list: mergedList };
+      return;
+    }
+
+    added = true;
+    const { viewerEmails, editorEmails } = accessMerge;
+    const inviteStatuses = {
+      ...normalizeInviteStatuses(publicData.inviteStatuses, currentViewerEmails, currentEditorEmails),
+      [normalizedMemberEmail]: {
+        ...inviteStatus,
+        email: normalizedMemberEmail,
+        access,
+      },
+    };
+    const createdAt = publicData.createdAt || serverTimestamp();
+    const updatedAt = serverTimestamp();
+    const nextShare: PipeListShare = {
+      id: shareId,
+      ownerUid: publicData.ownerUid || ownerUid,
+      ownerEmail: publicData.ownerEmail || ownerEmail,
+      list: mergedList,
+      access: editorEmails.length > 0 ? 'edit' : 'read',
+      publicRead: publicSnapshot.exists() ? publicData.publicRead === true : true,
+      protectedDetails,
+      viewerEmails,
+      editorEmails,
+      inviteStatuses,
+      lastEditedBy: actor,
+      createdAt,
+      updatedAt,
+    };
+
+    transaction.set(
+      publicShareRef,
+      stripUndefined({
+        ...nextShare,
+        list: publicSafePipeListSnapshot(mergedList),
+        lastEditedBy: protectedDetails ? deleteField() : actor,
+      }),
+      { merge: true },
+    );
+
+    if (protectedDetails) {
+      transaction.set(
+        protectedShareRef,
+        stripUndefined({
+          ownerUid: nextShare.ownerUid,
+          ownerEmail: nextShare.ownerEmail,
+          listId: mergedList.id,
+          list: mergedList,
+          lastEditedBy: actor,
+          ...(!protectedSnapshot?.exists() ? { createdAt } : {}),
+          updatedAt,
+        }),
+        { merge: true },
+      );
+    }
+
+    resolvedShare = nextShare;
+  });
+
+  if (!resolvedShare) throw new Error('Unable to update PipeList access.');
+  return { added, list: mergedList, share: resolvedShare };
 };
 
 const formatCount = (count: number, singular: string) => {
@@ -2405,10 +2945,15 @@ const parseMoney = (value: string) => {
   return values.reduce((sum, item) => sum + item, 0) / values.length;
 };
 
-const parsePercent = (value: string) => {
-  const parsed = Number.parseFloat(String(value).replace('%', ''));
-  if (Number.isNaN(parsed)) return 0;
-  return parsed;
+const parseOptionalNumber = (value: unknown): number | null => {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  const parsed = Number.parseFloat(text.replace(/[$,%\s,]/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const derivedMeasuredCheckInRate = (log: ActivityLog): number | null => {
+  return parseOptionalNumber(log.checkInRate);
 };
 
 const itemValue = (item: PipelineItem) => {
@@ -2424,6 +2969,9 @@ const formatMoney = (value: number) => {
     maximumFractionDigits: 0,
   }).format(value);
 };
+
+const formatMeasuredMetric = (value: number | null, suffix = '') =>
+  value === null ? 'Missing' : `${Math.round(value)}${suffix}`;
 
 const itemAmountDisplay = (list: Pick<PipeList, 'templateKey'>, item: PipelineItem) => {
   if (isFundSizeList(list)) return item.amount || '';
@@ -2444,15 +2992,6 @@ const average = (values: number[]) => {
   return valid.reduce((sum, value) => sum + value, 0) / valid.length;
 };
 
-const derivedCheckInRate = (log: ActivityLog) => {
-  const explicit = parsePercent(log.checkInRate);
-  if (explicit > 0) return explicit;
-  const rostered = Number.parseFloat(log.rosteredAthletes);
-  const completed = Number.parseFloat(log.completedCheckIns);
-  if (!rostered || !completed) return 0;
-  return (completed / rostered) * 100;
-};
-
 const logHasMetrics = (log: ActivityLog) =>
   Boolean(
     log.rosteredAthletes ||
@@ -2465,6 +3004,54 @@ const logHasMetrics = (log: ActivityLog) =>
       log.escalations ||
       log.staffFeedbackScore,
   );
+
+const successEvidenceAtForLog = (log: ActivityLog) =>
+  log.reportingPeriodEnd || log.weekOf || log.createdAt;
+
+const successEvidenceTimestamp = (log: ActivityLog) => {
+  const evidenceAt = successEvidenceAtForLog(log);
+  const parsed = new Date(evidenceAt.length === 10 ? `${evidenceAt}T23:59:59.999Z` : evidenceAt).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const latestCurrentSuccessEvidenceAt = (
+  success: UniversityCustomerSuccess,
+  logs: ActivityLog[],
+  options: { includeStored?: boolean; today?: string } = {},
+) => {
+  const today = options.today || new Date().toISOString().slice(0, 10);
+  const candidates = [
+    ...(options.includeStored === false ? [] : [success.lastSuccessUpdateAt]),
+    ...success.successMeasures.map((measure) =>
+      measure.latestResult.state === 'measured' ? measure.latestResult.asOf : '',
+    ),
+    ...logs.filter((log) => log.type === 'metrics').map(successEvidenceAtForLog),
+  ]
+    .filter(Boolean)
+    .filter((value) => value.slice(0, 10) <= today)
+    .sort((left, right) => {
+      const leftTime = new Date(left.length === 10 ? `${left}T23:59:59.999Z` : left).getTime();
+      const rightTime = new Date(right.length === 10 ? `${right}T23:59:59.999Z` : right).getTime();
+      return leftTime - rightTime;
+    });
+
+  return candidates.at(-1) || '';
+};
+
+const customerSuccessForItem = (item: PipelineItem) => {
+  const normalized = normalizeUniversityCustomerSuccess(item.customerSuccess, {
+    stage: item.stage,
+    owner: item.owner,
+    nextStep: item.nextStep,
+    dueDate: item.dueDate,
+    pilotStart: item.pilotStart,
+    pilotEnd: item.pilotEnd,
+  });
+  return {
+    ...normalized,
+    lastSuccessUpdateAt: latestCurrentSuccessEvidenceAt(normalized, item.weeklyLogs),
+  };
+};
 
 const readAuthError = (error: unknown, fallbackMessage: string) => {
   const code =
@@ -2556,7 +3143,15 @@ const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | n
         ? 'border-rose-200 bg-rose-50 text-rose-800'
         : 'border-sky-200 bg-sky-50 text-sky-800';
 
-  return <div className={`rounded-lg border px-4 py-3 text-sm ${className}`}>{message.text}</div>;
+  return (
+    <div
+      role={message.type === 'error' ? 'alert' : 'status'}
+      aria-live={message.type === 'error' ? 'assertive' : 'polite'}
+      className={`rounded-lg border px-4 py-3 text-sm ${className}`}
+    >
+      {message.text}
+    </div>
+  );
 };
 
 interface PipeListsLoginProps {
@@ -2762,15 +3357,20 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
 
 const PipelinePage: NextPage = () => {
   const [lists, setLists] = useState<PipeList[]>(initialLists);
+  const liveListsRef = useRef<PipeList[]>(initialLists);
   const personalListsRef = useRef<PipeList[]>(initialLists);
+  const directShareBaselineRef = useRef('');
+  const protectedShareBaselinesRef = useRef<Record<string, PipeList>>({});
   const [activeListId, setActiveListId] = useState(initialLists[0].id);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [viewMode, setViewModeState] = useState<ViewMode>('pipeline');
   const [pipelineDisplayMode, setPipelineDisplayMode] = useState<PipelineDisplayMode>('list');
+  const [metricsScope, setMetricsScope] = useState<MetricsScope>('selected-list');
+  const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>('90');
   const [runbookHasUnsavedChanges, setRunbookHasUnsavedChanges] = useState(false);
   const [query, setQuery] = useState('');
-  const [stageFilter, setStageFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<'all' | PipelinePriority>('all');
+  const [stageFilters, setStageFilters] = useState<string[]>([]);
+  const [priorityFilters, setPriorityFilters] = useState<PipelinePriority[]>([]);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [newListName, setNewListName] = useState('');
@@ -2857,7 +3457,7 @@ const PipelinePage: NextPage = () => {
   const [itemAskMessage, setItemAskMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [selectedLogItemId, setSelectedLogItemId] = useState<string>('');
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(() => new Set());
-  const [logListFilter, setLogListFilter] = useState<string>('all');
+  const [logListFilter, setLogListFilter] = useState<string>(initialLists[0].id);
   const [logEmailFilter, setLogEmailFilter] = useState<LogEmailFilter>('all');
   const [logRecipientFilter, setLogRecipientFilter] = useState<string>('');
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -2903,7 +3503,9 @@ const PipelinePage: NextPage = () => {
   });
   const [shareDoc, setShareDoc] = useState<PipeListShare | null>(null);
   const [ownerShareDocs, setOwnerShareDocs] = useState<PipeListShare[]>([]);
-  const [accessibleShareDocs, setAccessibleShareDocs] = useState<PipeListShare[]>([]);
+  const [baseAccessibleShareDocs, setAccessibleShareDocs] = useState<PipeListShare[]>([]);
+  const [protectedShareLists, setProtectedShareLists] = useState<Record<string, PipeList>>({});
+  const [protectedDirectShareUid, setProtectedDirectShareUid] = useState('');
   const [leadShareDoc, setLeadShareDoc] = useState<PipeLeadShare | null>(null);
   const [shareMessage, setShareMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [shareAccess, setShareAccess] = useState<ShareAccess>('read');
@@ -2915,8 +3517,13 @@ const PipelinePage: NextPage = () => {
   const [searchableProfiles, setSearchableProfiles] = useState<SearchablePipeListProfile[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [loadingOwnerShares, setLoadingOwnerShares] = useState(false);
+  const [ownerSharesReady, setOwnerSharesReady] = useState(false);
   const [resendingInviteEmails, setResendingInviteEmails] = useState<string[]>([]);
   const [removingAccessEmails, setRemovingAccessEmails] = useState<string[]>([]);
+  const [addingListsForEmail, setAddingListsForEmail] = useState('');
+  const [additionalListIds, setAdditionalListIds] = useState<string[]>([]);
+  const [additionalListAccess, setAdditionalListAccess] = useState<ShareAccess>('read');
+  const [savingAdditionalListsForEmail, setSavingAdditionalListsForEmail] = useState('');
   const [isSharePanelOpen, setIsSharePanelOpen] = useState(false);
   const [isInviteFormOpen, setIsInviteFormOpen] = useState(false);
   const [profile, setProfile] = useState<PipeListProfile | null>(null);
@@ -2924,6 +3531,10 @@ const PipelinePage: NextPage = () => {
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [profileMessage, setProfileMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    liveListsRef.current = lists;
+  }, [lists]);
   const normalizedUserEmail = user?.email?.toLowerCase() || '';
   const hasInviteAccountMismatch = Boolean(inviteEmail && normalizedUserEmail && inviteEmail !== normalizedUserEmail);
   const isLeadSharedView = Boolean(leadShareId);
@@ -2932,6 +3543,13 @@ const PipelinePage: NextPage = () => {
   const activeList = useMemo(
     () => lists.find((list) => list.id === activeListId) || lists[0] || initialLists[0],
     [activeListId, lists],
+  );
+  const accessibleShareDocs = useMemo(
+    () =>
+      baseAccessibleShareDocs.map((share) =>
+        protectedShareLists[share.id] ? { ...share, list: protectedShareLists[share.id] } : share,
+      ),
+    [baseAccessibleShareDocs, protectedShareLists],
   );
   const editableListIds = useMemo(() => {
     if (!normalizedUserEmail) return new Set<string>();
@@ -2955,6 +3573,14 @@ const PipelinePage: NextPage = () => {
     (shareDoc.ownerUid === user.uid ||
       shareDoc.ownerEmail.toLowerCase() === normalizedUserEmail ||
       shareDoc.editorEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail));
+  const canReadShared =
+    Boolean(shareId) &&
+    !!user &&
+    !!shareDoc &&
+    (shareDoc.ownerUid === user.uid ||
+      shareDoc.ownerEmail.toLowerCase() === normalizedUserEmail ||
+      shareDoc.viewerEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail) ||
+      shareDoc.editorEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail));
   const canModify = isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id);
   const canManageWorkspace = !isSharedView && Boolean(user);
   const runbookAvailable = !isSharedView && Boolean(user) && (isOwner || editableListIds.size > 0);
@@ -2962,6 +3588,11 @@ const PipelinePage: NextPage = () => {
   const isContactListActive = isContactList(activeList);
   const isInvestorUpdateContactsList = isInvestorUpdateContactList(activeList);
   const isTaskListActive = isTaskList(activeList);
+  const isUniversitySuccessList = activeList.templateKey === 'university-pilot';
+  const successWorkspaceAvailable =
+    isUniversitySuccessList &&
+    Boolean(user) &&
+    (isSharedView ? !isLeadSharedView && canReadShared : true);
   const canAttemptAuth = authReady || authReadyTimedOut;
 
   const setViewMode = (nextViewMode: ViewMode) => {
@@ -2985,6 +3616,21 @@ const PipelinePage: NextPage = () => {
       setViewModeState('pipeline');
     }
   }, [runbookAvailable, viewMode]);
+
+  useEffect(() => {
+    if (viewMode === 'success' && !successWorkspaceAvailable) {
+      setViewModeState('pipeline');
+    }
+  }, [successWorkspaceAvailable, viewMode]);
+
+  useEffect(() => {
+    setLogListFilter(activeList.id);
+  }, [activeList.id]);
+
+  useEffect(() => {
+    setStageFilters([]);
+    setPriorityFilters([]);
+  }, [activeList.id, user?.uid]);
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -3043,6 +3689,8 @@ const PipelinePage: NextPage = () => {
         setPersonalStateReady(false);
         personalListsRef.current = [];
         setAccessibleShareDocs([]);
+        setProtectedShareLists({});
+        protectedShareBaselinesRef.current = {};
         return;
       }
 
@@ -3120,6 +3768,8 @@ const PipelinePage: NextPage = () => {
 
         personalListsRef.current = nextLists;
         setAccessibleShareDocs([]);
+        setProtectedShareLists({});
+        protectedShareBaselinesRef.current = {};
         setLists(nextLists);
         setActiveListId(nextLists[0]?.id || initialLists[0].id);
         setDraft(defaultDraft(nextLists[0]?.stages[0]?.id || initialLists[0].stages[0].id));
@@ -3134,6 +3784,8 @@ const PipelinePage: NextPage = () => {
         const fallbackLists = currentUserIsOwner ? initialLists : [];
         personalListsRef.current = fallbackLists;
         setAccessibleShareDocs([]);
+        setProtectedShareLists({});
+        protectedShareBaselinesRef.current = {};
         setLists(fallbackLists);
         setActiveListId(initialLists[0].id);
         setDataReady(true);
@@ -3173,21 +3825,8 @@ const PipelinePage: NextPage = () => {
         ...Array.from(viewerShares.entries()),
         ...Array.from(editorShares.entries()),
       ]);
-      const nextShares = Array.from(sharesById.values()).filter((share) => share.publicRead);
-      const nextLists = [
-        ...personalListsRef.current,
-        ...nextShares
-          .filter((share) => !personalListsRef.current.some((personalList) => personalList.id === share.list.id))
-          .map((share) => share.list),
-      ];
-
+      const nextShares = Array.from(sharesById.values());
       setAccessibleShareDocs(nextShares);
-      setLists(nextLists);
-      setActiveListId((currentId) =>
-        nextLists.some((list) => list.id === currentId)
-          ? currentId
-          : nextLists[0]?.id || initialLists[0].id,
-      );
     };
 
     const unsubscribeViewerShares = onSnapshot(
@@ -3243,6 +3882,66 @@ const PipelinePage: NextPage = () => {
   }, [dataReady, isOwner, isSharedView, normalizedUserEmail, user]);
 
   useEffect(() => {
+    if (isSharedView || isOwner || !user || !dataReady) return undefined;
+
+    const protectedShares = baseAccessibleShareDocs.filter(pipeListShareRequiresAccountAccess);
+    const activeShareIds = new Set(protectedShares.map((share) => share.id));
+    setProtectedShareLists((current) =>
+      Object.fromEntries(Object.entries(current).filter(([shareId]) => activeShareIds.has(shareId))),
+    );
+
+    const unsubscribes = protectedShares.map((share) =>
+      onSnapshot(
+        doc(simpBudgetDb, PIPELIST_PROTECTED_SHARES_COLLECTION, share.id),
+        (snapshot) => {
+          setProtectedShareLists((current) => {
+            if (!snapshot.exists()) {
+              if (!current[share.id]) return current;
+              const next = { ...current };
+              delete next[share.id];
+              return next;
+            }
+            const data = snapshot.data() as Partial<PipeListProtectedShare>;
+            if (!data.list) return current;
+            const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
+            const localList = liveListsRef.current.find((list) => list.id === remoteList.id);
+            const previousBase = protectedShareBaselinesRef.current[share.id];
+            const nextList = localList
+              ? reconcilePipeListSnapshotsForWrite(remoteList, localList, previousBase)
+              : remoteList;
+            protectedShareBaselinesRef.current[share.id] = remoteList;
+            if (JSON.stringify(current[share.id]) === JSON.stringify(nextList)) return current;
+            return { ...current, [share.id]: nextList };
+          });
+        },
+        (error) => {
+          console.error('Unable to load protected PipeList success data:', error);
+          setAppMessage({
+            type: 'error',
+            text: readFirestoreError(error, 'Unable to load protected customer success data.'),
+          });
+        },
+      ),
+    );
+
+    return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
+  }, [baseAccessibleShareDocs, dataReady, isOwner, isSharedView, user]);
+
+  useEffect(() => {
+    if (isSharedView || isOwner || !user || !dataReady) return;
+    const nextLists = [
+      ...personalListsRef.current,
+      ...accessibleShareDocs
+        .filter((share) => !personalListsRef.current.some((personalList) => personalList.id === share.list.id))
+        .map((share) => share.list),
+    ];
+    setLists((current) => (JSON.stringify(current) === JSON.stringify(nextLists) ? current : nextLists));
+    setActiveListId((currentId) =>
+      nextLists.some((list) => list.id === currentId) ? currentId : nextLists[0]?.id || initialLists[0].id,
+    );
+  }, [accessibleShareDocs, dataReady, isOwner, isSharedView, user]);
+
+  useEffect(() => {
     if (isSharedView || shareId || leadShareId || !user || !dataReady) return undefined;
 
     const stateRef = doc(
@@ -3287,11 +3986,18 @@ const PipelinePage: NextPage = () => {
   }, [accessibleShareDocs, dataReady, isOwner, isSharedView, leadShareId, shareId, user]);
 
   useEffect(() => {
-    if (!shareId) return;
+    if (!shareId || !authReady) return;
+
+    directShareBaselineRef.current = '';
 
     const loadShare = async () => {
       setDataReady(false);
       setShareMessage(null);
+      setProtectedDirectShareUid('');
+      setProtectedShareLists({});
+      protectedShareBaselinesRef.current = {};
+      setShareDoc(null);
+      setLists([]);
 
       try {
         const shareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
@@ -3303,8 +4009,22 @@ const PipelinePage: NextPage = () => {
         }
 
         const data = snapshot.data() as Partial<PipeListShare>;
-        if (!data.publicRead || !data.list) {
+        if (!data.list) {
           setShareMessage({ type: 'error', text: 'This PipeLists share link is not available.' });
+          setDataReady(true);
+          return;
+        }
+
+        const signedInEmail = user?.email?.trim().toLowerCase() || '';
+        const accountCanRead = Boolean(
+          user &&
+            (data.ownerUid === user.uid ||
+              data.ownerEmail?.trim().toLowerCase() === signedInEmail ||
+              normalizeShareEmails(data.viewerEmails).includes(signedInEmail) ||
+              normalizeShareEmails(data.editorEmails).includes(signedInEmail)),
+        );
+        if (data.publicRead !== true && !accountCanRead) {
+          setShareMessage({ type: 'error', text: 'Sign in with an invited account to open this PipeLists share.' });
           setDataReady(true);
           return;
         }
@@ -3317,6 +4037,7 @@ const PipelinePage: NextPage = () => {
         }
         const normalizedList = purgeExpiredDeletedItems([nextShare.list])[0];
 
+        directShareBaselineRef.current = JSON.stringify(normalizedList);
         setShareDoc({ ...nextShare, list: normalizedList });
         setLists([normalizedList]);
         setActiveListId(normalizedList.id);
@@ -3329,14 +4050,17 @@ const PipelinePage: NextPage = () => {
         console.error('Unable to load shared PipeList:', error);
         setShareMessage({
           type: 'error',
-          text: readFirestoreError(error, 'Unable to load this shared PipeList.'),
+          text:
+            !user && error && typeof error === 'object' && 'code' in error && String(error.code).includes('permission-denied')
+              ? 'Sign in with an invited account to open this PipeLists share.'
+              : readFirestoreError(error, 'Unable to load this shared PipeList.'),
         });
         setDataReady(true);
       }
     };
 
     loadShare();
-  }, [shareId]);
+  }, [authReady, shareId, user?.uid]);
 
   useEffect(() => {
     if (!leadShareId) return;
@@ -3593,30 +4317,38 @@ const PipelinePage: NextPage = () => {
     let cancelled = false;
 
     const saveSharedList = async () => {
-      setSavingToCloud(true);
-
       try {
         const nextList = purgeExpiredDeletedItems(lists)[0];
         if (!nextList) return;
+        const nextSnapshot = collaboratorSafePipeListSnapshot(nextList);
+        const serializedSnapshot = JSON.stringify(nextSnapshot);
+        if (serializedSnapshot === directShareBaselineRef.current) return;
 
-        const shareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
-        await setDoc(
-          shareRef,
-          stripUndefined({
-            list: nextList,
-            updatedAt: serverTimestamp(),
-            lastEditedBy: {
-              uid: user?.uid || '',
-              email: user?.email || '',
-              displayName: profile?.displayName || user?.displayName || '',
-              photoURL: profile?.photoURL || user?.photoURL || '',
-            },
-          }),
-          { merge: true },
-        );
+        setSavingToCloud(true);
+        const actor: PipeListShareActor = {
+          uid: user?.uid || '',
+          email: user?.email || '',
+          displayName: profile?.displayName || user?.displayName || '',
+          photoURL: profile?.photoURL || user?.photoURL || '',
+        };
+        const baseList = directShareBaselineRef.current
+          ? normalizeList(JSON.parse(directShareBaselineRef.current) as Partial<PipeList>, 0)
+          : undefined;
+        const mergedList = await persistCollaborativePipeList({
+          shareId,
+          ownerUid: shareDoc.ownerUid,
+          ownerEmail: shareDoc.ownerEmail,
+          list: nextSnapshot,
+          actor,
+          protectedDetails: shareDoc.protectedDetails,
+          baseList,
+        });
+        directShareBaselineRef.current = JSON.stringify(mergedList);
+        if (shareDoc.protectedDetails) protectedShareBaselinesRef.current[shareId] = mergedList;
 
         if (!cancelled) {
-          setShareDoc((current) => (current ? { ...current, list: nextList } : current));
+          setLists([mergedList]);
+          setShareDoc((current) => (current ? { ...current, list: mergedList } : current));
           setShareMessage(null);
         }
       } catch (error) {
@@ -3637,13 +4369,18 @@ const PipelinePage: NextPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [canEditShared, dataReady, lists, profile, shareDoc, shareId, user]);
+  }, [canEditShared, dataReady, lists, profile, shareDoc?.id, shareId, user]);
 
   useEffect(() => {
     if (isSharedView || isOwner || !user || !dataReady || accessibleShareDocs.length === 0) return;
 
     const editableShares = accessibleShareDocs.filter((share) => share.editorEmails.includes(normalizedUserEmail));
     if (editableShares.length === 0) return;
+    const changedShares = editableShares.filter((share) => {
+      const nextList = lists.find((list) => list.id === share.list.id);
+      return Boolean(nextList && JSON.stringify(nextList) !== JSON.stringify(share.list));
+    });
+    if (changedShares.length === 0) return;
 
     let cancelled = false;
 
@@ -3651,27 +4388,39 @@ const PipelinePage: NextPage = () => {
       setSavingToCloud(true);
 
       try {
-        await Promise.all(
-          editableShares.map((share) => {
+        const actor: PipeListShareActor = {
+          uid: user.uid,
+          email: user.email || '',
+          displayName: profile?.displayName || user.displayName || '',
+          photoURL: profile?.photoURL || user.photoURL || '',
+        };
+        const savedShares = await Promise.all(
+          changedShares.map(async (share) => {
             const nextList = lists.find((list) => list.id === share.list.id);
-            if (!nextList) return Promise.resolve();
-
-            return setDoc(
-              doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, share.id),
-              stripUndefined({
-                list: nextList,
-                updatedAt: serverTimestamp(),
-                lastEditedBy: {
-                  uid: user.uid,
-                  email: user.email || '',
-                  displayName: profile?.displayName || user.displayName || '',
-                  photoURL: profile?.photoURL || user.photoURL || '',
-                },
-              }),
-              { merge: true },
-            );
+            if (!nextList) return null;
+            const mergedList = await persistCollaborativePipeList({
+              shareId: share.id,
+              ownerUid: share.ownerUid,
+              ownerEmail: share.ownerEmail,
+              list: nextList,
+              actor,
+              protectedDetails: share.protectedDetails,
+              baseList: protectedShareBaselinesRef.current[share.id] || share.list,
+            });
+            if (share.protectedDetails) protectedShareBaselinesRef.current[share.id] = mergedList;
+            return { shareId: share.id, list: mergedList, protectedDetails: share.protectedDetails };
           }),
         );
+
+        setProtectedShareLists((current) => {
+          const next = { ...current };
+          savedShares.forEach((saved) => {
+            if (saved && (saved.protectedDetails || pipeListRequiresAccountAccess(saved.list))) {
+              next[saved.shareId] = saved.list;
+            }
+          });
+          return next;
+        });
 
         if (!cancelled) setAppMessage(null);
       } catch (error) {
@@ -3699,65 +4448,125 @@ const PipelinePage: NextPage = () => {
   useEffect(() => {
     if (isSharedView || !user || !isOwner || !dataReady || !activeList?.id) return;
 
-    let cancelled = false;
+    const nextShareId = shareDocumentIdForList(user.uid, activeList.id);
+    setShareMessage(null);
 
-    const loadActiveListShare = async () => {
-      const nextShareId = shareDocumentIdForList(user.uid, activeList.id);
-      setShareMessage(null);
-
-      try {
-        const shareSnapshot = await getDoc(doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, nextShareId));
+    return onSnapshot(
+      doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, nextShareId),
+      (shareSnapshot) => {
         if (!shareSnapshot.exists()) {
-          if (!cancelled) {
-            setShareDoc(null);
-            setShareAccess('read');
-            setShareEditorEmails('');
-          }
+          setShareDoc(null);
+          setShareAccess('read');
+          setShareEditorEmails('');
           return;
         }
 
         const data = shareSnapshot.data() as Partial<PipeListShare>;
         const normalizedShare = normalizePipeListShare(shareSnapshot.id, data, 0);
-        if (!cancelled) {
-          const fallbackViewerEmails = normalizeShareEmails(data.viewerEmails);
-          const fallbackEditorEmails = normalizeShareEmails(data.editorEmails);
-          setShareDoc(
-            normalizedShare || {
-              id: shareSnapshot.id,
-              ownerUid: data.ownerUid || user.uid,
-              ownerEmail: data.ownerEmail || user.email || TREMAINE_OWNER_EMAIL,
-              list: activeList,
-              access: data.access === 'edit' ? 'edit' : 'read',
-              publicRead: data.publicRead === true,
-              viewerEmails: fallbackViewerEmails,
-              editorEmails: fallbackEditorEmails,
-              inviteStatuses: normalizeInviteStatuses(data.inviteStatuses, fallbackViewerEmails, fallbackEditorEmails),
-              createdAt: data.createdAt,
-              updatedAt: data.updatedAt,
-            },
+        const fallbackViewerEmails = normalizeShareEmails(data.viewerEmails);
+        const fallbackEditorEmails = normalizeShareEmails(data.editorEmails);
+        const nextShare =
+          normalizedShare || {
+            id: shareSnapshot.id,
+            ownerUid: data.ownerUid || user.uid,
+            ownerEmail: data.ownerEmail || user.email || TREMAINE_OWNER_EMAIL,
+            list: collaboratorSafePipeListSnapshot(activeList),
+            access: data.access === 'edit' ? 'edit' : 'read',
+            publicRead: data.publicRead === true,
+            protectedDetails: fallbackEditorEmails.length > 0 || pipeListRequiresAccountAccess(activeList),
+            viewerEmails: fallbackViewerEmails,
+            editorEmails: fallbackEditorEmails,
+            inviteStatuses: normalizeInviteStatuses(data.inviteStatuses, fallbackViewerEmails, fallbackEditorEmails),
+            lastEditedBy: data.lastEditedBy,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+          };
+        setShareDoc(nextShare);
+        setShareAccess(data.access === 'edit' ? 'edit' : 'read');
+        const accountEmails = data.access === 'edit' ? fallbackEditorEmails : fallbackViewerEmails;
+        setShareEditorEmails(accountEmails.join(', '));
+
+        if (
+          nextShare.lastEditedBy?.uid &&
+          nextShare.lastEditedBy.uid !== user.uid &&
+          !pipeListShareRequiresAccountAccess(nextShare)
+        ) {
+          setLists((currentLists) =>
+            currentLists.map((list) =>
+              list.id === nextShare.list.id ? mergeCollaboratorListSnapshot(list, nextShare.list) : list,
+            ),
           );
-          setShareAccess(data.access === 'edit' ? 'edit' : 'read');
-          const accountEmails = data.access === 'edit' ? normalizeShareEmails(data.editorEmails) : normalizeShareEmails(data.viewerEmails);
-          setShareEditorEmails(accountEmails.join(', '));
         }
-      } catch (error) {
+      },
+      (error) => {
         console.error('Unable to load PipeList invite:', error);
-        if (!cancelled) {
-          setShareDoc(null);
-          setShareMessage({
-            type: 'error',
-            text: readFirestoreError(error, 'Unable to load invite settings for this PipeList.'),
-          });
-        }
-      }
-    };
-
-    loadActiveListShare();
-
-    return () => {
-      cancelled = true;
-    };
+        setShareDoc(null);
+        setShareMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to load invite settings for this PipeList.'),
+        });
+      },
+    );
   }, [activeList.id, dataReady, isOwner, isSharedView, user]);
+
+  useEffect(() => {
+    if (!user || !dataReady || !shareDoc || !pipeListShareRequiresAccountAccess(shareDoc) || isLeadSharedView) {
+      return undefined;
+    }
+    const protectedShareId = isSharedView
+      ? canReadShared
+        ? shareId
+        : ''
+      : isOwner && shareDoc?.id === ownerShareId
+        ? ownerShareId
+        : '';
+    if (!protectedShareId) return undefined;
+
+    return onSnapshot(
+      doc(simpBudgetDb, PIPELIST_PROTECTED_SHARES_COLLECTION, protectedShareId),
+      (snapshot) => {
+        if (!snapshot.exists()) return;
+        const data = snapshot.data() as Partial<PipeListProtectedShare>;
+        if (!data.list) return;
+        const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
+        const currentList = liveListsRef.current.find((list) => list.id === remoteList.id);
+        const storedBase = protectedShareBaselinesRef.current[protectedShareId];
+        const directBase =
+          isSharedView && directShareBaselineRef.current
+            ? normalizeList(JSON.parse(directShareBaselineRef.current) as Partial<PipeList>, 0)
+            : undefined;
+        const baseList = storedBase || directBase;
+        const nextList = currentList
+          ? baseList
+            ? reconcilePipeListSnapshotsForWrite(remoteList, currentList, baseList)
+            : mergeCollaboratorListSnapshot(currentList, remoteList)
+          : remoteList;
+        protectedShareBaselinesRef.current[protectedShareId] = remoteList;
+        setProtectedShareLists((current) => ({ ...current, [protectedShareId]: nextList }));
+
+        if (isSharedView) {
+          directShareBaselineRef.current = JSON.stringify(remoteList);
+          setProtectedDirectShareUid(user.uid);
+          setLists([nextList]);
+          setShareDoc((current) => (current ? { ...current, list: nextList } : current));
+          return;
+        }
+
+        if (data.lastEditedBy?.uid && data.lastEditedBy.uid !== user.uid) {
+          setLists((currentLists) =>
+            currentLists.map((list) => (list.id === nextList.id ? nextList : list)),
+          );
+        }
+      },
+      (error) => {
+        console.error('Unable to load protected PipeList success data:', error);
+        setShareMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to load protected customer success data.'),
+        });
+      },
+    );
+  }, [canReadShared, dataReady, isLeadSharedView, isOwner, isSharedView, ownerShareId, shareDoc?.id, shareDoc?.protectedDetails, shareId, user]);
 
   useEffect(() => {
     if (isSharedView || !user || !isOwner || !dataReady || !shareDoc || shareDoc.id !== ownerShareId) return;
@@ -3766,17 +4575,35 @@ const PipelinePage: NextPage = () => {
 
     const syncSharedListSnapshot = async () => {
       try {
-        await setDoc(
-          doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareDoc.id),
-          stripUndefined({
-            list: activeList,
-            updatedAt: serverTimestamp(),
-          }),
-          { merge: true },
-        );
+        const actor: PipeListShareActor = {
+          uid: user.uid,
+          email: user.email || '',
+          displayName: profile?.displayName || user.displayName || '',
+          photoURL: profile?.photoURL || user.photoURL || '',
+        };
+        const mergedList = await persistCollaborativePipeList({
+          shareId: shareDoc.id,
+          ownerUid: shareDoc.ownerUid || user.uid,
+          ownerEmail: shareDoc.ownerEmail || user.email || TREMAINE_OWNER_EMAIL,
+          list: activeList,
+          actor,
+          protectedDetails: shareDoc.protectedDetails,
+          baseList: protectedShareBaselinesRef.current[shareDoc.id],
+        });
+        if (shareDoc.protectedDetails) protectedShareBaselinesRef.current[shareDoc.id] = mergedList;
 
         if (!cancelled) {
-          setShareDoc((current) => (current && current.id === shareDoc.id ? { ...current, list: activeList } : current));
+          setLists((currentLists) => {
+            const currentList = currentLists.find((list) => list.id === mergedList.id);
+            if (!currentList) return currentLists;
+            const reconciledList = mergeCollaboratorListSnapshot(currentList, mergedList);
+            if (JSON.stringify(currentList) === JSON.stringify(reconciledList)) return currentLists;
+            return currentLists.map((list) => (list.id === mergedList.id ? reconciledList : list));
+          });
+          if (shareDoc.protectedDetails || pipeListRequiresAccountAccess(mergedList)) {
+            setProtectedShareLists((current) => ({ ...current, [shareDoc.id]: mergedList }));
+          }
+          setShareDoc((current) => (current && current.id === shareDoc.id ? { ...current, list: mergedList } : current));
         }
       } catch (error) {
         console.error('Unable to sync PipeList invite:', error);
@@ -3788,11 +4615,12 @@ const PipelinePage: NextPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeList, dataReady, isOwner, isSharedView, ownerShareId, shareDoc?.id, user]);
+  }, [activeList, dataReady, isOwner, isSharedView, ownerShareId, profile, shareDoc?.id, user]);
 
   useEffect(() => {
     if (isSharedView || !user || !isOwner || !isSharePanelOpen) return;
 
+    setOwnerSharesReady(false);
     setLoadingOwnerShares(true);
     const ownerSharesQuery = firestoreQuery(
       collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION),
@@ -3801,13 +4629,16 @@ const PipelinePage: NextPage = () => {
 
     return onSnapshot(
       ownerSharesQuery,
+      { includeMetadataChanges: true },
       (shareSnapshots) => {
         const shares = shareSnapshots.docs
           .map((shareSnapshot, index) => normalizePipeListShare(shareSnapshot.id, shareSnapshot.data() as Partial<PipeListShare>, index))
           .filter((share): share is PipeListShare => Boolean(share));
 
         setOwnerShareDocs(shares);
-        setLoadingOwnerShares(false);
+        const isServerSnapshot = !shareSnapshots.metadata.fromCache;
+        setOwnerSharesReady(isServerSnapshot);
+        setLoadingOwnerShares(!isServerSnapshot);
       },
       (error) => {
         console.error('Unable to load PipeLists invite history:', error);
@@ -3815,6 +4646,7 @@ const PipelinePage: NextPage = () => {
           type: 'error',
           text: readFirestoreError(error, 'Unable to load invite history.'),
         });
+        setOwnerSharesReady(false);
         setLoadingOwnerShares(false);
       },
     );
@@ -3833,6 +4665,22 @@ const PipelinePage: NextPage = () => {
   const activeListItems = useMemo(
     () => activeList.items.filter((item) => !isItemDeleted(item)),
     [activeList.items],
+  );
+  const universitySuccessAccounts = useMemo<PipeListsSuccessAccount[]>(
+    () =>
+      activeList.templateKey === 'university-pilot'
+        ? activeListItems
+            .filter((item) => Boolean(item.customerSuccess) || isUniversityCustomerSuccessStage(item.stage))
+            .map((item) => ({
+              id: item.id,
+              title: item.title,
+              organization: item.organization,
+              commercialStage: getStage(activeList, item.stage).label,
+              value: itemAmountDisplay(activeList, item),
+              success: customerSuccessForItem(item),
+            }))
+        : [],
+    [activeList, activeListItems],
   );
   const activeContactEmails = useMemo(
     () => Array.from(new Set(activeListItems.flatMap((item) => normalizeContactEmails(item.contactEmails)))),
@@ -3910,8 +4758,8 @@ const PipelinePage: NextPage = () => {
 
     return activeListItems
       .filter((item) => {
-        const matchesStage = isInvestorUpdateContactsList || stageFilter === 'all' || item.stage === stageFilter;
-        const matchesPriority = priorityFilter === 'all' || item.priority === priorityFilter;
+        const matchesSelectedCategories =
+          isInvestorUpdateContactsList || matchesPipelineFilters(item, stageFilters, priorityFilters);
         const matchesQuery =
           search.length === 0 ||
           [
@@ -3931,7 +4779,7 @@ const PipelinePage: NextPage = () => {
             .toLowerCase()
             .includes(search);
 
-        return matchesStage && matchesPriority && matchesQuery;
+        return matchesSelectedCategories && matchesQuery;
       })
       .sort((left, right) => {
         if (sortColumn) {
@@ -3978,20 +4826,20 @@ const PipelinePage: NextPage = () => {
     activeListItems,
     isContactListActive,
     isInvestorUpdateContactsList,
-    priorityFilter,
+    priorityFilters,
     query,
     sortColumn,
     sortDirection,
-    stageFilter,
+    stageFilters,
   ]);
 
   const filteredItemIds = useMemo(() => filteredItems.map((item) => item.id), [filteredItems]);
   const visibleKanbanStages = useMemo(
     () =>
-      !isInvestorUpdateContactsList && stageFilter !== 'all'
-        ? activeList.stages.filter((stage) => stage.id === stageFilter)
+      !isInvestorUpdateContactsList && stageFilters.length > 0
+        ? activeList.stages.filter((stage) => stageFilters.includes(stage.id))
         : activeList.stages,
-    [activeList.stages, isInvestorUpdateContactsList, stageFilter],
+    [activeList.stages, isInvestorUpdateContactsList, stageFilters],
   );
   const kanbanItemsByStage = useMemo(() => {
     const stageIds = new Set(activeList.stages.map((stage) => stage.id));
@@ -4069,10 +4917,26 @@ const PipelinePage: NextPage = () => {
     .reduce((sum, item) => sum + itemValue(item), 0);
 
   const scorecardMetrics = useMemo(() => {
-    const openRows = allRows.filter(({ list, item }) => !isClosedStage(list, item.stage));
-    const wonRows = allRows.filter(({ list, item }) => isWonStage(list, item.stage));
-    const logs = allRows.flatMap(({ item }) => item.weeklyLogs);
-    const metricLogs = logs.filter(logHasMetrics);
+    const scopedRows = metricsScope === 'workspace' ? allRows : allRows.filter(({ list }) => list.id === activeList.id);
+    const openRows = scopedRows.filter(({ list, item }) => !isClosedStage(list, item.stage));
+    const wonRows = scopedRows.filter(({ list, item }) => isWonStage(list, item.stage));
+    const reportingCutoff =
+      metricsPeriod === 'all'
+        ? ''
+        : new Date(Date.now() - Number(metricsPeriod) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const reportingToday = new Date().toISOString().slice(0, 10);
+    const logs = scopedRows.flatMap(({ item }) => item.weeklyLogs);
+    const metricLogs = scopedRows.flatMap(({ item }) => {
+      const latestEligibleLog = item.weeklyLogs
+        .filter((log) => {
+          if (!logHasMetrics(log)) return false;
+          const logDate = (log.reportingPeriodEnd || log.weekOf || log.createdAt).slice(0, 10);
+          if (!logDate || logDate > reportingToday) return false;
+          return !reportingCutoff || logDate >= reportingCutoff;
+        })
+        .sort((left, right) => successEvidenceTimestamp(right) - successEvidenceTimestamp(left))[0];
+      return latestEligibleLog ? [latestEligibleLog] : [];
+    });
     const expectedDates = openRows
       .map(({ list, item }) => itemPrimaryDate(list, item))
       .filter(Boolean)
@@ -4085,25 +4949,28 @@ const PipelinePage: NextPage = () => {
       const sevenDays = 7 * 24 * 60 * 60 * 1000;
       return dueTime >= now - 24 * 60 * 60 * 1000 && dueTime <= now + sevenDays;
     });
-    const loggedRows = allRows.filter(({ item }) => item.weeklyLogs.length > 0);
+    const loggedRows = scopedRows.filter(({ item }) => item.weeklyLogs.length > 0);
+
+    const singleMetricLog = metricLogs.length === 1 ? metricLogs[0] : null;
 
     return {
       totalOpenDeals: openRows.length,
       totalOpenValue: openRows.reduce((sum, row) => sum + itemValue(row.item), 0),
-      averageContractValue: average(allRows.map(({ item }) => itemValue(item))),
+      averageContractValue: average(scopedRows.map(({ item }) => itemValue(item))),
       firstExpectedCloseDate: expectedDates[0] || '',
-      wonRate: allRows.length > 0 ? (wonRows.length / allRows.length) * 100 : 0,
+      wonRate: scopedRows.length > 0 ? (wonRows.length / scopedRows.length) * 100 : 0,
       dueSoon: dueSoonRows.length,
       loggedItems: loggedRows.length,
       totalLogs: logs.length,
-      checkInRate: average(metricLogs.map(derivedCheckInRate)),
-      biometricSyncRate: average(metricLogs.map((log) => parsePercent(log.biometricSyncRate))),
-      signalEvents: metricLogs.reduce((sum, log) => sum + (Number.parseFloat(log.signalEvents) || 0), 0),
-      noraEngagementRate: average(metricLogs.map((log) => parsePercent(log.noraEngagementRate))),
-      escalations: metricLogs.reduce((sum, log) => sum + (Number.parseFloat(log.escalations) || 0), 0),
-      staffScore: average(metricLogs.map((log) => Number.parseFloat(log.staffFeedbackScore))),
+      metricReports: metricLogs.length,
+      checkInRate: singleMetricLog ? derivedMeasuredCheckInRate(singleMetricLog) : null,
+      biometricSyncRate: singleMetricLog ? parseOptionalNumber(singleMetricLog.biometricSyncRate) : null,
+      signalEvents: singleMetricLog ? parseOptionalNumber(singleMetricLog.signalEvents) : null,
+      noraEngagementRate: singleMetricLog ? parseOptionalNumber(singleMetricLog.noraEngagementRate) : null,
+      escalations: singleMetricLog ? parseOptionalNumber(singleMetricLog.escalations) : null,
+      staffScore: singleMetricLog ? parseOptionalNumber(singleMetricLog.staffFeedbackScore) : null,
     };
-  }, [allRows]);
+  }, [activeList.id, allRows, metricsPeriod, metricsScope]);
 
   const selectedLogItem =
     activeListItems.find((item) => item.id === selectedLogItemId) ||
@@ -5816,8 +6683,8 @@ Rules:
     );
     setAddedGeneratedLeadKeys((currentKeys) => [...currentKeys, key]);
     setSelectedLogItemId(nextItem.id);
-    setStageFilter('all');
-    setPriorityFilter('all');
+    setStageFilters([]);
+    setPriorityFilters([]);
     setViewMode('pipeline');
     setLeadGenMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
   };
@@ -5879,8 +6746,8 @@ Rules:
     );
     setAddedPastedLeadKeys((currentKeys) => [...currentKeys, key]);
     setSelectedLogItemId(nextItem.id);
-    setStageFilter('all');
-    setPriorityFilter('all');
+    setStageFilters([]);
+    setPriorityFilters([]);
     setViewMode('pipeline');
     setPastedLeadListMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
   };
@@ -5934,6 +6801,9 @@ Rules:
                 ['Nora Sessions', log.noraSessions],
                 ['Escalations', log.escalations],
                 ['Staff Feedback Score', log.staffFeedbackScore],
+                ['Reporting Period Start', log.reportingPeriodStart],
+                ['Reporting Period End', log.reportingPeriodEnd],
+                ['Metric Source', log.metricSource],
                 ['Notes', log.notes],
                 ['Created At', log.createdAt],
               ]),
@@ -6278,7 +7148,7 @@ Rules:
         ownerEmail,
         listId: activeList.id,
         itemId: item.id,
-        list: buildLeadShareList(item),
+        list: publicSafePipeListSnapshot(buildLeadShareList(item)),
         publicRead: true,
       };
 
@@ -6390,8 +7260,8 @@ Rules:
           : list,
       ),
     );
-    setStageFilter('all');
-    setPriorityFilter('all');
+    setStageFilters([]);
+    setPriorityFilters([]);
     setSelectedLogItemId(nextItem.id);
     setViewMode('pipeline');
     setToastMessage({
@@ -6446,8 +7316,8 @@ Rules:
             : list,
         ),
       );
-      setStageFilter('all');
-      setPriorityFilter('all');
+    setStageFilters([]);
+    setPriorityFilters([]);
       setSelectedDetailItemId(nextItem.id);
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
@@ -6584,8 +7454,8 @@ Rules:
             : list,
         ),
       );
-      setStageFilter('all');
-      setPriorityFilter('all');
+    setStageFilters([]);
+    setPriorityFilters([]);
       setSelectedDetailItemId(nextItem.id);
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
@@ -6802,8 +7672,8 @@ Rules:
 
     setLists((currentLists) => [...currentLists, nextList]);
     setActiveListId(nextList.id);
-    setStageFilter('all');
-    setPriorityFilter('all');
+    setStageFilters([]);
+    setPriorityFilters([]);
     setNewListName('');
     setDraft(defaultDraft(nextList.stages[0]?.id));
     setSelectedLogItemId('');
@@ -6875,11 +7745,54 @@ Rules:
     const normalizedContactEmails = Array.from(new Set([...draft.contactEmails, ...pendingContactTokens]));
     const inferredContactName = normalizedContactEmails.map(contactNameFromEmail).find(Boolean) || '';
     const currentEditingItem = editingItemId ? activeList.items.find((item) => item.id === editingItemId) : undefined;
+    const shouldSaveCustomerSuccess =
+      activeList.templateKey === 'university-pilot' &&
+      (Boolean(draft.customerSuccess) || isUniversityCustomerSuccessStage(draft.stage));
+    const normalizedCustomerSuccess = shouldSaveCustomerSuccess
+      ? normalizeUniversityCustomerSuccess(draft.customerSuccess, {
+          stage: draft.stage,
+          owner: draft.owner,
+          nextStep: draft.nextStep,
+          dueDate: draft.dueDate,
+          pilotStart: draft.pilotStart,
+          pilotEnd: draft.pilotEnd,
+        })
+      : undefined;
+    const customerSuccessToSave = normalizedCustomerSuccess
+      ? (() => {
+          const nextCustomerSuccess: UniversityCustomerSuccess = {
+          ...normalizedCustomerSuccess,
+          ownership: {
+            ...normalizedCustomerSuccess.ownership,
+            accountOwner: draft.owner.trim(),
+          },
+          pilot: {
+            startDate: draft.pilotStart,
+            endDate: draft.pilotEnd,
+          },
+          };
+          return {
+            ...nextCustomerSuccess,
+            lastSuccessUpdateAt: latestCurrentSuccessEvidenceAt(
+              nextCustomerSuccess,
+              currentEditingItem?.weeklyLogs || [],
+              { includeStored: false },
+            ),
+          };
+        })()
+      : undefined;
     const baseDraftToSave = {
       ...draft,
       title: isContactListActive && !draft.title.trim() && inferredContactName ? inferredContactName : draft.title,
       contactEmails: normalizedContactEmails,
       notes: cleanDealNotes(draft.notes),
+      ...(customerSuccessToSave
+        ? {
+            customerSuccess: customerSuccessToSave,
+            nextStep: customerSuccessToSave.nextAction.summary,
+            dueDate: customerSuccessToSave.nextAction.dueDate,
+          }
+        : {}),
     };
     const draftToSave = {
       ...baseDraftToSave,
@@ -6938,7 +7851,7 @@ Rules:
 
   const handleEditItem = (item: PipelineItem) => {
     if (!canModify) return;
-    const { id, createdAt, updatedAt, weeklyLogs, deletedAt, deletedByLogId, restorableUntil, ...editableItem } = item;
+    const { id, createdAt, updatedAt, weeklyLogs, deletedAt, deletedByLogId, restorableUntil, movedToListId, ...editableItem } = item;
     void id;
     void createdAt;
     void updatedAt;
@@ -6946,10 +7859,15 @@ Rules:
     void deletedAt;
     void deletedByLogId;
     void restorableUntil;
+    void movedToListId;
     setDraft({
       ...editableItem,
       contactEmails: normalizeContactEmails(editableItem.contactEmails),
       notes: cleanDealNotes(editableItem.notes),
+      ...(activeList.templateKey === 'university-pilot' &&
+      (Boolean(item.customerSuccess) || isUniversityCustomerSuccessStage(item.stage))
+        ? { customerSuccess: customerSuccessForItem(item) }
+        : {}),
     });
     setContactEmailInput('');
     setContactEmailError('');
@@ -6982,6 +7900,7 @@ Rules:
                   deletedAt,
                   deletedByLogId: deletionLog.id,
                   restorableUntil,
+                  movedToListId: '',
                   weeklyLogs: [deletionLog, ...item.weeklyLogs],
                   updatedAt: deletedAt,
                 };
@@ -7048,6 +7967,7 @@ Rules:
                   deletedAt: '',
                   deletedByLogId: '',
                   restorableUntil: '',
+                  movedToListId: '',
                   weeklyLogs: [
                     createSystemLog(item, 'item-restored', `Restored ${item.title} to ${list.name}.`),
                     ...item.weeklyLogs,
@@ -7085,10 +8005,15 @@ Rules:
     }
 
     const now = new Date().toISOString();
+    const movedTombstoneUntil = addDays(new Date(now), SOFT_DELETE_RESTORE_DAYS).toISOString();
     const targetStage = normalizeStageId(itemToMove.stage, targetList.stages);
     const movedItem: PipelineItem = {
       ...itemToMove,
       stage: targetStage,
+      deletedAt: '',
+      deletedByLogId: '',
+      restorableUntil: '',
+      movedToListId: '',
       updatedAt: now,
       weeklyLogs: [
         createSystemLog(
@@ -7105,7 +8030,18 @@ Rules:
         if (list.id === sourceList.id) {
           return {
             ...list,
-            items: list.items.filter((item) => item.id !== itemId),
+            items: list.items.map((item) =>
+              item.id === itemId
+                ? {
+                    ...item,
+                    deletedAt: now,
+                    deletedByLogId: '',
+                    restorableUntil: movedTombstoneUntil,
+                    movedToListId: targetList.id,
+                    updatedAt: now,
+                  }
+                : item,
+            ),
           };
         }
 
@@ -7123,8 +8059,8 @@ Rules:
 
     if (editingItemId === itemId) resetEditor();
     setActiveListId(targetListId);
-    setStageFilter('all');
-    setPriorityFilter('all');
+    setStageFilters([]);
+    setPriorityFilters([]);
     setQuery('');
     setSelectedDetailItemId(itemId);
     setSelectedLogItemId(itemId);
@@ -7164,6 +8100,7 @@ Rules:
                   deletedAt,
                   deletedByLogId: deletionLog.id,
                   restorableUntil,
+                  movedToListId: '',
                   weeklyLogs: [deletionLog, ...item.weeklyLogs],
                   updatedAt: deletedAt,
                 };
@@ -7202,9 +8139,14 @@ Rules:
 
     const selectedIds = new Set(selectedBulkItems.map((item) => item.id));
     const now = new Date().toISOString();
+    const movedTombstoneUntil = addDays(new Date(now), SOFT_DELETE_RESTORE_DAYS).toISOString();
     const movedItems = selectedBulkItems.map((item) => ({
       ...item,
       stage: normalizeStageId(item.stage, targetList.stages),
+      deletedAt: '',
+      deletedByLogId: '',
+      restorableUntil: '',
+      movedToListId: '',
       updatedAt: now,
       weeklyLogs: [
         createSystemLog(
@@ -7221,7 +8163,18 @@ Rules:
         if (list.id === sourceList.id) {
           return {
             ...list,
-            items: list.items.filter((item) => !selectedIds.has(item.id)),
+            items: list.items.map((item) =>
+              selectedIds.has(item.id)
+                ? {
+                    ...item,
+                    deletedAt: now,
+                    deletedByLogId: '',
+                    restorableUntil: movedTombstoneUntil,
+                    movedToListId: targetList.id,
+                    updatedAt: now,
+                  }
+                : item,
+            ),
           };
         }
 
@@ -7256,8 +8209,8 @@ Rules:
     const nextLists = lists.filter((list) => list.id !== activeList.id);
     setLists(nextLists);
     setActiveListId(nextLists[0].id);
-    setStageFilter('all');
-    setPriorityFilter('all');
+    setStageFilters([]);
+    setPriorityFilters([]);
     setSelectedLogItemId('');
     setLogDraft(defaultLogDraft(nextLists[0].templateKey));
     setSelectedDetailItemId('');
@@ -7276,6 +8229,29 @@ Rules:
     const targetList = lists.find((list) => list.id === targetListId);
     const targetItemId = options.itemId || selectedLogItem?.id || '';
     if (!targetList || !targetItemId) return;
+    if (
+      logDraft.type === 'metrics' &&
+      logDraft.reportingPeriodStart &&
+      logDraft.reportingPeriodEnd &&
+      logDraft.reportingPeriodStart > logDraft.reportingPeriodEnd
+    ) {
+      setToastMessage({ type: 'error', text: 'Reporting period start must be on or before the end date.' });
+      return;
+    }
+    const invalidMetric = metricLogFields.find(([key, , , maximum]) => {
+      const value = parseOptionalNumber(logDraft[key]);
+      return value !== null && (value < 0 || (maximum !== undefined && value > maximum));
+    });
+    if (logDraft.type === 'metrics' && invalidMetric) {
+      setToastMessage({
+        type: 'error',
+        text:
+          invalidMetric[3] !== undefined
+            ? `${invalidMetric[1]} must be between 0 and ${invalidMetric[3]}.`
+            : `${invalidMetric[1]} cannot be negative.`,
+      });
+      return;
+    }
     const hasMetricInput = Boolean(
       logDraft.rosteredAthletes ||
         logDraft.completedCheckIns ||
@@ -7305,11 +8281,40 @@ Rules:
               ...list,
               items: list.items.map((item) =>
                 item.id === targetItemId
-                  ? {
-                      ...item,
-                      weeklyLogs: [nextLog, ...item.weeklyLogs],
-                      updatedAt: new Date().toISOString(),
-                    }
+                  ? (() => {
+                      const updatedAt = new Date().toISOString();
+                      const shouldUpdateSuccess =
+                        list.templateKey === 'university-pilot' &&
+                        (Boolean(item.customerSuccess) || isUniversityCustomerSuccessStage(item.stage)) &&
+                        nextLog.type === 'metrics';
+                      const customerSuccess = shouldUpdateSuccess
+                        ? normalizeUniversityCustomerSuccess(item.customerSuccess, {
+                            stage: item.stage,
+                            owner: item.owner,
+                            nextStep: item.nextStep,
+                            dueDate: item.dueDate,
+                            pilotStart: item.pilotStart,
+                            pilotEnd: item.pilotEnd,
+                          })
+                        : undefined;
+                      return {
+                        ...item,
+                        weeklyLogs: [nextLog, ...item.weeklyLogs],
+                        ...(customerSuccess
+                          ? {
+                              customerSuccess: {
+                                ...customerSuccess,
+                                lastSuccessUpdateAt: latestCurrentSuccessEvidenceAt(
+                                  customerSuccess,
+                                  [nextLog, ...item.weeklyLogs],
+                                  { today: updatedAt.slice(0, 10) },
+                                ),
+                              },
+                            }
+                          : {}),
+                        updatedAt,
+                      };
+                    })()
                   : item,
               ),
             }
@@ -7324,19 +8329,44 @@ Rules:
 
   const handleDeleteLog = (itemId: string, logId: string, listId = activeList.id) => {
     if (!canModify) return;
+    const updatedAt = new Date().toISOString();
     setLists((currentLists) =>
       currentLists.map((list) =>
         list.id === listId
           ? {
               ...list,
-              items: list.items.map((item) =>
-                item.id === itemId
-                  ? {
-                      ...item,
-                      weeklyLogs: item.weeklyLogs.filter((log) => log.id !== logId),
-                    }
-                  : item,
-              ),
+              items: list.items.map((item) => {
+                if (item.id !== itemId) return item;
+                const deletedLog = item.weeklyLogs.find((log) => log.id === logId);
+                const remainingLogs = item.weeklyLogs.filter((log) => log.id !== logId);
+                const customerSuccess = item.customerSuccess
+                  ? normalizeUniversityCustomerSuccess(item.customerSuccess, {
+                      stage: item.stage,
+                      owner: item.owner,
+                      nextStep: item.nextStep,
+                      dueDate: item.dueDate,
+                      pilotStart: item.pilotStart,
+                      pilotEnd: item.pilotEnd,
+                    })
+                  : undefined;
+
+                return {
+                  ...item,
+                  weeklyLogs: remainingLogs,
+                  ...(deletedLog?.type === 'metrics' && customerSuccess
+                    ? {
+                        customerSuccess: {
+                          ...customerSuccess,
+                          lastSuccessUpdateAt: latestCurrentSuccessEvidenceAt(customerSuccess, remainingLogs, {
+                            includeStored: false,
+                            today: updatedAt.slice(0, 10),
+                          }),
+                        },
+                      }
+                    : {}),
+                  updatedAt,
+                };
+              }),
             }
           : list,
       ),
@@ -7369,6 +8399,21 @@ Rules:
         'Partner Cost',
         'Hard Cost',
         'Next Step',
+        'Delivery Phase',
+        'Customer Health',
+        'Health Context',
+        'Customer Success Owner',
+        'Executive Sponsor',
+        'Champion',
+        'Next Review Date',
+        'Contract Start Date',
+        'Contract End Date',
+        'Renewal Decision Date',
+        'Renewal Owner',
+        'Renewal Outcome',
+        'Last Success Update',
+        'Launch Progress',
+        'Success Measures',
         'Expansion Path',
         'Loss Reason',
         'Notes',
@@ -7378,6 +8423,15 @@ Rules:
       ],
       ...activeListItems.map((item) => {
         const stage = getStage(activeList, item.stage);
+        const success =
+          activeList.templateKey === 'university-pilot' &&
+          (Boolean(item.customerSuccess) || isUniversityCustomerSuccessStage(item.stage))
+            ? customerSuccessForItem(item)
+            : null;
+        const requiredLaunchItems = success?.launchChecklist.filter((entry) => entry.required) || [];
+        const completedLaunchItems = requiredLaunchItems.filter(
+          (entry) => entry.status === 'complete' || entry.status === 'not-applicable',
+        );
         return [
           activeList.name,
           templateCatalog[activeList.templateKey].label,
@@ -7400,6 +8454,26 @@ Rules:
           item.partnerCost,
           item.hardwareCost,
           item.nextStep,
+          success?.pilotPhase || '',
+          success?.health.status || '',
+          success?.health.reason || '',
+          success?.ownership.customerSuccessOwner || '',
+          success?.ownership.executiveSponsor || '',
+          success?.ownership.champion || '',
+          success?.nextReviewDate || '',
+          success?.renewal.contractStartDate || '',
+          success?.renewal.contractEndDate || '',
+          success?.renewal.decisionDate || '',
+          success?.renewal.owner || '',
+          success?.renewal.outcome || '',
+          success?.lastSuccessUpdateAt || '',
+          success ? `${completedLaunchItems.length}/${requiredLaunchItems.length}` : '',
+          success?.successMeasures
+            .map((measure) => {
+              const latest = measure.latestResult.state === 'measured' ? measure.latestResult.value : 'missing';
+              return `${measure.label}: ${latest}${measure.unit ? ` ${measure.unit}` : ''} (target ${measure.target.state === 'measured' ? measure.target.value : 'missing'})`;
+            })
+            .join('\n') || '',
           item.expansionPath,
           item.lossReason,
           item.notes,
@@ -7525,13 +8599,34 @@ Rules:
   }, [collaboratorSearch, searchableProfiles, selectedCollaboratorAccountEmails]);
 
   const openSharePanel = () => {
+    setOwnerSharesReady(false);
+    setLoadingOwnerShares(true);
+    setShareSelectedListIds([activeList.id]);
+    setCollaboratorSearch('');
+    setShareEditorEmails('');
+    setSelectedCollaboratorAccountEmails([]);
+    setAddingListsForEmail('');
+    setAdditionalListIds([]);
+    setAdditionalListAccess('read');
+    setSavingAdditionalListsForEmail('');
+    setProfileSearchMessage(null);
+    setIsInviteFormOpen(false);
+    setIsSharePanelOpen(true);
+  };
+
+  const toggleInviteForm = () => {
+    if (isInviteFormOpen) {
+      setIsInviteFormOpen(false);
+      return;
+    }
+
+    closeAdditionalListPicker(addingListsForEmail, false);
     setShareSelectedListIds([activeList.id]);
     setCollaboratorSearch('');
     setShareEditorEmails('');
     setSelectedCollaboratorAccountEmails([]);
     setProfileSearchMessage(null);
-    setIsInviteFormOpen(false);
-    setIsSharePanelOpen(true);
+    setIsInviteFormOpen(true);
   };
 
   const toggleShareListSelection = (listId: string) => {
@@ -7542,6 +8637,47 @@ Rules:
 
       return [...currentIds, listId];
     });
+  };
+
+  const startAddingListsForCollaborator = (invite: InviteHistoryEntry) => {
+    const assignedListIds = new Set(invite.listAccess.map((entry) => entry.listId));
+    if (!personalListsRef.current.some((list) => !assignedListIds.has(list.id))) return;
+
+    setShareMessage(null);
+    setIsInviteFormOpen(false);
+    setAddingListsForEmail(invite.email);
+    setAdditionalListIds([]);
+    setAdditionalListAccess('read');
+
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        document.getElementById(`add-lists-heading-${invite.email.replace(/[^a-z0-9]+/gi, '-')}`)?.focus();
+      });
+    }
+  };
+
+  const closeAdditionalListPicker = (email = addingListsForEmail, returnFocus = true) => {
+    setAddingListsForEmail('');
+    setAdditionalListIds([]);
+    setAdditionalListAccess('read');
+
+    if (returnFocus && email && typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        const memberControlId = email.replace(/[^a-z0-9]+/gi, '-');
+        const focusTarget =
+          document.getElementById(`add-lists-trigger-${memberControlId}`) ||
+          document.getElementById(`collaborator-member-${memberControlId}`);
+        focusTarget?.focus();
+      });
+    }
+  };
+
+  const toggleAdditionalListSelection = (listId: string) => {
+    setAdditionalListIds((currentIds) =>
+      currentIds.includes(listId)
+        ? currentIds.filter((currentId) => currentId !== listId)
+        : [...currentIds, listId],
+    );
   };
 
   const addCollaboratorEmail = (email: string) => {
@@ -7812,19 +8948,185 @@ Rules:
     };
   }, [isOwner, isSharePanelOpen, normalizedUserEmail, user]);
 
-  const createOrUpdateShareLink = async () => {
+  const createOrUpdateShareLink = async (addition?: {
+    existingMember: InviteHistoryEntry;
+    selectedListIds: string[];
+    access: ShareAccess;
+  }) => {
     if (!user || !isOwner || isSharedView) return;
 
     setShareMessage(null);
 
-    try {
-      const targetLists = selectedShareLists.length > 0 ? selectedShareLists : [activeList];
-      const accountEmails = collaboratorAccountEmails;
-      if (accountEmails.length === 0) {
-        setShareMessage({ type: 'error', text: 'Add at least one collaborator email first.' });
+    if (!ownerSharesReady) {
+      setShareMessage({
+        type: 'error',
+        text: 'Wait for current collaborator access to finish loading before saving changes.',
+      });
+      return;
+    }
+
+    let targetLists = selectedShareLists;
+    let accountEmails = collaboratorAccountEmails;
+    let accessToGrant = shareAccess;
+    let existingMember: InviteHistoryEntry | undefined;
+
+    if (addition) {
+      const memberEmail = addition.existingMember.email.trim().toLowerCase();
+      existingMember = inviteHistory.find((invite) => invite.email === memberEmail);
+      if (!existingMember) {
+        setShareMessage({ type: 'error', text: 'This person no longer has PipeLists access. Refresh and try again.' });
+        return;
+      }
+      if (!memberEmail || memberEmail === normalizedUserEmail) {
+        setShareMessage({ type: 'error', text: 'Choose another PipeLists member.' });
         return;
       }
 
+      const additionPlan = planPipeListAccessAdditions({
+        selectedListIds: addition.selectedListIds,
+        availableListIds: personalListsRef.current.map((list) => list.id),
+        existingListIds: existingMember.listAccess.map((entry) => entry.listId),
+      });
+      const addListIds = new Set(additionPlan.addListIds);
+      targetLists = personalListsRef.current.filter((list) => addListIds.has(list.id));
+      accountEmails = [memberEmail];
+      accessToGrant = addition.access;
+
+      if (targetLists.length === 0) {
+        setShareMessage({
+          type: 'error',
+          text: additionPlan.unavailableListIds.length > 0
+            ? 'Those PipeLists are no longer available. Choose another list.'
+            : 'Choose at least one additional PipeList.',
+        });
+        return;
+      }
+    } else if (targetLists.length === 0) {
+      setShareMessage({ type: 'error', text: 'Choose at least one PipeList.' });
+      return;
+    }
+
+    if (accountEmails.length === 0) {
+      setShareMessage({ type: 'error', text: 'Add at least one collaborator email first.' });
+      return;
+    }
+
+    if (existingMember) {
+      const memberEmail = existingMember.email;
+      const memberLabel = existingMember.displayName || memberEmail;
+      const inviteBatchId = makeId();
+      const hasExistingAccount =
+        existingMember.status === 'accepted' ||
+        searchableProfiles.some((account) => account.email.trim().toLowerCase() === memberEmail);
+      const actor: PipeListShareActor = {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: profile?.displayName || user.displayName || '',
+        photoURL: profile?.photoURL || user.photoURL || '',
+      };
+
+      setSavingAdditionalListsForEmail(memberEmail);
+
+      try {
+        const results = await Promise.all(
+          targetLists.map((list) => {
+            const shareId = shareDocumentIdForList(user.uid, list.id);
+            return persistPipeListMemberAccessAddition({
+              shareId,
+              ownerUid: user.uid,
+              ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
+              list,
+              actor,
+              memberEmail,
+              access: accessToGrant,
+              inviteStatus: {
+                email: memberEmail,
+                access: accessToGrant,
+                status: hasExistingAccount ? 'accepted' : 'sent',
+                inviteId: inviteBatchId,
+                sentAt: serverTimestamp(),
+                acceptedAt: hasExistingAccount ? serverTimestamp() : undefined,
+              },
+              baseList: protectedShareBaselinesRef.current[shareId],
+            });
+          }),
+        );
+        const additions = results.filter((result) => result.added);
+
+        if (additions.length === 0) {
+          closeAdditionalListPicker(memberEmail);
+          setShareMessage({ type: 'info', text: `${memberLabel} already has access to those PipeLists.` });
+          return;
+        }
+
+        setProtectedShareLists((current) => {
+          const next = { ...current };
+          additions.forEach((result) => {
+            if (!result.share.protectedDetails) return;
+            next[result.share.id] = result.list;
+            protectedShareBaselinesRef.current[result.share.id] = result.list;
+          });
+          return next;
+        });
+        setLists((currentLists) =>
+          currentLists.map((currentList) => {
+            const result = additions.find((entry) => entry.list.id === currentList.id);
+            return result ? mergeCollaboratorListSnapshot(currentList, result.list) : currentList;
+          }),
+        );
+        setOwnerShareDocs((currentShares) => {
+          const sharesById = new Map(currentShares.map((share) => [share.id, share]));
+          additions.forEach((result) => sharesById.set(result.share.id, result.share));
+          return Array.from(sharesById.values());
+        });
+        const activeResult = additions.find((result) => result.list.id === activeList.id);
+        if (activeResult) setShareDoc(activeResult.share);
+
+        const addedLists = targetLists.filter((list) =>
+          additions.some((result) => result.list.id === list.id),
+        );
+        let emailFailed = false;
+        if (typeof window !== 'undefined') {
+          const invitePath = `/PipeLists?invite=${encodeURIComponent(additions[0].share.id)}&inviteBatch=${encodeURIComponent(inviteBatchId)}&inviteEmail=${encodeURIComponent(memberEmail)}`;
+          try {
+            await sendCollaboratorInviteEmail({
+              email: memberEmail,
+              inviteUrl: `${window.location.origin}${invitePath}`,
+              listNames: addedLists.map((list) => list.name),
+              access: accessToGrant,
+              inviteBatchId,
+            });
+          } catch (error) {
+            emailFailed = true;
+            console.error('Unable to email added PipeLists access:', error);
+          }
+        }
+
+        closeAdditionalListPicker(memberEmail);
+        setShareMessage(emailFailed
+          ? {
+              type: 'error',
+              text: `Added ${addedLists.map((list) => list.name).join(', ')} for ${memberLabel}, but the email could not be sent. You can copy their dashboard link from the member row.`,
+            }
+          : {
+              type: 'success',
+              text: `Added ${addedLists.map((list) => list.name).join(', ')} for ${memberLabel}. Dashboard link emailed.`,
+            });
+      } catch (error) {
+        console.error('Unable to add PipeLists for existing member:', error);
+        setShareMessage({
+          type: 'error',
+          text: error instanceof Error
+            ? error.message
+            : readFirestoreError(error, `Unable to add PipeLists for ${memberLabel}.`),
+        });
+      } finally {
+        setSavingAdditionalListsForEmail('');
+      }
+      return;
+    }
+
+    try {
       const inviteBatchId = makeId();
       const existingAccountEmails = new Set(
         searchableProfiles.map((account) => account.email.trim().toLowerCase()),
@@ -7836,22 +9138,26 @@ Rules:
         const existingEditorEmails = existingShare?.editorEmails || [];
         const invitedEmailSet = new Set(accountEmails);
         const viewerEmails =
-          shareAccess === 'read'
+          accessToGrant === 'read'
             ? Array.from(new Set([...existingViewerEmails, ...accountEmails])).filter(
                 (email) => !existingEditorEmails.includes(email) || invitedEmailSet.has(email),
               )
             : existingViewerEmails.filter((email) => !invitedEmailSet.has(email));
         const editorEmails =
-          shareAccess === 'edit'
+          accessToGrant === 'edit'
             ? Array.from(new Set([...existingEditorEmails, ...accountEmails]))
             : existingEditorEmails.filter((email) => !invitedEmailSet.has(email));
         return {
           id,
           ownerUid: user.uid,
           ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
-          list,
+          list: publicSafePipeListSnapshot(list),
           access: editorEmails.length > 0 ? 'edit' : 'read',
-          publicRead: true,
+          publicRead: existingShare?.publicRead ?? true,
+          protectedDetails:
+            existingShare?.protectedDetails === true ||
+            editorEmails.length > 0 ||
+            pipeListRequiresAccountAccess(list),
           viewerEmails,
           editorEmails,
           inviteStatuses: accountEmails.reduce<Record<string, InviteStatus>>(
@@ -7861,7 +9167,7 @@ Rules:
               statuses[email] = {
                 ...(statuses[email] || {}),
                 email,
-                access: shareAccess,
+                access: accessToGrant,
                 status: hasExistingAccount ? 'accepted' : 'sent',
                 inviteId: inviteBatchId,
                 sentAt: serverTimestamp(),
@@ -7876,42 +9182,83 @@ Rules:
         } satisfies PipeListShare;
       });
 
-      await Promise.all(
-        payloads.map((payload) =>
-          setDoc(
-            doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, payload.id),
-            stripUndefined({
-              ...payload,
-              createdAt:
-                ownerShareDocs.find((existingShare) => existingShare.id === payload.id)?.createdAt ||
-                (payload.id === shareDoc?.id ? shareDoc.createdAt : undefined) ||
-                serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            }),
-            { merge: true },
-          ),
-        ),
+      const actor: PipeListShareActor = {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: profile?.displayName || user.displayName || '',
+        photoURL: profile?.photoURL || user.photoURL || '',
+      };
+      const protectedLists = await Promise.all(
+        payloads.map(async (payload) => {
+          const sourceList = targetLists.find((list) => list.id === payload.list.id);
+          if (!sourceList) return null;
+          const existingShare =
+            ownerShareDocs.find((candidate) => candidate.id === payload.id) ||
+            (payload.id === shareDoc?.id ? shareDoc : null);
+          const publicSharePatch = stripUndefined({
+            ...payload,
+            createdAt: existingShare?.createdAt || serverTimestamp(),
+          });
+          if (!payload.protectedDetails) {
+            await setDoc(
+              doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, payload.id),
+              { ...publicSharePatch, updatedAt: serverTimestamp() },
+              { merge: true },
+            );
+            return null;
+          }
+          const mergedList = await persistCollaborativePipeList({
+            shareId: payload.id,
+            ownerUid: payload.ownerUid,
+            ownerEmail: payload.ownerEmail,
+            list: sourceList,
+            actor,
+            protectedDetails: payload.protectedDetails,
+            baseList: protectedShareBaselinesRef.current[payload.id] || existingShare?.list,
+            publicSharePatch,
+          });
+          return { shareId: payload.id, list: mergedList };
+        }),
       );
+      setProtectedShareLists((current) => {
+        const next = { ...current };
+        protectedLists.forEach((entry) => {
+          if (entry) {
+            next[entry.shareId] = entry.list;
+            protectedShareBaselinesRef.current[entry.shareId] = entry.list;
+          }
+        });
+        return next;
+      });
 
-      const activePayload = payloads.find((payload) => payload.list.id === activeList.id) || payloads[0];
-      setShareDoc(activePayload);
+      const activePayloadBase = payloads.find((payload) => payload.list.id === activeList.id);
+      const protectedActiveList = activePayloadBase
+        ? protectedLists.find((entry) => entry?.shareId === activePayloadBase.id)?.list
+        : undefined;
+      const activePayload = activePayloadBase
+        ? protectedActiveList
+          ? { ...activePayloadBase, list: protectedActiveList }
+          : activePayloadBase
+        : undefined;
+      if (activePayload) setShareDoc(activePayload);
       setOwnerShareDocs((currentShares) => {
         const sharesById = new Map(currentShares.map((share) => [share.id, share]));
         payloads.forEach((payload) => sharesById.set(payload.id, payload));
         return Array.from(sharesById.values());
       });
 
+      const inviteAnchorPayload = activePayload || payloads[0];
       let failedInviteEmails: string[] = [];
       if (typeof window !== 'undefined') {
         const emailResults = await Promise.allSettled(
           accountEmails.map(async (email) => {
-            const invitePath = `/PipeLists?invite=${encodeURIComponent(activePayload.id)}&inviteBatch=${encodeURIComponent(inviteBatchId)}&inviteEmail=${encodeURIComponent(email)}`;
+            const invitePath = `/PipeLists?invite=${encodeURIComponent(inviteAnchorPayload.id)}&inviteBatch=${encodeURIComponent(inviteBatchId)}&inviteEmail=${encodeURIComponent(email)}`;
             const inviteUrl = `${window.location.origin}${invitePath}`;
             await sendCollaboratorInviteEmail({
               email,
               inviteUrl,
               listNames: targetLists.map((list) => list.name),
-              access: shareAccess,
+              access: accessToGrant,
               inviteBatchId,
             });
           }),
@@ -7924,7 +9271,7 @@ Rules:
       if (failedInviteEmails.length > 0) {
         setShareMessage({
           type: 'error',
-          text: `Access was saved, but the invite email could not be sent to ${failedInviteEmails.join(', ')}. You can resend it from the pending invite.`,
+          text: `Access was saved, but the email could not be sent to ${failedInviteEmails.join(', ')}. You can copy their dashboard link from the member row.`,
         });
         return;
       }
@@ -8104,7 +9451,7 @@ Rules:
     }
     await signOut(simpBudgetAuth);
     setUser(null);
-    setDataReady(isSharedView);
+    setDataReady(false);
     setMagicEmail(inviteEmail || TREMAINE_OWNER_EMAIL);
     setAuthMessage(null);
   };
@@ -8154,7 +9501,10 @@ Rules:
 
   const selectedDetailStage = selectedDetailItem ? getStage(activeList, selectedDetailItem.stage) : null;
   const selectedDetailIsEditing = Boolean(selectedDetailItem && isEditorOpen && editingItemId === selectedDetailItem.id);
-  const shouldBlockEditShare = isSharedView && shareDoc?.access === 'edit' && !canEditShared;
+  const shouldBlockEditShare = Boolean(shareId && shareDoc && !shareDoc.publicRead && !canReadShared);
+  const protectedDirectShareIdentityChanged = Boolean(
+    shareId && protectedDirectShareUid && protectedDirectShareUid !== (user?.uid || ''),
+  );
 
   const isEmptyDetailValue = (value: React.ReactNode) =>
     value === null || value === undefined || value === false || (typeof value === 'string' && value.trim() === '');
@@ -8200,6 +9550,19 @@ Rules:
     );
   };
 
+  const showCustomerSuccessEditor =
+    isUniversitySuccessList && (Boolean(draft.customerSuccess) || isUniversityCustomerSuccessStage(draft.stage));
+  const draftCustomerSuccess = showCustomerSuccessEditor
+    ? normalizeUniversityCustomerSuccess(draft.customerSuccess, {
+        stage: draft.stage,
+        owner: draft.owner,
+        nextStep: draft.nextStep,
+        dueDate: draft.dueDate,
+        pilotStart: draft.pilotStart,
+        pilotEnd: draft.pilotEnd,
+      })
+    : null;
+
   const renderItemEditor = () => (
     <form id="pipe-item-editor-form" onSubmit={handleSaveItem} className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -8240,8 +9603,8 @@ Rules:
               ['amount', amountFieldLabelForList(activeList), '$'],
               ['expectedCloseDate', 'Expected Close', 'date'],
               ['contractTerm', 'Contract Term', '12 months'],
-              ['pilotStart', 'Start Date', 'date'],
-              ['pilotEnd', 'End Date', 'date'],
+              ['pilotStart', isUniversitySuccessList ? 'Pilot Start' : 'Start Date', 'date'],
+              ['pilotEnd', isUniversitySuccessList ? 'Pilot End' : 'End Date', 'date'],
               ['athleteCount', 'Count', '42'],
               ['sourceUrl', 'Source URL', 'https://example.com'],
             ]).map(([key, label, placeholder]) => (
@@ -8341,16 +9704,18 @@ Rules:
           </select>
         </label>
 
-        <label className="block" htmlFor="pipe-dueDate">
-          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isContactListActive ? 'Follow-Up Date' : 'Due Date'}</span>
-          <input
-            id="pipe-dueDate"
-            type="date"
-            value={draft.dueDate}
-            onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))}
-            className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
-          />
-        </label>
+        {!showCustomerSuccessEditor && (
+          <label className="block" htmlFor="pipe-dueDate">
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isContactListActive ? 'Follow-Up Date' : 'Due Date'}</span>
+            <input
+              id="pipe-dueDate"
+              type="date"
+              value={draft.dueDate}
+              onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))}
+              className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+            />
+          </label>
+        )}
 
         <label className="flex h-11 items-center gap-3 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700">
           <input
@@ -8367,6 +9732,21 @@ Rules:
           <span>Email deadline notifications</span>
         </label>
       </div>
+
+      {draftCustomerSuccess && (
+        <PipeListsSuccessPlanEditor
+          value={draftCustomerSuccess}
+          editorName={profile?.displayName || user?.displayName || user?.email || ''}
+          onChange={(customerSuccess) =>
+            setDraft((current) => ({
+              ...current,
+              customerSuccess,
+              nextStep: customerSuccess.nextAction.summary,
+              dueDate: customerSuccess.nextAction.dueDate,
+            }))
+          }
+        />
+      )}
 
       <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -8486,7 +9866,9 @@ Rules:
         {[
           ['description', 'Description', 'What this entity is and why it matters'],
           ['pilotScope', 'Scope', 'Timeline, scope, requirements, and commitments'],
-          ['nextStep', 'Next Step', 'The next action that moves this forward'],
+          ...(showCustomerSuccessEditor
+            ? []
+            : [['nextStep', 'Next Step', 'The next action that moves this forward']]),
           ['grossMargin', 'Margin Notes', 'Revenue, costs, or margin context'],
           ['partnerCost', 'Partner Cost', 'Partner, implementation, or service share'],
           ['hardwareCost', 'Hard Cost', 'Hardware, fulfillment, or delivery costs'],
@@ -8529,7 +9911,7 @@ Rules:
     </form>
   );
 
-  if (isSharedView && !dataReady) {
+  if (isSharedView && (!dataReady || protectedDirectShareIdentityChanged)) {
     return (
       <>
         <PageHead
@@ -8942,8 +10324,8 @@ Rules:
                         onClick={() => {
                           setActiveListId(list.id);
                           setViewMode('pipeline');
-                          setStageFilter('all');
-                          setPriorityFilter('all');
+                          setStageFilters([]);
+                          setPriorityFilters([]);
                           setSelectedLogItemId('');
                           setLogDraft(defaultLogDraft(list.templateKey));
                           setSelectedDetailItemId('');
@@ -9076,6 +10458,9 @@ Rules:
             <div className="mb-5 flex flex-wrap gap-2">
               {[
                 { id: 'pipeline' as const, label: 'Pipeline', icon: <Layers className="h-4 w-4" /> },
+                ...(successWorkspaceAvailable
+                  ? [{ id: 'success' as const, label: 'Success', icon: <HeartPulse className="h-4 w-4" /> }]
+                  : []),
                 { id: 'metrics' as const, label: 'Metrics', icon: <BarChart3 className="h-4 w-4" /> },
                 { id: 'logs' as const, label: 'Logs', icon: <ClipboardList className="h-4 w-4" /> },
                 ...(runbookAvailable
@@ -9102,13 +10487,64 @@ Rules:
               <PipeListsRunbook user={user} onDirtyChange={setRunbookHasUnsavedChanges} />
             )}
 
+            {viewMode === 'success' && successWorkspaceAvailable && (
+              <PipeListsCustomerSuccess
+                accounts={universitySuccessAccounts}
+                canModify={canModify}
+                onEdit={(itemId) => {
+                  const item = activeListItems.find((candidate) => candidate.id === itemId);
+                  if (item) handleEditItem(item);
+                }}
+                onAddUpdate={(itemId) => openLogModal(activeList.id, itemId)}
+                onOpenLogs={(itemId) => {
+                  setSelectedLogItemId(itemId);
+                  setSelectedDetailItemId(itemId);
+                  setLogDraft(defaultLogDraft(activeList.templateKey));
+                  setDetailModalMode('logs');
+                }}
+              />
+            )}
+
             {viewMode === 'metrics' && (
               <div className="space-y-5">
+                <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-stone-950">
+                      {metricsScope === 'selected-list' ? `Selected list: ${activeList.name}` : 'Workspace: all lists'}
+                    </p>
+                    <p className="mt-1 text-xs text-stone-500">
+                      Current pipeline snapshot. Success evidence uses the latest metric update per item in the reporting period.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <label className="sr-only" htmlFor="metrics-scope">Metrics scope</label>
+                    <select
+                      id="metrics-scope"
+                      value={metricsScope}
+                      onChange={(event) => setMetricsScope(event.target.value as MetricsScope)}
+                      className="h-10 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700 outline-none focus:border-stone-400"
+                    >
+                      <option value="selected-list">Selected list</option>
+                      <option value="workspace">Workspace: all lists</option>
+                    </select>
+                    <label className="sr-only" htmlFor="metrics-period">Reporting period</label>
+                    <select
+                      id="metrics-period"
+                      value={metricsPeriod}
+                      onChange={(event) => setMetricsPeriod(event.target.value as MetricsPeriod)}
+                      className="h-10 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700 outline-none focus:border-stone-400"
+                    >
+                      <option value="30">Success evidence: last 30 days</option>
+                      <option value="90">Success evidence: last 90 days</option>
+                      <option value="all">Success evidence: all history</option>
+                    </select>
+                  </div>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {renderMetricCard(
                     'Open Pipeline',
                     formatMoney(scorecardMetrics.totalOpenValue),
-                    `${scorecardMetrics.totalOpenDeals} open opportunities across all lists`,
+                    `${scorecardMetrics.totalOpenDeals} open opportunities in this scope`,
                     <DollarSign className="h-4 w-4" />,
                   )}
                   {renderMetricCard(
@@ -9150,11 +10586,13 @@ Rules:
                     'bg-teal-50 text-teal-700',
                   )}
                   {renderMetricCard(
-                    'Signal Events',
-                    String(Math.round(scorecardMetrics.signalEvents)),
-                    `${Math.round(scorecardMetrics.checkInRate)}% check-in rate, ${Math.round(
-                      scorecardMetrics.escalations,
-                    )} escalations`,
+                    'Success Reports',
+                    String(scorecardMetrics.metricReports),
+                    scorecardMetrics.metricReports === 0
+                      ? 'No metric updates in this reporting period'
+                      : scorecardMetrics.metricReports === 1
+                        ? `${formatMeasuredMetric(scorecardMetrics.checkInRate, '%')} check-in rate · ${formatMeasuredMetric(scorecardMetrics.signalEvents)} signal events`
+                        : 'Separate account reports; rates are kept unblended',
                     <CheckCircle2 className="h-4 w-4" />,
                     'bg-rose-50 text-rose-700',
                   )}
@@ -9169,7 +10607,11 @@ Rules:
                       ['How much is open?', `${scorecardMetrics.totalOpenDeals} open opportunities, ${formatMoney(scorecardMetrics.totalOpenValue)} total listed value.`],
                       ['What needs attention soon?', scorecardMetrics.firstExpectedCloseDate || 'Add expected close or due dates to important items.'],
                       ['How much is documented?', `${scorecardMetrics.loggedItems} items have logs, with ${scorecardMetrics.totalLogs} total records.`],
-                      ['What proof signals exist?', `${Math.round(scorecardMetrics.checkInRate)}% check-in rate, ${Math.round(scorecardMetrics.signalEvents)} signal events, ${Math.round(scorecardMetrics.staffScore) || 0}/10 staff score from metric logs.`],
+                      ['What proof signals exist?', scorecardMetrics.metricReports === 0
+                        ? 'No metric update is recorded inside this reporting period.'
+                        : scorecardMetrics.metricReports === 1
+                          ? `${formatMeasuredMetric(scorecardMetrics.checkInRate, '%')} check-in rate, ${formatMeasuredMetric(scorecardMetrics.signalEvents)} signal events, ${formatMeasuredMetric(scorecardMetrics.staffScore, '/10')} staff score from the current report.`
+                          : `${scorecardMetrics.metricReports} current account reports are available. Open the logs to compare them without blending differently defined rates.`],
                       ['Where do costs need attention?', 'Track margin notes, partner costs, and hard costs when those fields apply.'],
                     ].map(([question, answer]) => (
                       <div key={question} className="grid gap-2 px-4 py-3 md:grid-cols-[minmax(220px,0.8fr)_1fr]">
@@ -9195,7 +10637,7 @@ Rules:
                       onChange={(event) => setLogListFilter(event.target.value)}
                       className="h-11 min-w-[220px] rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
                     >
-                      <option value="all">All PipeLists</option>
+                      <option value="all">Workspace: all PipeLists</option>
                       {lists.map((list) => (
                         <option key={list.id} value={list.id}>
                           {list.name}
@@ -9288,6 +10730,7 @@ Rules:
                                   ) : (
                                     log.notes && log.notes !== log.summary && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>
                                   )}
+                                  <MetricLogSummary log={log} />
                                 </>
                               )}
                             </div>
@@ -9350,8 +10793,22 @@ Rules:
 
             {viewMode === 'pipeline' && (
               <>
-                <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {isInvestorUpdateContactsList ? (
+                <div className={`grid gap-2 sm:grid-cols-2 xl:grid-cols-4 ${isUniversitySuccessList ? 'mb-3' : 'mb-5 gap-3'}`}>
+                  {isUniversitySuccessList ? (
+                    <>
+                      {[
+                        ['Total', activeListItems.length],
+                        ['Active pipeline', activeItems],
+                        ['Closed won', wonItems],
+                        ['Due soon', dueSoonItems],
+                      ].map(([label, value]) => (
+                        <div key={String(label)} className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-3 py-2 shadow-sm">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">{label}</span>
+                          <span className="text-lg font-bold text-stone-950">{value}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : isInvestorUpdateContactsList ? (
                     <>
                       {renderMetricCard('Contacts', String(activeListItems.length), 'People in this update list', <Users className="h-4 w-4" />)}
                       {renderMetricCard('Sent', String(sentEmailItems), 'Contacts with an email sent', <Mail className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
@@ -9404,15 +10861,29 @@ Rules:
                       <div className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-stone-500">
                         <Filter className="h-4 w-4" />
                         <select
-                          value={stageFilter}
-                          onChange={(event) => setStageFilter(event.target.value)}
+                          value=""
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            if (value === '__clear') {
+                              setStageFilters([]);
+                              return;
+                            }
+                            if (value) {
+                              setStageFilters((current) => toggleFilterSelection(current, value));
+                            }
+                          }}
                           className="bg-transparent text-sm text-stone-700 outline-none"
-                          aria-label="Stage filter"
+                          aria-label="Add or remove stage filters"
                         >
-                          <option value="all">All stages</option>
+                          <option value="" disabled>
+                            {stageFilters.length === 0
+                              ? 'All stages'
+                              : `${stageFilters.length} ${stageFilters.length === 1 ? 'stage' : 'stages'} selected`}
+                          </option>
+                          {stageFilters.length > 0 && <option value="__clear">Clear stage filters</option>}
                           {activeList.stages.map((stage) => (
                             <option key={stage.id} value={stage.id}>
-                              {stage.label}
+                              {stageFilters.includes(stage.id) ? `Remove ${stage.label}` : `Add ${stage.label}`}
                             </option>
                           ))}
                         </select>
@@ -9423,8 +10894,8 @@ Rules:
                       type="button"
                       onClick={() => {
                         setQuery('');
-                        setStageFilter('all');
-                        setPriorityFilter('all');
+                        setStageFilters([]);
+                        setPriorityFilters([]);
                         setSortColumn(null);
                         setSortDirection('asc');
                       }}
@@ -9595,54 +11066,64 @@ Rules:
                   </div>
                 )}
 
-                {!isInvestorUpdateContactsList && (
+                {!isInvestorUpdateContactsList && (!isUniversitySuccessList || pipelineDisplayMode === 'list') && (
                   <div className="mb-4 grid gap-2 md:grid-cols-3 xl:grid-cols-5">
-                    {activeList.stages.map((stage) => (
-                      <button
-                        key={stage.id}
-                        type="button"
-                        onClick={() => setStageFilter(stageFilter === stage.id ? 'all' : stage.id)}
-                        className={`rounded-lg border px-3 py-3 text-left transition ${
-                          stageFilter === stage.id
-                            ? 'border-stone-900 bg-stone-900 text-white'
-                            : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
-                        }`}
-                      >
-                        <span className="block truncate text-sm font-semibold">{stage.label}</span>
-                        <span className={stageFilter === stage.id ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
-                          {formatCount(countsByStage[stage.id] || 0, 'item')}
-                        </span>
-                      </button>
-                    ))}
+                    {activeList.stages.map((stage) => {
+                      const isSelected = stageFilters.includes(stage.id);
+                      return (
+                        <button
+                          key={stage.id}
+                          type="button"
+                          onClick={() => setStageFilters((current) => toggleFilterSelection(current, stage.id))}
+                          className={`rounded-lg border px-3 py-3 text-left transition ${
+                            isSelected
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
+                          }`}
+                          aria-pressed={isSelected}
+                        >
+                          <span className="block truncate text-sm font-semibold">{stage.label}</span>
+                          <span className={isSelected ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
+                            {formatCount(countsByStage[stage.id] || 0, 'item')}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
                 {!isInvestorUpdateContactsList && (
                   <div className="mb-4 grid grid-cols-3 gap-2">
-                    {(['high', 'medium', 'low'] as PipelinePriority[]).map((priorityKey) => (
-                      <button
-                        key={priorityKey}
-                        type="button"
-                        onClick={() => setPriorityFilter(priorityFilter === priorityKey ? 'all' : priorityKey)}
-                        className={`flex items-center gap-2 rounded-lg border px-3 py-3 text-left transition ${
-                          priorityFilter === priorityKey
-                            ? 'border-stone-900 bg-stone-900 text-white'
-                            : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
-                        }`}
-                      >
-                        <span
-                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                            priorityKey === 'high' ? 'bg-rose-500' : priorityKey === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                    {(['high', 'medium', 'low'] as PipelinePriority[]).map((priorityKey) => {
+                      const isSelected = priorityFilters.includes(priorityKey);
+                      return (
+                        <button
+                          key={priorityKey}
+                          type="button"
+                          onClick={() =>
+                            setPriorityFilters((current) => toggleFilterSelection(current, priorityKey))
+                          }
+                          className={`flex items-center gap-2 rounded-lg border px-3 py-3 text-left transition ${
+                            isSelected
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
                           }`}
-                        />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold capitalize">{priorityKey} priority</span>
-                          <span className={priorityFilter === priorityKey ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
-                            {formatCount(countsByPriority[priorityKey] || 0, 'item')}
+                          aria-pressed={isSelected}
+                        >
+                          <span
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                              priorityKey === 'high' ? 'bg-rose-500' : priorityKey === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold capitalize">{priorityKey} priority</span>
+                            <span className={isSelected ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
+                              {formatCount(countsByPriority[priorityKey] || 0, 'item')}
+                            </span>
                           </span>
-                        </span>
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -10013,7 +11494,9 @@ Rules:
                                     ? item.contactEmails[0] || item.contactPhone
                                     : isTaskListActive
                                       ? item.owner || item.segment
-                                      : itemValueText;
+                                      : isUniversitySuccessList
+                                        ? item.owner
+                                        : itemValueText;
 
                                   return (
                                     <article
@@ -10102,9 +11585,11 @@ Rules:
                                             <span className="truncate">{dueDate}</span>
                                           </span>
                                         )}
-                                        <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 font-semibold text-stone-500">
-                                          {item.weeklyLogs.length > 0 ? formatCount(item.weeklyLogs.length, 'log') : 'No logs'}
-                                        </span>
+                                        {!isUniversitySuccessList && (
+                                          <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 font-semibold text-stone-500">
+                                            {item.weeklyLogs.length > 0 ? formatCount(item.weeklyLogs.length, 'log') : 'No logs'}
+                                          </span>
+                                        )}
                                       </div>
 
                                       {nextStepText && (
@@ -10174,7 +11659,9 @@ Rules:
                 )}
 
                 <div className="mt-4 text-sm text-stone-500">
-                  {dueSoonItems} due soon · {loggedItems} with logs.
+                  {isUniversitySuccessList
+                    ? `${dueSoonItems} due soon. Open Success for launch, evidence, health, and renewal work.`
+                    : `${dueSoonItems} due soon · ${loggedItems} with logs.`}
                 </div>
               </>
             )}
@@ -10341,7 +11828,9 @@ Rules:
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsInviteFormOpen((current) => !current)}
+                    onClick={toggleInviteForm}
+                    aria-expanded={isInviteFormOpen}
+                    aria-controls="pipelists-invite-form"
                     className="inline-flex h-9 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
                   >
                     {isInviteFormOpen ? <ChevronDown className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -10353,9 +11842,21 @@ Rules:
                   <p className="px-4 py-8 text-center text-sm text-stone-500">Loading collaborator access...</p>
                 ) : inviteHistory.length > 0 ? (
                   <div className="divide-y divide-stone-100">
-                    {inviteHistory.map((invite) => (
-                      <div key={invite.email} className="grid gap-4 px-4 py-4 md:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.3fr)_auto]">
-                        <div className="flex min-w-0 items-start gap-3">
+                    {inviteHistory.map((invite) => {
+                      const assignedListIds = new Set(invite.listAccess.map((entry) => entry.listId));
+                      const availableAdditionalLists = lists.filter((list) => !assignedListIds.has(list.id));
+                      const memberLabel = invite.displayName || invite.email;
+                      const memberControlId = invite.email.replace(/[^a-z0-9]+/gi, '-');
+                      const additionalListsPanelId = `add-lists-panel-${memberControlId}`;
+                      const isAddingLists = addingListsForEmail === invite.email;
+
+                      return (
+                        <div key={invite.email} className="grid gap-4 px-4 py-4 md:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.3fr)_auto]">
+                        <div
+                          id={`collaborator-member-${memberControlId}`}
+                          tabIndex={-1}
+                          className="flex min-w-0 items-start gap-3 outline-none"
+                        >
                           {invite.photoURL ? (
                             <img
                               src={invite.photoURL}
@@ -10375,34 +11876,162 @@ Rules:
                           </div>
                         </div>
 
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {invite.listAccess.map((entry) => (
-                            <div
-                              key={entry.listId}
-                              className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2"
-                            >
-                              <span className="flex min-w-0 items-center gap-2">
-                                <span className={`h-2 w-2 shrink-0 rounded-full ${entry.accent}`} />
-                                <span className="truncate text-sm font-medium text-stone-700">{entry.listName}</span>
-                              </span>
-                              <span className="flex shrink-0 items-center gap-1.5">
-                                <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-stone-600">
-                                  {entry.access === 'edit' ? 'Can edit' : 'Read only'}
+                        <div className="min-w-0">
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {invite.listAccess.map((entry) => (
+                              <div
+                                key={entry.listId}
+                                className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2"
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <span className={`h-2 w-2 shrink-0 rounded-full ${entry.accent}`} />
+                                  <span className="truncate text-sm font-medium text-stone-700">{entry.listName}</span>
                                 </span>
-                                {entry.status === 'sent' ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
-                                    <Clock className="h-3 w-3" />
-                                    Pending
+                                <span className="flex shrink-0 items-center gap-1.5">
+                                  <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-stone-600">
+                                    {entry.access === 'edit' ? 'Can edit' : 'Read only'}
                                   </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
-                                    <CheckCircle2 className="h-3 w-3" />
-                                    Active
-                                  </span>
-                                )}
+                                  {entry.status === 'sent' ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                                      <Clock className="h-3 w-3" />
+                                      Pending
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      Active
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="mt-2">
+                            {availableAdditionalLists.length > 0 ? (
+                              <button
+                                id={`add-lists-trigger-${memberControlId}`}
+                                type="button"
+                                onClick={() => isAddingLists
+                                  ? closeAdditionalListPicker(invite.email)
+                                  : startAddingListsForCollaborator(invite)}
+                                disabled={!ownerSharesReady || savingAdditionalListsForEmail === invite.email}
+                                aria-expanded={isAddingLists}
+                                aria-controls={additionalListsPanelId}
+                                aria-label={`${isAddingLists ? 'Cancel adding' : 'Add'} PipeLists for ${memberLabel}`}
+                                className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {isAddingLists ? <X className="h-3.5 w-3.5" /> : <ListPlus className="h-3.5 w-3.5" />}
+                                {isAddingLists ? 'Cancel' : 'Add lists'}
+                              </button>
+                            ) : (
+                              <span className="inline-flex min-h-10 items-center text-xs font-medium text-stone-400">
+                                All PipeLists added
                               </span>
+                            )}
+                          </div>
+
+                          {isAddingLists && (
+                            <div
+                              id={additionalListsPanelId}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Escape') closeAdditionalListPicker(invite.email);
+                              }}
+                              className="mt-3 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3"
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <h4
+                                    id={`add-lists-heading-${memberControlId}`}
+                                    tabIndex={-1}
+                                    className="text-sm font-semibold text-stone-900 outline-none"
+                                  >
+                                    Add PipeLists for {memberLabel}
+                                  </h4>
+                                  <p className="mt-1 text-xs leading-5 text-stone-500">
+                                    Current access stays the same. Choose only the additional lists they should see; we will email an updated dashboard link.
+                                  </p>
+                                </div>
+                                <span aria-live="polite" className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">
+                                  {additionalListIds.length} selected
+                                </span>
+                              </div>
+
+                              <fieldset className="mt-3">
+                                <legend className="sr-only">Choose additional PipeLists for {memberLabel}</legend>
+                                <div className="grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">
+                                  {availableAdditionalLists.map((list) => (
+                                    <label
+                                      key={list.id}
+                                      className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={additionalListIds.includes(list.id)}
+                                        onChange={() => toggleAdditionalListSelection(list.id)}
+                                        className="h-4 w-4 rounded border-stone-300 accent-stone-900"
+                                      />
+                                      <span className={`h-2 w-2 shrink-0 rounded-full ${list.accent}`} />
+                                      <span className="truncate">{list.name}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </fieldset>
+
+                              <fieldset className="mt-3">
+                                <legend className="text-xs font-semibold uppercase text-stone-400">
+                                  Access for the new lists
+                                </legend>
+                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                  {([
+                                    { value: 'read' as const, label: 'View only' },
+                                    { value: 'edit' as const, label: 'Can make changes' },
+                                  ]).map((option) => (
+                                    <label
+                                      key={option.value}
+                                      className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700"
+                                    >
+                                      <input
+                                        type="radio"
+                                        name={`additional-list-access-${memberControlId}`}
+                                        value={option.value}
+                                        checked={additionalListAccess === option.value}
+                                        onChange={() => setAdditionalListAccess(option.value)}
+                                        className="h-4 w-4 border-stone-300 accent-stone-900"
+                                      />
+                                      {option.label}
+                                    </label>
+                                  ))}
+                                </div>
+                              </fieldset>
+
+                              <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => closeAdditionalListPicker(invite.email)}
+                                  disabled={savingAdditionalListsForEmail === invite.email}
+                                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => createOrUpdateShareLink({
+                                    existingMember: invite,
+                                    selectedListIds: additionalListIds,
+                                    access: additionalListAccess,
+                                  })}
+                                  disabled={!ownerSharesReady || additionalListIds.length === 0 || savingAdditionalListsForEmail === invite.email}
+                                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <ListPlus className="h-4 w-4" />
+                                  {savingAdditionalListsForEmail === invite.email
+                                    ? 'Adding...'
+                                    : `Add ${formatCount(additionalListIds.length, 'PipeList')}`}
+                                </button>
+                              </div>
                             </div>
-                          ))}
+                          )}
                         </div>
 
                         <div className="flex flex-wrap items-start justify-end gap-2">
@@ -10435,8 +12064,9 @@ Rules:
                             {removingAccessEmails.includes(invite.email) ? 'Removing...' : 'Remove access'}
                           </button>
                         </div>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="px-4 py-8 text-center text-sm text-stone-500">
@@ -10448,13 +12078,16 @@ Rules:
               <MessageBanner message={shareMessage} />
 
               {isInviteFormOpen && (
-                <div className="grid gap-4 rounded-lg border border-stone-200 bg-[#FAFAF7] p-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)]">
+                <div
+                  id="pipelists-invite-form"
+                  className="grid gap-4 rounded-lg border border-stone-200 bg-[#FAFAF7] p-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)]"
+                >
                   <div className="space-y-4">
                     <div>
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <span className="text-xs font-semibold uppercase text-stone-400">Give access to PipeLists</span>
                         <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">
-                          {formatCount(selectedShareLists.length || 1, 'list')}
+                          {formatCount(selectedShareLists.length, 'list')}
                         </span>
                       </div>
                       <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
@@ -10591,11 +12224,12 @@ Rules:
 
                     <button
                       type="button"
-                      onClick={createOrUpdateShareLink}
-                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                      onClick={() => createOrUpdateShareLink()}
+                      disabled={!ownerSharesReady || loadingOwnerShares || selectedShareLists.length === 0}
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Mail className="h-4 w-4" />
-                      Save Access & Send Link
+                      {!ownerSharesReady || loadingOwnerShares ? 'Loading current access...' : 'Save Access & Send Link'}
                     </button>
                   </div>
                 </div>
@@ -11869,6 +13503,8 @@ Rules:
                 </label>
               </div>
 
+              <MetricLogFields draft={logDraft} onChange={setLogDraft} idPrefix="modal-log-metric" />
+
               <label className="block" htmlFor="modal-log-notes">
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Notes</span>
                 <textarea
@@ -12594,6 +14230,10 @@ Rules:
                       </label>
                     </div>
 
+                    <div className="mt-3">
+                      <MetricLogFields draft={logDraft} onChange={setLogDraft} idPrefix="detail-log-metric" />
+                    </div>
+
                     <label className="mt-3 block" htmlFor="detail-log-notes">
                       <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Notes</span>
                       <textarea
@@ -12662,6 +14302,7 @@ Rules:
                                         <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>
                                       )
                                     )}
+                                    <MetricLogSummary log={log} />
                                   </>
                                 )}
                               </div>
@@ -13024,9 +14665,9 @@ Rules:
                             </div>
                             {logHasMetrics(log) && (
                               <div className="grid grid-cols-3 gap-2 text-right text-xs text-stone-500">
-                                <span>{Math.round(derivedCheckInRate(log))}% check-ins</span>
-                                <span>{log.signalEvents || '0'} signals</span>
-                                <span>{log.staffFeedbackScore || '-'} staff</span>
+                                <span>{formatMeasuredMetric(derivedMeasuredCheckInRate(log), '%')} check-ins</span>
+                                <span>{log.signalEvents || 'Missing'} signals</span>
+                                <span>{log.staffFeedbackScore || 'Missing'} staff</span>
                               </div>
                             )}
                           </div>

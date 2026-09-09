@@ -36,7 +36,24 @@ service cloud.firestore {
       }
 
       function isCreateOwner() {
-        return isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+        return isSharePathOwner()
+          && request.auth.token.email != null
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.ownerEmail == request.auth.token.email;
+      }
+
+      function hasStableOwnerEnvelope() {
+        return request.resource.data.ownerUid == resource.data.ownerUid
+          && request.resource.data.ownerEmail == resource.data.ownerEmail;
+      }
+
+      function isProtectedPublicProjection() {
+        return resource.data.get('protectedDetails', false) == true
+          || request.resource.data.get('protectedDetails', false) == true
+          || resource.data.get('editorEmails', []).size() > 0
+          || request.resource.data.get('editorEmails', []).size() > 0
+          || resource.data.list.templateKey == 'university-pilot'
+          || request.resource.data.list.templateKey == 'university-pilot';
       }
 
       function isInvitedViewer() {
@@ -78,10 +95,11 @@ service cloud.firestore {
         || isShareOwner()
         || isInvitedViewer();
       allow create: if isCreateOwner();
-      allow update: if isShareOwner()
+      allow update: if (isShareOwner() && hasStableOwnerEnvelope())
         || isAcceptingOwnInvite()
         || (
           isInvitedEditor()
+          && !isProtectedPublicProjection()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'list',
             'updatedAt',
@@ -89,6 +107,60 @@ service cloud.firestore {
           ])
         );
       allow delete: if isShareOwner();
+    }
+
+    match /pipeListProtectedShares/{shareId} {
+      function sourceShare() {
+        return get(/databases/$(database)/documents/pipeListShares/$(shareId)).data;
+      }
+
+      function sourceShareAfterWrite() {
+        return getAfter(/databases/$(database)/documents/pipeListShares/$(shareId)).data;
+      }
+
+      function isProtectedShareOwner() {
+        return isSignedIn() && sourceShare().ownerUid == request.auth.uid;
+      }
+
+      function isProtectedShareOwnerAfterWrite() {
+        return isSignedIn() && sourceShareAfterWrite().ownerUid == request.auth.uid;
+      }
+
+      function isProtectedShareViewer() {
+        return isSignedIn()
+          && request.auth.token.email != null
+          && (
+            request.auth.token.email in sourceShare().viewerEmails
+            || request.auth.token.email in sourceShare().editorEmails
+          );
+      }
+
+      function isProtectedShareEditor() {
+        return isSignedIn()
+          && request.auth.token.email != null
+          && request.auth.token.email in sourceShare().editorEmails;
+      }
+
+      function hasValidProtectedEnvelope() {
+        return request.resource.data.ownerUid == sourceShareAfterWrite().ownerUid
+          && request.resource.data.ownerEmail == sourceShareAfterWrite().ownerEmail
+          && request.resource.data.listId == sourceShareAfterWrite().list.id
+          && request.resource.data.list.id == sourceShareAfterWrite().list.id
+          && request.resource.data.lastEditedBy.uid == request.auth.uid
+          && request.resource.data.lastEditedBy.email == request.auth.token.email;
+      }
+
+      allow read: if isProtectedShareOwner() || isProtectedShareViewer();
+      allow create: if (isProtectedShareOwnerAfterWrite() || isProtectedShareEditor())
+        && hasValidProtectedEnvelope();
+      allow update: if (isProtectedShareOwner() || isProtectedShareEditor())
+        && hasValidProtectedEnvelope()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'list',
+          'lastEditedBy',
+          'updatedAt'
+        ]);
+      allow delete: if isProtectedShareOwner();
     }
 
     match /pipeLeadShares/{shareId} {

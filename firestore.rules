@@ -153,7 +153,7 @@ service cloud.firestore {
     }
 
     function isExplicitlyRuledCollection(collectionName) {
-      return collectionName.matches('nora-red-team-.*') || collectionName in [
+      return collectionName == 'pulsecheck-restricted-questionnaire-submissions' || collectionName.matches('nora-red-team-.*') || collectionName in [
         'admin-settings',
         'conversations',
         'conversationSummaries',
@@ -3343,6 +3343,11 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update, delete: if isAdminUser();
+    }
+
+    // Server-only questionnaire intake. Includes retained external references.
+    match /pulsecheck-restricted-questionnaire-submissions/{document=**} {
+      allow read, write: if false;
     }
 
     // Compatibility fallback: unknown collections are no longer public. They

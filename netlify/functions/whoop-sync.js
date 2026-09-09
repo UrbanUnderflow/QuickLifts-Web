@@ -491,6 +491,9 @@ async function fetchWhoopData(accessToken, { dateKey, timezone }) {
     fetchPaginatedWhoopCollection(accessToken, '/v2/activity/sleep', { start: sleepStart, end: sleepEnd, limit: 25 }).catch((error) => ({ records: [], fetchError: error?.message || String(error) })),
     fetchPaginatedWhoopCollection(accessToken, '/v2/activity/workout', { start, end, limit: 25 }).catch((error) => ({ records: [], fetchError: error?.message || String(error) })),
   ]);
+  if ([cycles, recoveries, sleeps, workouts].some(result => result?.fetchError)) {
+    throw new Error('WHOOP daily data request was incomplete. Retry required.');
+  }
   return { profile, bodyMeasurement, cycles, recoveries, sleeps, workouts };
 }
 
@@ -872,3 +875,6 @@ exports.__test = {
   mapWorkoutPayload,
   msToHours,
 };
+
+exports.syncWhoopForConnection = syncWhoopForConnection;
+exports.resolveTimeZone = resolveTimeZone;
