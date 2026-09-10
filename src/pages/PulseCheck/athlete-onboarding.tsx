@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import ConsentChoices from '../../components/pulsecheck/consent/ConsentChoices';
+import { consentCategory, consentDecisionComplete, type ConsentDecisions } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
+import React, { useEffect, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -242,11 +244,13 @@ export default function PulseCheckAthleteOnboardingPage() {
   const [team, setTeam] = useState<PulseCheckTeam | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const progressSaveQueue = useRef<Promise<unknown>>(Promise.resolve());
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [displayName, setDisplayName] = useState('');
   // E.164 contact phone so a team clinician can reach the athlete for a welfare
   // check. Required to finish intake; authorized under the pilot crisis consent.
   const [phone, setPhone] = useState('');
+  const [consentDecisions, setConsentDecisions] = useState<ConsentDecisions>({});
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [completedConsentIds, setCompletedConsentIds] = useState<string[]>([]);
   const [completedConsentVersions, setCompletedConsentVersions] = useState<Record<string, string>>({});
@@ -312,6 +316,7 @@ export default function PulseCheckAthleteOnboardingPage() {
 
         if (!active) return;
         setMembership(nextMembership);
+        setConsentDecisions(nextMembership?.athleteOnboarding?.consentDecisions || {});
         setOrganization(nextOrganization);
         setPilot(nextPilot);
         setTeam(nextTeam);
@@ -361,7 +366,16 @@ export default function PulseCheckAthleteOnboardingPage() {
   const requiredConsents = previewMode
     ? (team?.requiredConsents || [])
     : (membership?.athleteOnboarding?.requiredConsents || []);
-  const requiredConsentsComplete = requiredConsents.every((consent) => completedConsentIds.includes(consent.id));
+  const athleteConsents = requiredConsents.filter(doc => consentCategory(doc) !== 'staff');
+  const requiredConsentsComplete = athleteConsents.every(doc => consentDecisionComplete(doc, consentDecisions, completedConsentIds, completedConsentVersions));
+  const recordChoices = (next: ConsentDecisions) => {
+    setConsentDecisions(next);
+    const accepted = Object.entries(next).filter(([, entry]) => entry.decision === 'accepted');
+    setCompletedConsentIds([...completedConsentIds.filter(id => !next[id]), ...accepted.map(([id]) => id)]);
+    setCompletedConsentVersions({ ...Object.fromEntries(Object.entries(completedConsentVersions).filter(([id]) => !next[id])), ...Object.fromEntries(accepted.map(([id, entry]) => [id, entry.version])) });
+    const research = athleteConsents.filter(doc => consentCategory(doc) === 'research');
+    if (research.length) setResearchConsentStatus(research.every(doc => next[doc.id]?.decision === 'accepted') ? 'accepted' : research.every(doc => next[doc.id]) ? 'declined' : 'pending');
+  };
 
   const intakeQuestions = team?.intake?.athlete?.questions || [];
   const intakeFormVersion = team?.intake?.athlete?.version || PULSECHECK_INTAKE_FORM_VERSION;
@@ -388,19 +402,20 @@ export default function PulseCheckAthleteOnboardingPage() {
           : 'starting-point';
 
     const timeout = window.setTimeout(() => {
-      pulseCheckProvisioningService.saveAthleteOnboardingProgress({
+      progressSaveQueue.current = progressSaveQueue.current.then(() => pulseCheckProvisioningService.saveAthleteOnboardingProgress({
         teamMembershipId: membership.id,
         entryOnboardingStep,
         entryOnboardingName: trimmedName,
         productConsentAccepted: consentAccepted,
         completedConsentIds,
         completedConsentVersions,
+        consentDecisions,
         researchConsentStatus: requiresResearchConsent ? researchConsentStatus : undefined,
         ...(normalizePhoneToE164(phone) ? { phone: normalizePhoneToE164(phone) } : {}),
-        ...(intakeQuestions.length > 0
+        ...(consentAccepted && requiredConsentsComplete && intakeQuestions.length > 0
           ? { intakeResponses: intakeAnswers, intakeFormVersion }
           : {}),
-      }).catch((error) => {
+      })).catch((error) => {
         console.error('[PulseCheck athlete onboarding] Failed to sync onboarding progress:', error);
       });
     }, 250);
@@ -409,6 +424,7 @@ export default function PulseCheckAthleteOnboardingPage() {
   }, [
     completedConsentIds,
     completedConsentVersions,
+    consentDecisions,
     consentAccepted,
     displayName,
     intakeAnswers,
@@ -492,6 +508,7 @@ export default function PulseCheckAthleteOnboardingPage() {
     setSaving(true);
     setMessage(null);
     try {
+      await progressSaveQueue.current;
       await userService.updateUser(currentUser.id, {
         ...currentUser.toDictionary(),
         displayName: displayName.trim(),
@@ -507,6 +524,7 @@ export default function PulseCheckAthleteOnboardingPage() {
         baselinePathwayId: BASELINE_PATHWAY_ID,
         completedConsentIds,
         completedConsentVersions,
+        consentDecisions,
         researchConsentStatus: requiresResearchConsent ? researchConsentStatus : 'not-required',
         researchConsentVersion:
           requiresResearchConsent && (researchConsentStatus === 'accepted' || researchConsentStatus === 'declined')
@@ -800,7 +818,26 @@ export default function PulseCheckAthleteOnboardingPage() {
                 </motion.label>
 
                 {/* Intake questions */}
-                {intakeQuestions.length > 0 ? (
+                {/* Product Consent */}
+                <SectionCard
+                  icon={<ClipboardCheck className="h-4 w-4 text-[#E0FE10]" />}
+                  title="Before You Begin"
+                  accentColor="#E0FE10"
+                  delay={0.45}
+                >
+                  <p className="text-sm leading-7 text-zinc-400 mb-4">
+                    Before we set anything up, we need your okay to get PulseCheck ready for your team.
+                  </p>
+                  <GlowCheckbox
+                    checked={consentAccepted}
+                    onChange={setConsentAccepted}
+                    label="I agree to get started with PulseCheck for my team."
+                  />
+                </SectionCard>
+
+                <ConsentChoices documents={athleteConsents} decisions={consentDecisions} onChange={recordChoices} name={displayName} />
+
+                {consentAccepted && requiredConsentsComplete && intakeQuestions.length > 0 ? (
                   <SectionCard
                     icon={<ClipboardCheck className="h-4 w-4 text-[#84DFC1]" />}
                     title="A Few Questions"
@@ -878,118 +915,6 @@ export default function PulseCheckAthleteOnboardingPage() {
                           </div>
                         );
                       })}
-                    </div>
-                  </SectionCard>
-                ) : null}
-
-                {/* Product Consent */}
-                <SectionCard
-                  icon={<ClipboardCheck className="h-4 w-4 text-[#E0FE10]" />}
-                  title="Before You Begin"
-                  accentColor="#E0FE10"
-                  delay={0.45}
-                >
-                  <p className="text-sm leading-7 text-zinc-400 mb-4">
-                    Before we set anything up, we need your okay to get PulseCheck ready for your team.
-                  </p>
-                  <GlowCheckbox
-                    checked={consentAccepted}
-                    onChange={setConsentAccepted}
-                    label="I agree to get started with PulseCheck for my team."
-                  />
-                </SectionCard>
-
-                <SectionCard
-                  icon={<FileText className="h-4 w-4 text-[#84DFC1]" />}
-                  title="Required Agreements"
-                  accentColor="#84DFC1"
-                  delay={0.48}
-                >
-                  <p className="text-sm leading-7 text-zinc-400 mb-4">
-                    Read these before you continue. We need your yes on each one before you can use this program.
-                  </p>
-
-                  <div className="space-y-3">
-                    {requiredConsents.length > 0 ? requiredConsents.map((consent) => {
-                      const isAccepted = completedConsentIds.includes(consent.id);
-                      return (
-                        <div
-                          key={consent.id}
-                          className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 backdrop-blur-sm"
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0">
-                              <p className="text-base font-semibold text-white">{consent.title}</p>
-                              <p className="mt-2 text-sm leading-7 text-zinc-400">
-                                {previewAgreementBody(consent.body)}
-                              </p>
-                            </div>
-                            {isAccepted ? (
-                              <div className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#E0FE10]">
-                                Agreed
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <button
-                              type="button"
-                              onClick={() => setActiveConsent(consent)}
-                              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
-                            >
-                              <FileText className="h-4 w-4" />
-                              Read agreement
-                            </button>
-
-                            <GlowCheckbox
-                              checked={isAccepted}
-                              onChange={() => toggleCompletedConsent(consent)}
-                              label="I have read this and I agree."
-                            />
-                          </div>
-                        </div>
-                      );
-                    }) : (
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 text-sm leading-7 text-zinc-400">
-                        There are no extra agreements for this team right now.
-                      </div>
-                    )}
-                  </div>
-                </SectionCard>
-
-                {requiresResearchConsent ? (
-                  <SectionCard
-                    icon={<CheckCircle2 className="h-4 w-4 text-[#8B5CF6]" />}
-                    title="Research Choice"
-                    accentColor="#8B5CF6"
-                    delay={0.5}
-                  >
-                    <p className="text-sm leading-7 text-zinc-400 mb-4">
-                      {pilot?.name || 'This program'} includes a research option. You can keep using PulseCheck either way. We just need your answer before you continue.
-                    </p>
-                    <div className="grid gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setResearchConsentStatus('accepted')}
-                        className={`rounded-2xl border px-4 py-4 text-left text-sm transition ${
-                          researchConsentStatus === 'accepted'
-                            ? 'border-[#8B5CF6]/50 bg-[#8B5CF6]/[0.12] text-white'
-                            : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-[#8B5CF6]/30'
-                        }`}
-                      >
-                        I want my activity included in the research study.
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setResearchConsentStatus('declined')}
-                        className={`rounded-2xl border px-4 py-4 text-left text-sm transition ${
-                          researchConsentStatus === 'declined'
-                            ? 'border-white/20 bg-white/[0.08] text-white'
-                            : 'border-white/10 bg-white/[0.04] text-zinc-300 hover:border-white/20'
-                        }`}
-                      >
-                        I want to use PulseCheck, but I do not want my activity included in the study.
-                      </button>
                     </div>
                   </SectionCard>
                 ) : null}

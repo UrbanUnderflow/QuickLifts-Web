@@ -1107,7 +1107,7 @@ service cloud.firestore {
           'phone',
           'postActivationCompletedAt',
           'smsConsentAt',
-          'updatedAt'
+          'staffConsentDecisions', 'staffConsentRecordedAt', 'updatedAt'
         ]);
     }
     function hasHumanUiAuditFields() {
@@ -2857,6 +2857,15 @@ service cloud.firestore {
     // profile fields. Self-service clients can only update bounded onboarding and
     // notification preferences; invite redemption is handled by trusted APIs.
     match /pulsecheck-team-memberships/{membershipId} {
+      match /consent-events/{eventId} {
+        allow read: if isSignedIn() && get(/databases/$(database)/documents/pulsecheck-team-memberships/$(membershipId)).data.userId == request.auth.uid;
+        allow create: if isSignedIn()
+          && get(/databases/$(database)/documents/pulsecheck-team-memberships/$(membershipId)).data.userId == request.auth.uid
+          && request.resource.data.actorUserId == request.auth.uid
+          && request.resource.data.recordedAt == request.time
+          && request.resource.data.keys().hasOnly(['actorUserId', 'decisions', 'recordedAt']);
+        allow update, delete: if false;
+      }
       allow read: if isAdminUser()
         || (
           isSignedIn()

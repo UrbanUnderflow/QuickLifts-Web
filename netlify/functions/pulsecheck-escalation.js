@@ -1,3 +1,4 @@
+const { clinicalAuthorizationAllowsTransfer } = require('./lib/clinical-authorization');
 /**
  * PulseCheck Escalation Handler Function
  * 
@@ -3171,6 +3172,29 @@ async function performClinicalHandoff(
   const teamId = normalizeString(
     escalationData?.teamId || supportContext?.teamId || supportContext?.pilotContext?.teamId
   );
+
+  // Check the current team configuration and athlete decision before reading
+  // conversation content or transmitting anything to the clinical provider.
+  if (Number(escalationData?.tier) < EscalationTier.CriticalRisk && teamId) {
+    const membership = await runtimeDb.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(normalizeString(supportContext?.pilotContext?.teamMembershipId) || `${teamId}_${userId}`).get();
+    const member = membership.exists ? membership.data() : {};
+    const onboarding = member.athleteOnboarding || {};
+    const teamDocs = supportContext?.team?.requiredConsents;
+    const documents = Array.isArray(teamDocs) && teamDocs.length ? teamDocs : (onboarding.requiredConsents || []);
+    const participationEnded = member.revokedAt != null || (member.status && member.status !== 'active')
+      || ['withdrawn', 'completed', 'ended'].includes(supportContext?.pilotContext?.pilotEnrollment?.status);
+    const hasAuthorization = documents.some(doc => doc.category === 'health_authorization' || doc.id === 'pulsecheck-health-authorization');
+    let signedDecisions = {};
+    if (hasAuthorization) {
+      const evidence = await membership.ref.collection('consent-events').orderBy('recordedAt', 'desc').limit(1).get();
+      const latest = evidence.empty ? null : evidence.docs[0].data();
+      if (latest?.actorUserId === userId) signedDecisions = latest.decisions || {};
+    }
+    if (!clinicalAuthorizationAllowsTransfer({ documents, decisions: onboarding.consentDecisions || {}, participationEnded, tier: escalationData.tier })
+      || !clinicalAuthorizationAllowsTransfer({ documents, decisions: signedDecisions, participationEnded, tier: escalationData.tier })) {
+      return { success: false, supportRoute: 'clinician', error: { code: 'HEALTH_AUTHORIZATION_REQUIRED', message: 'Review your health information authorization before this clinical transfer. Other program features remain available.' } };
+    }
+  }
 
   // Load conversation for summary
   const convoDoc = await runtimeDb.collection('conversations').doc(conversationId).get();

@@ -2262,7 +2262,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const handleTeamConsentFieldChange = (
     team: PulseCheckTeam,
     index: number,
-    field: 'title' | 'body' | 'version',
+    field: 'title' | 'body' | 'version' | 'category',
     value: string
   ) => {
     setTeamConsentDraft(
@@ -4925,7 +4925,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             className="pcp-card pcp-tracker-card"
                                           >
                                             <div className="pcp-tracker-copy" style={{ marginTop: 0 }}>
-                                              Every athlete on this team accepts these during intake. Signing here means the app will not ask again. Bumping a version re-prompts anyone who signed the older one. Research-study consents are added automatically when a pilot runs in research mode.
+                                              Choose the audience and purpose for each set of terms. Athletes decide separately about participation, health authorization, and research. Staff see staff responsibilities. A new version requires a new decision. This editor changes terms; participants make their own decisions.
                                             </div>
                                             <div style={{ marginTop: 12, fontSize: 13, color: '#fff' }}>
                                               {consentDraft.length} consent{consentDraft.length === 1 ? '' : 's'}
@@ -5017,6 +5017,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                         <button type="button" className="pcp-ab pcp-ab-t" onClick={() => handleBumpTeamConsentVersion(team, activeIndex)}>Bump</button>
                                                         <button type="button" className="pcp-ab pcp-ab-t" aria-label="Remove consent" onClick={() => handleRemoveTeamConsent(team, activeIndex)}><X /></button>
                                                       </div>
+                                                      <label style={{ display: 'block', marginBottom: 12 }}>Consent category
+                                                        <select value={activeConsent.category || (activeConsent.id.includes('research') ? 'research' : 'participation')} onChange={event => handleTeamConsentFieldChange(team, activeIndex, 'category', event.target.value)} style={{ ...consentInputStyle, width: '100%' }}>
+                                                          <option value="participation">Athlete participation (agreement required)</option>
+                                                          <option value="health_authorization">Health authorization (accept or decline)</option>
+                                                          <option value="research">Research (accept or decline)</option>
+                                                          <option value="staff">Coach and staff responsibilities</option>
+                                                        </select>
+                                                      </label>
+                                                      {activeConsent.category === 'research' && <label style={{ display: 'block', marginBottom: 12 }}><input type="checkbox" checked={activeConsent.studySpecific === true} onChange={event => setTeamConsentDraft(team.id, draft.map((item, i) => i === activeIndex ? { ...item, studySpecific: event.target.checked } : item))} /> This is the approved study-specific consent, including the required research authorization or documented waiver.</label>}
                                                       <textarea
                                                         value={activeConsent.body}
                                                         placeholder="Full consent text shown to the athlete…"

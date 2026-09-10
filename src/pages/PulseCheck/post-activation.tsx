@@ -1,3 +1,5 @@
+import ConsentChoices from '../../components/pulsecheck/consent/ConsentChoices';
+import { STAFF_CONSENT, staffConsentDocuments, consentCategory, consentDecisionComplete, type ConsentDecisions } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -166,6 +168,7 @@ export default function PulseCheckPostActivationPage() {
   const isDemo = router.query.demo === '1';
   const demoTeamName = typeof router.query.teamName === 'string' ? router.query.teamName : 'Your team';
 
+  const [staffDecisions, setStaffDecisions] = useState<ConsentDecisions>({});
   const [membership, setMembership] = useState<PulseCheckTeamMembership | null>(null);
   const [organization, setOrganization] = useState<PulseCheckOrganization | null>(null);
   const [team, setTeam] = useState<PulseCheckTeam | null>(null);
@@ -210,6 +213,7 @@ export default function PulseCheckPostActivationPage() {
       null;
 
     setMembership(nextMembership);
+    setStaffDecisions(nextMembership?.staffConsentDecisions || {});
 
     const [nextOrganization, nextTeam, nextInviteLinks] = await Promise.all([
       organizationId ? pulseCheckProvisioningService.getOrganization(organizationId) : Promise.resolve(null),
@@ -308,6 +312,8 @@ export default function PulseCheckPostActivationPage() {
     }
   };
 
+  const staffConsents = staffConsentDocuments(team?.requiredConsents);
+
   const handleSaveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
     if (isDemo) {
@@ -338,6 +344,8 @@ export default function PulseCheckPostActivationPage() {
       }
     }
 
+    if (!staffConsents.every(doc => consentDecisionComplete(doc, staffDecisions))) { setMessage({ type: 'error', text: 'Review and sign your staff responsibilities before continuing.' }); return; }
+
     setSavingProfile(true);
     setMessage(null);
 
@@ -361,6 +369,7 @@ export default function PulseCheckPostActivationPage() {
       });
 
       await pulseCheckProvisioningService.savePostActivationSetup({
+        consentDecisions: staffDecisions,
         organizationId: organization.id,
         teamId: team.id,
         teamMembershipId: membership.id,
@@ -799,10 +808,11 @@ export default function PulseCheckPostActivationPage() {
                   ) : null}
                 </div>
 
+                <div className="mt-6"><ConsentChoices documents={staffConsents} decisions={staffDecisions} onChange={setStaffDecisions} name={profileForm.displayName} /></div>
                 <div className="mt-6">
                   <button
                     type="submit"
-                    disabled={savingProfile}
+                    disabled={savingProfile || !staffConsents.every(doc => consentDecisionComplete(doc, staffDecisions))}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                     style={{ background: PC.purple }}
                   >

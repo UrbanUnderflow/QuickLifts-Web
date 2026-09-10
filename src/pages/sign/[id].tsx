@@ -5,6 +5,7 @@ import { FileText, Check, AlertCircle, Download, ExternalLink } from 'lucide-rea
 import { doc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { renderHtmlToPdf } from '../../utils/pdf';
+import { isStrategicDocument, renderStrategicSigningHtml } from '../../lib/strategicDocumentSigning';
 
 interface SigningRequest {
   id: string;
@@ -14,6 +15,7 @@ interface SigningRequest {
   recipientLegalName?: string;
   recipientEmail: string;
   companyName?: string;  // Which company issued this document
+  signerRole?: string;
   status: 'pending' | 'sent' | 'delivered' | 'opened' | 'viewed' | 'signed' | 'failed' | 'deferred';
   createdAt: Timestamp | Date | string;
   sentAt?: Timestamp | Date | string;
@@ -269,6 +271,21 @@ const SignDocument: React.FC = () => {
     const company = request.companyName || 'Pulse Intelligence Labs, Inc.';
 
     if (request.documentContent) {
+      if (isStrategicDocument(request.documentType)) {
+        const signatureTimestamp = request.signatureData?.timestamp || request.signedAt;
+        const signatureDate = signatureTimestamp && typeof (signatureTimestamp as Timestamp).toDate === 'function'
+          ? (signatureTimestamp as Timestamp).toDate()
+          : signatureTimestamp ? new Date(signatureTimestamp as string | Date) : null;
+        return renderStrategicSigningHtml({
+          title: request.documentName,
+          content: request.documentContent,
+          recipientName: request.recipientName,
+          recipientEmail: request.recipientEmail,
+          signerRole: request.signerRole,
+          signedName: downloadSignedVersion ? request.signatureData?.typedName : undefined,
+          signedAt: signatureDate && !Number.isNaN(signatureDate.getTime()) ? signatureDate.toISOString() : undefined,
+        });
+      }
       if (request.documentContent.includes('<!DOCTYPE html>')) {
         // Handle fully structured HTML (like Invoices)
         let html = request.documentContent;

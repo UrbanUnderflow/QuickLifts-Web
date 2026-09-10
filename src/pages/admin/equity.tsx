@@ -5,6 +5,7 @@ import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp,
 import { auth, db } from '../../api/firebase/config';
 import { getManagedAdvisorEquityProfile, type ManagedAdvisorEquityProfile } from '../../lib/equityAdvisorProfiles';
 import { formatEquityContentForPdf as formatContentForPdf } from '../../lib/equityDocumentFormatting';
+import { PreparedDocumentSigner } from '../../lib/strategicDocumentSigning';
 import { buildScopedEquityDocumentUrl } from '../../lib/equityDocumentPreview';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -168,6 +169,8 @@ interface EquityDocument {
   originalDocumentId?: string;
   isAmendment?: boolean;
   legalTemplateVersion?: string;
+  preparedSigners?: PreparedDocumentSigner[];
+  closingRequirements?: string[];
 }
 
 interface SignaturePacketDocument {
@@ -2584,6 +2587,10 @@ const EquityAdminPage: React.FC = () => {
       };
     };
 
+    if (docToSign.preparedSigners?.length) {
+      return docToSign.preparedSigners.map(makeRow);
+    }
+
     // Document-type heuristics
     if (['advisor_nso_agreement', 'option_agreement', 'fast_agreement'].includes(docToSign.documentType)) {
       return [
@@ -2879,6 +2886,14 @@ const EquityAdminPage: React.FC = () => {
       const currentSigningDoc = await prepareEquityDocumentForPreviewOrSend(signingDoc);
       setSigningDoc(currentSigningDoc);
       const { stakeholderList, documentList } = await loadFreshEquityPacketData();
+
+      const freshSigningDoc = documentList.find(document => document.id === currentSigningDoc.id) || currentSigningDoc;
+      if (freshSigningDoc.closingRequirements?.length) {
+        const text = `Complete these closing items before sending: ${freshSigningDoc.closingRequirements.join('; ')}.`;
+        setSigningModalStatus({ type: 'error', text });
+        setMessage({ type: 'error', text });
+        return;
+      }
 
       const missingPacketRequirements = getMissingSignaturePacketRequirements(
         currentSigningDoc,
@@ -5843,6 +5858,14 @@ const EquityAdminPage: React.FC = () => {
                             </span>
                           )}
                         </div>
+                        {edoc.closingRequirements && edoc.closingRequirements.length > 0 && (
+                          <div className="mt-3 rounded-lg border border-amber-800 bg-amber-950/30 p-3 text-sm text-amber-200">
+                            <p className="font-medium">Closing items to complete before sending</p>
+                            <ul className="mt-1 list-disc pl-5">
+                              {edoc.closingRequirements.map(item => <li key={item}>{item}</li>)}
+                            </ul>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap justify-end">

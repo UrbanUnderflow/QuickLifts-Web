@@ -1,3 +1,4 @@
+import { questionCustodian, questionVisible } from '../../../lib/questionnaires/cau-routing';
 import Head from 'next/head';
 import React, { useEffect, useRef, useState } from 'react';
 import source from '../../../content/questionnaires/cau-operational.json';
@@ -20,14 +21,11 @@ export default function CAUQuestionnaire({ collectionEnabled }: { collectionEnab
   const [track, setTrack] = useState<'performance' | 'health' | null>(null);
   const [completed, setCompleted] = useState({ performance: false, health: false });
   const [positions, setPositions] = useState({ performance: 0, health: 0 });
-  const isHealth = (q: typeof allQuestions[number]) => {
-    const n = Number(q.id.split('-').pop());
-    return (n >= 14 && n <= 32) || (n >= 41 && n <= 51) || n === 62;
-  };
-  const questions = allQuestions.filter(q => track === 'health' ? isHealth(q) : !isHealth(q));
+  const isHealth = (q: typeof allQuestions[number]) => questionCustodian(q.id) === 'auntEDNA';
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [error, setError] = useState('');
+  const questions = allQuestions.filter(q => (track === 'health' ? isHealth(q) : !isHealth(q)) && questionVisible(q.id, answers));
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const q = questions[index];
   const value = q && answers[q.id];
@@ -48,7 +46,7 @@ export default function CAUQuestionnaire({ collectionEnabled }: { collectionEnab
     const next = selected ? previous.filter(v => v !== option) : exclusive.includes(option) ? [option] : [...previous.filter(v => !exclusive.includes(v)), option];
     if (q.type === 'multi_select' && q.maxSelections && next.length > q.maxSelections) { setError(`Choose up to ${q.maxSelections} answers.`); return; }
     setError('');
-    setAnswers(old => ({ ...old, [q.id]: q.type === 'multi_select' ? next : option }));
+    setAnswers(old => { const updated = { ...old, [q.id]: q.type === 'multi_select' ? next : option }; if (q.id === 'cau-operational-12' && option !== 'Yes') delete updated['cau-operational-13']; return updated; });
     if (q.type !== 'multi_select' && (!q.requiresConfirmation || option === 'Yes')) timer.current = setTimeout(() => move(index + 1), 450);
   }
   async function submit() {
@@ -96,12 +94,12 @@ export default function CAUQuestionnaire({ collectionEnabled }: { collectionEnab
         <details><summary>Before you begin: privacy and questionnaire context</summary><p style={{ whiteSpace: 'pre-line' }}>{source.questions[0].instructions}</p></details>
         {(['performance', 'health'] as const).map(section => <button key={section} style={{ ...card, borderColor: completed[section] ? '#d9f764' : '#424641' }} onClick={() => openTrack(section)}>
           <strong>{completed[section] ? '✓ ' : ''}{section === 'health' ? 'Mental Health' : 'Mental Performance'}</strong>
-          <p style={{ fontSize: 14 }}>{section === 'health' ? 'Well-being, stress, sleep, and support.' : 'Your setup, readiness, and platform experience.'}</p>
+          <p style={{ fontSize: 14 }}>{section === 'health' ? 'Health, injury, well-being, and support.' : 'Focus, confidence, sport mindset, and general setup.'}</p>
           <span>{completed[section] ? 'Complete · review answers' : positions[section] > 0 ? 'In progress · continue' : 'Still to do'}</span>
         </button>)}
         <p>{Number(completed.performance) + Number(completed.health)} of 2 sections complete. Answers are saved when you submit both sections. Keep this page open until then.</p>
         {completed.health && completed.performance && <details><summary>Review all answers</summary>
-        {allQuestions.map((question, i) => <section key={question.id}><h2 style={{ fontSize: 17 }}>{question.question}</h2><p>{Array.isArray(answers[question.id]) ? (answers[question.id] as string[]).join(', ') : answers[question.id] || 'Skipped'}</p><button onClick={() => { const section = isHealth(question) ? 'health' : 'performance'; const items = allQuestions.filter(item => isHealth(item) === isHealth(question)); setTrack(section); setIndex(items.findIndex(item => item.id === question.id)); }} style={card}>Edit answer</button></section>)}
+        {allQuestions.filter(question => questionVisible(question.id, answers)).map((question, i) => <section key={question.id}><h2 style={{ fontSize: 17 }}>{question.question}</h2><p>{Array.isArray(answers[question.id]) ? (answers[question.id] as string[]).join(', ') : answers[question.id] || 'Skipped'}</p><button onClick={() => { const section = isHealth(question) ? 'health' : 'performance'; const items = allQuestions.filter(item => isHealth(item) === isHealth(question) && questionVisible(item.id, answers)); setTrack(section); setIndex(items.findIndex(item => item.id === question.id)); }} style={card}>Edit answer</button></section>)}
         </details>}
         {error && <p role="alert">{error}</p>}
         <button disabled={!collectionEnabled || saving || !completed.health || !completed.performance} onClick={submit} style={{ ...card, background: '#d9f764', color: '#17200b' }}>{saving ? 'Saving…' : collectionEnabled ? 'Submit answers' : 'Preview: saving is unavailable'}</button>

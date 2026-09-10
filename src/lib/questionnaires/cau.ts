@@ -1,3 +1,5 @@
+import { OWNERSHIP_VERSION, questionCustodian, questionVisible } from './cau-routing';
+export { OWNERSHIP_VERSION, questionCustodian } from './cau-routing';
 import source from '../../content/questionnaires/cau-operational.json';
 export const COLLECTION = 'pulsecheck-restricted-questionnaire-submissions';
 export const VERSION = 'cau-operational-web-v1';
@@ -10,6 +12,7 @@ export function validateSubmission(input: any) {
   if (Object.keys(input.answers).some(id => !allowed.has(id))) throw Error('Unknown question.');
   const fields: Record<string, any> = {};
   for (const q of questions) {
+    if (!questionVisible(q.id, input.answers)) { fields[q.id] = { questionId: q.id, state: 'not_applicable' }; continue; }
     const value = input.answers[q.id];
     if (value === undefined || value === '' || (Array.isArray(value) && value.length === 0)) { fields[q.id] = { questionId: q.id, state: 'skipped' }; continue; }
     if (q.type === 'multi_select') {
@@ -22,14 +25,6 @@ export function validateSubmission(input: any) {
     fields[q.id] = { questionId: q.id, state: 'local', value };
   }
   return { version: VERSION, completedSections: { performance: input.completedSections?.performance === true, health: input.completedSections?.health === true }, identity: { name: input.name.trim(), email: input.email.trim().toLowerCase(), verification: 'self_reported' }, fields };
-}
-// Ownership follows the current questionnaire split. This is a routing map,
-// not a legal determination that every health item is PHI or every other item is not.
-export const OWNERSHIP_VERSION = 'cau-routing-v1';
-export function questionCustodian(id: string): 'auntEDNA' | 'PulseCheck' {
-  if (!questions.some(q => q.id === id)) throw Error('Unknown question.');
-  const n = Number(id.split('-').pop());
-  return (n >= 14 && n <= 32) || (n >= 41 && n <= 51) || n === 62 ? 'auntEDNA' : 'PulseCheck';
 }
 export function splitSubmission(input: any) {
   const validated = validateSubmission(input);

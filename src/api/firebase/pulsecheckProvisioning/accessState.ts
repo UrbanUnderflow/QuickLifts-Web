@@ -1,3 +1,4 @@
+import { consentCategory, consentDecisionComplete, type ConsentDecisions } from './consentPolicy';
 import type {
   PulseCheckAthleteOnboardingState,
   PulseCheckPilotEnrollmentStatus,
@@ -91,7 +92,10 @@ export const hasCompletedRequiredConsents = (athleteOnboarding?: AthleteOnboardi
   const completedConsentIds = new Set(normalizeConsentIds(athleteOnboarding?.completedConsentIds));
   const completedConsentVersions = normalizeConsentVersions(athleteOnboarding?.completedConsentVersions);
   const hasVersionedCompletions = Object.keys(completedConsentVersions).length > 0;
-  return requiredConsents.every((consent) => {
+  return requiredConsents.filter(doc => consentCategory(doc) !== 'staff').every((consent) => {
+    const decisions = (athleteOnboarding?.consentDecisions || {}) as ConsentDecisions;
+    if (decisions[consent.id] || consentCategory(consent) === 'health_authorization') return consentDecisionComplete(consent, decisions);
+    if (consentCategory(consent) === 'research' && athleteOnboarding?.researchConsentStatus === 'declined') return true;
     if (!completedConsentIds.has(consent.id)) return false;
     if (!hasVersionedCompletions) return true;
 

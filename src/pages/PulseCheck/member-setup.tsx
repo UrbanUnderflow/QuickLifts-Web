@@ -1,3 +1,5 @@
+import ConsentChoices from '../../components/pulsecheck/consent/ConsentChoices';
+import { STAFF_CONSENT, staffConsentDocuments, consentCategory, consentDecisionComplete, type ConsentDecisions } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
 import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -67,6 +69,7 @@ export default function PulseCheckMemberSetupPage() {
   const organizationId = typeof router.query.organizationId === 'string' ? router.query.organizationId : '';
   const teamId = typeof router.query.teamId === 'string' ? router.query.teamId : '';
 
+  const [staffDecisions, setStaffDecisions] = useState<ConsentDecisions>({});
   const [membership, setMembership] = useState<PulseCheckTeamMembership | null>(null);
   const [organization, setOrganization] = useState<PulseCheckOrganization | null>(null);
   const [team, setTeam] = useState<PulseCheckTeam | null>(null);
@@ -100,6 +103,7 @@ export default function PulseCheckMemberSetupPage() {
 
         if (!active) return;
         setMembership(nextMembership);
+    setStaffDecisions(nextMembership?.staffConsentDecisions || {});
         setOrganization(nextOrganization);
         setTeam(nextTeam);
         setForm({
@@ -121,6 +125,8 @@ export default function PulseCheckMemberSetupPage() {
     };
   }, [currentUser?.id, currentUserLoading, organizationId, teamId]);
 
+  const staffConsents = staffConsentDocuments(team?.requiredConsents);
+
   const handleToggle = (key: keyof PulseCheckNotificationPreferences) => {
     setForm((current) => ({
       ...current,
@@ -141,6 +147,8 @@ export default function PulseCheckMemberSetupPage() {
       setMessage({ type: 'error', text: 'Name and title are required.' });
       return;
     }
+
+    if (!staffConsents.every(doc => consentDecisionComplete(doc, staffDecisions))) { setMessage({ type: 'error', text: 'Review and sign your staff responsibilities before continuing.' }); return; }
 
     setSaving(true);
     setMessage(null);
@@ -165,6 +173,7 @@ export default function PulseCheckMemberSetupPage() {
       });
 
       await pulseCheckProvisioningService.saveAdultMemberSetup({
+        consentDecisions: staffDecisions,
         teamMembershipId: membership.id,
         title,
         notificationPreferences: form.notificationPreferences,
@@ -320,24 +329,18 @@ export default function PulseCheckMemberSetupPage() {
             </div>
           </div>
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-6"><ConsentChoices documents={staffConsents} decisions={staffDecisions} onChange={setStaffDecisions} name={form.displayName} /></div>
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !staffConsents.every(doc => consentDecisionComplete(doc, staffDecisions))}
               className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               style={{ background: PC.purple }}
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               {saving ? 'Saving…' : 'Complete Member Setup'}
             </button>
-            <Link
-              href="/coach/dashboard"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold text-white transition hover:border-white/30"
-              style={{ borderColor: PC.cardBorder }}
-            >
-              Skip for Now
-              <ChevronRight className="h-4 w-4" />
-            </Link>
+
           </div>
         </form>
       </main>

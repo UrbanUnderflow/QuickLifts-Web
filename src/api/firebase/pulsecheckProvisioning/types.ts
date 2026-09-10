@@ -1,3 +1,5 @@
+import type { ConsentCategory, ConsentDecisions } from './consentPolicy';
+import { HEALTH_CONSENT, STAFF_CONSENT, PARTICIPATION_CONSENT, RESEARCH_CONSENT } from './consentPolicy';
 import type { Timestamp } from 'firebase/firestore';
 import type { SurveyQuestion } from '../creatorPages/service';
 
@@ -190,6 +192,8 @@ export interface PulseCheckNotificationPreferences {
 }
 
 export interface PulseCheckRequiredConsentDocument {
+  category?: ConsentCategory;
+  studySpecific?: boolean;
   id: string;
   title: string;
   body: string;
@@ -316,8 +320,7 @@ const ALL_DEFAULT_PULSECHECK_REQUIRED_CONSENT_IDS = new Set<string>([
 export const getDefaultPulseCheckRequiredConsents = (
   studyMode: PulseCheckPilotStudyMode = 'operational'
 ): PulseCheckRequiredConsentDocument[] =>
-  (DEFAULT_PULSECHECK_REQUIRED_CONSENTS_BY_STUDY_MODE[studyMode] || DEFAULT_PULSECHECK_REQUIRED_CONSENTS_BY_STUDY_MODE.operational)
-    .map((consent) => ({ ...consent }));
+  [PARTICIPATION_CONSENT, HEALTH_CONSENT, ...(studyMode === 'research' ? [RESEARCH_CONSENT] : []), STAFF_CONSENT].map(doc => ({ ...doc }));
 
 export const mergePulseCheckRequiredConsents = (
   studyMode: PulseCheckPilotStudyMode = 'operational',
@@ -473,6 +476,7 @@ export const getDefaultPulseCheckIntakeForm = (kind: PulseCheckIntakeKind): Puls
 });
 
 export interface PulseCheckAthleteOnboardingState {
+  consentDecisions?: ConsentDecisions;
   productConsentAccepted: boolean;
   productConsentAcceptedAt?: Timestamp | null;
   productConsentVersion?: string;
@@ -712,6 +716,7 @@ export interface PulseCheckPilotCohort {
 }
 
 export interface PulseCheckPilotEnrollment {
+  consentDecisions?: ConsentDecisions;
   id: string;
   organizationId: string;
   teamId: string;
@@ -923,6 +928,7 @@ export interface PulseCheckOrganizationMembership {
 }
 
 export interface PulseCheckTeamMembership {
+  staffConsentDecisions?: ConsentDecisions;
   id: string;
   organizationId: string;
   teamId: string;
@@ -1075,6 +1081,7 @@ export interface CreatePulseCheckTeamAccessInviteInput {
 }
 
 export interface SavePulseCheckPostActivationSetupInput {
+  consentDecisions?: ConsentDecisions;
   organizationId: string;
   teamId: string;
   teamMembershipId: string;
@@ -1093,12 +1100,14 @@ export interface SavePulseCheckPostActivationSetupInput {
 }
 
 export interface SavePulseCheckAdultMemberSetupInput {
+  consentDecisions?: ConsentDecisions;
   teamMembershipId: string;
   title: string;
   notificationPreferences: PulseCheckNotificationPreferences;
 }
 
 export interface CompletePulseCheckAthleteOnboardingInput {
+  consentDecisions?: ConsentDecisions;
   teamMembershipId: string;
   consentVersion: string;
   baselinePathwayId: string;
@@ -1114,6 +1123,7 @@ export interface CompletePulseCheckAthleteOnboardingInput {
 }
 
 export interface SavePulseCheckAthleteOnboardingProgressInput {
+  consentDecisions?: ConsentDecisions;
   teamMembershipId: string;
   entryOnboardingStep: PulseCheckAthleteEntryOnboardingStep;
   entryOnboardingName?: string;

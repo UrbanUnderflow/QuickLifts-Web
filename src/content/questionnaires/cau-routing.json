@@ -1,0 +1,376 @@
+{
+  "version": "cau-routing-v2",
+  "classification": "Product privacy routing. Not a legal HIPAA classification. Sport-specific performance items 34\u201337 require alignment with the source data-sharing schedule before live collection.",
+  "questions": [
+    {
+      "questionId": "cau-operational-01",
+      "custodian": "PulseCheck",
+      "reason": "General questionnaire-purpose acknowledgement.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-02",
+      "custodian": "auntEDNA",
+      "reason": "Mental-health confidentiality acknowledgement belongs with the protected workflow.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-03",
+      "custodian": "auntEDNA",
+      "reason": "Clinical/emergency support acknowledgement.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-05",
+      "custodian": "PulseCheck",
+      "reason": "Completion date metadata.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-06",
+      "custodian": "auntEDNA",
+      "reason": "First access to either service can include auntEDNA care engagement.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-07",
+      "custodian": "auntEDNA",
+      "reason": "Cross-platform use can reveal auntEDNA engagement.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-08",
+      "custodian": "auntEDNA",
+      "reason": "Combined check-ins include auntEDNA engagement.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-09",
+      "custodian": "PulseCheck",
+      "reason": "Academic year, general setup.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-10",
+      "custodian": "auntEDNA",
+      "reason": "Modified/nonparticipation status can reveal health-related limitation; keep protected under current broad wording.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-11",
+      "custodian": "PulseCheck",
+      "reason": "Season phase, general performance context.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-12",
+      "custodian": "auntEDNA",
+      "reason": "Direct injury or physical-condition disclosure.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-13",
+      "custodian": "auntEDNA",
+      "reason": "Unrestricted description of injury/condition impact; show only after Yes to item 12.",
+      "requiresDataMapAlignment": false,
+      "showWhen": {
+        "questionId": "cau-operational-12",
+        "equals": "Yes"
+      }
+    },
+    {
+      "questionId": "cau-operational-14",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-15",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-16",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-17",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-18",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-19",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-20",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-21",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-22",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-23",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-24",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-25",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-26",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-27",
+      "custodian": "auntEDNA",
+      "reason": "Sleep, pain, fatigue or recovery assessment.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-28",
+      "custodian": "auntEDNA",
+      "reason": "Sleep, pain, fatigue or recovery assessment.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-29",
+      "custodian": "auntEDNA",
+      "reason": "Sleep, pain, fatigue or recovery assessment.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-30",
+      "custodian": "auntEDNA",
+      "reason": "Sleep, pain, fatigue or recovery assessment.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-31",
+      "custodian": "auntEDNA",
+      "reason": "Sleep, pain, fatigue or recovery assessment.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-32",
+      "custodian": "auntEDNA",
+      "reason": "Sleep, pain, fatigue or recovery assessment.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-33",
+      "custodian": "auntEDNA",
+      "reason": "Physical health/readiness, not narrowly mental performance.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-34",
+      "custodian": "PulseCheck",
+      "reason": "Sport-specific mental readiness; no clinical details requested.",
+      "requiresDataMapAlignment": true
+    },
+    {
+      "questionId": "cau-operational-35",
+      "custodian": "PulseCheck",
+      "reason": "Focus specifically during volleyball.",
+      "requiresDataMapAlignment": true
+    },
+    {
+      "questionId": "cau-operational-36",
+      "custodian": "PulseCheck",
+      "reason": "Confidence in volleyball role.",
+      "requiresDataMapAlignment": true
+    },
+    {
+      "questionId": "cau-operational-37",
+      "custodian": "PulseCheck",
+      "reason": "Recovering after sport mistakes or difficult moments.",
+      "requiresDataMapAlignment": true
+    },
+    {
+      "questionId": "cau-operational-38",
+      "custodian": "auntEDNA",
+      "reason": "Support or adjustment can concern injury, accommodation or health needs.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-39",
+      "custodian": "auntEDNA",
+      "reason": "Mixed choices explicitly include injury/pain, stress and fatigue; keep the whole item together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-40",
+      "custodian": "auntEDNA",
+      "reason": "Overall readiness includes physical/health readiness.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-41",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-42",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-43",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-44",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-45",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-46",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-47",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-48",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-49",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-50",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-51",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness, help-seeking or auntEDNA check-in preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-52",
+      "custodian": "PulseCheck",
+      "reason": "Understanding the distinction between two services.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-53",
+      "custodian": "auntEDNA",
+      "reason": "auntEDNA-specific product feedback.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-54",
+      "custodian": "PulseCheck",
+      "reason": "PulseCheck-specific product understanding.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-55",
+      "custodian": "auntEDNA",
+      "reason": "Check-ins are not limited to PulseCheck; mixed-service feedback.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-56",
+      "custodian": "PulseCheck",
+      "reason": "General understanding of data access.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-57",
+      "custodian": "auntEDNA",
+      "reason": "Unrestricted feedback about both platforms may disclose personal health information.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-58",
+      "custodian": "auntEDNA",
+      "reason": "Unrestricted feedback about both platforms may disclose personal health information.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-59",
+      "custodian": "PulseCheck",
+      "reason": "Understanding how to access the two services, not usage history.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-60",
+      "custodian": "PulseCheck",
+      "reason": "Knowing where to ask privacy questions.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-61",
+      "custodian": "auntEDNA",
+      "reason": "Support follow-up request belongs with the confidential support pathway.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-operational-62",
+      "custodian": "auntEDNA",
+      "reason": "Unrestricted onboarding free text can contain health details.",
+      "requiresDataMapAlignment": false
+    }
+  ]
+}
