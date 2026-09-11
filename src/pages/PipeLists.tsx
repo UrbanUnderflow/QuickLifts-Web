@@ -1327,8 +1327,6 @@ const shouldRetryGoogleSignInWithRedirect = (error: unknown) => {
       : '';
 
   return (
-    code === 'auth/popup-closed-by-user' ||
-    code === 'auth/cancelled-popup-request' ||
     code === 'auth/popup-blocked'
   );
 };
@@ -3505,6 +3503,8 @@ const PipelinePage: NextPage = () => {
   const [personalStateReady, setPersonalStateReady] = useState(false);
   const [authMessage, setAuthMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [isGoogleSignInStarting, setIsGoogleSignInStarting] = useState(false);
+  const googleSignInInFlightRef = useRef(false);
+  const googleRedirectCompletionStartedRef = useRef(false);
   const [appMessage, setAppMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [magicEmail, setMagicEmail] = useState(() => {
@@ -4209,9 +4209,11 @@ const PipelinePage: NextPage = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    if (googleRedirectCompletionStartedRef.current) return;
+    googleRedirectCompletionStartedRef.current = true;
     const completeGoogleRedirectSignIn = async () => {
       try {
-        const result = await getRedirectResult(simpBudgetAuth);
+        const result = await withTimeout(getRedirectResult(simpBudgetAuth, browserPopupRedirectResolver), 30000, 'Google sign-in took too long to finish. Please try again.');
         if (!result?.user) return;
 
         const email = result.user.email?.toLowerCase() || '';
@@ -9430,7 +9432,8 @@ Rules:
   };
 
   const handleGoogleSignIn = async () => {
-    if (isGoogleSignInStarting) return;
+    if (googleSignInInFlightRef.current) return;
+    googleSignInInFlightRef.current = true;
     setIsGoogleSignInStarting(true);
     setAuthMessage(null);
     const provider = new GoogleAuthProvider();
@@ -9439,11 +9442,12 @@ Rules:
     try {
       if (shouldUseRedirectSignIn()) {
         setAuthMessage({ type: 'info', text: 'Opening Google sign-in...' });
-        await signInWithRedirect(simpBudgetAuth, provider);
+        await withTimeout(signInWithRedirect(simpBudgetAuth, provider, browserPopupRedirectResolver), 15000, 'Google sign-in did not open. Try again or use an email magic link.');
         return;
       }
 
-      const result = await signInWithPopup(simpBudgetAuth, provider, browserPopupRedirectResolver);
+      setAuthMessage({ type: 'info', text: 'Complete sign-in in the Google window.' });
+      const result = await withTimeout(signInWithPopup(simpBudgetAuth, provider, browserPopupRedirectResolver), 45000, 'Google sign-in took too long. Close any unfinished Google sign-in window, then try again or use an email magic link.');
       const email = result.user.email?.toLowerCase() || '';
       if (
         isSharedView &&
@@ -9460,7 +9464,7 @@ Rules:
       if (shouldRetryGoogleSignInWithRedirect(error)) {
         try {
           setAuthMessage({ type: 'info', text: 'Opening Google sign-in...' });
-          await signInWithRedirect(simpBudgetAuth, provider);
+          await withTimeout(signInWithRedirect(simpBudgetAuth, provider, browserPopupRedirectResolver), 15000, 'Google sign-in did not open. Try again or use an email magic link.');
           return;
         } catch (redirectError) {
           console.error('PipeLists Google redirect fallback failed:', redirectError);
@@ -9478,6 +9482,7 @@ Rules:
         text: readAuthError(error, 'Unable to sign in with Google.'),
       });
     } finally {
+      googleSignInInFlightRef.current = false;
       setIsGoogleSignInStarting(false);
     }
   };
