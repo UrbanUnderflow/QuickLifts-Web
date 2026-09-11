@@ -845,6 +845,7 @@ const contactStages: StageConfig[] = [
 
 const pilotContractStages: StageConfig[] = [
   { id: 'identified', label: 'Identified', probability: 10, track: 'build', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'outreach-queued', label: 'Outreach Queued', probability: 10, track: 'build', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
   { id: 'engaged', label: 'Engaged', probability: 25, track: 'build', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
   { id: 'pilot-agreed', label: 'Pilot Agreed', probability: 40, track: 'build', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
   { id: 'pilot-active', label: 'Pilot Active', probability: 55, track: 'build', tone: 'bg-violet-50 text-violet-700 border-violet-100' },
@@ -855,7 +856,7 @@ const pilotContractStages: StageConfig[] = [
   { id: 'closed-lost-paused', label: 'Closed Lost / Paused', probability: 0, track: 'run', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
 ];
 
-const contractStages: StageConfig[] = pilotContractStages.slice(5);
+const contractStages: StageConfig[] = pilotContractStages.filter((stage) => stage.track === 'run');
 
 const vcStages: StageConfig[] = [
   { id: 'targeted', label: 'Targeted', probability: 5, track: 'capital', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
@@ -2503,10 +2504,10 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
           }
           return [...mergedStages, templateStage];
         }, savedStages)
-      : templateKey === 'pitch'
+      : templateKey === 'pitch' || templateKey === 'university-pilot'
       ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
           if (mergedStages.some((stage) => stage.id === templateStage.id)) return mergedStages;
-          const insertAfterIndex = templateStage.id === 'application-in-progress'
+          const insertAfterIndex = templateStage.id === 'application-in-progress' || templateStage.id === 'outreach-queued'
             ? mergedStages.findIndex((stage) => stage.id === 'identified')
             : -1;
           if (insertAfterIndex >= 0) {
@@ -4670,7 +4671,7 @@ const PipelinePage: NextPage = () => {
     () =>
       activeList.templateKey === 'university-pilot'
         ? activeListItems
-            .filter((item) => Boolean(item.customerSuccess) || isUniversityCustomerSuccessStage(item.stage))
+            .filter((item) => isWonStage(activeList, item.stage))
             .map((item) => ({
               id: item.id,
               title: item.title,
