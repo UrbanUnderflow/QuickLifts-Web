@@ -249,6 +249,7 @@ export const pilotPhaseFromPipelineStage = (stage: unknown): PilotPhase => {
 
 export const isUniversityCustomerSuccessStage = (stage: unknown) =>
   new Set([
+    'contract-signed',
     'pilot-agreed',
     'pilot-active',
     'pilot-complete',

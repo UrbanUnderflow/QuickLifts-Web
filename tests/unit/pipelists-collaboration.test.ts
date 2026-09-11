@@ -177,3 +177,15 @@ test('adding a member preserves every other collaborator and never changes an ex
     },
   );
 });
+
+test('an older snapshot after research acknowledgment cannot roll the lead back', () => {
+  const old = [{ id: 'university', items: [{ id: 'penn', title: 'Penn State', organization: '', updatedAt: '2026-09-11T14:47:00Z', weeklyLogs: [{ id: 'added' }] }] }];
+  const saved = structuredClone(old);
+  saved[0].items[0] = { ...saved[0].items[0], title: 'Carl Ohlson', organization: 'Penn State Athletics', updatedAt: '2026-09-11T15:21:00Z', weeklyLogs: [{ id: 'research' }, { id: 'added' }] };
+  const rolledBack = mergePipeListSnapshotsThreeWay(saved, old, saved);
+  assert.deepEqual(rolledBack, saved);
+  const newer = structuredClone(saved);
+  newer[0].items[0].organization = 'Updated university name';
+  newer[0].items[0].updatedAt = '2026-09-11T15:22:00Z';
+  assert.deepEqual(mergePipeListSnapshotsThreeWay(saved, newer, saved), newer);
+});

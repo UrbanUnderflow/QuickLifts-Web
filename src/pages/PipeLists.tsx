@@ -844,7 +844,7 @@ const contactStages: StageConfig[] = [
   { id: 'paused', label: 'Paused', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
 ];
 
-const pilotContractStages: StageConfig[] = [
+const legacyPilotContractStages: StageConfig[] = [
   { id: 'identified', label: 'Identified', probability: 10, track: 'build', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
   { id: 'outreach-queued', label: 'Outreach Queued', probability: 10, track: 'build', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
   { id: 'engaged', label: 'Engaged', probability: 25, track: 'build', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
@@ -857,7 +857,22 @@ const pilotContractStages: StageConfig[] = [
   { id: 'closed-lost-paused', label: 'Closed Lost / Paused', probability: 0, track: 'run', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
 ];
 
-const contractStages: StageConfig[] = pilotContractStages.filter((stage) => stage.track === 'run');
+const contractStages: StageConfig[] = legacyPilotContractStages.filter((stage) => stage.track === 'run');
+
+const pilotContractStages: StageConfig[] = [
+  ...['identified', 'outreach-queued', 'engaged', 'proposal-sent', 'negotiating', 'pilot-agreed']
+    .map((id, index) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: [10, 10, 25, 40, 60, 80][index] })),
+  { id: 'contract-signed', label: 'Contract Signed', probability: 100, track: 'run', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+  ...['pilot-active', 'pilot-complete', 'closed-lost-paused']
+    .map((id) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: id === 'closed-lost-paused' ? 0 : 100 })),
+];
+
+const needsUniversityStageMigration = (lists: Partial<PipeList>[]) => lists.some((list) =>
+  list.templateKey === 'university-pilot' && (
+    list.stages?.map((stage) => stage.id).join(',') !== pilotContractStages.map((stage) => stage.id).join(',') ||
+    list.items?.some((item) => item.stage === 'closed-won' || item.stage === 'won')
+  ),
+);
 
 const vcStages: StageConfig[] = [
   { id: 'targeted', label: 'Targeted', probability: 5, track: 'capital', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
@@ -2329,6 +2344,7 @@ const isIdentifiedStage = (stage: StageConfig) =>
   normalizeOpportunityKey(stage.id) === 'identified' || normalizeOpportunityKey(stage.label) === 'identified';
 
 const normalizeStageId = (stage: string, listStages: StageConfig[]) => {
+  if ((stage === 'closed-won' || stage === 'won') && listStages.some((stageConfig) => stageConfig.id === 'contract-signed')) return 'pilot-active';
   if (listStages.some((stageConfig) => stageConfig.id === stage)) return stage;
   const legacyMap: Record<string, string> = {
     sourced: listStages.find((stageConfig) => stageConfig.id === 'sourced')?.id || listStages[0]?.id || 'sourced',
@@ -2488,7 +2504,7 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
   const template = templateCatalog[templateKey];
   const savedStages = Array.isArray(list.stages) && list.stages.length > 0 ? list.stages : template.stages;
   const stages =
-    templateKey === 'investor-metrics' || templateKey === 'contacts'
+    templateKey === 'investor-metrics' || templateKey === 'contacts' || templateKey === 'university-pilot'
       ? template.stages
       : templateKey === 'vc'
       ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
@@ -2505,7 +2521,7 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
           }
           return [...mergedStages, templateStage];
         }, savedStages)
-      : templateKey === 'pitch' || templateKey === 'university-pilot'
+      : templateKey === 'pitch'
       ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
           if (mergedStages.some((stage) => stage.id === templateStage.id)) return mergedStages;
           const insertAfterIndex = templateStage.id === 'application-in-progress' || templateStage.id === 'outreach-queued'
@@ -2733,7 +2749,7 @@ const persistCollaborativePipeList = async ({
     shareId,
   );
   const publicShareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
-  const localSnapshot = collaboratorSafePipeListSnapshot(list);
+  const localSnapshot = collaboratorSafePipeListSnapshot(normalizeList(list, 0));
   let mergedList = localSnapshot;
 
   await runTransaction(simpBudgetDb, async (transaction) => {
@@ -2744,11 +2760,11 @@ const persistCollaborativePipeList = async ({
       const data = snapshot.data() as Partial<PipeListShare & PipeListProtectedShare>;
       if (!data.list) throw new Error('This shared PipeList is no longer available.');
       const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
-      mergedList = collaboratorSafePipeListSnapshot(
-        reconcilePipeListSnapshotsForWrite(remoteList, localSnapshot, baseList),
-      );
+      mergedList = collaboratorSafePipeListSnapshot(normalizeList(
+        reconcilePipeListSnapshotsForWrite(remoteList, localSnapshot, baseList ? normalizeList(baseList, 0) : undefined), 0,
+      ));
       if (pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch && data.protectedDetails === protectedDetails && !isProtected) return;
-      if (isProtected && protectedDetails === true && pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch) return;
+      if (isProtected && protectedDetails === true && !needsUniversityStageMigration([data.list]) && pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch) return;
     }
 
     transaction.set(
@@ -3368,6 +3384,8 @@ const PipelinePage: NextPage = () => {
   const personalSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [pendingPersonalSaves, setPendingPersonalSaves] = useState(0);
   const [personalSaveError, setPersonalSaveError] = useState(false);
+  const [personalSyncConflict, setPersonalSyncConflict] = useState(false);
+  const [universityStageMigrationPending, setUniversityStageMigrationPending] = useState(false);
   const directShareBaselineRef = useRef('');
   const protectedShareBaselinesRef = useRef<Record<string, PipeList>>({});
   const [activeListId, setActiveListId] = useState(initialLists[0].id);
@@ -3387,6 +3405,7 @@ const PipelinePage: NextPage = () => {
   const [isDeleteListModalOpen, setIsDeleteListModalOpen] = useState(false);
   const [isListProfileModalOpen, setIsListProfileModalOpen] = useState(false);
   const [listProfileDraft, setListProfileDraft] = useState({
+    name: '',
     description: '',
     objective: '',
     leadDefinition: '',
@@ -3455,6 +3474,11 @@ const PipelinePage: NextPage = () => {
   const [contactEmailInput, setContactEmailInput] = useState('');
   const [contactEmailError, setContactEmailError] = useState('');
   const [selectedDetailItemId, setSelectedDetailItemId] = useState<string>('');
+  const detailSnapshotRef = useRef<{ item: PipelineItem; list: PipeList } | null>(null);
+  const closeLeadDetails = () => {
+    detailSnapshotRef.current = null;
+    setSelectedDetailItemId('');
+  };
   const [detailModalMode, setDetailModalMode] = useState<DetailModalMode>('details');
   const [itemResearchPrompt, setItemResearchPrompt] = useState('');
   const [isResearchingItem, setIsResearchingItem] = useState(false);
@@ -3495,14 +3519,14 @@ const PipelinePage: NextPage = () => {
   const [sendingMagicLink, setSendingMagicLink] = useState(false);
   const [savingToCloud, setSavingToCloud] = useState(false);
   useEffect(() => {
-    if (pendingPersonalSaves === 0 && !personalSaveError) return;
+    if (pendingPersonalSaves === 0 && !personalSaveError && !personalSyncConflict) return;
     const protectPendingSave = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', protectPendingSave);
     return () => window.removeEventListener('beforeunload', protectPendingSave);
-  }, [pendingPersonalSaves, personalSaveError]);
+  }, [pendingPersonalSaves, personalSaveError, personalSyncConflict]);
   const [shareId] = useState(() => {
     if (typeof window === 'undefined') return '';
     return new URLSearchParams(window.location.search).get('share') || '';
@@ -3559,8 +3583,11 @@ const PipelinePage: NextPage = () => {
   const isSharedView = Boolean(shareId || leadShareId);
   const isOwner = normalizedUserEmail === TREMAINE_OWNER_EMAIL;
   const activeList = useMemo(
-    () => lists.find((list) => list.id === activeListId) || lists[0] || initialLists[0],
-    [activeListId, lists],
+    () => (selectedDetailItemId
+      ? lists.find((list) => list.items.some((item) => item.id === selectedDetailItemId)) ||
+        (detailSnapshotRef.current?.item.id === selectedDetailItemId ? detailSnapshotRef.current.list : null)
+      : null) || lists.find((list) => list.id === activeListId) || lists[0] || initialLists[0],
+    [activeListId, lists, selectedDetailItemId],
   );
   const accessibleShareDocs = useMemo(
     () =>
@@ -3797,7 +3824,7 @@ const PipelinePage: NextPage = () => {
         setDraft(defaultDraft(nextLists[0]?.stages[0]?.id || initialLists[0].stages[0].id));
         setSelectedLogItemId('');
         setLogDraft(defaultLogDraft(nextLists[0]?.templateKey || initialLists[0].templateKey));
-        setSelectedDetailItemId('');
+        setUniversityStageMigrationPending(needsUniversityStageMigration(snapshot.data()?.lists || []));
         setPersonalStateReady(true);
         setDataReady(true);
         setAppMessage(null);
@@ -3982,6 +4009,7 @@ const PipelinePage: NextPage = () => {
         if (!snapshot.exists()) return;
         const data = snapshot.data() as { lists?: Partial<PipeList>[] };
         if (!Array.isArray(data.lists)) return;
+        setUniversityStageMigrationPending(needsUniversityStageMigration(data.lists));
 
         const nextPersonalLists = isOwner
           ? mergeRecommendedPitchCompetitions(purgeExpiredDeletedItems(data.lists.map(normalizeList)))
@@ -3994,6 +4022,20 @@ const PipelinePage: NextPage = () => {
         ];
 
         const previousPersonalSnapshot = personalSnapshotBaselineRef.current;
+        const hasOlderLeadRevision = nextPersonalLists.some((list) => {
+          const previousItems = new Map(previousPersonalSnapshot.find((previous) => previous.id === list.id)?.items.map((item) => [item.id, item]) || []);
+          return list.items.some((item) => {
+            const previous = previousItems.get(item.id);
+            return previous && Date.parse(item.updatedAt) < Date.parse(previous.updatedAt);
+          });
+        });
+        if (hasOlderLeadRevision) {
+          setPersonalSyncConflict(true);
+          setAppMessage({ type: 'error', text: 'Another PipeLists session replaced newer saved edits. Your newer edits remain open here. Close older PipeLists tabs, then save your changes again before reloading.' });
+        } else if (pipeListSnapshotsEqual(nextPersonalLists, liveListsRef.current.filter((list) =>
+          isOwner || !accessibleShareDocs.some((share) => share.list.id === list.id)))) {
+          setPersonalSyncConflict(false);
+        }
         personalSnapshotBaselineRef.current = nextPersonalLists;
         setLists((currentLists) => {
           const currentPersonalLists = currentLists.filter((list) =>
@@ -4081,7 +4123,6 @@ const PipelinePage: NextPage = () => {
         setDraft(defaultDraft(normalizedList.stages[0]?.id));
         setSelectedLogItemId('');
         setLogDraft(defaultLogDraft(normalizedList.templateKey));
-        setSelectedDetailItemId('');
         setDataReady(true);
       } catch (error) {
         console.error('Unable to load shared PipeList:', error);
@@ -4301,9 +4342,9 @@ const PipelinePage: NextPage = () => {
     let cancelled = false;
 
     const saveLists = async () => {
-      const listsToPersist = purgeExpiredDeletedItems(lists.filter((list) => !sharedListIds.has(list.id)));
+      const listsToPersist = purgeExpiredDeletedItems(lists.filter((list) => !sharedListIds.has(list.id)).map(normalizeList));
       const baseLists = personalSnapshotBaselineRef.current;
-      if (pipeListSnapshotsEqual(listsToPersist, baseLists)) return;
+      if (!universityStageMigrationPending && pipeListSnapshotsEqual(listsToPersist, baseLists)) return;
       setPendingPersonalSaves((count) => count + 1);
       const previousSave = personalSaveQueueRef.current;
       let releaseSave: () => void = () => {};
@@ -4325,8 +4366,8 @@ const PipelinePage: NextPage = () => {
           const remoteLists = Array.isArray(storedLists)
             ? purgeExpiredDeletedItems(storedLists.map(normalizeList))
             : [];
-          const mergedLists = mergePipeListSnapshotsThreeWay(baseLists, remoteLists, listsToPersist);
-          if (pipeListSnapshotsEqual(remoteLists, mergedLists)) return;
+          const mergedLists = mergePipeListSnapshotsThreeWay(baseLists, remoteLists, listsToPersist).map(normalizeList);
+          if (!needsUniversityStageMigration(Array.isArray(storedLists) ? storedLists : []) && pipeListSnapshotsEqual(remoteLists, mergedLists)) return;
           transaction.set(stateRef, stripUndefined({
             ownerEmail: user.email || '',
             lists: mergedLists,
@@ -4362,7 +4403,7 @@ const PipelinePage: NextPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [dataReady, isOwner, isSharedView, lists, personalStateReady, sharedListIds, user]);
+  }, [dataReady, isOwner, isSharedView, lists, personalStateReady, sharedListIds, universityStageMigrationPending, user]);
 
   useEffect(() => {
     if (!shareId || !shareDoc || !dataReady || !canEditShared) return;
@@ -4623,6 +4664,11 @@ const PipelinePage: NextPage = () => {
 
   useEffect(() => {
     if (isSharedView || !user || !isOwner || !dataReady || !shareDoc || shareDoc.id !== ownerShareId) return;
+    const sharedBaseline = protectedShareBaselinesRef.current[shareDoc.id];
+    if (!universityStageMigrationPending && sharedBaseline && pipeListSnapshotsEqual(
+      collaboratorSafePipeListSnapshot(normalizeList(activeList, 0)),
+      collaboratorSafePipeListSnapshot(normalizeList(sharedBaseline, 0)),
+    )) return;
 
     let cancelled = false;
 
@@ -4643,13 +4689,13 @@ const PipelinePage: NextPage = () => {
           protectedDetails: shareDoc.protectedDetails,
           baseList: protectedShareBaselinesRef.current[shareDoc.id],
         });
-        if (shareDoc.protectedDetails) protectedShareBaselinesRef.current[shareDoc.id] = mergedList;
+        // Only the subscription advances its baseline; overlapping save acknowledgments can arrive out of order.
 
         if (!cancelled) {
           setLists((currentLists) => {
             const currentList = currentLists.find((list) => list.id === mergedList.id);
             if (!currentList) return currentLists;
-            const reconciledList = mergeCollaboratorListSnapshot(currentList, mergedList);
+            const reconciledList = reconcilePipeListSnapshotsForWrite(mergedList, currentList, activeList);
             if (pipeListSnapshotsEqual(currentList, reconciledList)) return currentLists;
             return currentLists.map((list) => (list.id === mergedList.id ? reconciledList : list));
           });
@@ -4668,7 +4714,7 @@ const PipelinePage: NextPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeList, dataReady, isOwner, isSharedView, ownerShareId, profile, shareDoc?.id, user]);
+  }, [activeList, dataReady, isOwner, isSharedView, ownerShareId, profile, shareDoc?.id, universityStageMigrationPending, user]);
 
   useEffect(() => {
     if (isSharedView || !user || !isOwner || !isSharePanelOpen) return;
@@ -4723,7 +4769,7 @@ const PipelinePage: NextPage = () => {
     () =>
       activeList.templateKey === 'university-pilot'
         ? activeListItems
-            .filter((item) => isWonStage(activeList, item.stage))
+            .filter((item) => item.stage === 'pilot-active' || item.stage === 'pilot-complete')
             .map((item) => ({
               id: item.id,
               title: item.title,
@@ -5030,14 +5076,11 @@ const PipelinePage: NextPage = () => {
     activeListItems.find((item) => item.weeklyLogs.length > 0 || item.stage.includes('pilot')) ||
     activeListItems[0];
 
-  const selectedDetailItem = activeList.items.find((item) => item.id === selectedDetailItemId) || null;
+  const liveDetailItem = activeList.items.find((item) => item.id === selectedDetailItemId);
+  if (liveDetailItem) detailSnapshotRef.current = { item: liveDetailItem, list: activeList };
+  const selectedDetailItem = liveDetailItem ||
+    (detailSnapshotRef.current?.item.id === selectedDetailItemId ? detailSnapshotRef.current.item : null);
 
-  useEffect(() => {
-    if (selectedDetailItemId && !activeList.items.some((item) => item.id === selectedDetailItemId)) {
-      setSelectedDetailItemId('');
-      setDetailModalMode('details');
-    }
-  }, [activeList.items, selectedDetailItemId]);
 
   useEffect(() => {
     setSelectedBulkItemIds((currentIds) => currentIds.filter((itemId) => activeListItems.some((item) => item.id === itemId)));
@@ -5170,19 +5213,6 @@ const PipelinePage: NextPage = () => {
     };
   }, [activeList.id, detailModalMode, filteredLogRows, isOwner, isSharedView, selectedDetailItem, user, viewMode]);
 
-  useEffect(() => {
-    if (!selectedDetailItemId) return undefined;
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && detailModalMode !== 'email') {
-        setSelectedDetailItemId('');
-        setDetailModalMode('details');
-      }
-    };
-
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [detailModalMode, selectedDetailItemId]);
 
   useEffect(() => {
     setLeadCopyMessage(null);
@@ -5403,7 +5433,6 @@ const PipelinePage: NextPage = () => {
     setManualLeadDraft(defaultManualLeadDraft(activeList.stages[0]?.id));
     setLeadExtractMessage(null);
     setIsLeadUrlModalOpen(true);
-    setSelectedDetailItemId('');
     setDetailModalMode('details');
     setViewMode('pipeline');
   };
@@ -5768,12 +5797,16 @@ Preserve the identity of the existing record unless a source corrects it. Popula
     if (!canModify || !selectedDetailItem || !itemResearchResult) return;
 
     const result = itemResearchResult;
+    // Research can be opened while the lead editor still holds an older draft.
+    // Commit that draft and the findings together, then retire the editor.
+    const editorDraft = isEditorOpen && editingItemId === selectedDetailItem.id ? draft : null;
+    const researchBase = editorDraft || selectedDetailItem;
     const contactEmails = Array.from(
-      new Set([...normalizeContactEmails(selectedDetailItem.contactEmails), ...normalizeContactEmails(result.contactEmails)]),
+      new Set([...normalizeContactEmails(researchBase.contactEmails), ...normalizeContactEmails(contactEmailInput.split(/[\s,;]+/).filter(isValidContactEmail)), ...normalizeContactEmails(result.contactEmails)]),
     );
     const researchNotes = cleanDealNotes(result.notes);
     const emailSearchNote = contactEmails.length === 0 ? 'Contact email could not be found in public sources.' : '';
-    const notes = Array.from(new Set([cleanDealNotes(selectedDetailItem.notes), researchNotes, emailSearchNote].filter(Boolean))).join('\n\n');
+    const notes = Array.from(new Set([cleanDealNotes(researchBase.notes), researchNotes, emailSearchNote].filter(Boolean))).join('\n\n');
     const now = new Date().toISOString();
 
     setLists((currentLists) =>
@@ -5785,17 +5818,18 @@ Preserve the identity of the existing record unless a source corrects it. Popula
                 item.id === selectedDetailItem.id
                   ? {
                       ...item,
-                      title: result.title || item.title,
-                      organization: result.organization || item.organization,
-                      description: result.description || item.description,
-                      owner: result.owner || item.owner,
+                      ...editorDraft,
+                      title: result.title || researchBase.title,
+                      organization: result.organization || researchBase.organization,
+                      description: result.description || researchBase.description,
+                      owner: result.owner || researchBase.owner,
                       contactEmails,
-                      contactPhone: result.contactPhone || item.contactPhone,
-                      linkedinUrl: result.linkedinUrl,
-                      sourceUrl: result.sourceUrl || item.sourceUrl,
-                      segment: result.segment || item.segment,
-                      decisionMaker: result.decisionMaker || item.decisionMaker,
-                      nextStep: result.nextStep || item.nextStep,
+                      contactPhone: result.contactPhone || researchBase.contactPhone,
+                      linkedinUrl: result.linkedinUrl || researchBase.linkedinUrl,
+                      sourceUrl: result.sourceUrl || researchBase.sourceUrl,
+                      segment: result.segment || researchBase.segment,
+                      decisionMaker: result.decisionMaker || researchBase.decisionMaker,
+                      nextStep: result.nextStep || researchBase.nextStep,
                       notes,
                       updatedAt: now,
                       weeklyLogs: [
@@ -5815,6 +5849,7 @@ Preserve the identity of the existing record unless a source corrects it. Popula
           : list,
       ),
     );
+    resetEditor();
     setDetailModalMode('details');
     setItemResearchResult(null);
     setToastMessage({ type: 'success', text: `Applied research to ${selectedDetailItem.title}.` });
@@ -5827,7 +5862,6 @@ Preserve the identity of the existing record unless a source corrects it. Popula
     setLogListFilter(activeList.id);
     setLogEmailFilter(emailFilter);
     setLogRecipientFilter(recipient);
-    setSelectedDetailItemId('');
     setSelectedLogItemId(item.id);
     setViewMode('logs');
   };
@@ -6119,7 +6153,6 @@ Preserve the identity of the existing record unless a source corrects it. Popula
     setOpenedGeneratedLeadSourceKeys([]);
     setLeadGenMessage(null);
     setIsLeadGenModalOpen(true);
-    setSelectedDetailItemId('');
     setDetailModalMode('details');
     setViewMode('pipeline');
   };
@@ -6138,7 +6171,6 @@ Preserve the identity of the existing record unless a source corrects it. Popula
     setAddedPastedLeadKeys([]);
     setPastedLeadListMessage(null);
     setIsPastedLeadListModalOpen(true);
-    setSelectedDetailItemId('');
     setDetailModalMode('details');
     setViewMode('pipeline');
   };
@@ -7731,7 +7763,6 @@ Rules:
     setDraft(defaultDraft(nextList.stages[0]?.id));
     setSelectedLogItemId('');
     setLogDraft(defaultLogDraft(nextList.templateKey));
-    setSelectedDetailItemId('');
     setDetailModalMode('details');
     setIsNewListModalOpen(false);
     resetEditor();
@@ -7740,6 +7771,7 @@ Rules:
   const openListProfileModal = () => {
     if (!canModify) return;
     setListProfileDraft({
+      name: activeList.name,
       description: activeList.description || templateCatalog[activeList.templateKey].description,
       objective: activeList.objective || defaultListObjective(activeList.templateKey, activeList.name),
       leadDefinition: activeList.leadDefinition || defaultLeadDefinition(activeList.templateKey),
@@ -7752,6 +7784,8 @@ Rules:
     event.preventDefault();
     if (!canModify) return;
 
+    const name = listProfileDraft.name.trim();
+    if (!name) return;
     const description = listProfileDraft.description.trim() || templateCatalog[activeList.templateKey].description;
     const objective = listProfileDraft.objective.trim() || defaultListObjective(activeList.templateKey, activeList.name);
     const leadDefinition = listProfileDraft.leadDefinition.trim() || defaultLeadDefinition(activeList.templateKey);
@@ -7769,6 +7803,7 @@ Rules:
         list.id === activeList.id
           ? {
               ...list,
+              name,
               description,
               objective,
               leadDefinition,
@@ -7785,6 +7820,10 @@ Rules:
   const handleSaveItem = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canModify) return;
+    if (itemResearchResult && selectedDetailItem?.id === editingItemId) {
+      handleApplyItemResearch();
+      return;
+    }
     const pendingContactTokens = contactEmailInput
       .split(/[\s,;]+/)
       .map((email) => email.trim().toLowerCase())
@@ -7966,7 +8005,6 @@ Rules:
     if (editingItemId === itemId) resetEditor();
     if (selectedLogItemId === itemId) setSelectedLogItemId('');
     if (selectedDetailItemId === itemId) {
-      setSelectedDetailItemId('');
       setDetailModalMode('details');
     }
   };
@@ -8169,7 +8207,6 @@ Rules:
       text: `Deleted ${formatCount(selectedBulkItems.length, listItemNoun(activeList))}.`,
     });
     if (selectedDetailItemId && selectedIds.has(selectedDetailItemId)) {
-      setSelectedDetailItemId('');
       setDetailModalMode('details');
     }
   };
@@ -8250,7 +8287,6 @@ Rules:
       text: `Moved ${formatCount(movedItems.length, listItemNoun(activeList))} to ${targetList.name}.`,
     });
     if (selectedDetailItemId && selectedIds.has(selectedDetailItemId)) {
-      setSelectedDetailItemId('');
       setDetailModalMode('details');
     }
   };
@@ -8266,7 +8302,6 @@ Rules:
     setPriorityFilters([]);
     setSelectedLogItemId('');
     setLogDraft(defaultLogDraft(nextLists[0].templateKey));
-    setSelectedDetailItemId('');
     setDetailModalMode('details');
     setIsDeleteListModalOpen(false);
     resetEditor();
@@ -10273,7 +10308,7 @@ Rules:
 
             <div className="flex items-center gap-2">
               <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-500 shadow-sm md:flex">
-                <span className={`h-2 w-2 rounded-full ${personalSaveError ? 'bg-rose-500' : savingToCloud || pendingPersonalSaves > 0 ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                <span className={`h-2 w-2 rounded-full ${personalSaveError || personalSyncConflict ? 'bg-rose-500' : savingToCloud || pendingPersonalSaves > 0 ? 'bg-amber-400' : 'bg-emerald-500'}`} />
                 <span>
                   {isSharedView
                     ? canEditShared
@@ -10285,6 +10320,8 @@ Rules:
                       ? activeDashboardShare.editorEmails.includes(normalizedUserEmail)
                         ? 'Editor access'
                         : 'Read-only access'
+                    : personalSyncConflict
+                      ? 'Save conflict'
                     : personalSaveError
                       ? 'Save failed'
                     : savingToCloud || pendingPersonalSaves > 0
@@ -10383,7 +10420,6 @@ Rules:
                           setPriorityFilters([]);
                           setSelectedLogItemId('');
                           setLogDraft(defaultLogDraft(list.templateKey));
-                          setSelectedDetailItemId('');
                           setDraft(defaultDraft(list.stages[0]?.id));
                           resetEditor();
                         }}
@@ -10854,7 +10890,7 @@ Rules:
                       {[
                         ['Total', activeListItems.length],
                         ['Active pipeline', activeItems],
-                        ['Closed won', wonItems],
+                        ['Pilots active', activeListItems.filter((item) => item.stage === 'pilot-active').length],
                         ['Due soon', dueSoonItems],
                       ].map(([label, value]) => (
                         <div key={String(label)} className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-3 py-2 shadow-sm">
@@ -12626,6 +12662,17 @@ Rules:
             </div>
 
             <div className="space-y-4">
+              <label className="block" htmlFor="pipe-list-profile-name">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">List name</span>
+                <input
+                  id="pipe-list-profile-name"
+                  value={listProfileDraft.name}
+                  required
+                  maxLength={160}
+                  onChange={(event) => setListProfileDraft((current) => ({ ...current, name: event.target.value }))}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none focus:border-stone-400 focus:bg-white"
+                />
+              </label>
               <label className="block" htmlFor="pipe-list-profile-description">
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Short description</span>
                 <textarea
@@ -13608,13 +13655,7 @@ Rules:
       {selectedDetailItem && selectedDetailStage && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
-          onClick={(event) => {
-            if (detailModalMode !== 'email' && isBackdropClick(event)) {
-              resetEditor();
-              setSelectedDetailItemId('');
-              setDetailModalMode('details');
-            }
-          }}
+
         >
           <section
             role="dialog"
@@ -13658,7 +13699,9 @@ Rules:
                         Cancel
                       </button>
                       <button
-                        type="submit"
+                        type={itemResearchResult ? 'button' : 'submit'}
+                        onClick={itemResearchResult ? handleApplyItemResearch : undefined}
+                        disabled={isResearchingItem}
                         form="pipe-item-editor-form"
                         data-testid="pipe-save-opportunity"
                         className="inline-flex h-9 items-center justify-center rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
@@ -13696,7 +13739,7 @@ Rules:
                       type="button"
                       onClick={() => {
                         resetEditor();
-                        setSelectedDetailItemId('');
+                        closeLeadDetails();
                         setDetailModalMode('details');
                       }}
                       className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"

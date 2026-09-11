@@ -13,6 +13,13 @@ const nextConfig = {
     return config;
   },
   reactStrictMode: true,
+  async rewrites() {
+    return {
+      beforeFiles: process.env.NODE_ENV === 'development'
+        ? [{ source: '/api/pipelists/runbook', destination: 'https://fitwithpulse.ai/api/pipelists/runbook' }]
+        : [],
+    };
+  },
   images: {
     domains: ['fitwithpulse.ai', 'firebasestorage.googleapis.com'],
   },

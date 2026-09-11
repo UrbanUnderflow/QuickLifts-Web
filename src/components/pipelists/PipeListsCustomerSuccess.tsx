@@ -163,7 +163,7 @@ export default function PipeListsCustomerSuccess({
     <div className="space-y-4" data-testid="pipelists-customer-success">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          ['Customer accounts', accounts.length, 'Leads in the Won stage', <HeartPulse key="accounts" className="h-4 w-4" />],
+          ['Customer accounts', accounts.length, 'Active and completed pilots', <HeartPulse key="accounts" className="h-4 w-4" />],
           ['Needs attention', needsAttention, 'Clear action, launch, evidence, or renewal reasons', <AlertTriangle key="attention" className="h-4 w-4" />],
           ['Live relationships', liveAccounts, 'Active pilots and ongoing customers', <CheckCircle2 key="live" className="h-4 w-4" />],
           ['Renewal window', renewalAccounts, 'Decision work due inside 60 days', <Calendar key="renewal" className="h-4 w-4" />],
@@ -355,7 +355,7 @@ export default function PipeListsCustomerSuccess({
           <ClipboardCheck className="mx-auto h-6 w-6 text-stone-300" />
           <p className="mt-3 text-sm font-semibold text-stone-900">No customer accounts match this view</p>
           <p className="mt-1 text-sm text-stone-500">
-            Move a lead to the Won column in Pipeline to see it here.
+            Move a lead to Pilot Active in Pipeline to start tracking its success here.
           </p>
         </div>
       )}

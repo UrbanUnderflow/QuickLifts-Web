@@ -45,7 +45,19 @@ function mergeKeyedArrays(base: unknown[], remote: unknown[], local: unknown[]):
 }
 
 function mergeCollaborativeValue(base: unknown, remote: unknown, local: unknown): unknown {
-  if (valuesEqual(local, base)) return remote;
+  // An older snapshot can arrive after a write acknowledgment or listener restart.
+  // It is not a new edit, even when local already matches the acknowledged base.
+  if (isRecord(base) && isRecord(remote) && isRecord(local) &&
+      typeof base.id === 'string' && base.id === remote.id && base.id === local.id) {
+    const baseTime = typeof base.updatedAt === 'string' ? Date.parse(base.updatedAt) : NaN;
+    const remoteTime = typeof remote.updatedAt === 'string' ? Date.parse(remote.updatedAt) : NaN;
+    if (Number.isFinite(baseTime) && Number.isFinite(remoteTime) && remoteTime < baseTime) return local;
+  }
+  // Descend through records and keyed arrays before taking the equality shortcut
+  // so each lead can reject an older revision independently.
+  const containsRecords = (Array.isArray(remote) && Array.isArray(local) &&
+    isKeyedRecordArray(remote) && isKeyedRecordArray(local)) || (isRecord(remote) && isRecord(local));
+  if (valuesEqual(local, base) && !containsRecords) return remote;
   if (valuesEqual(remote, base)) return local;
   if (valuesEqual(remote, local)) return local;
 

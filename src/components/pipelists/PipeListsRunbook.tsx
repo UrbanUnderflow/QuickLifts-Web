@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
 import { marked, type Token, type Tokens } from 'marked';
+import { runbookElementToMarkdown } from '../../utils/pipelistsRichText';
 import {
   AlertTriangle,
   BookOpen,
@@ -333,6 +334,25 @@ function renderBlockTokens(tokens: Token[] = [], keyPrefix = 'block', onCellEdit
   });
 }
 
+function RichRunbookEditor({ content, onChange }: { content: string; onChange: (value: string) => void }) {
+  const editor = useRef<HTMLDivElement>(null);
+  // Keep React from replacing the editable DOM (and moving the caret) on each keystroke.
+  const initialContent = useRef(content);
+  const formattedContent = useMemo(() => <SafeRunbookMarkdown content={initialContent.current} />, []);
+  const format = (command: string) => { editor.current?.focus(); document.execCommand(command); if (editor.current) onChange(runbookElementToMarkdown(editor.current)); };
+  return <div>
+    <div className="sticky top-0 z-20 mb-4 flex flex-wrap gap-2 rounded-lg border border-stone-200 bg-white p-2" aria-label="Text formatting">
+      {([['Bold', 'bold'], ['Italic', 'italic'], ['Numbered list', 'insertOrderedList'], ['Bullet list', 'insertUnorderedList']] as const).map(([label, command]) => <button key={command} type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => format(command)} className="rounded px-3 py-1 text-sm hover:bg-stone-100">{label}</button>)}
+    </div>
+    <div ref={editor} role="textbox" aria-label="Runbook formatted editor" aria-multiline="true" contentEditable suppressContentEditableWarning
+      className="min-h-[500px] rounded-lg outline-none focus:ring-2 focus:ring-sky-100"
+      onInput={(event) => onChange(runbookElementToMarkdown(event.currentTarget))}
+      onClick={(event) => { if ((event.target as HTMLElement).closest('a')) event.preventDefault(); }}
+      onPaste={(event) => { event.preventDefault(); document.execCommand('insertText', false, event.clipboardData.getData('text/plain')); }}
+    >{formattedContent}</div>
+  </div>;
+}
+
 function SafeRunbookMarkdown({ content, onChange, onStart }: { content: string; onChange?: (content: string) => void; onStart?: () => void }) {
   const tokens = useMemo(() => {
     try {
@@ -428,7 +448,7 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-  const [inlineEditing, setInlineEditing] = useState(false);
+  const [markupMode, setMarkupMode] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [draftChangeSummary, setDraftChangeSummary] = useState('');
@@ -596,7 +616,7 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
 
   const beginEditing = () => {
     if (!snapshot) return;
-    setInlineEditing(false);
+    setMarkupMode(false);
     setDraftTitle(snapshot.runbook.title);
     setDraftContent(snapshot.runbook.content);
     setDraftChangeSummary('');
@@ -792,6 +812,7 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
           </button>
           {isEditing ? (
             <>
+              <button type="button" aria-pressed={markupMode} onClick={() => setMarkupMode((value) => !value)} className={`rounded-full border px-4 py-2 text-sm font-semibold ${markupMode ? 'border-sky-400 bg-sky-50 text-sky-800' : 'border-stone-200'}`}>Markup mode</button>
               <button
                 type="button"
                 onClick={cancelEditing}
@@ -856,7 +877,7 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
         <main className="relative min-w-0 max-w-full rounded-xl border border-stone-200 bg-white shadow-sm">
-          {isEditing && !inlineEditing ? (
+          {isEditing ? (
             <div className="space-y-5 p-5 md:p-7">
               <div>
                 <label htmlFor="runbook-title" className="text-xs font-semibold uppercase tracking-wide text-stone-500">
@@ -871,7 +892,7 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
                 />
               </div>
 
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
+              {markupMode ? <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4">
                 <div className="min-w-0">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <label htmlFor="runbook-content" className="text-xs font-semibold uppercase tracking-wide text-stone-500">
@@ -899,7 +920,7 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
                     <SafeRunbookMarkdown content={draftContent} onChange={saving ? undefined : setDraftContent} />
                   </div>
                 </div>
-              </div>
+              </div> : <RichRunbookEditor key={`rich-${baseVersion}`} content={draftContent} onChange={setDraftContent} />}
 
               <div>
                 <label htmlFor="runbook-change-summary" className="text-xs font-semibold uppercase tracking-wide text-stone-500">
@@ -929,15 +950,9 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
                   </span>
                 </div>
               </div>
-              <p className="mb-4 text-xs text-stone-500">Click a table cell to edit. Press Enter or click outside the cell, then Save revision.</p>
-              <SafeRunbookMarkdown content={isEditing ? draftContent : snapshot.runbook.content}
-                onStart={() => { if (!isEditing) { beginEditing(); setInlineEditing(true); } }}
-                onChange={saving || conflictVersion ? undefined : (content) => {
-                  if (!isEditing) beginEditing();
-                  setInlineEditing(true);
-                  setDraftContent(content);
-                  setDraftChangeSummary('Updated runbook table inline.');
-                }} />
+              <div onDoubleClick={beginEditing}>
+                <SafeRunbookMarkdown content={snapshot.runbook.content} />
+              </div>
             </article>
           )}
         </main>
