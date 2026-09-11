@@ -31,6 +31,7 @@ import {
   PIPELISTS_RUNBOOK_CONTENT_MAX_LENGTH,
   PIPELISTS_RUNBOOK_TITLE_MAX_LENGTH,
   summarizePipeListsRunbookDiff,
+  updateRunbookTableCell,
 } from '../../utils/pipelistsRunbook';
 
 type PipeListsRunbookProps = {
@@ -168,7 +169,25 @@ function renderInlineTokens(tokens: Token[] = [], keyPrefix = 'inline'): React.R
   });
 }
 
-function renderBlockTokens(tokens: Token[] = [], keyPrefix = 'block'): React.ReactNode[] {
+type TableCellEdit = (table: Tokens.Table, index: number, row: number, column: number, value: string) => void;
+
+function EditableRunbookCell({ text, label, children, onCommit, onStart }: {
+  text: string; label: string; children: React.ReactNode; onStart?: () => void; onCommit: (value: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(text);
+  if (!editing) return <button type="button" aria-label={`Edit ${label}`} className="w-full rounded text-left hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-400" onClick={() => { onStart?.(); setValue(text); setEditing(true); }}>{children}</button>;
+  return <textarea autoFocus aria-label={label} value={value} rows={4}
+    className="w-full min-w-[140px] rounded border border-sky-400 p-2 text-sm text-stone-900"
+    onChange={(event) => setValue(event.target.value)}
+    onBlur={() => { setEditing(false); if (value !== text) onCommit(value); }}
+    onKeyDown={(event) => {
+      if (event.key === 'Escape') { event.preventDefault(); setEditing(false); }
+      if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.blur(); }
+    }} />;
+}
+
+function renderBlockTokens(tokens: Token[] = [], keyPrefix = 'block', onCellEdit?: TableCellEdit, onCellStart?: () => void): React.ReactNode[] {
   return tokens.map((token, index) => {
     const key = `${keyPrefix}-${index}-${token.type}`;
 
@@ -263,7 +282,7 @@ function renderBlockTokens(tokens: Token[] = [], keyPrefix = 'block'): React.Rea
                       className="border-b border-stone-200 px-4 py-3 font-semibold"
                       style={{ textAlign: cell.align || 'left' }}
                     >
-                      {renderInlineTokens(cell.tokens, `${key}-header-${cellIndex}`)}
+                      {onCellEdit ? <EditableRunbookCell onStart={onCellStart} text={cell.text} label={`table ${index + 1} header ${cellIndex + 1}`} onCommit={(value) => onCellEdit(table, index, -1, cellIndex, value)}>{renderInlineTokens(cell.tokens, `${key}-header-${cellIndex}`)}</EditableRunbookCell> : renderInlineTokens(cell.tokens, `${key}-header-${cellIndex}`)}
                     </th>
                   ))}
                 </tr>
@@ -277,7 +296,7 @@ function renderBlockTokens(tokens: Token[] = [], keyPrefix = 'block'): React.Rea
                         className="px-4 py-3 align-top text-stone-700"
                         style={{ textAlign: cell.align || 'left' }}
                       >
-                        {renderInlineTokens(cell.tokens, `${key}-row-${rowIndex}-cell-${cellIndex}`)}
+                        {onCellEdit ? <EditableRunbookCell onStart={onCellStart} text={cell.text} label={`table ${index + 1} row ${rowIndex + 1}, ${table.header[cellIndex]?.text || `column ${cellIndex + 1}`}`} onCommit={(value) => onCellEdit(table, index, rowIndex, cellIndex, value)}>{renderInlineTokens(cell.tokens, `${key}-row-${rowIndex}-cell-${cellIndex}`)}</EditableRunbookCell> : renderInlineTokens(cell.tokens, `${key}-row-${rowIndex}-cell-${cellIndex}`)}
                       </td>
                     ))}
                   </tr>
@@ -314,7 +333,7 @@ function renderBlockTokens(tokens: Token[] = [], keyPrefix = 'block'): React.Rea
   });
 }
 
-function SafeRunbookMarkdown({ content }: { content: string }) {
+function SafeRunbookMarkdown({ content, onChange, onStart }: { content: string; onChange?: (content: string) => void; onStart?: () => void }) {
   const tokens = useMemo(() => {
     try {
       return marked.lexer(content, { gfm: true, breaks: false });
@@ -327,7 +346,11 @@ function SafeRunbookMarkdown({ content }: { content: string }) {
     return <p className="text-sm text-stone-400">Start writing to see the preview.</p>;
   }
 
-  return <div className="first:[&>*]:mt-0 last:[&>*]:mb-0">{renderBlockTokens(tokens)}</div>;
+  const editCell: TableCellEdit = (table, index, row, column, value) => {
+    const start = tokens.slice(0, index).reduce((offset, token) => offset + token.raw.length, 0);
+    onChange?.(updateRunbookTableCell(content, start, table.raw, row, column, value));
+  };
+  return <div className="first:[&>*]:mt-0 last:[&>*]:mb-0">{renderBlockTokens(tokens, 'block', onChange ? editCell : undefined, onStart)}</div>;
 }
 
 function HistoryDiff({ revision }: { revision: PipeListsRunbookRevision }) {
@@ -405,6 +428,7 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [inlineEditing, setInlineEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [draftChangeSummary, setDraftChangeSummary] = useState('');
@@ -572,6 +596,7 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
 
   const beginEditing = () => {
     if (!snapshot) return;
+    setInlineEditing(false);
     setDraftTitle(snapshot.runbook.title);
     setDraftContent(snapshot.runbook.content);
     setDraftChangeSummary('');
@@ -831,7 +856,7 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
 
       <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
         <main className="relative min-w-0 max-w-full rounded-xl border border-stone-200 bg-white shadow-sm">
-          {isEditing ? (
+          {isEditing && !inlineEditing ? (
             <div className="space-y-5 p-5 md:p-7">
               <div>
                 <label htmlFor="runbook-title" className="text-xs font-semibold uppercase tracking-wide text-stone-500">
@@ -871,7 +896,7 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
                 <div className="min-w-0 max-w-full">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">Safe preview</p>
                   <div className="min-h-[680px] overflow-auto rounded-lg border border-stone-200 bg-white p-5">
-                    <SafeRunbookMarkdown content={draftContent} />
+                    <SafeRunbookMarkdown content={draftContent} onChange={saving ? undefined : setDraftContent} />
                   </div>
                 </div>
               </div>
@@ -904,7 +929,15 @@ export default function PipeListsRunbook({ user, onDirtyChange }: PipeListsRunbo
                   </span>
                 </div>
               </div>
-              <SafeRunbookMarkdown content={snapshot.runbook.content} />
+              <p className="mb-4 text-xs text-stone-500">Click a table cell to edit. Press Enter or click outside the cell, then Save revision.</p>
+              <SafeRunbookMarkdown content={isEditing ? draftContent : snapshot.runbook.content}
+                onStart={() => { if (!isEditing) { beginEditing(); setInlineEditing(true); } }}
+                onChange={saving || conflictVersion ? undefined : (content) => {
+                  if (!isEditing) beginEditing();
+                  setInlineEditing(true);
+                  setDraftContent(content);
+                  setDraftChangeSummary('Updated runbook table inline.');
+                }} />
             </article>
           )}
         </main>

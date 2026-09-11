@@ -3,8 +3,46 @@ import assert from 'node:assert/strict';
 import {
   addPipeListMemberAccess,
   mergePipeListSnapshotsThreeWay,
+  pipeListSnapshotsEqual,
   planPipeListAccessAdditions,
 } from '../../src/utils/pipelistsCollaboration';
+
+test('cloud field ordering and omitted undefined fields do not trigger another save', () => {
+  assert.equal(pipeListSnapshotsEqual({ id: 'one', stage: 'outreach-queued', extra: undefined },
+    { stage: 'outreach-queued', id: 'one' }), true);
+  assert.equal(pipeListSnapshotsEqual({ stage: 'identified' }, { stage: 'outreach-queued' }), false);
+});
+
+test('analyzed leads survive stale snapshots and successive cloud saves', () => {
+  const base = [{ id: 'university', items: [{ id: 'existing', stage: 'identified' }] }];
+  const first = [{ id: 'university', items: [{ id: 'analyzed-one', stage: 'identified' }, ...base[0].items] }];
+  const second = [{ id: 'university', items: [{ id: 'analyzed-two', stage: 'identified' }, ...first[0].items] }];
+  const afterStaleSnapshot = mergePipeListSnapshotsThreeWay(base, base, second);
+  const firstSaved = mergePipeListSnapshotsThreeWay(base, base, first);
+  const secondSaved = mergePipeListSnapshotsThreeWay(base, firstSaved, afterStaleSnapshot);
+  const reloaded = JSON.parse(JSON.stringify(secondSaved));
+  assert.deepEqual(reloaded[0].items.map((item: { id: string }) => item.id), ['analyzed-two', 'analyzed-one', 'existing']);
+  assert.equal(pipeListSnapshotsEqual(secondSaved, reloaded), true);
+});
+
+test('a stale personal snapshot preserves queued outreach and concurrent remote edits', () => {
+  const base = [{ id: 'university', items: [
+    { id: 'stanford', stage: 'identified', notes: '' },
+    { id: 'auburn', stage: 'identified', notes: '' },
+  ] }];
+  const local = structuredClone(base);
+  local[0].items[0].stage = 'outreach-queued';
+  const remote = structuredClone(base);
+  remote[0].items[1].notes = 'Reply received';
+  const merged = mergePipeListSnapshotsThreeWay(base, remote, local);
+  assert.equal(merged[0].items[0].stage, 'outreach-queued');
+  assert.equal(merged[0].items[1].notes, 'Reply received');
+  const acknowledged = mergePipeListSnapshotsThreeWay(remote, merged, merged);
+  assert.deepEqual(acknowledged, merged);
+  const laterRemote = structuredClone(merged);
+  laterRemote[0].items[0].stage = 'engaged';
+  assert.equal(mergePipeListSnapshotsThreeWay(merged, laterRemote, merged)[0].items[0].stage, 'engaged');
+});
 
 test('three-way collaboration keeps distinct teammate edits and keyed log additions', () => {
   const base = {

@@ -98,6 +98,7 @@ import {
 import {
   addPipeListMemberAccess,
   mergePipeListSnapshotsThreeWay,
+  pipeListSnapshotsEqual,
   planPipeListAccessAdditions,
 } from '../utils/pipelistsCollaboration';
 import { matchesPipelineFilters, toggleFilterSelection } from '../utils/pipelistsFilters';
@@ -2732,7 +2733,8 @@ const persistCollaborativePipeList = async ({
     shareId,
   );
   const publicShareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
-  let mergedList = collaboratorSafePipeListSnapshot(list);
+  const localSnapshot = collaboratorSafePipeListSnapshot(list);
+  let mergedList = localSnapshot;
 
   await runTransaction(simpBudgetDb, async (transaction) => {
     const snapshot = await transaction.get(canonicalRef);
@@ -2743,8 +2745,10 @@ const persistCollaborativePipeList = async ({
       if (!data.list) throw new Error('This shared PipeList is no longer available.');
       const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
       mergedList = collaboratorSafePipeListSnapshot(
-        reconcilePipeListSnapshotsForWrite(remoteList, mergedList, baseList),
+        reconcilePipeListSnapshotsForWrite(remoteList, localSnapshot, baseList),
       );
+      if (pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch && data.protectedDetails === protectedDetails && !isProtected) return;
+      if (isProtected && protectedDetails === true && pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch) return;
     }
 
     transaction.set(
@@ -3360,6 +3364,10 @@ const PipelinePage: NextPage = () => {
   const [lists, setLists] = useState<PipeList[]>(initialLists);
   const liveListsRef = useRef<PipeList[]>(initialLists);
   const personalListsRef = useRef<PipeList[]>(initialLists);
+  const personalSnapshotBaselineRef = useRef<PipeList[]>([]);
+  const personalSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const [pendingPersonalSaves, setPendingPersonalSaves] = useState(0);
+  const [personalSaveError, setPersonalSaveError] = useState(false);
   const directShareBaselineRef = useRef('');
   const protectedShareBaselinesRef = useRef<Record<string, PipeList>>({});
   const [activeListId, setActiveListId] = useState(initialLists[0].id);
@@ -3486,6 +3494,15 @@ const PipelinePage: NextPage = () => {
   });
   const [sendingMagicLink, setSendingMagicLink] = useState(false);
   const [savingToCloud, setSavingToCloud] = useState(false);
+  useEffect(() => {
+    if (pendingPersonalSaves === 0 && !personalSaveError) return;
+    const protectPendingSave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', protectPendingSave);
+    return () => window.removeEventListener('beforeunload', protectPendingSave);
+  }, [pendingPersonalSaves, personalSaveError]);
   const [shareId] = useState(() => {
     if (typeof window === 'undefined') return '';
     return new URLSearchParams(window.location.search).get('share') || '';
@@ -3689,6 +3706,7 @@ const PipelinePage: NextPage = () => {
         setDataReady(false);
         setPersonalStateReady(false);
         personalListsRef.current = [];
+        personalSnapshotBaselineRef.current = [];
         setAccessibleShareDocs([]);
         setProtectedShareLists({});
         protectedShareBaselinesRef.current = {};
@@ -3768,6 +3786,9 @@ const PipelinePage: NextPage = () => {
         }
 
         personalListsRef.current = nextLists;
+        personalSnapshotBaselineRef.current = snapshot.exists() && Array.isArray(snapshot.data().lists)
+          ? purgeExpiredDeletedItems(snapshot.data().lists.map(normalizeList))
+          : [];
         setAccessibleShareDocs([]);
         setProtectedShareLists({});
         protectedShareBaselinesRef.current = {};
@@ -3784,6 +3805,7 @@ const PipelinePage: NextPage = () => {
         console.error('Unable to initialize PipeLists:', error);
         const fallbackLists = currentUserIsOwner ? initialLists : [];
         personalListsRef.current = fallbackLists;
+        personalSnapshotBaselineRef.current = [];
         setAccessibleShareDocs([]);
         setProtectedShareLists({});
         protectedShareBaselinesRef.current = {};
@@ -3971,10 +3993,24 @@ const PipelinePage: NextPage = () => {
             .map((share) => share.list),
         ];
 
-        personalListsRef.current = nextPersonalLists;
+        const previousPersonalSnapshot = personalSnapshotBaselineRef.current;
+        personalSnapshotBaselineRef.current = nextPersonalLists;
         setLists((currentLists) => {
-          if (JSON.stringify(currentLists) === JSON.stringify(nextLists)) return currentLists;
-          return nextLists;
+          const currentPersonalLists = currentLists.filter((list) =>
+            isOwner || !accessibleShareDocs.some((share) => share.list.id === list.id),
+          );
+          const mergedPersonalLists = mergePipeListSnapshotsThreeWay(
+            previousPersonalSnapshot,
+            nextPersonalLists,
+            currentPersonalLists,
+          );
+          personalListsRef.current = mergedPersonalLists;
+          const mergedLists = [
+            ...mergedPersonalLists,
+            ...nextLists.filter((list) => !nextPersonalLists.some((personalList) => personalList.id === list.id)),
+          ];
+          if (pipeListSnapshotsEqual(currentLists, mergedLists)) return currentLists;
+          return mergedLists;
         });
         setActiveListId((currentId) =>
           nextLists.some((list) => list.id === currentId) ? currentId : nextLists[0]?.id || initialLists[0].id,
@@ -4265,10 +4301,16 @@ const PipelinePage: NextPage = () => {
     let cancelled = false;
 
     const saveLists = async () => {
-      setSavingToCloud(true);
+      const listsToPersist = purgeExpiredDeletedItems(lists.filter((list) => !sharedListIds.has(list.id)));
+      const baseLists = personalSnapshotBaselineRef.current;
+      if (pipeListSnapshotsEqual(listsToPersist, baseLists)) return;
+      setPendingPersonalSaves((count) => count + 1);
+      const previousSave = personalSaveQueueRef.current;
+      let releaseSave: () => void = () => {};
+      personalSaveQueueRef.current = new Promise<void>((resolve) => { releaseSave = resolve; });
 
       try {
-        const listsToPersist = purgeExpiredDeletedItems(lists.filter((list) => !sharedListIds.has(list.id)));
+        await previousSave;
         personalListsRef.current = listsToPersist;
         const stateRef = doc(
           simpBudgetDb,
@@ -4277,31 +4319,41 @@ const PipelinePage: NextPage = () => {
           PIPELISTS_SUBCOLLECTION,
           PIPELISTS_STATE_DOCUMENT_ID,
         );
-        await setDoc(
-          stateRef,
-          stripUndefined({
+        await runTransaction(simpBudgetDb, async (transaction) => {
+          const snapshot = await transaction.get(stateRef);
+          const storedLists = snapshot.data()?.lists;
+          const remoteLists = Array.isArray(storedLists)
+            ? purgeExpiredDeletedItems(storedLists.map(normalizeList))
+            : [];
+          const mergedLists = mergePipeListSnapshotsThreeWay(baseLists, remoteLists, listsToPersist);
+          if (pipeListSnapshotsEqual(remoteLists, mergedLists)) return;
+          transaction.set(stateRef, stripUndefined({
             ownerEmail: user.email || '',
-            lists: listsToPersist,
+            lists: mergedLists,
             updatedAt: serverTimestamp(),
-          }),
-          { merge: true },
-        );
+          }), { merge: true });
+        });
 
         if (isOwner && typeof window !== 'undefined') {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(listsToPersist));
         }
 
-        if (!cancelled) setAppMessage(null);
+        if (!cancelled) {
+          setPersonalSaveError(false);
+          setAppMessage(null);
+        }
       } catch (error) {
         console.error('Unable to save PipeLists:', error);
-        if (!cancelled) {
+        if (simpBudgetAuth.currentUser?.uid === user.uid) {
+          setPersonalSaveError(true);
           setAppMessage({
             type: 'error',
             text: readFirestoreError(error, 'Unable to save PipeLists.'),
           });
         }
       } finally {
-        if (!cancelled) setSavingToCloud(false);
+        setPendingPersonalSaves((count) => Math.max(0, count - 1));
+        releaseSave();
       }
     };
 
@@ -4598,7 +4650,7 @@ const PipelinePage: NextPage = () => {
             const currentList = currentLists.find((list) => list.id === mergedList.id);
             if (!currentList) return currentLists;
             const reconciledList = mergeCollaboratorListSnapshot(currentList, mergedList);
-            if (JSON.stringify(currentList) === JSON.stringify(reconciledList)) return currentLists;
+            if (pipeListSnapshotsEqual(currentList, reconciledList)) return currentLists;
             return currentLists.map((list) => (list.id === mergedList.id ? reconciledList : list));
           });
           if (shareDoc.protectedDetails || pipeListRequiresAccountAccess(mergedList)) {
@@ -10221,7 +10273,7 @@ Rules:
 
             <div className="flex items-center gap-2">
               <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-500 shadow-sm md:flex">
-                <span className={`h-2 w-2 rounded-full ${savingToCloud ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                <span className={`h-2 w-2 rounded-full ${personalSaveError ? 'bg-rose-500' : savingToCloud || pendingPersonalSaves > 0 ? 'bg-amber-400' : 'bg-emerald-500'}`} />
                 <span>
                   {isSharedView
                     ? canEditShared
@@ -10233,7 +10285,9 @@ Rules:
                       ? activeDashboardShare.editorEmails.includes(normalizedUserEmail)
                         ? 'Editor access'
                         : 'Read-only access'
-                    : savingToCloud
+                    : personalSaveError
+                      ? 'Save failed'
+                    : savingToCloud || pendingPersonalSaves > 0
                       ? 'Saving'
                       : 'Saved'}
                 </span>

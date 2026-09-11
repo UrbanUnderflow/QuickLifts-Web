@@ -1,4 +1,17 @@
 export const PIPELISTS_RUNBOOK_ID = 'university-sales-strategy';
+
+export function updateRunbookTableCell(content: string, start: number, raw: string, row: number, column: number, value: string) {
+  if (content.slice(start, start + raw.length) !== raw) return content;
+  const lines = raw.split('\n');
+  const lineIndex = row < 0 ? 0 : row + 2;
+  if (!lines[lineIndex]) return content;
+  const cells = lines[lineIndex].split(/(?<!\\)\|/);
+  const cellIndex = column + (lines[lineIndex].trimStart().startsWith('|') ? 1 : 0);
+  if (cellIndex < 0 || cellIndex >= cells.length) return content;
+  cells[cellIndex] = ` ${value.replace(/\r?\n/g, ' ').replace(/(?<!\\)\|/g, '\\|')} `;
+  lines[lineIndex] = cells.join('|');
+  return content.slice(0, start) + lines.join('\n') + content.slice(start + raw.length);
+}
 export const PIPELISTS_RUNBOOK_TITLE_MAX_LENGTH = 160;
 export const PIPELISTS_RUNBOOK_CONTENT_MAX_LENGTH = 250_000;
 

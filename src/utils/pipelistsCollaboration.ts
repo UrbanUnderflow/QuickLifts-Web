@@ -1,7 +1,16 @@
-const valuesEqual = (left: unknown, right: unknown) => {
+export const pipeListSnapshotsEqual = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
-  return JSON.stringify(left) === JSON.stringify(right);
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length && left.every((value, index) => pipeListSnapshotsEqual(value, right[index]));
+  }
+  if (isRecord(left) && isRecord(right)) {
+    const keys = Object.keys(left).filter((key) => left[key] !== undefined);
+    return keys.length === Object.keys(right).filter((key) => right[key] !== undefined).length &&
+      keys.every((key) => pipeListSnapshotsEqual(left[key], right[key]));
+  }
+  return false;
 };
+const valuesEqual = pipeListSnapshotsEqual;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);

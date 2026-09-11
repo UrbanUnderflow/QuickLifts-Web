@@ -5,7 +5,17 @@ import {
   DEFAULT_PIPELISTS_RUNBOOK_CONTENT,
   isSafePipeListsRunbookUrl,
   summarizePipeListsRunbookDiff,
+  updateRunbookTableCell,
 } from '../../src/utils/pipelistsRunbook';
+
+test('inline table edits preserve surrounding content and escape cell separators', () => {
+  const table = '| Who | Ask |\n| --- | --- |\n| Coach | Readiness |\n';
+  const before = `Opening\n\n${table}\nMiddle\n\n`;
+  const content = before + table + '\nClosing';
+  const result = updateRunbookTableCell(content, before.length, table, 0, 1, 'Focus | recovery\nFollow up');
+  assert.equal(result, before + table.replace('Readiness', 'Focus \\| recovery Follow up') + '\nClosing');
+  assert.equal(updateRunbookTableCell(content, 0, table, 0, 1, 'Wrong table'), content);
+});
 
 test('runbook diff records exact added and removed lines', () => {
   const diff = buildPipeListsRunbookLineDiff(
