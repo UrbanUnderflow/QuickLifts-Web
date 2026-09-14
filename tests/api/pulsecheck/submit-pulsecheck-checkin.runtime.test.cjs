@@ -145,7 +145,9 @@ function createFirestoreDb({ snapshot, existingAssignment = null, trainingPlans 
         },
       };
     },
+    runTransaction: async work => work({ get: ref => ref.get(), set: (ref, data, options) => ref.set(data, options) }),
     collection(name) {
+      if (name === 'pulsecheck-linear-curriculum/states/items') return { doc: () => ({ get: async () => ({ exists: false }) }) };
       if (name === 'state-snapshots') {
         return {
           doc(id) {
@@ -449,7 +451,9 @@ function createResponsivenessDb() {
 
   return {
     writes,
+    runTransaction: async work => work({ get: ref => ref.get(), set: (ref, data, options) => ref.set(data, options) }),
     collection(name) {
+      if (name === 'pulsecheck-linear-curriculum/states/items') return { doc: () => ({ get: async () => ({ exists: false }) }) };
       if (name === 'pulsecheck-protocol-responsiveness-profiles') {
         return {
           doc(id) {
@@ -523,7 +527,9 @@ function createMaterializationDb({ snapshot, simModules = [], protocols = [], tr
         },
       };
     },
+    runTransaction: async work => work({ get: ref => ref.get(), set: (ref, data, options) => ref.set(data, options) }),
     collection(name) {
+      if (name === 'pulsecheck-linear-curriculum/states/items') return { doc: () => ({ get: async () => ({ exists: false }) }) };
       if (name === 'state-snapshots') {
         return {
           doc(id) {
@@ -2105,4 +2111,13 @@ test('orchestratePostCheckIn preserves an existing completed assignment instead 
   assert.equal(assignment.id, existingAssignment.id);
   assert.equal(assignment.status, 'completed');
   assert.equal(db.writes.assignments.length, 0);
+});
+
+test('protected linear state prevents check-in materialization and preserves existing records', async () => {
+  const { orchestratePostCheckIn } = loadRuntimeHelpers();
+  const db = { collection(name) {
+    assert.equal(name, 'pulsecheck-linear-curriculum/states/items');
+    return { doc(id) { assert.equal(id, 'protected-athlete'); return { get: async () => ({ exists: true, data: () => ({ optedIn: false }) }) }; } };
+  } };
+  assert.equal(await orchestratePostCheckIn({ db, athleteId: 'protected-athlete' }), null);
 });

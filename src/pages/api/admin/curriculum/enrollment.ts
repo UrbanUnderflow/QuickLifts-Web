@@ -1,3 +1,4 @@
+import { prepareLegacyHandoff } from '../../../../api/firebase/dailyCurriculum/linearLegacyHandoff';
 import { assertNoActiveLegacyWork } from '../../../../api/firebase/dailyCurriculum/linearEnrollmentHandshake';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireCurriculumAdmin, CurriculumApiError, type CurriculumAdminIdentity } from './_auth';
@@ -42,9 +43,10 @@ export const createLinearEnrollmentHandler = (deps: { authorize?: typeof require
       const first = version.content.orderedIds[0];
       const pinnedAsset = first ? await tx.get(linearCollection(identity.db, 'versions').doc(version.id).collection('content').doc(first)) : null;
       if (first !== 'protocol-478-breathing' || !version.runtimeReadySkillIds.includes(first) || !(version.contentSnapshots?.[first] || pinnedAsset?.data()?.contentSnapshot)) throw new CurriculumApiError(409, 'runtime_unapproved', 'The selected version needs explicit runtime and pinned-content approval.');
-      try { await assertNoActiveLegacyWork(tx, identity.db, body.athleteId); } catch (error) { throw new CurriculumApiError(409, 'legacy_review_required', error instanceof Error ? error.message : 'Review current legacy work before enrollment.'); }
+      let handoff = {};
+      try { if (body.reviewedLegacyHandoff !== undefined) handoff = await prepareLegacyHandoff(tx, identity.db, { review: body.reviewedLegacyHandoff, athleteId: body.athleteId, today, timezone: body.timezone, versionId: version.id, now }); else await assertNoActiveLegacyWork(tx, identity.db, body.athleteId); } catch (error) { throw new CurriculumApiError(409, 'legacy_review_required', error instanceof Error ? error.message : 'Review current legacy work before enrollment.'); }
       const next: LinearRuntimeState = { athleteId: body.athleteId, optedIn: true, audienceId: body.audienceId, revision: 1, enrollment: { athleteId: body.athleteId, versionId: version.id, optedIn: true, startedOn: today, timezone: body.timezone, historyPolicy: 'preserve' }, currentSkill: { skillId: first, versionId: version.id, startedOn: today }, completedSkillIds: [] };
-      tx.create(stateRef, { ...next, enrolledBy: identity.uid, enrolledAt: now }); return next;
+      tx.create(stateRef, { ...next, ...handoff, enrolledBy: identity.uid, enrolledAt: now }); return { ...next, ...handoff };
     });
     return res.status(200).json({ state, legacyHistoryWrites: 0 });
   } catch (err) {

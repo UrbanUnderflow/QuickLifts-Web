@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Head from 'next/head';
+import { onAuthStateChanged } from 'firebase/auth';
+import { resolveEquityPlan, deriveEquityBalances, issuedShares, isEffectiveEip } from '../../lib/equityPlanState';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp, getDoc, deleteField } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp, getDoc, deleteField, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../../api/firebase/config';
 import { getManagedAdvisorEquityProfile, type ManagedAdvisorEquityProfile } from '../../lib/equityAdvisorProfiles';
 import { formatEquityContentForPdf as formatContentForPdf } from '../../lib/equityDocumentFormatting';
 import { PreparedDocumentSigner } from '../../lib/strategicDocumentSigning';
-import { buildEipDraftVersion, eipDraftText, isApprovedEip, nextEipVersion } from '../../lib/eipVersions';
+import { buildEipDraftVersion, eipDraftText, nextEipVersion } from '../../lib/eipVersions';
 import { buildScopedEquityDocumentUrl } from '../../lib/equityDocumentPreview';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -258,9 +260,9 @@ type InlineStatus = {
 interface EquityPool {
   id?: string;
   totalReserved: number;      // Total pool size (e.g., 1,000,000)
-  granted: number;            // Options granted but not exercised
+  granted: number;            // Recorded plan commitments, including shares already issued
   exercised: number;          // Options exercised (now actual shares)
-  available: number;          // Remaining in pool (totalReserved - granted - exercised)
+  available: number;          // Remaining plan capacity (totalReserved - granted)
   createdAt?: Timestamp | Date;
   updatedAt?: Timestamp | Date;
 }
@@ -933,22 +935,27 @@ const EquityAdminPage: React.FC = () => {
   const [convertibleNotes, setConvertibleNotes] = useState<ConvertibleNote[]>([]);
   const [equityDocuments, setEquityDocuments] = useState<EquityDocument[]>([]);
   const [signingRequests, setSigningRequests] = useState<SigningRequest[]>([]);
-  const [equityPool, setEquityPool] = useState<EquityPool>({
-    totalReserved: DEFAULT_CAP_TABLE.equityPool.totalReserved,
-    granted: 0,
-    exercised: 0,
-    available: DEFAULT_CAP_TABLE.equityPool.totalReserved,
-  });
-  const [capTableSummary, setCapTableSummary] = useState<CapTableSummary>({
+  const [syncErrors, setSyncErrors] = useState<Record<string, boolean>>({});
+  const liveSyncUnavailable = Object.values(syncErrors).some(Boolean);
+  const [poolRecord, setPoolRecord] = useState<Partial<EquityPool>>({});
+  const planState = useMemo(() => resolveEquityPlan(equityDocuments), [equityDocuments]);
+  const draftPlanReserve = planState.reserve ?? poolRecord.totalReserved ?? DEFAULT_CAP_TABLE.equityPool.totalReserved;
+  const balances = useMemo(() => deriveEquityBalances(stakeholders, planState.reserve,
+    poolRecord.exercised || 0, DEFAULT_CAP_TABLE.authorizedShares), [stakeholders, planState.reserve, poolRecord]);
+  const equityPool: EquityPool = {
+    id: poolRecord.id, totalReserved: planState.reserve ?? 0,
+    granted: balances.committed, exercised: balances.planIssued, available: balances.available ?? 0,
+  };
+  const capTableSummary: CapTableSummary = {
     totalAuthorizedShares: DEFAULT_CAP_TABLE.authorizedShares,
-    totalIssuedShares: 0,
-    totalReservedOptions: DEFAULT_CAP_TABLE.equityPool.totalReserved,
-    totalAvailable: DEFAULT_CAP_TABLE.authorizedShares,
-    founderShares: 0,
-    employeeOptions: DEFAULT_CAP_TABLE.equityPool.totalReserved,
-    advisorShares: 0,
-    investorShares: 0,
-  });
+    totalIssuedShares: balances.issued, totalReservedOptions: planState.reserve ?? 0,
+    totalAvailable: balances.unallocated ?? 0,
+    founderShares: stakeholders.filter(s => s.type === 'founder').reduce((n, s) => n + issuedShares(s), 0),
+    employeeOptions: planState.reserve ?? 0,
+    advisorShares: stakeholders.filter(s => s.type === 'advisor').reduce((n, s) => n + issuedShares(s), 0),
+    investorShares: stakeholders.filter(s => s.type === 'investor').reduce((n, s) => n + issuedShares(s), 0),
+  };
+  const poolMismatch = poolRecord.totalReserved !== undefined && planState.reserve !== null && poolRecord.totalReserved !== planState.reserve;
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'stakeholders' | 'grants' | 'documents'>('overview');
   const [seeding, setSeeding] = useState(false);
@@ -1138,53 +1145,13 @@ const EquityAdminPage: React.FC = () => {
       
       setStakeholders(stakeholderData);
 
-      // Calculate total options granted to stakeholders (this comes from the pool)
-      const totalGrantedOptions = stakeholderData.reduce((sum, sh) => {
-        // Only count options (advisors, employees, contractors with option grants)
-        if (['advisor', 'employee', 'contractor'].includes(sh.type)) {
-          return sum + (sh.optionsGranted || sh.totalShares || 0);
-        }
-        return sum;
-      }, 0);
-
-      // Load equity pool (separate from stakeholders)
+      // Pool records supply bookkeeping only; the effective EIP supplies its limit.
       try {
-        const poolQuery = query(collection(db, 'equity-pool'));
-        const poolSnapshot = await getDocs(poolQuery);
-        if (!poolSnapshot.empty) {
-          const poolDoc = poolSnapshot.docs[0];
-          const poolData = poolDoc.data() as EquityPool;
-          // Calculate available based on what's actually granted
-          const granted = totalGrantedOptions;
-          const exercised = poolData.exercised || 0;
-          const available = poolData.totalReserved - granted - exercised;
-          
-          setEquityPool({
-            id: poolDoc.id,
-            totalReserved: poolData.totalReserved,
-            granted,
-            exercised,
-            available: Math.max(0, available),
-          });
-        } else {
-          // No pool in DB yet, calculate from defaults
-          const available = DEFAULT_CAP_TABLE.equityPool.totalReserved - totalGrantedOptions;
-          setEquityPool({
-            totalReserved: DEFAULT_CAP_TABLE.equityPool.totalReserved,
-            granted: totalGrantedOptions,
-            exercised: 0,
-            available: Math.max(0, available),
-          });
-        }
+        const poolSnapshot = await getDocs(collection(db, 'equity-pool'));
+        const poolDoc = poolSnapshot.docs[0];
+        setPoolRecord(poolDoc ? { ...poolDoc.data(), id: poolDoc.id } : {});
       } catch {
-        // Pool collection might not exist yet, use defaults with calculated grants
-        const available = DEFAULT_CAP_TABLE.equityPool.totalReserved - totalGrantedOptions;
-        setEquityPool({
-          totalReserved: DEFAULT_CAP_TABLE.equityPool.totalReserved,
-          granted: totalGrantedOptions,
-          exercised: 0,
-          available: Math.max(0, available),
-        });
+        setPoolRecord({});
       }
 
       // Load convertible notes
@@ -1245,54 +1212,6 @@ const EquityAdminPage: React.FC = () => {
         }
       }
       
-      // Calculate cap table summary
-      // IMPORTANT: Options are NOT issued shares - they come from the pool
-      // Only count actual shares (founder stock, exercised options, direct grants)
-      let totalIssuedShares = 0;  // Actual shares issued
-      let founderShares = 0;
-      let advisorOptions = 0;
-      let investorShares = 0;
-      
-      stakeholderData.forEach(sh => {
-        switch (sh.type) {
-          case 'founder': 
-            // Founders have actual shares (issued stock)
-            const fShares = sh.sharesOwned || sh.totalShares || 0;
-            founderShares += fShares;
-            totalIssuedShares += fShares;
-            break;
-          case 'employee': 
-            // Employees typically have options (not issued shares yet)
-            break;
-          case 'advisor': 
-            // Advisors typically have options (not issued shares yet)
-            const advOpts = sh.optionsGranted || sh.totalShares || 0;
-            advisorOptions += advOpts;
-            break;
-          case 'investor': 
-            // Investors have actual shares
-            const invShares = sh.sharesOwned || sh.totalShares || 0;
-            investorShares += invShares;
-            totalIssuedShares += invShares;
-            break;
-        }
-      });
-      
-      // Available = Total Authorized - Issued Shares - Pool Reserved
-      // The pool is reserved but options granted from it don't affect "available" at the company level
-      const poolReserved = DEFAULT_CAP_TABLE.equityPool.totalReserved;
-      const available = DEFAULT_CAP_TABLE.authorizedShares - totalIssuedShares - poolReserved;
-      
-      setCapTableSummary(prev => ({
-        ...prev,
-        totalIssuedShares: totalIssuedShares,
-        totalAvailable: available,
-        founderShares,
-        employeeOptions: poolReserved, // Show the pool size, not granted options
-        advisorShares: advisorOptions,
-        investorShares,
-      }));
-      
     } catch (error) {
       console.error('Error loading equity data:', error);
       if (retryOnFailure) {
@@ -1309,6 +1228,36 @@ const EquityAdminPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    let subscriptions: Array<() => void> = [];
+    const stopAuth = onAuthStateChanged(auth, user => {
+      subscriptions.forEach(stop => stop());
+      subscriptions = [];
+      if (!user) return;
+      const onError = (source: string) => () => {
+        setSyncErrors(prev => ({ ...prev, [source]: true }));
+        setMessage({ type: 'error', text: 'Live equity updates are unavailable. Refresh before changing an allocation.' });
+      };
+      const recovered = (source: string) => setSyncErrors(prev => ({ ...prev, [source]: false }));
+      subscriptions = [
+        onSnapshot(query(collection(db, 'equity-documents'), orderBy('createdAt', 'desc')), snapshot => {
+          recovered('documents');
+          setEquityDocuments(snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as EquityDocument[]);
+        }, onError('documents')),
+        onSnapshot(query(collection(db, 'equity-stakeholders'), orderBy('createdAt', 'desc')), snapshot => {
+          recovered('stakeholders');
+          setStakeholders(snapshot.docs.map(d => ({ ...d.data(), id: d.id })).filter((d: any) => !d.isReservedPool) as Stakeholder[]);
+        }, onError('stakeholders')),
+        onSnapshot(collection(db, 'equity-pool'), snapshot => {
+          recovered('pool');
+          const record = snapshot.docs[0];
+          setPoolRecord(record ? { ...record.data(), id: record.id } : {});
+        }, onError('pool')),
+      ];
+    });
+    return () => { stopAuth(); subscriptions.forEach(stop => stop()); };
+  }, []);
 
   const loadFreshEquityPacketData = async (): Promise<{
     stakeholderList: Stakeholder[];
@@ -1501,7 +1450,11 @@ const EquityAdminPage: React.FC = () => {
     }
 
     if (newStakeholder.type === 'advisor') {
-      if (!equityDocuments.some(d => isApprovedEip(d))) {
+      if (liveSyncUnavailable || planState.issue || balances.available === null || advisorOptionCount > balances.available) {
+        setMessage({ type: 'error', text: (liveSyncUnavailable ? 'Refresh the live equity records before allocating awards.' : planState.issue) || 'This allocation exceeds the remaining effective EIP reserve.' });
+        return;
+      }
+      if (!equityDocuments.some(d => isEffectiveEip(d))) {
         setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before approving an advisor option grant.' });
         return;
       }
@@ -1589,7 +1542,7 @@ const EquityAdminPage: React.FC = () => {
       // Update the equity pool if we're granting options
       if (hasOptionGrant && equityPool.id) {
         const newGranted = equityPool.granted + advisorOptionCount;
-        const newAvailable = equityPool.totalReserved - newGranted - equityPool.exercised;
+        const newAvailable = equityPool.totalReserved - newGranted;
         
         await updateDoc(doc(db, 'equity-pool', equityPool.id), {
           granted: newGranted,
@@ -1734,7 +1687,7 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
-    if (!equityDocuments.some(d => isApprovedEip(d))) {
+    if (!equityDocuments.some(d => isEffectiveEip(d))) {
       setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before creating an advisor Board Consent.' });
       return;
     }
@@ -1858,7 +1811,7 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
-    if (!equityDocuments.some(d => isApprovedEip(d))) {
+    if (!equityDocuments.some(d => isEffectiveEip(d))) {
       setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before creating an advisor agreement.' });
       return;
     }
@@ -1917,7 +1870,7 @@ const EquityAdminPage: React.FC = () => {
       : newGrant;
 
     if (usesStoredAdvisorGrant) {
-      if (!equityDocuments.some(d => isApprovedEip(d))) {
+      if (!equityDocuments.some(d => isEffectiveEip(d))) {
         setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before creating advisor grant documents.' });
         return;
       }
@@ -1933,7 +1886,7 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
-    if (selectedDocType === 'eip' && equityPool.totalReserved <= 0) {
+    if (selectedDocType === 'eip' && draftPlanReserve <= 0) {
       setMessage({ type: 'error', text: 'Set a positive option-pool reserve before generating the Equity Incentive Plan.' });
       return;
     }
@@ -1975,7 +1928,7 @@ const EquityAdminPage: React.FC = () => {
         requiresSignature: effectiveRequiresSignature,
         boardApprovalDate: selectedDocType === 'board_consent' ? documentExecutionDate : undefined,
         documentDate: shouldAutoExecuteDoc ? documentExecutionDate : undefined,
-        planShareReserve: selectedDocType === 'eip' ? equityPool.totalReserved : undefined,
+        planShareReserve: selectedDocType === 'eip' ? draftPlanReserve : undefined,
         grantDetails: effectiveGrantDetails,
         documentId: placeholder.id,
       });
@@ -3159,10 +3112,13 @@ const EquityAdminPage: React.FC = () => {
   const getLatestCompletedEquityDocumentByType = (
     documentType: string,
     documentList: EquityDocument[] = equityDocuments,
-  ) =>
-    getLatestRelevantDocuments(
-      documentList.filter(d => d.documentType === documentType && d.status === 'completed' && (documentType !== 'eip' || isApprovedEip(d)))
-    )[0] || null;
+  ) => {
+    if (documentType === 'eip') {
+      const governingId = resolveEquityPlan(documentList).active?.id;
+      return documentList.find(d => d.id === governingId) || null;
+    }
+    return getLatestRelevantDocuments(documentList.filter(d => d.documentType === documentType && d.status === 'completed'))[0] || null;
+  };
 
   const requiresEquityReviewPacket = (equityDoc: EquityDocument) =>
     ['advisor_nso_agreement', 'option_agreement', 'fast_agreement'].includes(equityDoc.documentType);
@@ -3324,6 +3280,35 @@ const EquityAdminPage: React.FC = () => {
   // Render Overview Tab
   const renderOverview = () => (
     <div className="space-y-8">
+      <GlassCard accentColor="#E0FE10">
+        <div className="p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-white">Plan and reserve status</h3>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-sm text-zinc-400">Effective EIP</p>
+              {planState.active ? <a className="text-[#E0FE10] underline" href={`/equity-doc/${planState.active.id}`} target="_blank" rel="noreferrer">Version {planState.active.versionNumber || 1}: view governing plan</a> : <p className="text-amber-300">Needs review</p>}
+              <p className="text-white text-xl font-semibold">{planState.reserve === null ? 'Reserve unavailable' : `${formatNumber(planState.reserve)} shares`}</p>
+            </div>
+            <div>
+              <p className="text-sm text-zinc-400">Recorded EIP commitments</p>
+              <p className="text-white text-xl font-semibold">{formatNumber(balances.committed)} shares / options</p>
+              <p className="text-sm text-zinc-400">{formatNumber(balances.outstanding)} remain unissued</p>
+            </div>
+            <div>
+              <p className="text-sm text-zinc-400">Remaining EIP capacity</p>
+              <p className="text-white text-xl font-semibold">{balances.available === null ? 'Needs review' : `${formatNumber(balances.available)} shares`}</p>
+              <p className="text-sm text-zinc-400">The reserve is separate from issued-share ownership.</p>
+            </div>
+          </div>
+          {planState.pending && <div className="p-4 rounded-lg border border-amber-500/30 bg-amber-500/10 text-sm">
+            <p className="text-amber-200 font-medium">Proposed EIP: Version {planState.pending.versionNumber || 1}{planState.proposedReserve === null ? '' : `, ${formatNumber(planState.proposedReserve)} shares`}</p>
+            <p className="text-zinc-300 mt-1">Pending approval and recorded effectiveness. Proposed changes do not increase today's available shares.</p>
+            <a className="text-amber-200 underline" href={`/equity-doc/${planState.pending.id}`} target="_blank" rel="noreferrer">Review proposed version</a>
+          </div>}
+          <p className="text-xs text-zinc-400">Plan limits come from the effective EIP. Issued shares come from shareholder records. Strategic-partner reserves require separate approval and bookkeeping.</p>
+          {(planState.issue || poolMismatch || (balances.available !== null && balances.available < 0) || (balances.unallocated !== null && balances.unallocated < 0)) && <p role="alert" className="text-sm text-amber-300">{planState.issue || (poolMismatch ? 'The stored pool record differs from the effective EIP. This view uses the governing plan limit; reconcile the bookkeeping record.' : 'Recorded commitments exceed available capacity. Reconcile the records before allocating more awards.')}</p>}
+        </div>
+      </GlassCard>
       {/* Cap Table Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
@@ -3344,9 +3329,9 @@ const EquityAdminPage: React.FC = () => {
         />
         <StatCard
           icon={<Award className="w-5 h-5" />}
-          label="Option Pool"
-          value={formatNumber(capTableSummary.employeeOptions)}
-          subValue="Reserved for employees"
+          label="Effective EIP reserve"
+          value={planState.reserve === null ? "Needs review" : formatNumber(planState.reserve)}
+          subValue="Plan limit, including recorded awards"
           color="#8B5CF6"
           delay={0.2}
         />
@@ -3365,7 +3350,7 @@ const EquityAdminPage: React.FC = () => {
         <div className="p-6">
           <h3 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
             <PieChart className="w-5 h-5 text-[#E0FE10]" />
-            Ownership Breakdown
+            Issued-share ownership
           </h3>
           
           <div className="grid md:grid-cols-2 gap-8">
@@ -3373,7 +3358,7 @@ const EquityAdminPage: React.FC = () => {
             <div className="space-y-4">
               {[
                 { label: 'Founders', value: capTableSummary.founderShares, color: '#E0FE10', icon: '👑' },
-                { label: 'Employees', value: capTableSummary.employeeOptions, color: '#3B82F6', icon: '💼' },
+                { label: 'Employees / contractors', value: stakeholders.filter(s => ['employee', 'contractor'].includes(s.type)).reduce((n, s) => n + issuedShares(s), 0), color: '#3B82F6', icon: '💼' },
                 { label: 'Advisors', value: capTableSummary.advisorShares, color: '#8B5CF6', icon: '🎯' },
                 { label: 'Investors', value: capTableSummary.investorShares, color: '#10B981', icon: '💰' },
               ].map((item, idx) => {
@@ -3414,9 +3399,9 @@ const EquityAdminPage: React.FC = () => {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#E0FE10]/10 border border-[#E0FE10]/20 mb-4">
                   <Scale className="w-8 h-8 text-[#E0FE10]" />
                 </div>
-                <h4 className="text-zinc-400 text-sm mb-2">Available for Issuance</h4>
+                <h4 className="text-zinc-400 text-sm mb-2">Unallocated authorized shares</h4>
                 <p className="text-3xl font-bold text-white mb-1">
-                  {formatNumber(capTableSummary.totalAvailable)}
+                  {balances.unallocated === null ? "Needs review" : formatNumber(balances.unallocated)}
                 </p>
                 <p className="text-[#E0FE10] text-sm">
                   {((capTableSummary.totalAvailable / capTableSummary.totalAuthorizedShares) * 100).toFixed(1)}% remaining
@@ -3503,11 +3488,11 @@ const EquityAdminPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="py-4 px-4 text-right">
-                          <span className="text-white font-semibold">{formatNumber(stakeholder.totalShares || 0)}</span>
+                          <span className="text-white font-semibold">{formatNumber(issuedShares(stakeholder))}</span>
                         </td>
                         <td className="py-4 px-4 text-right">
                           <span className={`font-semibold ${(stakeholder.ownershipPercentage ?? 0) >= 50 ? 'text-[#E0FE10]' : 'text-white'}`}>
-                            {stakeholder.ownershipPercentage ?? 0}%
+                            {capTableSummary.totalIssuedShares ? ((issuedShares(stakeholder) / capTableSummary.totalIssuedShares) * 100).toFixed(1) : '0'}%
                           </span>
                         </td>
                         <td className="py-4 px-4 text-center">
@@ -3532,7 +3517,7 @@ const EquityAdminPage: React.FC = () => {
                       <span className="text-[#E0FE10] font-semibold">Total</span>
                     </td>
                     <td className="py-4 px-4 text-right">
-                      <span className="text-white font-bold">{formatNumber(capTableSummary.totalAuthorizedShares)}</span>
+                      <span className="text-white font-bold">{formatNumber(capTableSummary.totalIssuedShares)}</span>
                     </td>
                     <td className="py-4 px-4 text-right">
                       <span className="text-white font-bold">100%</span>
@@ -3769,7 +3754,7 @@ const EquityAdminPage: React.FC = () => {
 
     if (
       stakeholder.type === 'advisor' &&
-      !equityDocuments.some(d => isApprovedEip(d))
+      !equityDocuments.some(d => isEffectiveEip(d))
     ) {
       setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before changing advisor grant terms.' });
       return;
@@ -3877,6 +3862,11 @@ const EquityAdminPage: React.FC = () => {
     ) {
       setMessage({ type: 'info', text: 'No grant changes to save.' });
       return true;
+    }
+
+    if (nextOptionsValue > oldOptions && (liveSyncUnavailable || planState.issue || balances.available === null || nextOptionsValue - oldOptions > balances.available)) {
+      setMessage({ type: 'error', text: (liveSyncUnavailable ? 'Refresh the live equity records before allocating awards.' : planState.issue) || 'This increase exceeds the remaining effective EIP reserve.' });
+      return false;
     }
 
     setIsSavingGrantOptions(true);
@@ -4407,7 +4397,7 @@ const EquityAdminPage: React.FC = () => {
       // Update equity pool (only if pool exists and we have an ID)
       if (equityPool.id) {
         const newGranted = (equityPool.granted || 0) + difference;
-        const newAvailable = equityPool.totalReserved - newGranted - (equityPool.exercised || 0);
+        const newAvailable = equityPool.totalReserved - newGranted;
         try {
           await updateDoc(doc(db, 'equity-pool', equityPool.id), {
             granted: newGranted,
@@ -4461,14 +4451,6 @@ const EquityAdminPage: React.FC = () => {
             }
           : s
       ));
-
-      if (equityPool.id) {
-        setEquityPool(prev => ({
-          ...prev,
-          granted: (prev.granted || 0) + difference,
-          available: prev.totalReserved - ((prev.granted || 0) + difference) - (prev.exercised || 0),
-        }));
-      }
 
       // Build success message based on what was done
       let successMessage = forceRegenerateDocuments && !advisorGrantTermsChanged
@@ -5473,7 +5455,7 @@ const EquityAdminPage: React.FC = () => {
                 <div>
                   <p className="text-blue-300 font-medium text-sm">Company-wide document</p>
                   <p className="text-blue-400/70 text-xs mt-0.5">
-                    This company-wide Plan will use an exact reserve of {formatNumber(equityPool.totalReserved)} shares. It authorizes awards but does not itself grant equity to Valerie, Marques, or anyone else; each grant still needs Board approval and an award agreement.
+                    This draft company-wide Plan will propose an exact reserve of {formatNumber(draftPlanReserve)} shares. It authorizes awards but does not itself grant equity to Valerie, Marques, or anyone else; each grant still needs Board approval and an award agreement.
                   </p>
                 </div>
               </div>

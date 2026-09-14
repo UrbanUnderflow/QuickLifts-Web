@@ -86,7 +86,7 @@ const createFakeFirestore = (seed: Seed = {}) => {
   };
 
   return {
-    db: { collection },
+    db: { collection, runTransaction: async (work: any) => work({ get: (ref: any) => ref.get(), set: (ref: any, data: any, options: any) => ref.set(data, options) }) },
     collections,
   };
 };
@@ -444,3 +444,14 @@ test('admin curriculum assessment writes monthly rollup doc', async () => {
   assert.equal(assessment.simRepCounts[0].simId, 'sim-decision');
   assert.ok(collections.get('pulsecheck-curriculum-assessments')?.has('athlete-1_2026-04'));
 });
+
+ test('protected state prevents legacy generation even with opt-in disabled and preserves history', async () => {
+  const historical = { athleteId: 'protected', status: 'completed' };
+  const { db, collections } = createFakeFirestore({
+    'pulsecheck-linear-curriculum/states/items': { protected: { optedIn: false } },
+    'pulsecheck-daily-assignments': { historical },
+  });
+  const result = await generateDailyAssignmentAdmin(db as any, { athleteUserId: 'protected' } as any);
+  assert.equal(result, null);
+  assert.deepEqual([...collections.get('pulsecheck-daily-assignments')!.entries()], [['historical', historical]]);
+ });

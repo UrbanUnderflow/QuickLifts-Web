@@ -96,3 +96,35 @@ test('shared transaction handshake serializes both start/enrollment orderings', 
   else {assert.equal(await enroll(),200);await assert.rejects(start,/versioned skill journey/);assert.equal(s.data.get('pulsecheck-daily-assignments/old').status,'assigned');}
  }
 });
+
+function linkedSetup() {
+ const s=setup();const state=s.data.get(`${ROOT}/states/items/a`);
+ state.legacyHandoff={collection:'pulsecheck-daily-assignments',assignmentId:'old-started',fingerprint:'reviewed',skillId:first,versionId:'v1',phase:'learn',sourceDate:'2026-09-01',timezone:'America/New_York',enrolledAt:time(1)-500,startedAt:time(1)-1000,status:'pending',ledgerId:'legacy-handoff_test'};
+ s.data.set('pulsecheck-daily-assignments/old-started',{athleteId:'a',protocolId:first,legacyExerciseId:'breathing-478',sourceDate:'2026-09-01',timezone:'America/New_York',status:'started',startedAt:time(1)-1000});return s;
+}
+test('linked started session activates Learn with zero days and preserves legacy record',async()=>{
+ const s=linkedSetup(),old=copy(s.data.get('pulsecheck-daily-assignments/old-started'));const a=await issued(s,1);
+ assert.equal(a.phase,'learn');assert.equal(a.completedDayCount,0);assert.equal(a.startedAt,old.startedAt);assert.equal(a.linkedLegacyStatus,'started');
+ assert.equal([...s.data.keys()].filter(k=>k.includes('/completions/')).length,0);assert.deepEqual(s.data.get('pulsecheck-daily-assignments/old-started'),old);
+});
+test('later actual legacy completion contributes once and keeps Learn active',async()=>{
+ const s=linkedSetup();await issued(s,1);const legacy=s.data.get('pulsecheck-daily-assignments/old-started');legacy.status='completed';legacy.completedAt=time(1);
+ const a=await issued(s,1);assert.equal(a.phase,'learn');assert.equal(a.completedDayCount,1);assert.equal(a.phaseCompletedToday,true);
+ assert.equal((await issued(s,2)).completedDayCount,1);assert.equal([...s.data.keys()].filter(k=>k.includes('/completions/')).length,1);
+ assert.equal(s.data.get(`${ROOT}/states/items/a`).legacyHandoff.status,'completed_from_legacy');
+});
+test('finishing linked journey session prevents its legacy copy from earning another day',async()=>{
+ const s=linkedSetup(),a=await issued(s,1);await call(s,'complete',1,{assignmentId:a.id});assert.equal((await issued(s,1)).completedDayCount,1);
+ assert.equal(s.data.get(`${ROOT}/states/items/a`).legacyHandoff.status,'completed_in_journey');
+ const legacy=s.data.get('pulsecheck-daily-assignments/old-started');legacy.status='completed';legacy.completedAt=time(2);
+ assert.equal((await issued(s,2)).completedDayCount,1);assert.equal([...s.data.keys()].filter(k=>k.includes('/completions/')).length,1);
+});
+test('invalid linked data cannot fabricate a started session or qualifying credit',async()=>{
+ for(const change of [{athleteId:'other'},{startedAt:time(1)-50},{status:'assigned'},{completedAt:time(1)-600,status:'completed'}]){
+ const s=linkedSetup();Object.assign(s.data.get('pulsecheck-daily-assignments/old-started'),change);const a=await issued(s,1);assert.equal(a.startedAt,undefined);assert.equal(a.completedDayCount,0);
+ }
+});
+test('linked completion requires a check-in and failed bridge transactions preserve all data',async()=>{
+ const s=linkedSetup();Object.assign(s.data.get('pulsecheck-daily-assignments/old-started'),{status:'completed',completedAt:time(1)});s.data.delete('pulsecheck-morning-checkins/a_2026-09-01');assert.equal((await issued(s,1)).completedDayCount,0);
+ s.data.set('pulsecheck-morning-checkins/a_2026-09-01',{athleteUserId:'a',dayKey:'2026-09-01',level:'okay'});const before=JSON.stringify([...s.data]);s.fail();await assert.rejects(()=>issued(s,1),/injected/);assert.equal(JSON.stringify([...s.data]),before);
+});

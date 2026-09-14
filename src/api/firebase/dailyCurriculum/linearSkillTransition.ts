@@ -38,7 +38,7 @@ export function selectLinearSkillTransition(input: LinearSkillTransitionInput): 
   const completed = new Set([...input.completedSkillIds, pin.skillId]);
   const remaining = latest.content.orderedIds.filter(id => !completed.has(id));
   if (!remaining.length) return { kind: 'complete' };
-  const next = remaining.find(id => latest.runtimeReadySkillIds.includes(id));
-  if (!next) return { kind: 'blocked', reason: 'Remaining skills require runtime approval before assignment.' };
+  const next = remaining[0];
+  if (!latest.runtimeReadySkillIds.includes(next)) return { kind: 'blocked', reason: 'The next skill in the published order requires runtime approval before assignment.' };
   return { kind: 'next_skill', pin: { skillId: next, versionId: latest.id, startedOn: input.nextStartedOn }, version: latest };
 }

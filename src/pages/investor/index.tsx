@@ -1,3 +1,4 @@
+import { resolveEquityPlan, deriveEquityBalances, issuedShares } from '../../lib/equityPlanState';
 import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
@@ -497,10 +498,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const formatWholeNumber = (value: number) =>
-    value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : 'Unavailable';
 
   const formatOwnershipPercent = (value: number) =>
-    `${value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`;
+    Number.isFinite(value) ? `${value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%` : 'Unavailable';
 
   const toNumber = (value: unknown): number => {
     if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -512,7 +513,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   };
 
   const getStakeholderShares = (stakeholder: any): number =>
-    toNumber(stakeholder?.sharesOwned ?? stakeholder?.totalShares ?? stakeholder?.shares ?? stakeholder?.optionsGranted);
+    issuedShares(stakeholder);
 
   const getStakeholderTypeLabel = (type?: string) => {
     switch (type) {
@@ -574,25 +575,18 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     ? liveCapTableStakeholders
     : BASELINE_CAP_TABLE.stakeholders;
   const isUsingBaselineCapTable = !isLoadingCapTable && liveCapTableStakeholders.length === 0;
-  const capTablePool = equityPool ?? BASELINE_CAP_TABLE.equityPool;
-  const capTablePoolReserved = toNumber(capTablePool.totalReserved);
-  const capTableOptionGrants = capTableStakeholders.reduce((total, stakeholder) => {
-    if (['advisor', 'employee', 'contractor'].includes(stakeholder?.type)) {
-      return total + toNumber(stakeholder?.optionsGranted ?? stakeholder?.totalShares);
-    }
-    return total;
-  }, 0);
-  const capTablePoolGranted = toNumber(capTablePool.granted) || capTableOptionGrants;
-  const capTablePoolExercised = toNumber(capTablePool.exercised);
-  const capTablePoolAvailable = capTablePool.available !== undefined
-    ? toNumber(capTablePool.available)
-    : Math.max(0, capTablePoolReserved - capTablePoolGranted - capTablePoolExercised);
-  const capTableIssuedShares = capTableStakeholders.reduce((total, stakeholder) => {
-    if (['advisor', 'employee', 'contractor'].includes(stakeholder?.type)) return total;
-    return total + getStakeholderShares(stakeholder);
-  }, 0);
+  const effectivePlan = resolveEquityPlan(corporateEquityDocs);
+  const capTableAuthorizedShares = BASELINE_CAP_TABLE.authorizedShares;
+  const balances = deriveEquityBalances(capTableStakeholders, effectivePlan.reserve, toNumber(equityPool?.exercised), capTableAuthorizedShares);
+  const capTablePool = { notes: effectivePlan.active
+    ? `Effective EIP version ${effectivePlan.active.versionNumber || 1}; unissued reserve includes outstanding awards and remaining capacity.`
+    : 'Effective EIP unavailable; reserve requires review.' };
+  const capTablePoolReserved = balances.unissuedReserve ?? NaN;
+  const capTablePoolGranted = balances.committed;
+  const capTablePoolExercised = balances.planIssued;
+  const capTablePoolAvailable = balances.available ?? NaN;
+  const capTableIssuedShares = balances.issued;
   const capTableFullyDilutedShares = capTableIssuedShares + capTablePoolReserved;
-  const capTableAuthorizedShares = Math.max(BASELINE_CAP_TABLE.authorizedShares, capTableFullyDilutedShares);
 
   // Generate P&L PDF
   const generatePLPdf = () => {
@@ -1105,6 +1099,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
   // Generate Cap Table PDF
   const _generateCapTablePdf = () => {
+    if (effectivePlan.issue || isLoadingCorporateDocs || isLoadingCapTable) return;
     const htmlEntities: Record<string, string> = {
       '&': '&amp;',
       '<': '&lt;',
@@ -1117,9 +1112,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
     const stakeholderRows = capTableStakeholders.map((stakeholder) => {
       const shares = getStakeholderShares(stakeholder);
-      const ownership = stakeholder?.ownershipPercentage !== undefined
-        ? toNumber(stakeholder.ownershipPercentage)
-        : capTableFullyDilutedShares > 0
+      const ownership = capTableFullyDilutedShares > 0
           ? (shares / capTableFullyDilutedShares) * 100
           : 0;
 
@@ -6962,6 +6955,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                       <button
                         type="button"
                         onClick={_generateCapTablePdf}
+                        disabled={!!effectivePlan.issue || isLoadingCorporateDocs || isLoadingCapTable}
                         className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-zinc-700 text-sm font-medium text-zinc-200 hover:border-[#E0FE10] hover:text-[#E0FE10] transition-colors"
                       >
                         <Download className="w-4 h-4 mr-2" />
@@ -6975,6 +6969,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         Syncing live cap table records...
                       </div>
                     )}
+
+                    <div className="mb-6 rounded-xl border border-zinc-800 p-4 text-sm text-zinc-300">
+                      {effectivePlan.issue || `Reserve follows effective EIP version ${effectivePlan.active?.versionNumber || 1}. Draft amendments do not change current capacity.`}
+                    </div>
 
                     {isUsingBaselineCapTable && (
                       <div className="mb-6 rounded-xl border border-[#E0FE10]/20 bg-[#E0FE10]/10 p-4 flex items-start text-sm text-zinc-300">
@@ -7029,9 +7027,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                           <tbody>
                             {capTableStakeholders.map((stakeholder) => {
                               const shares = getStakeholderShares(stakeholder);
-                              const ownership = stakeholder?.ownershipPercentage !== undefined
-                                ? toNumber(stakeholder.ownershipPercentage)
-                                : capTableFullyDilutedShares > 0
+                              const ownership = capTableFullyDilutedShares > 0
                                   ? (shares / capTableFullyDilutedShares) * 100
                                   : 0;
                               const typeColor = getStakeholderTypeColor(stakeholder?.type);

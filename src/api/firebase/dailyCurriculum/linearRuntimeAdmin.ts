@@ -3,12 +3,16 @@ import { createHash } from 'node:crypto';
 import type { firestore } from 'firebase-admin';
 import { previewPinnedSkillAssignment, type LinearPublishedVersion, type LinearCompletionEvidence, type LinearEnrollment } from './linearPublication';
 import type { LinearSkillPin } from './linearSkillTransition';
+type LinkedCompletionEvidence = LinearCompletionEvidence & { localDate: string; timezone: string; assignmentId: string; verification: 'authenticated_assignment_response' };
+import { evaluateLegacyHandoffCompletion, isPendingLegacyHandoffStarted, type LinearLegacyHandoff } from './linearLegacyHandoff';
 
 export const LINEAR_ROOT = 'pulsecheck-linear-curriculum';
 export const linearRuntimeEnabled = () => process.env.LINEAR_CURRICULUM_RUNTIME_ENABLED === 'true';
 export interface LinearRuntimeState {
   athleteId: string; optedIn: true; audienceId: string; revision: number;
   enrollment: LinearEnrollment; currentSkill: LinearSkillPin; completedSkillIds: string[]; completedSkillSummaries?: { skillId: string; name: string; versionId: string }[];
+  legacyHandoff?: LinearLegacyHandoff;
+  legacyReconciliation?: { reviewedAt: number; manifestFingerprint: string; historicalActiveAssignments: unknown[]; historyPolicy: 'preserve'; importedCompletionCount: 0 };
 }
 export interface LinearRuntimeAssignment {
   id: string; athleteId: string; versionId: string; skillId: string; skillName: string;
@@ -17,6 +21,7 @@ export interface LinearRuntimeAssignment {
   completedDayCount: number; requiredDays: 5; phaseCompletedToday: boolean;
   contentSnapshot: Record<string, unknown>; clientContractVersion: 1;
   issuedAt: number; startedAt?: number; completedAt?: number; requiresCheckIn?: boolean;
+  linkedLegacyStatus?: 'started' | 'completed';
 }
 export type LinearRuntimeResponse = { status: 'legacy' | 'blocked' | 'review_due'; reason?: string; timeline?: LinearTimeline } | { status: 'assignment'; assignment: LinearRuntimeAssignment; timeline?: LinearTimeline } | { status: 'recorded'; qualified: boolean; duplicate: boolean };
 export const linearCollection = (db: firestore.Firestore, section: string) => db.collection(LINEAR_ROOT).doc(section).collection('items');
@@ -37,6 +42,8 @@ export async function runLinearRuntime(db: firestore.Firestore, input: { athlete
   const now = options.now ?? Date.now();
   const stateRef = linearCollection(db, 'states').doc(input.athleteId);
   return db.runTransaction(async tx => {
+    let bridgeWrite: { ref: firestore.DocumentReference; data: LinkedCompletionEvidence; link: LinearLegacyHandoff } | undefined;
+    const response = await (async (): Promise<LinearRuntimeResponse> => {
     const stateDoc = await tx.get(stateRef);
     if (!stateDoc.exists) return input.action === 'today' ? { status: 'legacy' } : { status: 'blocked', reason: 'A verified enrollment is required before recording activity.' };
     const state = stateDoc.data() as LinearRuntimeState;
@@ -60,7 +67,31 @@ export async function runLinearRuntime(db: firestore.Firestore, input: { athlete
     const latestDoc = applicable ? await tx.get(linearCollection(db, 'versions').doc(audience!.versionId)) : null;
     const pinned = pinnedDoc.exists ? pinnedDoc.data() as LinearPublishedVersion : null;
     const latest = latestDoc?.exists ? latestDoc.data() as LinearPublishedVersion : null;
-    const decision = previewPinnedSkillAssignment({ featureEnabled: true, athleteId: input.athleteId, enrollment: state.enrollment, currentSkill: state.currentSkill, pinnedVersion: pinned, latestApplicableVersion: latest, completedSkillIds: state.completedSkillIds, asOf: date, completions: ledger.docs.map(doc => doc.data() as LinearCompletionEvidence) });
+    const evidence = ledger.docs.map(doc => doc.data() as LinearCompletionEvidence);
+    const preview = () => previewPinnedSkillAssignment({ featureEnabled: true, athleteId: input.athleteId, enrollment: state.enrollment, currentSkill: state.currentSkill, pinnedVersion: pinned, latestApplicableVersion: latest, completedSkillIds: state.completedSkillIds, asOf: date, completions: evidence });
+    let decision = preview();
+    const link = state.legacyHandoff;
+    let linkedLegacyStatus: 'started' | 'completed' | undefined;
+    if (link && link.versionId === state.currentSkill.versionId && link.skillId === state.currentSkill.skillId && link.phase === 'learn') {
+      const linkedDoc = await tx.get(db.collection(link.collection).doc(link.assignmentId));
+      const linkedData = linkedDoc.data();
+      const verified = evaluateLegacyHandoffCompletion(link, linkedData, input.athleteId, now);
+      const current = decision.result;
+      if (current.kind === 'assignment' && current.phase === 'learn') {
+        linkedLegacyStatus = verified.kind === 'completed' ? 'completed' : isPendingLegacyHandoffStarted(link, linkedData, input.athleteId) ? 'started' : undefined;
+        if (verified.kind === 'completed' && !ledger.docs.some(doc => doc.id === verified.ledgerId)) {
+          const completionDate = linearLocalDate(verified.completedAt, state.enrollment.timezone);
+          const completedCheckIn = completionDate === date ? checkIn : (await tx.get(db.collection('pulsecheck-morning-checkins').doc(`${input.athleteId}_${completionDate}`))).data();
+          const hasCheckIn = completedCheckIn?.athleteUserId === input.athleteId && completedCheckIn?.dayKey === completionDate && (levels.includes(completedCheckIn?.level) || levels.includes(completedCheckIn?.eveningCheckIn?.level));
+          if (hasCheckIn && completionDate >= current.windowStart && completionDate <= current.windowEnd) {
+            const imported: LinkedCompletionEvidence = { id: verified.ledgerId, athleteId: input.athleteId, versionId: link.versionId, skillId: link.skillId, phase: 'learn', status: 'completed', completedAt: verified.completedAt, localDate: completionDate, timezone: state.enrollment.timezone, assignmentId: verified.ledgerId, verification: 'authenticated_assignment_response' };
+            evidence.push(imported);
+            bridgeWrite = { ref: completionsRef.doc(verified.ledgerId), data: imported, link };
+            decision = preview();
+          }
+        }
+      }
+    }
     const result = decision.result;
     if (input.action !== 'today') {
       if (options.dryRun) return { status: 'blocked', reason: 'Preview requests cannot record activity.' };
@@ -78,6 +109,7 @@ export async function runLinearRuntime(db: firestore.Firestore, input: { athlete
       const qualified = assigned.phase !== 'use_it' || input.outcome === 'used';
       tx.update(assignmentRef, { lastResponseAt: now, lastOutcome: input.outcome || 'completed', ...(qualified ? { completedAt: now } : {}) });
       if (qualified) tx.create(completionsRef.doc(input.assignmentId!), { id: input.assignmentId, athleteId: input.athleteId, versionId: assigned.versionId, skillId: assigned.skillId, phase: assigned.phase, status: 'completed', completedAt: now, localDate: date, timezone: state.enrollment.timezone, assignmentId: assigned.id, verification: 'authenticated_assignment_response' });
+      if (qualified && link?.status === 'pending' && assigned.versionId === link.versionId && assigned.skillId === link.skillId && assigned.phase === link.phase && assigned.sourceDate === link.sourceDate && assigned.startedAt === link.startedAt) tx.update(stateRef, { legacyHandoff: { ...link, status: 'completed_in_journey', resolvedAt: now, resolvedByAssignmentId: assigned.id } });
       return { status: 'recorded', qualified, duplicate: false };
     }
     const completedSkillIds = decision.completedSkillId ? [...new Set([...state.completedSkillIds, decision.completedSkillId])] : state.completedSkillIds;
@@ -96,9 +128,16 @@ export async function runLinearRuntime(db: firestore.Firestore, input: { athlete
     const id = createHash('sha256').update([input.athleteId,result.versionId,result.skillId,result.phase,date].join('|')).digest('hex');
     const assignmentRef = stateRef.collection('assignments').doc(id);
     const assignedDoc = await tx.get(assignmentRef);
-    const assignment: LinearRuntimeAssignment = { id, athleteId: input.athleteId, versionId: result.versionId, skillId: result.skillId, skillName: result.skillName, skillType: skill.type, phase: result.phase, sourceDate: date, timezone: state.enrollment.timezone, windowStart: result.windowStart, windowEnd: result.windowEnd, completedDayCount: result.verifiedCompletions, requiredDays: 5, phaseCompletedToday: result.phaseCompletedToday, contentSnapshot, clientContractVersion: 1, issuedAt: now, requiresCheckIn: !checkedIn };
+    const linkedStart = linkedLegacyStatus === 'started' && link?.sourceDate === date && result.phase === 'learn' ? link.startedAt : undefined;
+    const assignment: LinearRuntimeAssignment = { id, athleteId: input.athleteId, versionId: result.versionId, skillId: result.skillId, skillName: result.skillName, skillType: skill.type, phase: result.phase, sourceDate: date, timezone: state.enrollment.timezone, windowStart: result.windowStart, windowEnd: result.windowEnd, completedDayCount: result.verifiedCompletions, requiredDays: 5, phaseCompletedToday: result.phaseCompletedToday, contentSnapshot, clientContractVersion: 1, issuedAt: now, requiresCheckIn: !checkedIn, ...(linkedStart ? { startedAt: linkedStart } : {}), ...(linkedLegacyStatus ? { linkedLegacyStatus } : {}) };
     if (decision.nextPin && !options.dryRun) tx.update(stateRef, { currentSkill: decision.nextPin, completedSkillIds, completedSkillSummaries, revision: state.revision + 1, updatedAt: now });
     if (!assignedDoc.exists && !options.dryRun) tx.create(assignmentRef, assignment);
-    return { status: 'assignment', timeline: buildLinearTimeline({ completedSkillIds, completedSkillSummaries, currentAssignment: assignment, pinnedVersion: chosenVersion, latestApplicableVersion: latest }), assignment: { ...assignment, ...(assignedDoc.exists ? { issuedAt: assignedDoc.data()!.issuedAt, startedAt: assignedDoc.data()!.startedAt, completedAt: assignedDoc.data()!.completedAt } : {}) } };
+    return { status: 'assignment', timeline: buildLinearTimeline({ completedSkillIds, completedSkillSummaries, currentAssignment: assignment, pinnedVersion: chosenVersion, latestApplicableVersion: latest }), assignment: { ...assignment, ...(assignedDoc.exists ? { issuedAt: assignedDoc.data()!.issuedAt, startedAt: assignedDoc.data()!.startedAt ?? assignment.startedAt, completedAt: assignedDoc.data()!.completedAt } : {}) } };
+    })();
+    if (bridgeWrite && !options.dryRun) {
+      tx.create(bridgeWrite.ref, bridgeWrite.data);
+      tx.update(stateRef, { legacyHandoff: { ...bridgeWrite.link, status: 'completed_from_legacy', resolvedAt: now, resolvedByAssignmentId: bridgeWrite.data.assignmentId } });
+    }
+    return response;
   });
 }

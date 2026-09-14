@@ -12,8 +12,8 @@ test('mid-skill removal/reorder/publication preserves exact pin and original ver
     if (result.kind === 'keep_current') { assert.equal(result.pin, input.currentSkill); assert.equal(result.version, input.pinnedVersion); }
   }
 });
-test('verified boundary uses latest order, skips completed skills and unavailable runtime', () => {
-  const input = { ...fixture(), skillComplete: true, latestApplicableVersion: version('v3', ['d', 'c', 'b'], ['c', 'b']), completedSkillIds: ['c'] };
+test('verified boundary uses latest order and skips only completed skills', () => {
+  const input = { ...fixture(), skillComplete: true, latestApplicableVersion: version('v3', ['c', 'b', 'd'], ['c', 'b']), completedSkillIds: ['c'] };
   const result = selectLinearSkillTransition(input);
   assert.equal(result.kind, 'next_skill');
   if (result.kind === 'next_skill') assert.deepEqual(result.pin, { skillId: 'b', versionId: 'v3', startedOn: '2026-09-20' });
@@ -41,4 +41,15 @@ test('retry is deterministic and leaves all input history and snapshots untouche
   const before = JSON.stringify(input);
   assert.deepEqual(selectLinearSkillTransition(input), selectLinearSkillTransition(input));
   assert.equal(JSON.stringify(input), before);
+});
+
+test('unsupported next skill holds boundary instead of skipping to later ready skills', () => {
+  const input = { ...fixture(), skillComplete: true, latestApplicableVersion: version('v3', ['a', 'd', 'b'], ['a', 'b']) };
+  assert.equal(selectLinearSkillTransition(input).kind, 'blocked');
+  assert.equal(selectLinearSkillTransition({ ...input, completedSkillIds: ['d'] }).kind, 'next_skill');
+});
+test('unsupported final unfinished skill is blocked, not mistaken for all complete', () => {
+  const input = { ...fixture(), skillComplete: true, latestApplicableVersion: version('v3', ['a', 'd'], ['a']) };
+  assert.equal(selectLinearSkillTransition(input).kind, 'blocked');
+  assert.equal(selectLinearSkillTransition({ ...input, completedSkillIds: ['d'] }).kind, 'complete');
 });

@@ -1,3 +1,4 @@
+const { hasProtectedLinearState, commitLegacyGeneration } = require('./utils/legacy-generation-guard');
 const { initializeFirebaseAdmin, getFirebaseAdminApp, admin, headers } = require('./config/firebase');
 const profileSnapshotRuntime = require('../../src/api/firebase/mentaltraining/profileSnapshotRuntime.js');
 const protocolRegistryRuntime = require('../../src/api/firebase/mentaltraining/protocolRegistryRuntime.js');
@@ -2735,27 +2736,6 @@ function assignmentLineageChanged(existing, nextAssignment) {
   });
 }
 
-async function archiveAssignmentRevision({
-  db,
-  assignmentRef,
-  existing,
-  nextRevision,
-  now,
-}) {
-  if (!existing) return;
-
-  const currentRevision = typeof existing.revision === 'number' ? existing.revision : 1;
-  const revisionId = `r${String(currentRevision).padStart(4, '0')}`;
-  await assignmentRef.collection(ASSIGNMENT_REVISIONS_SUBCOLLECTION).doc(revisionId).set(stripUndefinedDeep({
-    ...existing,
-    lineageId: existing.lineageId || assignmentRef.id,
-    revision: currentRevision,
-    supersededAt: now,
-    supersededByRevision: nextRevision,
-    archivedAt: now,
-  }), { merge: true });
-}
-
 function summarizeAssignmentForSystemEvent(assignment) {
   if (!assignment) return null;
 
@@ -2884,6 +2864,7 @@ async function orchestratePostCheckIn({
   forceMutableReplacement = false,
   assignmentIdOverride,
 }) {
+  if (await hasProtectedLinearState(db, athleteId)) return null;
   const snapshot =
     (sourceStateSnapshotId ? await getSnapshotById(db, sourceStateSnapshotId) : null) ||
     await getSnapshotById(db, `${athleteId}_${sourceDate}`);
@@ -3086,15 +3067,6 @@ async function orchestratePostCheckIn({
     now,
   });
   const nextRevision = existing ? (lineageChanged ? baselineRevision + 1 : baselineRevision) : 1;
-  if (existing && lineageChanged) {
-    await archiveAssignmentRevision({
-      db,
-      assignmentRef,
-      existing,
-      nextRevision,
-      now,
-    });
-  }
 
   const assignment = {
     ...draftAssignment,
@@ -3111,7 +3083,21 @@ async function orchestratePostCheckIn({
     supersededByRevision: undefined,
   };
 
-  await assignmentRef.set(stripUndefinedDeep(assignment), { merge: true });
+  const committed = await commitLegacyGeneration(db, athleteId, async (tx) => {
+    if (existing && lineageChanged) {
+      const revisionId = `r${String(baselineRevision).padStart(4, '0')}`;
+      tx.set(assignmentRef.collection(ASSIGNMENT_REVISIONS_SUBCOLLECTION).doc(revisionId), stripUndefinedDeep({
+        ...existing,
+        lineageId: existing.lineageId || assignmentRef.id,
+        revision: baselineRevision,
+        supersededAt: now,
+        supersededByRevision: nextRevision,
+        archivedAt: now,
+      }), { merge: true });
+    }
+    tx.set(assignmentRef, stripUndefinedDeep(assignment), { merge: true });
+  });
+  if (!committed) return null;
   await recordDailyTaskMaterializationEvents({
     db,
     assignment,

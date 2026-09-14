@@ -1,3 +1,4 @@
+import { hasProtectedLinearState, commitLegacyGeneration } from './legacy-generation-guard';
 import { runLinearRuntime, linearRuntimeEnabled } from '../../../src/api/firebase/dailyCurriculum/linearRuntimeAdmin';
 import type * as FirebaseAdmin from 'firebase-admin';
 import type {
@@ -469,6 +470,7 @@ export const generateDailyAssignmentAdmin = async (
   db: FirebaseAdmin.firestore.Firestore,
   input: GenerateDailyAssignmentAdminInput,
 ): Promise<CurriculumGenerationResult | null> => {
+  if (await hasProtectedLinearState(db, input.athleteUserId)) return null;
   if (linearRuntimeEnabled()) {
     const runtime = await runLinearRuntime(db, { athleteId: input.athleteUserId, action: 'today' }, { dryRun: !!input.preview });
     // Explicitly enrolled athletes never receive a legacy six-slot replacement, even when blocked.
@@ -665,72 +667,71 @@ export const generateDailyAssignmentAdmin = async (
   if (input.preview) return result;
 
   const traceId = `${input.athleteUserId}_${sourceDate}_${generatedAt}`;
-  const assignmentWrites = [...protocolSlots, ...simSlots].map((slot) => {
-    const slotMetadata = buildSlotMetadata({ slateId, slot });
-    if (slot.existing) {
-      return db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(slot.assignmentId).set(
+  const committed = await commitLegacyGeneration(db, input.athleteUserId, async (tx) => {
+    [...protocolSlots, ...simSlots].forEach((slot) => {
+      const slotMetadata = buildSlotMetadata({ slateId, slot });
+      if (slot.existing) {
+        return tx.set(db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(slot.assignmentId),
+          stripUndefinedDeep({
+            id: stringValue(slot.existing.data.id) || slot.assignmentId,
+            lineageId: stringValue(slot.existing.data.lineageId) || slot.assignmentId,
+            ...slotMetadata,
+            updatedAt: generatedAt,
+          }) as Record<string, unknown>,
+          { merge: true },
+        );
+      }
+
+      const pick = slot.pick;
+      if (!pick) return;
+      const assignmentBase: Partial<PulseCheckDailyAssignment> = {
+        id: slot.assignmentId,
+        lineageId: slot.assignmentId,
+        revision: 1,
+        athleteId: input.athleteUserId,
+        teamId: input.teamId,
+        teamMembershipId: input.teamMembershipId,
+        sourceCheckInId: '',
+        sourceDate,
+        timezone: input.timezone,
+        assignedBy: 'curriculum-engine',
+        materializedAt: generatedAt,
+        status: 'assigned' as PulseCheckDailyAssignment['status'],
+        actionType: slot.kind as PulseCheckDailyAssignment['actionType'],
+        chosenCandidateId: pick.asset.id,
+        chosenCandidateType: (slot.kind === 'protocol' ? 'protocol' : 'sim') as PulseCheckDailyAssignment['chosenCandidateType'],
+        rationale: pick.rationale,
+        curriculumIntent: buildSlotIntent({
+          slot,
+          drivingPillar: slot.kind === 'protocol' ? protocolDrivingPillar : simDrivingPillar,
+          pairedAssignmentLabel: pairedLabelForSlot(slot.kind === 'protocol' ? simSlots : protocolSlots, slot.slotIndex - 1),
+        }),
+        createdAt: generatedAt,
+        updatedAt: generatedAt,
+      };
+
+      if (slot.kind === 'protocol') {
+        const protocol = pick.asset as PulseCheckProtocolDefinition;
+        assignmentBase.legacyExerciseId = protocol.legacyExerciseId;
+        assignmentBase.protocolId = protocol.id;
+        assignmentBase.protocolLabel = protocol.label;
+        assignmentBase.durationSeconds = protocol.durationSeconds;
+      } else {
+        const sim = pick.asset as MentalExercise;
+        assignmentBase.simSpecId = sim.simSpecId || sim.id;
+        assignmentBase.simName = sim.name;
+      }
+
+      return tx.set(db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(slot.assignmentId),
         stripUndefinedDeep({
-          id: stringValue(slot.existing.data.id) || slot.assignmentId,
-          lineageId: stringValue(slot.existing.data.lineageId) || slot.assignmentId,
+          ...assignmentBase,
           ...slotMetadata,
-          updatedAt: generatedAt,
         }) as Record<string, unknown>,
-        { merge: true },
+        { merge: false },
       );
-    }
+    });
 
-    const pick = slot.pick;
-    if (!pick) return Promise.resolve();
-    const assignmentBase: Partial<PulseCheckDailyAssignment> = {
-      id: slot.assignmentId,
-      lineageId: slot.assignmentId,
-      revision: 1,
-      athleteId: input.athleteUserId,
-      teamId: input.teamId,
-      teamMembershipId: input.teamMembershipId,
-      sourceCheckInId: '',
-      sourceDate,
-      timezone: input.timezone,
-      assignedBy: 'curriculum-engine',
-      materializedAt: generatedAt,
-      status: 'assigned' as PulseCheckDailyAssignment['status'],
-      actionType: slot.kind as PulseCheckDailyAssignment['actionType'],
-      chosenCandidateId: pick.asset.id,
-      chosenCandidateType: (slot.kind === 'protocol' ? 'protocol' : 'sim') as PulseCheckDailyAssignment['chosenCandidateType'],
-      rationale: pick.rationale,
-      curriculumIntent: buildSlotIntent({
-        slot,
-        drivingPillar: slot.kind === 'protocol' ? protocolDrivingPillar : simDrivingPillar,
-        pairedAssignmentLabel: pairedLabelForSlot(slot.kind === 'protocol' ? simSlots : protocolSlots, slot.slotIndex - 1),
-      }),
-      createdAt: generatedAt,
-      updatedAt: generatedAt,
-    };
-
-    if (slot.kind === 'protocol') {
-      const protocol = pick.asset as PulseCheckProtocolDefinition;
-      assignmentBase.legacyExerciseId = protocol.legacyExerciseId;
-      assignmentBase.protocolId = protocol.id;
-      assignmentBase.protocolLabel = protocol.label;
-      assignmentBase.durationSeconds = protocol.durationSeconds;
-    } else {
-      const sim = pick.asset as MentalExercise;
-      assignmentBase.simSpecId = sim.simSpecId || sim.id;
-      assignmentBase.simName = sim.name;
-    }
-
-    return db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(slot.assignmentId).set(
-      stripUndefinedDeep({
-        ...assignmentBase,
-        ...slotMetadata,
-      }) as Record<string, unknown>,
-      { merge: false },
-    );
-  });
-
-  await Promise.all([
-    ...assignmentWrites,
-    db.collection(CURRICULUM_SLATES_COLLECTION).doc(slateId).set(
+    tx.set(db.collection(CURRICULUM_SLATES_COLLECTION).doc(slateId),
       stripUndefinedDeep({
         id: slateId,
         athleteId: input.athleteUserId,
@@ -764,8 +765,8 @@ export const generateDailyAssignmentAdmin = async (
         updatedAt: generatedAt,
       }) as Record<string, unknown>,
       { merge: true },
-    ),
-    db.collection(GENERATION_TRACES_COLLECTION).doc(traceId).set(
+    );
+    tx.set(db.collection(GENERATION_TRACES_COLLECTION).doc(traceId),
       stripUndefinedDeep({
         id: traceId,
         athleteUserId: input.athleteUserId,
@@ -775,8 +776,9 @@ export const generateDailyAssignmentAdmin = async (
         configRevisionId: config.revisionId,
       }) as Record<string, unknown>,
       { merge: false },
-    ),
-  ]);
+    );
+  });
+  if (!committed) return null;
 
   const overrideIds = new Set(
     [...protocolPicks, ...simPicks]

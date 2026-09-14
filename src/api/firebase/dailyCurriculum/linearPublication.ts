@@ -106,7 +106,7 @@ export const previewLinearAssignment = (input: { featureEnabled?: boolean; athle
       catch { return { kind: 'blocked', reason: 'Valid local dates and a pinned IANA timezone are required.' }; }
       if (progress.completedOn && progress.completedOn < input.asOf) { phaseStartedOn = addLocalCalendarDays(progress.completedOn, 1); continue; }
       if (!version.runtimeReadySkillIds.includes(skill.id)) return { kind: 'blocked', reason: `${skill.name} needs runtime review before it can be assigned. ${skill.readiness}` };
-      return { kind: 'assignment', versionId: version.id, skillId: skill.id, skillName: skill.name, ordinal: index + 1, phase, progressionBasis: basis, phasePosition: Math.min(progress.count + 1, 5), phaseLength: 5, verifiedCompletions: progress.count, journalWithinUse: true, windowStart: progress.currentWindowStart, windowEnd: progress.currentWindowEnd, restartCount: progress.restartCount, phaseCompletedToday: progress.completedOn === input.asOf };
+      return { kind: 'assignment', versionId: version.id, skillId: skill.id, skillName: skill.name, ordinal: index + 1, phase, progressionBasis: basis, phasePosition: Math.min(progress.count + 1, 5), phaseLength: 5, verifiedCompletions: progress.count, journalWithinUse: true, windowStart: progress.currentWindowStart, windowEnd: progress.currentWindowEnd, restartCount: progress.restartCount, phaseCompletedToday: progress.uniqueCompletionDays.includes(input.asOf) };
     }
     if (input.currentSkill) return { kind: 'skill_complete', skillId: skill.id, nextStartedOn: phaseStartedOn };
   }
