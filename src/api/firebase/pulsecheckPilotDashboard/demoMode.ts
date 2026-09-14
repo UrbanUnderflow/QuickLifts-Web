@@ -1,3 +1,4 @@
+import { emptyPracticeBacklog } from './practiceBacklog';
 import type {
   PilotDashboardAthleteDetail,
   PilotDashboardAthleteJourneySummary,
@@ -131,6 +132,7 @@ function buildDemoJourneySummary(input: Partial<PilotDashboardAthleteJourneySumm
     checkInCount: input.checkInCount ?? 4,
     assignmentCount: input.assignmentCount ?? 5,
     assignmentCompletedCount: input.assignmentCompletedCount ?? 3,
+    practiceBacklog: input.practiceBacklog ?? emptyPracticeBacklog(),
     noraConversationCount: input.noraConversationCount ?? 2,
     noraSavedChatConversationCount: input.noraSavedChatConversationCount ?? 1,
     noraStructuredConversationCount: input.noraStructuredConversationCount ?? 1,
@@ -1105,7 +1107,12 @@ function readStore(): PilotDashboardDemoStore {
   }
 
   try {
-    return JSON.parse(raw) as PilotDashboardDemoStore;
+    const store = JSON.parse(raw) as PilotDashboardDemoStore;
+    // Older saved demos predate the lifecycle-aware backlog fields.
+    store.athletes.forEach((entry) => {
+      entry.summary.journey = buildDemoJourneySummary(entry.summary.journey);
+    });
+    return store;
   } catch {
     const nextStore = buildBaseDemoStore();
     window.localStorage.setItem(DEMO_STORE_KEY, JSON.stringify(nextStore));

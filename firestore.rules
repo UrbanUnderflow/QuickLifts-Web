@@ -187,6 +187,7 @@ service cloud.firestore {
         'coach-team-schedule',
         'company-config',
         'curriculum-notes',
+        'pulsecheck-linear-curriculum',
         'dailySentimentAnalysis',
         'document-notes',
         'escalation-conditions',
@@ -3361,6 +3362,11 @@ service cloud.firestore {
 
     // Compatibility fallback: unknown collections are no longer public. They
     // remain available to signed-in clients unless a stricter rule exists above.
+    // Versioned curriculum is server-only; API authorization and feature gates apply.
+    match /pulsecheck-linear-curriculum/{document=**} {
+      allow read, write: if false;
+    }
+
     match /{collectionName}/{document=**} {
       allow read: if isSignedIn()
         && !isExplicitlyRuledCollection(collectionName);

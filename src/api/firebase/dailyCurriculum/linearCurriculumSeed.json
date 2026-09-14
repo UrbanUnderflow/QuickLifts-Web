@@ -1,0 +1,2014 @@
+{
+  "active": [
+    {
+      "id": "protocol-478-breathing",
+      "name": "4-7-8 Relaxation Breathing",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "First by explicit user requirement; introduce Learn, independent Practice, then Use it with journaling inside Use it through one guided technique.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-478-breathing",
+        "sim-modules/breathing-478",
+        "mental-exercises/breathing-478",
+        "pulsecheck-protocol-variants/recovery-recovery_downregulation--4-7-8-relaxation-breathing",
+        "pulsecheck-protocol-families/recovery-recovery_downregulation"
+      ],
+      "aliases": [
+        "breathing-478",
+        "protocol-478-breathing"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "protocol-physiological-sigh",
+      "name": "Physiological Sigh",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Introduce one simple timed breathing or attention instruction before longer reflection, changing rules or layered distractions.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-physiological-sigh",
+        "sim-modules/breathing-physiological-sigh",
+        "mental-exercises/breathing-physiological-sigh",
+        "pulsecheck-protocol-variants/regulation-acute_downshift--physiological-sigh",
+        "pulsecheck-protocol-families/regulation-acute_downshift"
+      ],
+      "aliases": [
+        "breathing-physiological-sigh",
+        "protocol-physiological-sigh"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "protocol-box-breathing",
+      "name": "Box Breathing",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Introduce one simple timed breathing or attention instruction before longer reflection, changing rules or layered distractions.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-box-breathing",
+        "sim-modules/breathing-box",
+        "mental-exercises/breathing-box",
+        "pulsecheck-protocol-variants/regulation-steady_regulation--box-breathing",
+        "pulsecheck-protocol-families/regulation-steady_regulation"
+      ],
+      "aliases": [
+        "breathing-box",
+        "protocol-box-breathing"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "protocol-recovery-breathing",
+      "name": "Recovery Breathing",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Introduce one simple timed breathing or attention instruction before longer reflection, changing rules or layered distractions.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-recovery-breathing",
+        "sim-modules/breathing-recovery",
+        "mental-exercises/breathing-recovery",
+        "pulsecheck-protocol-variants/recovery-recovery_downregulation--recovery-breathing",
+        "pulsecheck-protocol-families/recovery-recovery_downregulation"
+      ],
+      "aliases": [
+        "breathing-recovery",
+        "protocol-recovery-breathing"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "focus-single-point",
+      "name": "Single-Point Focus",
+      "type": "protocol",
+      "readiness": "classification review guided activity in simulation catalog",
+      "rationale": "Introduce one simple timed breathing or attention instruction before longer reflection, changing rules or layered distractions. Guided dwell/imagery or timed attention technique, not a scored skill game; reclassified as Protocol under user definition while preserving current catalogKind=simulation.",
+      "sourceRefs": [
+        "sim-modules/focus-single-point",
+        "mental-exercises/focus-single-point"
+      ],
+      "aliases": [
+        "focus-single-point"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": "Guided dwell/imagery or timed attention technique, not a scored skill game; reclassified as Protocol under user definition while preserving current catalogKind=simulation."
+    },
+    {
+      "id": "protocol-body-scan-reset",
+      "name": "Body Scan Awareness",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Introduce one simple timed breathing or attention instruction before longer reflection, changing rules or layered distractions.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-body-scan-reset",
+        "sim-modules/focus-body-scan",
+        "mental-exercises/focus-body-scan",
+        "pulsecheck-protocol-variants/regulation-focus_narrowing--body-scan-awareness",
+        "pulsecheck-protocol-families/regulation-focus_narrowing"
+      ],
+      "aliases": [
+        "focus-body-scan",
+        "protocol-body-scan-reset"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "protocol-cue-word-anchoring",
+      "name": "Cue Word Anchoring",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Introduce one simple timed breathing or attention instruction before longer reflection, changing rules or layered distractions.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-cue-word-anchoring",
+        "sim-modules/focus-cue-word",
+        "mental-exercises/focus-cue-word",
+        "pulsecheck-protocol-variants/priming-focus_narrowing--cue-word-anchoring",
+        "pulsecheck-protocol-families/priming-focus_narrowing"
+      ],
+      "aliases": [
+        "focus-cue-word",
+        "protocol-cue-word-anchoring"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "confidence-affirmations",
+      "name": "Sport-Specific Affirmations",
+      "type": "protocol",
+      "readiness": "classification review guided activity in simulation catalog",
+      "rationale": "Add one concrete cue, self-statement, evidence recall or brief imagery/reflection after the basic session pattern is familiar. Guided dwell/imagery or timed attention technique, not a scored skill game; reclassified as Protocol under user definition while preserving current catalogKind=simulation.",
+      "sourceRefs": [
+        "sim-modules/confidence-affirmations",
+        "mental-exercises/confidence-affirmations"
+      ],
+      "aliases": [
+        "confidence-affirmations"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": "Guided dwell/imagery or timed attention technique, not a scored skill game; reclassified as Protocol under user definition while preserving current catalogKind=simulation."
+    },
+    {
+      "id": "protocol-evidence-journal",
+      "name": "Evidence Journal",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Add one concrete cue, self-statement, evidence recall or brief imagery/reflection after the basic session pattern is familiar.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-evidence-journal",
+        "sim-modules/confidence-evidence-journal",
+        "mental-exercises/confidence-evidence-journal",
+        "pulsecheck-protocol-variants/recovery-recovery_reflection--evidence-journal",
+        "pulsecheck-protocol-families/recovery-recovery_reflection"
+      ],
+      "aliases": [
+        "confidence-evidence-journal",
+        "protocol-evidence-journal"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "mindset-growth",
+      "name": "Growth Mindset Self-Talk",
+      "type": "simulation",
+      "readiness": "active base requires dispatch and copy review",
+      "rationale": "Add one concrete cue, self-statement, evidence recall or brief imagery/reflection after the basic session pattern is familiar.",
+      "sourceRefs": [
+        "sim-modules/mindset-growth",
+        "mental-exercises/mindset-growth"
+      ],
+      "aliases": [
+        "mindset-growth"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "protocol-process-over-outcome",
+      "name": "Process Over Outcome",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Add one concrete cue, self-statement, evidence recall or brief imagery/reflection after the basic session pattern is familiar.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-process-over-outcome",
+        "sim-modules/mindset-process-focus",
+        "mental-exercises/mindset-process-focus",
+        "pulsecheck-protocol-variants/recovery-recovery_reflection--process-over-outcome",
+        "pulsecheck-protocol-families/recovery-recovery_reflection"
+      ],
+      "aliases": [
+        "mindset-process-focus",
+        "protocol-process-over-outcome"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "viz-highlight-reel",
+      "name": "Highlight Reel",
+      "type": "protocol",
+      "readiness": "classification review guided activity in simulation catalog",
+      "rationale": "Add one concrete cue, self-statement, evidence recall or brief imagery/reflection after the basic session pattern is familiar. Guided dwell/imagery or timed attention technique, not a scored skill game; reclassified as Protocol under user definition while preserving current catalogKind=simulation.",
+      "sourceRefs": [
+        "sim-modules/viz-highlight-reel",
+        "mental-exercises/viz-highlight-reel"
+      ],
+      "aliases": [
+        "viz-highlight-reel"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": "Guided dwell/imagery or timed attention technique, not a scored skill game; reclassified as Protocol under user definition while preserving current catalogKind=simulation."
+    },
+    {
+      "id": "protocol-perfect-execution-replay",
+      "name": "Perfect Execution Replay",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Add one concrete cue, self-statement, evidence recall or brief imagery/reflection after the basic session pattern is familiar.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-perfect-execution-replay",
+        "sim-modules/viz-perfect-execution",
+        "mental-exercises/viz-perfect-execution",
+        "pulsecheck-protocol-variants/priming-imagery_priming--perfect-execution-replay",
+        "pulsecheck-protocol-families/priming-imagery_priming"
+      ],
+      "aliases": [
+        "protocol-perfect-execution-replay",
+        "viz-perfect-execution"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "protocol-nerves-to-excitement",
+      "name": "Nerves to Excitement Reframe",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Add one concrete cue, self-statement, evidence recall or brief imagery/reflection after the basic session pattern is familiar.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-nerves-to-excitement",
+        "sim-modules/mindset-nerves-excitement",
+        "mental-exercises/mindset-nerves-excitement",
+        "pulsecheck-protocol-variants/regulation-cognitive_reframe--nerves-to-excitement-reframe",
+        "pulsecheck-protocol-families/regulation-cognitive_reframe"
+      ],
+      "aliases": [
+        "mindset-nerves-excitement",
+        "protocol-nerves-to-excitement"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "mindset-pressure-privilege",
+      "name": "Pressure to Privilege Reframe",
+      "type": "simulation",
+      "readiness": "active base requires dispatch and copy review",
+      "rationale": "Add longer preparation, meaning selection, body priming or scenario choice; content copy and platform behavior need review, not an efficacy claim.",
+      "sourceRefs": [
+        "sim-modules/mindset-pressure-privilege",
+        "mental-exercises/mindset-pressure-privilege"
+      ],
+      "aliases": [
+        "mindset-pressure-privilege"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "protocol-power-pose",
+      "name": "Power Posing",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Add longer preparation, meaning selection, body priming or scenario choice; content copy and platform behavior need review, not an efficacy claim.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-power-pose",
+        "sim-modules/confidence-power-pose",
+        "mental-exercises/confidence-power-pose",
+        "pulsecheck-protocol-variants/priming-confidence_priming--power-posing",
+        "pulsecheck-protocol-families/priming-confidence_priming"
+      ],
+      "aliases": [
+        "confidence-power-pose",
+        "protocol-power-pose"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "confidence-inventory",
+      "name": "Confidence Inventory",
+      "type": "protocol",
+      "readiness": "classification review guided activity in simulation catalog",
+      "rationale": "Add longer preparation, meaning selection, body priming or scenario choice; content copy and platform behavior need review, not an efficacy claim. Guided dwell/imagery or timed attention technique, not a scored skill game; reclassified as Protocol under user definition while preserving current catalogKind=simulation.",
+      "sourceRefs": [
+        "sim-modules/confidence-inventory",
+        "mental-exercises/confidence-inventory"
+      ],
+      "aliases": [
+        "confidence-inventory"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": "Guided dwell/imagery or timed attention technique, not a scored skill game; reclassified as Protocol under user definition while preserving current catalogKind=simulation."
+    },
+    {
+      "id": "protocol-activation-breathing",
+      "name": "Activation Breathing",
+      "type": "protocol",
+      "readiness": "active protocol requires copy and platform review",
+      "rationale": "Add longer preparation, meaning selection, body priming or scenario choice; content copy and platform behavior need review, not an efficacy claim.",
+      "sourceRefs": [
+        "pulsecheck-protocols/protocol-activation-breathing",
+        "sim-modules/breathing-activation",
+        "mental-exercises/breathing-activation",
+        "pulsecheck-protocol-variants/priming-activation_upshift--activation-breathing",
+        "pulsecheck-protocol-families/priming-activation_upshift"
+      ],
+      "aliases": [
+        "breathing-activation",
+        "protocol-activation-breathing"
+      ],
+      "catalogType": "protocol",
+      "classificationReason": ""
+    },
+    {
+      "id": "viz-competition-walkthrough",
+      "name": "Competition Walkthrough",
+      "type": "protocol",
+      "readiness": "classification review guided activity in simulation catalog",
+      "rationale": "Add longer preparation, meaning selection, body priming or scenario choice; content copy and platform behavior need review, not an efficacy claim. Guided dwell/imagery or timed attention technique, not a scored skill game; reclassified as Protocol under user definition while preserving current catalogKind=simulation.",
+      "sourceRefs": [
+        "sim-modules/viz-competition-walkthrough",
+        "mental-exercises/viz-competition-walkthrough"
+      ],
+      "aliases": [
+        "viz-competition-walkthrough"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": "Guided dwell/imagery or timed attention technique, not a scored skill game; reclassified as Protocol under user definition while preserving current catalogKind=simulation."
+    },
+    {
+      "id": "viz-adversity-response",
+      "name": "Adversity Response Imagery",
+      "type": "simulation",
+      "readiness": "active base requires dispatch and copy review",
+      "rationale": "Add longer preparation, meaning selection, body priming or scenario choice; content copy and platform behavior need review, not an efficacy claim.",
+      "sourceRefs": [
+        "sim-modules/viz-adversity-response",
+        "mental-exercises/viz-adversity-response"
+      ],
+      "aliases": [
+        "viz-adversity-response"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "focus-3-second-reset",
+      "name": "Reset",
+      "type": "simulation",
+      "readiness": "active base requires dispatch and copy review",
+      "rationale": "Introduce the reset task with its task-specific score before named expressions. This is a bounded task observation, not sport-transfer validation.",
+      "sourceRefs": [
+        "sim-modules/focus-3-second-reset",
+        "mental-exercises/focus-3-second-reset"
+      ],
+      "aliases": [
+        "focus-3-second-reset"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-branch-short-daily-reset",
+      "name": "Short Daily Reset",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named reset expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/reset-branch-short-daily-reset",
+        "sim-variants/reset-branch-short-daily-reset"
+      ],
+      "aliases": [
+        "reset-branch-short-daily-reset"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-library-recovery-chain",
+      "name": "Recovery Chain",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named reset expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/reset-library-recovery-chain",
+        "sim-variants/reset-library-recovery-chain"
+      ],
+      "aliases": [
+        "reset-library-recovery-chain"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-library-reset-window",
+      "name": "Reset Window",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named reset expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/reset-library-reset-window",
+        "sim-variants/reset-library-reset-window"
+      ],
+      "aliases": [
+        "reset-library-reset-window"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-library-restart",
+      "name": "Restart",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named reset expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/reset-library-restart",
+        "sim-variants/reset-library-restart"
+      ],
+      "aliases": [
+        "reset-library-restart"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-library-second-chance",
+      "name": "Second Chance",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named reset expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/reset-library-second-chance",
+        "sim-variants/reset-library-second-chance"
+      ],
+      "aliases": [
+        "reset-library-second-chance"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "focus-noise-gate",
+      "name": "Noise Gate",
+      "type": "simulation",
+      "readiness": "active base requires dispatch and copy review",
+      "rationale": "Introduce the noise_gate task with its task-specific score before named expressions. This is a bounded task observation, not sport-transfer validation.",
+      "sourceRefs": [
+        "sim-modules/focus-noise-gate",
+        "mental-exercises/focus-noise-gate"
+      ],
+      "aliases": [
+        "focus-noise-gate"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-library-channel-filter",
+      "name": "Channel Filter",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named noise_gate expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/noise-gate-library-channel-filter",
+        "sim-variants/noise-gate-library-channel-filter"
+      ],
+      "aliases": [
+        "noise-gate-library-channel-filter"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "decision-brake-point",
+      "name": "Brake Point",
+      "type": "simulation",
+      "readiness": "active base requires dispatch and copy review",
+      "rationale": "Introduce the brake_point task with its task-specific score before named expressions. This is a bounded task observation, not sport-transfer validation.",
+      "sourceRefs": [
+        "sim-modules/decision-brake-point",
+        "mental-exercises/decision-brake-point"
+      ],
+      "aliases": [
+        "decision-brake-point"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-branch-high-stakes-inhibition-brake-point",
+      "name": "High-Stakes Inhibition Brake Point",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named brake_point expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/brake-point-branch-high-stakes-inhibition-brake-point",
+        "sim-variants/brake-point-branch-high-stakes-inhibition-brake-point"
+      ],
+      "aliases": [
+        "brake-point-branch-high-stakes-inhibition-brake-point"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-branch-spatial-cancel-brake-point",
+      "name": "Spatial Cancel Brake Point",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named brake_point expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/brake-point-branch-spatial-cancel-brake-point",
+        "sim-variants/brake-point-branch-spatial-cancel-brake-point"
+      ],
+      "aliases": [
+        "brake-point-branch-spatial-cancel-brake-point"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "decision-signal-window",
+      "name": "Signal Window",
+      "type": "simulation",
+      "readiness": "active base requires dispatch and copy review",
+      "rationale": "Introduce the signal_window task with its task-specific score before named expressions. This is a bounded task observation, not sport-transfer validation.",
+      "sourceRefs": [
+        "sim-modules/decision-signal-window",
+        "mental-exercises/decision-signal-window"
+      ],
+      "aliases": [
+        "decision-signal-window"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-branch-rapid-recognition-signal-window",
+      "name": "Rapid Recognition Signal Window",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named signal_window expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/signal-window-branch-rapid-recognition-signal-window",
+        "sim-variants/signal-window-branch-rapid-recognition-signal-window"
+      ],
+      "aliases": [
+        "signal-window-branch-rapid-recognition-signal-window"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "decision-sequence-shift",
+      "name": "Sequence Shift",
+      "type": "simulation",
+      "readiness": "active base requires dispatch and copy review",
+      "rationale": "Introduce the sequence_shift task with its task-specific score before named expressions. This is a bounded task observation, not sport-transfer validation.",
+      "sourceRefs": [
+        "sim-modules/decision-sequence-shift",
+        "mental-exercises/decision-sequence-shift"
+      ],
+      "aliases": [
+        "decision-sequence-shift"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "sequence-shift-branch-dual-rule-sequence-shift",
+      "name": "Dual-Rule Sequence Shift",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named sequence_shift expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/sequence-shift-branch-dual-rule-sequence-shift",
+        "sim-variants/sequence-shift-branch-dual-rule-sequence-shift"
+      ],
+      "aliases": [
+        "sequence-shift-branch-dual-rule-sequence-shift"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "sequence-shift-branch-pattern-change-sequence-shift",
+      "name": "Pattern-Change Sequence Shift",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named sequence_shift expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/sequence-shift-branch-pattern-change-sequence-shift",
+        "sim-variants/sequence-shift-branch-pattern-change-sequence-shift"
+      ],
+      "aliases": [
+        "sequence-shift-branch-pattern-change-sequence-shift"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "sequence-shift-branch-sequence-memory-sequence-shift",
+      "name": "Sequence-Memory Sequence Shift",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named sequence_shift expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/sequence-shift-branch-sequence-memory-sequence-shift",
+        "sim-variants/sequence-shift-branch-sequence-memory-sequence-shift"
+      ],
+      "aliases": [
+        "sequence-shift-branch-sequence-memory-sequence-shift"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "sequence-shift-library-audible",
+      "name": "Audible",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named sequence_shift expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/sequence-shift-library-audible",
+        "sim-variants/sequence-shift-library-audible"
+      ],
+      "aliases": [
+        "sequence-shift-library-audible"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "sequence-shift-library-rule-break",
+      "name": "Rule Break",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named sequence_shift expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/sequence-shift-library-rule-break",
+        "sim-variants/sequence-shift-library-rule-break"
+      ],
+      "aliases": [
+        "sequence-shift-library-rule-break"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "focus-endurance-lock",
+      "name": "Endurance Lock",
+      "type": "simulation",
+      "readiness": "active base requires dispatch and copy review",
+      "rationale": "Introduce the endurance_lock task with its task-specific score before named expressions. This is a bounded task observation, not sport-transfer validation.",
+      "sourceRefs": [
+        "sim-modules/focus-endurance-lock",
+        "mental-exercises/focus-endurance-lock"
+      ],
+      "aliases": [
+        "focus-endurance-lock"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-library-grind-line",
+      "name": "Grind Line",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named endurance_lock expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-library-grind-line",
+        "sim-variants/endurance-lock-library-grind-line"
+      ],
+      "aliases": [
+        "endurance-lock-library-grind-line"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-library-sharpness-drop",
+      "name": "Sharpness Drop",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named endurance_lock expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-library-sharpness-drop",
+        "sim-variants/endurance-lock-library-sharpness-drop"
+      ],
+      "aliases": [
+        "endurance-lock-library-sharpness-drop"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-library-stay-clean",
+      "name": "Stay Clean",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named endurance_lock expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-library-stay-clean",
+        "sim-variants/endurance-lock-library-stay-clean"
+      ],
+      "aliases": [
+        "endurance-lock-library-stay-clean"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-library-volatility-curve",
+      "name": "Volatility Curve",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Retain this separately named endurance_lock expression; stored archetype is simple/short. Native engines may not implement its named variation; no additional ability inferred.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-library-volatility-curve",
+        "sim-variants/endurance-lock-library-volatility-curve"
+      ],
+      "aliases": [
+        "endurance-lock-library-volatility-curve"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-branch-visual-disruption-reset",
+      "name": "Visual Disruption Reset",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared visual_channel expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/reset-branch-visual-disruption-reset",
+        "sim-variants/reset-branch-visual-disruption-reset"
+      ],
+      "aliases": [
+        "reset-branch-visual-disruption-reset"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-branch-peripheral-bait-noise-gate",
+      "name": "Peripheral Bait Noise Gate",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared visual_channel expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/noise-gate-branch-peripheral-bait-noise-gate",
+        "sim-variants/noise-gate-branch-peripheral-bait-noise-gate"
+      ],
+      "aliases": [
+        "noise-gate-branch-peripheral-bait-noise-gate"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-branch-visual-clutter-noise-gate",
+      "name": "Visual Clutter Noise Gate",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared visual_channel expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/noise-gate-branch-visual-clutter-noise-gate",
+        "sim-variants/noise-gate-branch-visual-clutter-noise-gate"
+      ],
+      "aliases": [
+        "noise-gate-branch-visual-clutter-noise-gate"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-library-spotlight",
+      "name": "Spotlight",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared visual_channel expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/noise-gate-library-spotlight",
+        "sim-variants/noise-gate-library-spotlight"
+      ],
+      "aliases": [
+        "noise-gate-library-spotlight"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-branch-clutter-fatigue-endurance-lock",
+      "name": "Clutter-Fatigue Endurance Lock",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared visual_channel expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-branch-clutter-fatigue-endurance-lock",
+        "sim-variants/endurance-lock-branch-clutter-fatigue-endurance-lock"
+      ],
+      "aliases": [
+        "endurance-lock-branch-clutter-fatigue-endurance-lock"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-branch-audio-disruption-reset",
+      "name": "Audio Disruption Reset",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared audio_channel expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/reset-branch-audio-disruption-reset",
+        "sim-variants/reset-branch-audio-disruption-reset"
+      ],
+      "aliases": [
+        "reset-branch-audio-disruption-reset"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-branch-crowd-noise-noise-gate",
+      "name": "Crowd-Noise Noise Gate",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared audio_channel expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/noise-gate-branch-crowd-noise-noise-gate",
+        "sim-variants/noise-gate-branch-crowd-noise-noise-gate"
+      ],
+      "aliases": [
+        "noise-gate-branch-crowd-noise-noise-gate"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-library-crowd-control",
+      "name": "Crowd Control",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared audio_channel expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/noise-gate-library-crowd-control",
+        "sim-variants/noise-gate-library-crowd-control"
+      ],
+      "aliases": [
+        "noise-gate-library-crowd-control"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-branch-fakeout-brake-point",
+      "name": "Fakeout Brake Point",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared decoy_discrimination expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/brake-point-branch-fakeout-brake-point",
+        "sim-variants/brake-point-branch-fakeout-brake-point"
+      ],
+      "aliases": [
+        "brake-point-branch-fakeout-brake-point"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-branch-false-start-brake-point",
+      "name": "False-Start Brake Point",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared decoy_discrimination expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/brake-point-branch-false-start-brake-point",
+        "sim-variants/brake-point-branch-false-start-brake-point"
+      ],
+      "aliases": [
+        "brake-point-branch-false-start-brake-point"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-branch-go-no-go-brake-point",
+      "name": "Go/No-Go Brake Point",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared decoy_discrimination expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/brake-point-branch-go-no-go-brake-point",
+        "sim-variants/brake-point-branch-go-no-go-brake-point"
+      ],
+      "aliases": [
+        "brake-point-branch-go-no-go-brake-point"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-branch-decoy-cue-signal-window",
+      "name": "Decoy Cue Signal Window",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared decoy_discrimination expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/signal-window-branch-decoy-cue-signal-window",
+        "sim-variants/signal-window-branch-decoy-cue-signal-window"
+      ],
+      "aliases": [
+        "signal-window-branch-decoy-cue-signal-window"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-branch-combined-channel-reset",
+      "name": "Combined-Channel Reset",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared combined_channel expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/reset-branch-combined-channel-reset",
+        "sim-variants/reset-branch-combined-channel-reset"
+      ],
+      "aliases": [
+        "reset-branch-combined-channel-reset"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-branch-mixed-channel-noise-gate",
+      "name": "Mixed-Channel Noise Gate",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared combined_channel expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/noise-gate-branch-mixed-channel-noise-gate",
+        "sim-variants/noise-gate-branch-mixed-channel-noise-gate"
+      ],
+      "aliases": [
+        "noise-gate-branch-mixed-channel-noise-gate"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-branch-cognitive-provocation-reset",
+      "name": "Cognitive-Provocation Reset",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared cognitive_pressure expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/reset-branch-cognitive-provocation-reset",
+        "sim-variants/reset-branch-cognitive-provocation-reset"
+      ],
+      "aliases": [
+        "reset-branch-cognitive-provocation-reset"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-branch-ambiguous-cue-signal-window",
+      "name": "Ambiguous Cue Signal Window",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared cognitive_pressure expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/signal-window-branch-ambiguous-cue-signal-window",
+        "sim-variants/signal-window-branch-ambiguous-cue-signal-window"
+      ],
+      "aliases": [
+        "signal-window-branch-ambiguous-cue-signal-window"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-branch-shot-clock-signal-window",
+      "name": "Shot-Clock Signal Window",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared sport_context expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/signal-window-branch-shot-clock-signal-window",
+        "sim-variants/signal-window-branch-shot-clock-signal-window"
+      ],
+      "aliases": [
+        "signal-window-branch-shot-clock-signal-window"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "sequence-shift-branch-sport-playbook-sequence-shift",
+      "name": "Sport-Playbook Sequence Shift",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared sport_context expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/sequence-shift-branch-sport-playbook-sequence-shift",
+        "sim-variants/sequence-shift-branch-sport-playbook-sequence-shift"
+      ],
+      "aliases": [
+        "sequence-shift-branch-sport-playbook-sequence-shift"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "sequence-shift-branch-late-audible-sequence-shift",
+      "name": "Late-Audible Sequence Shift",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared fatigue_load expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/sequence-shift-branch-late-audible-sequence-shift",
+        "sim-variants/sequence-shift-branch-late-audible-sequence-shift"
+      ],
+      "aliases": [
+        "sequence-shift-branch-late-audible-sequence-shift"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-branch-late-pressure-endurance-lock",
+      "name": "Late-Pressure Endurance Lock",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared fatigue_load expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-branch-late-pressure-endurance-lock",
+        "sim-variants/endurance-lock-branch-late-pressure-endurance-lock"
+      ],
+      "aliases": [
+        "endurance-lock-branch-late-pressure-endurance-lock"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-branch-long-reset-endurance-lock",
+      "name": "Long-Reset Endurance Lock",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared fatigue_load expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-branch-long-reset-endurance-lock",
+        "sim-variants/endurance-lock-branch-long-reset-endurance-lock"
+      ],
+      "aliases": [
+        "endurance-lock-branch-long-reset-endurance-lock"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-branch-sustained-focus-endurance-lock",
+      "name": "Sustained-Focus Endurance Lock",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared fatigue_load expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-branch-sustained-focus-endurance-lock",
+        "sim-variants/endurance-lock-branch-sustained-focus-endurance-lock"
+      ],
+      "aliases": [
+        "endurance-lock-branch-sustained-focus-endurance-lock"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-library-burn-rate",
+      "name": "Burn Rate",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared fatigue_load expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-library-burn-rate",
+        "sim-variants/endurance-lock-library-burn-rate"
+      ],
+      "aliases": [
+        "endurance-lock-library-burn-rate"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-library-fatigue-filter",
+      "name": "Fatigue Filter",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared fatigue_load expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-library-fatigue-filter",
+        "sim-variants/endurance-lock-library-fatigue-filter"
+      ],
+      "aliases": [
+        "endurance-lock-library-fatigue-filter"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-library-late-clock",
+      "name": "Late Clock",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared fatigue_load expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-library-late-clock",
+        "sim-variants/endurance-lock-library-late-clock"
+      ],
+      "aliases": [
+        "endurance-lock-library-late-clock"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-library-long-reset",
+      "name": "Long Reset",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared fatigue_load expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-library-long-reset",
+        "sim-variants/endurance-lock-library-long-reset"
+      ],
+      "aliases": [
+        "endurance-lock-library-long-reset"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-branch-extended-trial-reset",
+      "name": "Extended Trial Reset",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared trial expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/reset-branch-extended-trial-reset",
+        "sim-variants/reset-branch-extended-trial-reset"
+      ],
+      "aliases": [
+        "reset-branch-extended-trial-reset"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-branch-field-read-trial-signal-window",
+      "name": "Field-Read Trial Signal Window",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared trial expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/signal-window-branch-field-read-trial-signal-window",
+        "sim-variants/signal-window-branch-field-read-trial-signal-window"
+      ],
+      "aliases": [
+        "signal-window-branch-field-read-trial-signal-window"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-branch-trial-only-fatigability-probe",
+      "name": "Trial-Only Fatigability Probe",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared trial expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/endurance-lock-branch-trial-only-fatigability-probe",
+        "sim-variants/endurance-lock-branch-trial-only-fatigability-probe"
+      ],
+      "aliases": [
+        "endurance-lock-branch-trial-only-fatigability-probe"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-branch-immersive-reset-chamber",
+      "name": "Immersive Reset Chamber",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared immersive expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/reset-branch-immersive-reset-chamber",
+        "sim-variants/reset-branch-immersive-reset-chamber"
+      ],
+      "aliases": [
+        "reset-branch-immersive-reset-chamber"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-library-reset-chamber",
+      "name": "Reset Chamber",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared immersive expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/reset-library-reset-chamber",
+        "sim-variants/reset-library-reset-chamber"
+      ],
+      "aliases": [
+        "reset-library-reset-chamber"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-library-tunnel-line",
+      "name": "Tunnel Line",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared immersive expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/noise-gate-library-tunnel-line",
+        "sim-variants/noise-gate-library-tunnel-line"
+      ],
+      "aliases": [
+        "noise-gate-library-tunnel-line"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-branch-immersive-spatial-brake",
+      "name": "Immersive Spatial Brake",
+      "type": "simulation",
+      "readiness": "active named variant requires mechanics adaptation",
+      "rationale": "Declared immersive expression follows the relevant family introduction and simpler expressions. Preserve its name/order while flagging engine/config mismatch; title is not proof of implemented complexity or efficacy.",
+      "sourceRefs": [
+        "sim-modules/brake-point-branch-immersive-spatial-brake",
+        "sim-variants/brake-point-branch-immersive-spatial-brake"
+      ],
+      "aliases": [
+        "brake-point-branch-immersive-spatial-brake"
+      ],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    }
+  ],
+  "candidates": [
+    {
+      "id": "blind-commit-branch-confidence-calibration",
+      "name": "Confidence Calibration",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/blind-commit-branch-confidence-calibration"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "blind-commit-branch-forced-commit-under-timer",
+      "name": "Forced-Commit Under Timer",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/blind-commit-branch-forced-commit-under-timer"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "blind-commit-branch-late-reveal",
+      "name": "Late Reveal",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/blind-commit-branch-late-reveal"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "blind-commit-branch-partial-information-commit",
+      "name": "Partial-Information Commit",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/blind-commit-branch-partial-information-commit"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-library-decoy-lane",
+      "name": "Decoy Lane",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/brake-point-library-decoy-lane"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-library-false-key",
+      "name": "False Key",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/brake-point-library-false-key"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-library-false-start",
+      "name": "False Start",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/brake-point-library-false-start"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-library-red-light",
+      "name": "Red Light",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/brake-point-library-red-light"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "brake-point-library-spatial-brake",
+      "name": "Spatial Brake",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/brake-point-library-spatial-brake"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "chaos-read-branch-blindside",
+      "name": "Blindside",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/chaos-read-branch-blindside"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "chaos-read-branch-compressed-chaos",
+      "name": "Compressed Chaos",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/chaos-read-branch-compressed-chaos"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "chaos-read-branch-noise-to-choice",
+      "name": "Noise to Choice",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/chaos-read-branch-noise-to-choice"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "chaos-read-branch-reset-and-read",
+      "name": "Reset and Read",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/chaos-read-branch-reset-and-read"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "chaos-read-hybrid-noise-to-choice-hybrid",
+      "name": "Noise to Choice (Hybrid)",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/chaos-read-hybrid-noise-to-choice-hybrid"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-hybrid-last-rep",
+      "name": "Last Rep",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/endurance-lock-hybrid-last-rep"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "endurance-lock-hybrid-two-minute-drill",
+      "name": "Two-Minute Drill",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/endurance-lock-hybrid-two-minute-drill"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "fault-line-branch-bounce-back",
+      "name": "Bounce Back",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/fault-line-branch-bounce-back"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "fault-line-branch-error-spiral",
+      "name": "Error Spiral",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/fault-line-branch-error-spiral"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "fault-line-branch-next-play",
+      "name": "Next Play",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/fault-line-branch-next-play"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "fault-line-branch-post-miss-reset",
+      "name": "Post-Miss Reset",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/fault-line-branch-post-miss-reset"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "fault-line-branch-tilt-test",
+      "name": "Tilt Test",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/fault-line-branch-tilt-test"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "heat-check-branch-coach-watch-mode",
+      "name": "Coach-Watch Mode",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/heat-check-branch-coach-watch-mode"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "heat-check-branch-last-play",
+      "name": "Last Play",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/heat-check-branch-last-play"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "heat-check-branch-public-eye",
+      "name": "Public Eye",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/heat-check-branch-public-eye"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "heat-check-branch-ranking-pressure",
+      "name": "Ranking Pressure",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/heat-check-branch-ranking-pressure"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "heat-check-branch-score-on-the-line",
+      "name": "Score-On-The-Line",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/heat-check-branch-score-on-the-line"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "heat-check-hybrid-pressure-room",
+      "name": "Pressure Room",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/heat-check-hybrid-pressure-room"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-branch-fatigue-state-noise-gate",
+      "name": "Fatigue-State Noise Gate",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/noise-gate-branch-fatigue-state-noise-gate"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-branch-immersive-crowd-tunnel",
+      "name": "Immersive Crowd Tunnel",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/noise-gate-branch-immersive-crowd-tunnel"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-library-crowd-tunnel",
+      "name": "Crowd Tunnel",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/noise-gate-library-crowd-tunnel"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "noise-gate-library-peripheral-fade",
+      "name": "Peripheral Fade",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/noise-gate-library-peripheral-fade"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "quiet-eye-branch-anticipatory-anchor",
+      "name": "Anticipatory Anchor",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/quiet-eye-branch-anticipatory-anchor"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "quiet-eye-branch-fixation-under-pressure",
+      "name": "Fixation Under Pressure",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/quiet-eye-branch-fixation-under-pressure"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "quiet-eye-branch-gaze-hold",
+      "name": "Gaze Hold",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/quiet-eye-branch-gaze-hold"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "quiet-eye-branch-pre-shot-lock",
+      "name": "Pre-Shot Lock",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/quiet-eye-branch-pre-shot-lock"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-branch-sport-context-reset",
+      "name": "Sport-Context Reset",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/reset-branch-sport-context-reset"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-hybrid-overload",
+      "name": "Overload",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/reset-hybrid-overload"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-hybrid-recovery-chain",
+      "name": "Recovery Chain",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/reset-hybrid-recovery-chain"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "reset-library-aftershock",
+      "name": "Aftershock",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/reset-library-aftershock"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "sequence-shift-library-broken-play",
+      "name": "Broken Play",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/sequence-shift-library-broken-play"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "sequence-shift-library-pattern-shift",
+      "name": "Pattern Shift",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/sequence-shift-library-pattern-shift"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "sequence-shift-library-switchboard",
+      "name": "Switchboard",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/sequence-shift-library-switchboard"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-branch-ambiguous-signal-window",
+      "name": "Ambiguous Signal Window",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/signal-window-branch-ambiguous-signal-window"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-branch-decoy-signal-window",
+      "name": "Decoy Signal Window",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/signal-window-branch-decoy-signal-window"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-branch-spatial-read-signal-window",
+      "name": "Spatial Read Signal Window",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/signal-window-branch-spatial-read-signal-window"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-hybrid-field-mirror",
+      "name": "Field Mirror",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/signal-window-hybrid-field-mirror"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-library-check-down",
+      "name": "Check Down",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/signal-window-library-check-down"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-library-shot-clock",
+      "name": "Shot Clock",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/signal-window-library-shot-clock"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-library-snap-read",
+      "name": "Snap Read",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/signal-window-library-snap-read"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-library-spatial-read",
+      "name": "Spatial Read",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/signal-window-library-spatial-read"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-library-split-second",
+      "name": "Split Second",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/signal-window-library-split-second"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "signal-window-library-window-close",
+      "name": "Window Close",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/signal-window-library-window-close"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "split-stream-branch-dual-channel-monitoring",
+      "name": "Dual-Channel Monitoring",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/split-stream-branch-dual-channel-monitoring"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "split-stream-branch-multi-source",
+      "name": "Multi-Source",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/split-stream-branch-multi-source"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "split-stream-branch-priority-stack",
+      "name": "Priority Stack",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/split-stream-branch-priority-stack"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    },
+    {
+      "id": "split-stream-branch-rotating-source-load",
+      "name": "Rotating-Source Load",
+      "type": "simulation",
+      "readiness": "hold",
+      "rationale": "No active published module exists. Listed separately without curricular activation or invented transfer capability.",
+      "sourceRefs": [
+        "sim-variants/split-stream-branch-rotating-source-load"
+      ],
+      "aliases": [],
+      "catalogType": "simulation",
+      "classificationReason": ""
+    }
+  ]
+}

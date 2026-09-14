@@ -1,3 +1,4 @@
+import type { PracticeBacklog } from './practiceBacklog';
 import type { Timestamp } from 'firebase/firestore';
 import type {
   CorrelationConfidenceTier,
@@ -434,6 +435,7 @@ export interface PilotDashboardAthleteJourneySummary {
   checkInCount: number;
   assignmentCount: number;
   assignmentCompletedCount: number;
+  practiceBacklog: PracticeBacklog;
   noraConversationCount: number;
   noraSavedChatConversationCount: number;
   noraStructuredConversationCount: number;

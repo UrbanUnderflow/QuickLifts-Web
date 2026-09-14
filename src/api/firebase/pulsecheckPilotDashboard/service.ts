@@ -1,3 +1,4 @@
+import { emptyPracticeBacklog, summarizePracticeBacklog } from './practiceBacklog';
 import {
   collection,
   deleteDoc,
@@ -1604,6 +1605,7 @@ const buildEmptyAthleteJourneySummary = (
     checkInCount: 0,
     assignmentCount: 0,
     assignmentCompletedCount: 0,
+    practiceBacklog: emptyPracticeBacklog(),
     noraConversationCount: 0,
     noraSavedChatConversationCount: 0,
     noraStructuredConversationCount: 0,
@@ -1758,6 +1760,7 @@ async function loadAthleteJourneySummary(
     checkInCount: checkIns.length,
     assignmentCount: assignments.length,
     assignmentCompletedCount: completedAssignments.length,
+    practiceBacklog: summarizePracticeBacklog(assignments, Date.now(), (teamMembership as any)?.timezone || 'America/New_York'),
     noraConversationCount: noraConversations.length + savedChatConversations.length,
     noraSavedChatConversationCount: savedChatConversations.length,
     noraStructuredConversationCount: noraConversations.length,

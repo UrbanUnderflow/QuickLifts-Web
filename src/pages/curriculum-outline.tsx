@@ -32,6 +32,10 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
+import LinearCurriculumTab from '../components/admin/LinearCurriculumTab';
+import CurriculumOperationsPanel from '../components/admin/CurriculumOperationsPanel';
+import type { LinearCurriculumEntry } from '../api/firebase/dailyCurriculum/linearCurriculum';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
   AlertTriangle,
@@ -69,6 +73,7 @@ import {
   collection,
   doc,
   getDocs,
+  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -166,9 +171,9 @@ const CURRICULUM_TRACKS: CurriculumTrack[] = [
   },
   {
     id: 'pro',
-    label: 'Pro',
+    label: 'Adult',
     ageRange: '18+',
-    description: 'Adaptive curriculum generated daily from the full module library.',
+    description: 'Current adult assignment model and legacy module inventory. Adult means ages 18+, at any competitive level.',
     status: 'live',
   },
 ];
@@ -270,8 +275,8 @@ const CURRICULUM_JOURNEYS: Record<CurriculumTrackId, CurriculumJourneyModel> = {
     continuityRules: ['Trained days keep increasing', 'Earned milestones never reset', 'A return after a gap is celebrated'],
   },
   pro: {
-    title: 'A prescription loop that always creates the next right work',
-    description: 'Pro has no fixed course. Daily training feeds adherence and performance signals into repeating blocks, reassessment, and pathway progression so the next prescription stays meaningful.',
+    title: 'Current adult assignment cycle',
+    description: 'The current adult model uses adaptive assignments. Daily training feeds adherence and performance signals into repeating blocks, reassessment, and pathway progression so the next prescription stays meaningful.',
     stages: [
       { label: 'Daily slate', detail: '3 protocols and 3 sims', icon: CalendarDays, tone: 'bg-teal-50 text-teal-700' },
       { label: '14-day block', detail: 'Practice toward one focus', icon: Layers3, tone: 'bg-indigo-50 text-indigo-700' },
@@ -672,8 +677,16 @@ const ModulePreviewModal: React.FC<ModulePreviewModalProps> = ({
 // ---------------------------------------------------------------------------
 
 const JuniorCurriculumPage: React.FC = () => {
+  const router = useRouter();
+  const view = ['content', 'settings', 'reports'].includes(String(router.query.view)) ? String(router.query.view) : 'sequence';
+  const selectView = (next: string) => { void router.push({ pathname: '/curriculum-outline', query: { view: next, ...(router.query.track ? { track: router.query.track } : {}) } }, undefined, { shallow: true, scroll: false }); };
   const bundled = curriculumData as JuniorLessonSeed[];
   const [activeTrackId, setActiveTrackId] = useState<CurriculumTrackId>('junior');
+  const [visitedOperations, setVisitedOperations] = useState<string[]>([]);
+  useEffect(() => { if (view === 'settings' || view === 'reports') setVisitedOperations(previous => previous.includes(view) ? previous : [...previous, view]); }, [view]);
+  useEffect(() => { const track = String(router.query.track || 'junior'); if (['rookie', 'junior', 'pro'].includes(track)) setActiveTrackId(track as CurriculumTrackId); }, [router.query.track]);
+  const selectTrack = (track: CurriculumTrackId) => { setActiveTrackId(track); void router.replace({ pathname: '/curriculum-outline', query: { view: 'content', track } }, undefined, { shallow: true, scroll: false }); };
+
   const [curriculumQuery, setCurriculumQuery] = useState('');
   const [activePillarFilter, setActivePillarFilter] = useState('all');
   const [moduleQuery, setModuleQuery] = useState('');
@@ -692,6 +705,8 @@ const JuniorCurriculumPage: React.FC = () => {
   const [seededExerciseIds, setSeededExerciseIds] = useState<Map<string, string>>(new Map());
   const [seededIds, setSeededIds] = useState<Set<string>>(new Set());
   const [exercises, setExercises] = useState<ExerciseOption[]>([]);
+  const [previewError, setPreviewError] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [syncingCopy, setSyncingCopy] = useState(false);
@@ -836,6 +851,25 @@ const JuniorCurriculumPage: React.FC = () => {
   const checkpointCount = bundled.filter((l) => l.kind === 'checkpoint').length;
   const lessonCount = bundled.length - checkpointCount;
   const totalMinutes = bundled.reduce((sum, l) => sum + (Number(l.durationMinutes) || 0), 0);
+
+  const previewSequenceSkill = useCallback(async (entry: LinearCurriculumEntry) => {
+    setPreviewError(''); setPreviewLoading(true);
+    try {
+      const known = exercises.find(exercise => entry.aliases.includes(exercise.id) || exercise.id === entry.id);
+      if (known) { setPreview({ exercise: known }); return; }
+      const refs = entry.sourceRefs.filter(ref => ref.startsWith('sim-modules/') || ref.startsWith('mental-exercises/'));
+      for (const ref of refs) {
+        const [collectionName, id] = ref.split('/');
+        const snapshot = await getDoc(doc(db, collectionName, id));
+        if (!snapshot.exists()) continue;
+        const data = snapshot.data();
+        setPreview({ exercise: { id, name: String(data.name || entry.name), category: String(data.category || ''), durationMinutes: Number(data.durationMinutes || 0), handoffRisk: exerciseHandoffRisk(data), isSim: Boolean(data.simSpecId), data } });
+        return;
+      }
+      setPreviewError('A compatible module preview is not available for this skill yet. Review its readiness details.');
+    } catch { setPreviewError('Could not load this preview. Check your sign-in and selected database, then try again.'); }
+    finally { setPreviewLoading(false); }
+  }, [exercises]);
 
   const openLessonPreview = useCallback((lesson: LessonRow) => {
     const exercise = exercisesById.get(lesson.effectiveExerciseId);
@@ -1204,15 +1238,34 @@ const JuniorCurriculumPage: React.FC = () => {
       </Head>
       <div className="min-h-screen bg-[#FAFAF7] text-stone-900">
         <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
+          <header className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Curriculum administration</p>
+            <h1 className="mt-2 text-3xl font-bold text-stone-950">Curriculum Outline</h1>
+            <p className="mt-2 text-sm leading-6 text-stone-600">Review the skill sequence, explore track content, and manage daily assignments.</p>
+          </header>
+          <nav aria-label="Curriculum workspace" className="mb-6 flex flex-wrap gap-2 rounded-lg border border-stone-200 bg-white p-2 shadow-sm">
+            {[['sequence', 'Proposed skill sequence'], ['content', 'Tracks & lessons'], ['settings', 'Assignment settings'], ['reports', 'Module insights']].map(([key, label]) => <button key={key} type="button" aria-pressed={view === key} onClick={() => selectView(key)} className={`rounded-md px-4 py-2 text-sm font-semibold ${view === key ? 'bg-stone-950 text-white' : 'text-stone-600 hover:bg-stone-100'}`}>{label}</button>)}
+          </nav>
+          <div hidden={view !== 'sequence'}>
+            {previewLoading && <p role="status" className="mb-3 text-sm text-stone-600">Loading module preview…</p>}
+            {previewError && <p role="alert" className="mb-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{previewError}</p>}
+            <LinearCurriculumTab onPreview={previewSequenceSkill} />
+          </div>
+          {visitedOperations.map(mode => <div key={mode} hidden={view !== mode}>
+            <p className="mb-4 rounded-lg border border-stone-200 bg-white p-3 text-sm text-stone-700">{mode === 'settings' ? 'Current assignment settings. Saving here updates the selected database. The proposed skill sequence stays a browser draft.' : 'Module-level activity from the selected database. Individual and team participation remain in the pilot dashboard.'}</p>
+            <CurriculumOperationsPanel mode={mode as 'settings' | 'reports'} initialTab={String(router.query.tab || '')} onTabChange={tab => { void router.replace({ pathname: '/curriculum-outline', query: { view: mode, tab } }, undefined, { shallow: true, scroll: false }); }} />
+          </div>)}
+          <div hidden={view !== 'content'}>
+          <p className="mb-4 rounded-lg border border-stone-200 bg-white p-3 text-sm text-stone-700">Current track content: Junior uses its guided lesson sequence; Adult uses adaptive assignments; Rookie is planned. The proposed shared sequence has not replaced these models.</p>
           <header className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
               <div className="min-w-0">
                 <div className="mb-2 flex items-center gap-2">
                   <GraduationCap className="h-4 w-4 text-teal-700" />
                   <span className="text-xs font-bold uppercase tracking-wide text-stone-400">Curriculum administration</span>
                 </div>
-                <h1 className="text-3xl font-bold tracking-normal text-stone-950 md:text-4xl">
+                <h2 className="text-3xl font-bold tracking-normal text-stone-950 md:text-4xl">
                   {activeTrack.label} Curriculum
-                </h1>
+                </h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">
                   {devMode
                     ? 'Source-of-truth curriculum view with seed status, module mapping, and Firestore maintenance tools.'
@@ -1262,7 +1315,7 @@ const JuniorCurriculumPage: React.FC = () => {
                 <button
                   key={track.id}
                   type="button"
-                  onClick={() => setActiveTrackId(track.id)}
+                  onClick={() => selectTrack(track.id)}
                   aria-pressed={selected}
                   style={{ backgroundColor: selected ? '#1c1917' : '#ffffff' }}
                   className={`flex min-h-20 items-center gap-3 border-b px-4 py-3 text-left transition last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0 ${
@@ -1409,9 +1462,9 @@ const JuniorCurriculumPage: React.FC = () => {
             </section>
           ) : activeTrack.id === 'pro' ? (
             <>
-              <section aria-label="Pro curriculum summary" className="mb-6 grid overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm sm:grid-cols-2 lg:grid-cols-4">
+              <section aria-label="Adult curriculum summary" className="mb-6 grid overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm sm:grid-cols-2 lg:grid-cols-4">
                 {[
-                  { label: 'Active modules', value: exercises.length, detail: 'Finite engine inventory', icon: Layers3, tone: 'text-teal-700 bg-teal-50' },
+                  { label: 'Legacy library modules', value: exercises.length, detail: 'Separate from the full proposed sequence', icon: Layers3, tone: 'text-teal-700 bg-teal-50' },
                   { label: 'Daily slate', value: '3 + 3', detail: 'Protocols and simulations', icon: CalendarDays, tone: 'text-indigo-700 bg-indigo-50' },
                   { label: 'Training block', value: '14 days', detail: 'Extends 7 days below 80%', icon: TrendingUp, tone: 'text-amber-700 bg-amber-50' },
                   { label: 'Reassessment', value: '30 days', detail: 'Targets the largest gap', icon: RotateCcw, tone: 'text-rose-700 bg-rose-50' },
@@ -1436,7 +1489,7 @@ const JuniorCurriculumPage: React.FC = () => {
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wide text-stone-400">Adaptive content map</div>
                   <h2 className="mt-1 text-xl font-semibold text-stone-950">Pathway and module inventory</h2>
-                  <p className="mt-1 text-sm text-stone-500">The pathway defines long-term progression. The engine selects daily work from the finite module inventory below.</p>
+                  <p className="mt-1 text-sm text-stone-500">This view describes the current adult model. The inventory below comes from the legacy module library; the proposed sequence combines linked records across the full catalog.</p>
                 </div>
                 <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700">
                   <Infinity className="h-3.5 w-3.5" aria-hidden="true" /> New work is prescribed continuously
@@ -1566,7 +1619,7 @@ const JuniorCurriculumPage: React.FC = () => {
                     <section className="rounded-lg border border-dashed border-stone-300 bg-[#FAFAF7] p-4 text-xs leading-5 text-stone-500">
                       Engine surfaces: `ensure-todays-curriculum-assignment` (daily slate), `mental-curriculum-assignments`
                       (14-day cycles), `pulsecheck-curriculum-assessments` (monthly rollups), `athlete-mental-progress`
-                      (pathway state). Pro has no bundled seed JSON.
+                      (pathway state). The adult track has no bundled lesson sequence.
                     </section>
                   )}
                 </div>
@@ -1627,7 +1680,7 @@ const JuniorCurriculumPage: React.FC = () => {
                   { label: 'First-season lessons', value: lessonCount, detail: 'Across 3 pillars', icon: BookOpen, tone: 'text-teal-700 bg-teal-50' },
                   { label: 'Checkpoints', value: checkpointCount, detail: 'One per unit', icon: Flag, tone: 'text-amber-700 bg-amber-50' },
                   { label: 'Training time', value: `${totalMinutes} min`, detail: 'First guided season', icon: Clock3, tone: 'text-indigo-700 bg-indigo-50' },
-                  { label: 'Module coverage', value: `${mappingCoverage}%`, detail: blockedCount ? `${blockedCount} need attention` : 'All lessons playable', icon: ShieldCheck, tone: blockedCount ? 'text-rose-700 bg-rose-50' : 'text-emerald-700 bg-emerald-50' },
+                  { label: 'Module coverage', value: `${mappingCoverage}%`, detail: blockedCount ? `${blockedCount} need attention` : 'All lesson mappings present', icon: ShieldCheck, tone: blockedCount ? 'text-rose-700 bg-rose-50' : 'text-emerald-700 bg-emerald-50' },
                 ].map((metric) => {
                   const MetricIcon = metric.icon;
                   return (
@@ -1879,7 +1932,7 @@ const JuniorCurriculumPage: React.FC = () => {
                         </span>
                         <div>
                           <div className="text-[10px] font-bold uppercase tracking-wide text-stone-500">Curriculum health</div>
-                          <h2 className="text-base font-semibold text-stone-950">{curriculumReady ? 'Ready for athletes' : 'Needs attention'}</h2>
+                          <h2 className="text-base font-semibold text-stone-950">{curriculumReady ? 'Lesson mappings complete' : 'Needs attention'}</h2>
                         </div>
                       </div>
                     </div>
@@ -1929,7 +1982,7 @@ const JuniorCurriculumPage: React.FC = () => {
                       ) : (
                         <p className="flex items-start gap-2 text-xs leading-5 text-stone-500">
                           <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
-                          Every guided lesson has a playable, junior-safe module.
+                          Every guided lesson has a module mapping that passes the current mapping checks. Content and gameplay readiness require separate review.
                         </p>
                       )}
                     </div>
@@ -1944,6 +1997,7 @@ const JuniorCurriculumPage: React.FC = () => {
             </>
           )}
           </main>
+          </div>
         </div>
       </div>
       {preview && previewNoteTarget && (

@@ -2636,103 +2636,21 @@ const EquityAdminPage: React.FC = () => {
     });
   };
 
-  const prepareEquityDocumentForPreviewOrSend = async (docToPrepare: EquityDocument): Promise<EquityDocument> => {
+  // Viewing or preparing a signing packet must only read persisted documents.
+  // Regeneration belongs exclusively to the explicit document-edit workflow.
+  const loadSavedEquityDocument = async (documentToLoad: EquityDocument): Promise<EquityDocument> => {
     if (preparingSigningDocId) {
-      throw new Error('Another equity document is already being prepared.');
+      throw new Error('Another equity document is already being loaded.');
     }
-
-    setPreparingSigningDocId(docToPrepare.id);
-    setMessage({
-      type: 'info',
-      text: `Refreshing ${docToPrepare.title} before preview/send...`,
-    });
-
-    const stakeholder = docToPrepare.stakeholderId
-      ? stakeholders.find(candidate => candidate.id === docToPrepare.stakeholderId)
-      : null;
-    const managedProfile = getManagedAdvisorEquityProfile(
-      docToPrepare.stakeholderName || stakeholder?.name,
-    );
-    const isManagedUnsignedAdvisorPacketDoc =
-      Boolean(managedProfile) &&
-      stakeholder?.type === 'advisor' &&
-      ['advisor_nso_agreement', 'board_consent'].includes(docToPrepare.documentType) &&
-      !getEquityDocSignatureState(docToPrepare).isFullyExecuted;
-
+    setPreparingSigningDocId(documentToLoad.id);
     try {
-      if (isManagedUnsignedAdvisorPacketDoc && stakeholder && managedProfile) {
-        setMessage({
-          type: 'info',
-          text: `Preparing ${managedProfile.canonicalName}'s current 25,000-option packet...`,
-        });
-
-        const currentEip = getLatestCompletedEquityDocumentByType('eip');
-        if (!currentEip) {
-          throw new Error('A completed Equity Incentive Plan is required before sending this advisor packet.');
-        }
-
-        await regenerateCompanyApprovalDocCleanly(
-          currentEip,
-          currentEip.title,
-          'Refresh automatically for the current advisor resend and preview packet.',
-        );
-
-        const grantDetails = getAdvisorGrantDetails(stakeholder);
-        const saved = await saveGrantOptions(stakeholder, {
-          forceRegenerateDocuments: true,
-          optionsValue: managedProfile.numberOfOptions,
-          vestingStartDateValue:
-            getDateInputValue(grantDetails.vestingStartDate) || getDateInputValue(new Date()),
-          strikePriceValue: grantDetails.strikePrice,
-          valuationDateValue:
-            getDateInputValue(grantDetails.valuationDate) || getDateInputValue(new Date()),
-          earlyExerciseAllowed: Boolean(grantDetails.earlyExerciseAllowed),
-        });
-
-        if (!saved) {
-          throw new Error('Advisor packet refresh was not completed.');
-        }
-
-        const refreshedDocumentsSnapshot = await getDocs(query(
-          collection(db, 'equity-documents'),
-          where('stakeholderId', '==', stakeholder.id),
-          where('documentType', '==', docToPrepare.documentType),
-          where('status', '==', 'completed'),
-        ));
-        const refreshedDocuments = refreshedDocumentsSnapshot.docs.map(snapshot => ({
-          id: snapshot.id,
-          ...snapshot.data(),
-        })) as EquityDocument[];
-        const refreshedDocument = getLatestRelevantDocuments(refreshedDocuments)[0];
-
-        if (!refreshedDocument) {
-          throw new Error('The refreshed advisor document could not be found.');
-        }
-
-        await loadData();
-        setMessage({
-          type: 'success',
-          text: `${managedProfile.canonicalName}'s 25,000-option packet is current and ready to preview or resend.`,
-        });
-        return refreshedDocument;
-      }
-
-      if (isAutoExecutedCompanyDoc(docToPrepare)) {
-        const refreshedDocument = await regenerateCompanyApprovalDocCleanly(
-          docToPrepare,
-          docToPrepare.title,
-          'Refresh automatically before opening the document preview.',
-        );
-        await loadData();
-        return refreshedDocument;
-      }
-
-      return docToPrepare;
+      const snapshot = await getDoc(doc(db, 'equity-documents', documentToLoad.id));
+      if (!snapshot.exists()) throw new Error('The saved equity document could not be found.');
+      return { ...snapshot.data(), id: snapshot.id } as EquityDocument;
     } catch (error) {
-      console.error('Error preparing equity document:', error);
       setMessage({
         type: 'error',
-        text: error instanceof Error ? error.message : 'Failed to prepare the equity document.',
+        text: error instanceof Error ? error.message : 'Unable to load the saved equity document.',
       });
       throw error;
     } finally {
@@ -2742,109 +2660,21 @@ const EquityAdminPage: React.FC = () => {
 
   const openSigningModal = async (docToSign: EquityDocument) => {
     try {
-      const refreshedDocument = await prepareEquityDocumentForPreviewOrSend(docToSign);
+      const refreshedDocument = await loadSavedEquityDocument(docToSign);
       openSigningModalWithDocument(refreshedDocument, false);
       if (refreshedDocument.id !== docToSign.id || refreshedDocument.updatedAt !== docToSign.updatedAt) {
         setSigningModalStatus({
           type: 'success',
-          text: 'Latest EIP, Board Consent, and advisor agreement loaded for this packet.',
+          text: 'Saved document loaded for this packet.',
         });
       }
     } catch {
-      // prepareEquityDocumentForPreviewOrSend already shows the user-facing error.
+      // loadSavedEquityDocument already shows the user-facing error.
     }
   };
 
-  const handlePreviewEquityDoc = async (docToPreview: EquityDocument) => {
-    if (preparingSigningDocId) return;
-
-    const previewWindow = window.open('about:blank', '_blank');
-    if (previewWindow) {
-      previewWindow.document.title = 'Preparing document preview...';
-      previewWindow.document.body.style.margin = '0';
-      previewWindow.document.body.style.fontFamily = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      previewWindow.document.body.style.background = '#09090b';
-      previewWindow.document.body.style.color = '#f4f4f5';
-
-      const container = previewWindow.document.createElement('main');
-      container.style.minHeight = '100vh';
-      container.style.display = 'flex';
-      container.style.alignItems = 'center';
-      container.style.justifyContent = 'center';
-      container.style.padding = '32px';
-
-      const card = previewWindow.document.createElement('section');
-      card.style.maxWidth = '520px';
-      card.style.border = '1px solid #3f3f46';
-      card.style.borderRadius = '18px';
-      card.style.padding = '28px';
-      card.style.background = '#18181b';
-
-      const title = previewWindow.document.createElement('h1');
-      title.textContent = 'Preparing latest preview...';
-      title.style.margin = '0 0 12px';
-      title.style.fontSize = '22px';
-
-      const body = previewWindow.document.createElement('p');
-      body.textContent = 'Regenerating the document with the latest terms and cleanup rules. This tab will open the refreshed preview automatically.';
-      body.style.margin = '0';
-      body.style.lineHeight = '1.6';
-      body.style.color = '#d4d4d8';
-
-      card.append(title, body);
-      container.append(card);
-      previewWindow.document.body.replaceChildren(container);
-    }
-
-    try {
-      const refreshedDocument = await prepareEquityDocumentForPreviewOrSend(docToPreview);
-      const previewUrl = `/equity-doc/${refreshedDocument.id}?preview=${Date.now()}`;
-
-      if (previewWindow && !previewWindow.closed) {
-        previewWindow.location.href = previewUrl;
-      } else {
-        window.open(previewUrl, '_blank');
-      }
-    } catch (error) {
-      if (previewWindow && !previewWindow.closed) {
-        previewWindow.document.title = 'Preview failed';
-        previewWindow.document.body.style.margin = '0';
-        previewWindow.document.body.style.fontFamily = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-        previewWindow.document.body.style.background = '#09090b';
-        previewWindow.document.body.style.color = '#f4f4f5';
-        previewWindow.document.body.innerHTML = '';
-
-        const container = previewWindow.document.createElement('main');
-        container.style.minHeight = '100vh';
-        container.style.display = 'flex';
-        container.style.alignItems = 'center';
-        container.style.justifyContent = 'center';
-        container.style.padding = '32px';
-
-        const card = previewWindow.document.createElement('section');
-        card.style.maxWidth = '560px';
-        card.style.border = '1px solid #7f1d1d';
-        card.style.borderRadius = '18px';
-        card.style.padding = '28px';
-        card.style.background = '#1f1111';
-
-        const title = previewWindow.document.createElement('h1');
-        title.textContent = 'Preview failed to refresh';
-        title.style.margin = '0 0 12px';
-        title.style.fontSize = '22px';
-
-        const body = previewWindow.document.createElement('p');
-        body.textContent = error instanceof Error ? error.message : 'The latest document could not be generated. Please return to the admin page and try again.';
-        body.style.margin = '0';
-        body.style.lineHeight = '1.6';
-        body.style.color = '#fecaca';
-
-        card.append(title, body);
-        container.append(card);
-        previewWindow.document.body.replaceChildren(container);
-      }
-      // prepareEquityDocumentForPreviewOrSend already shows the user-facing error.
-    }
+  const handlePreviewEquityDoc = (docToPreview: EquityDocument) => {
+    window.open(`/equity-doc/${encodeURIComponent(docToPreview.id)}`, '_blank', 'noopener,noreferrer');
   };
 
   const closeSigningModal = () => {
@@ -2881,9 +2711,9 @@ const EquityAdminPage: React.FC = () => {
     }
 
     setIsSending(true);
-    setSigningModalStatus({ type: 'info', text: 'Refreshing the document packet before sending...' });
+    setSigningModalStatus({ type: 'info', text: 'Loading the saved document packet before sending...' });
     try {
-      const currentSigningDoc = await prepareEquityDocumentForPreviewOrSend(signingDoc);
+      const currentSigningDoc = await loadSavedEquityDocument(signingDoc);
       setSigningDoc(currentSigningDoc);
       const { stakeholderList, documentList } = await loadFreshEquityPacketData();
 
@@ -3040,10 +2870,10 @@ const EquityAdminPage: React.FC = () => {
     const company = getDefaultCompanySigner();
 
     setIsSending(true);
-    setSigningModalStatus({ type: 'info', text: 'Refreshing the document packet before sending preview...' });
+    setSigningModalStatus({ type: 'info', text: 'Loading the saved document packet before sending preview...' });
 
     try {
-      const currentSigningDoc = await prepareEquityDocumentForPreviewOrSend(signingDoc);
+      const currentSigningDoc = await loadSavedEquityDocument(signingDoc);
       setSigningDoc(currentSigningDoc);
       const { stakeholderList, documentList } = await loadFreshEquityPacketData();
 
@@ -5304,7 +5134,7 @@ const EquityAdminPage: React.FC = () => {
                                             ) : (
                                               <Eye className="w-3 h-3" />
                                             )}
-                                            {preparingSigningDocId === edoc.id ? 'Updating...' : 'Preview'}
+                                            {preparingSigningDocId === edoc.id ? 'Loading...' : 'Preview'}
                                           </button>
                                           <button
                                             onClick={(e) => { e.stopPropagation(); openAuditModal(edoc); }}
@@ -5881,7 +5711,7 @@ const EquityAdminPage: React.FC = () => {
                               ) : (
                                 <Eye className="w-4 h-4" />
                               )}
-                              {preparingSigningDocId === edoc.id ? 'Updating...' : 'Preview'}
+                              {preparingSigningDocId === edoc.id ? 'Loading...' : 'Preview'}
                             </button>
                             <button
                               onClick={() => openEditEquityDocModal(edoc)}

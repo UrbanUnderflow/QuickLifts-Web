@@ -16,6 +16,7 @@ import type { ExerciseCompletion, PulseCheckDailyAssignment, PulseCheckStateSnap
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import PulseCheckAccessHub, { teamDestinationForMembership } from './PulseCheckAccessHub';
 import CurriculumIntentPanel from './CurriculumIntentPanel';
+import LinearSkillEntry from './linear/LinearSkillEntry';
 
 type ReadinessLevel = 'drained' | 'low' | 'okay' | 'solid' | 'locked';
 
@@ -609,6 +610,7 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
 
   return (
     <div className="relative h-full overflow-y-auto" style={{ background: '#0a0a0b' }}>
+      <LinearSkillEntry />
       {/* ── BACKGROUND LAYER ── ambient floating orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <FloatingOrb color="#E0FE10" size={500} position={{ top: '-8%', left: '-6%' }} delay={0} />

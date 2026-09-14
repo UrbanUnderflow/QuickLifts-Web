@@ -1015,6 +1015,7 @@ const MoodSelector: React.FC<MoodSelectorProps> = ({ title, subtitle, onSelect }
 
 interface ActiveExerciseProps {
   exercise: SimModule;
+  allowConversationPractice?: boolean;
   isPaused: boolean;
   elapsedSeconds: number;
   categoryColor: string;
@@ -1046,8 +1047,9 @@ interface ActiveExerciseProps {
   onCueWordConfirmed?: (cueWord: string) => void;
 }
 
-const ActiveExercise: React.FC<ActiveExerciseProps> = ({
+export const ActiveExercise: React.FC<ActiveExerciseProps> = ({
   exercise,
+  allowConversationPractice = true,
   isPaused,
   elapsedSeconds,
   categoryColor,
@@ -1138,6 +1140,7 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
   return (
     <PromptExercise
       exercise={exercise}
+      allowConversationPractice={allowConversationPractice}
       isPaused={isPaused}
       elapsedSeconds={elapsedSeconds}
       categoryColor={categoryColor}
@@ -2694,6 +2697,7 @@ const BreathingExercise: React.FC<BreathingExerciseProps> = ({
 
 interface PromptExerciseProps {
   exercise: SimModule;
+  allowConversationPractice?: boolean;
   isPaused: boolean;
   elapsedSeconds: number;
   categoryColor: string;
@@ -2716,6 +2720,7 @@ interface PromptExerciseProps {
 
 const PromptExercise: React.FC<PromptExerciseProps> = ({
   exercise,
+  allowConversationPractice = true,
   isPaused,
   elapsedSeconds,
   categoryColor,
@@ -2738,9 +2743,9 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
 
   const config = exercise.exerciseConfig.config as any;
   const prompts = Array.isArray(config?.prompts) ? config.prompts.filter(Boolean) : [];
-  const practiceSpec =
+  const practiceSpec = allowConversationPractice ? (
     protocolPracticeConversationService.getByVariantId(protocolExecutionContext?.protocolVariantId) ||
-    protocolPracticeConversationService.getByLegacyExerciseId(exercise.id);
+    protocolPracticeConversationService.getByLegacyExerciseId(exercise.id)) : null;
   const safeTotalPrompts = Math.max(1, prompts.length);
   const currentPrompt = prompts[currentPromptIndex];
   const isLastPrompt = prompts.length === 0 ? true : currentPromptIndex >= prompts.length - 1;

@@ -1,3 +1,4 @@
+import { runLinearRuntime, linearRuntimeEnabled } from '../../src/api/firebase/dailyCurriculum/linearRuntimeAdmin';
 import type { Handler } from '@netlify/functions';
 import * as admin from 'firebase-admin';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
@@ -183,6 +184,15 @@ export const handler: Handler = async (event) => {
     (athleteMembership.timezone as string | undefined) ||
     'America/New_York';
   const sourceDate = body.sourceDate || formatYmdInTz(new Date(), tz);
+
+  if (linearRuntimeEnabled()) {
+    try {
+      const runtime = await runLinearRuntime(db, { athleteId: auth.uid, action: 'today' });
+      if (runtime.status !== 'legacy') return { statusCode: 200, headers: RESPONSE_HEADERS, body: JSON.stringify({ ok: true, generated: null, versionedCurriculum: runtime }) };
+    } catch {
+      return { statusCode: 503, headers: RESPONSE_HEADERS, body: JSON.stringify({ error: 'versioned_curriculum_unavailable' }) };
+    }
+  }
 
   // Idempotency check — if curriculum-engine already wrote today's full
   // six-item slate, short-circuit. Partial legacy days are topped up below.

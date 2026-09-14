@@ -213,7 +213,7 @@ const PulseCheckCurriculumLayerSpecTab: React.FC = () => {
         <p>
           The default is equal — composure 33 / focus 33 / decision 33. The engine normalizes the sum, so values do not
           need to add to 100. Per-sport overrides take precedence (e.g., basketball weighting decision higher).
-          Operator-tunable from <code className="rounded bg-black/40 px-1">/admin/curriculumLayer</code> Pillar tab.
+          Operator-tunable from <code className="rounded bg-black/40 px-1">/curriculum-outline?view=settings</code> Assignment settings, Pillar tab.
         </p>
         <p className="mt-2">
           Pillar tagging on protocols comes from a new field{' '}
@@ -358,7 +358,7 @@ const PulseCheckCurriculumLayerSpecTab: React.FC = () => {
             <li>30-day assessment service</li>
             <li>Coach override service</li>
             <li>Curriculum config singleton + revision log</li>
-            <li>Admin surface at <code className="rounded bg-black/40 px-1">/admin/curriculumLayer</code></li>
+            <li>Admin surface at <code className="rounded bg-black/40 px-1">/curriculum-outline?view=settings</code></li>
           </ul>
         </Card>
         <Card title="Schedulers, surfaces, voice — partial">

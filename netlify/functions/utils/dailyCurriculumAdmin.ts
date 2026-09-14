@@ -1,3 +1,4 @@
+import { runLinearRuntime, linearRuntimeEnabled } from '../../../src/api/firebase/dailyCurriculum/linearRuntimeAdmin';
 import type * as FirebaseAdmin from 'firebase-admin';
 import type {
   MentalExercise,
@@ -468,6 +469,11 @@ export const generateDailyAssignmentAdmin = async (
   db: FirebaseAdmin.firestore.Firestore,
   input: GenerateDailyAssignmentAdminInput,
 ): Promise<CurriculumGenerationResult | null> => {
+  if (linearRuntimeEnabled()) {
+    const runtime = await runLinearRuntime(db, { athleteId: input.athleteUserId, action: 'today' }, { dryRun: !!input.preview });
+    // Explicitly enrolled athletes never receive a legacy six-slot replacement, even when blocked.
+    if (runtime.status !== 'legacy') return null;
+  }
   const config = await getOrInitCurriculumConfigAdmin(db);
   if (!config.engineEnabled) return null;
 

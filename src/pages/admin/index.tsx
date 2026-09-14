@@ -121,14 +121,8 @@ const adminCardsData = [
     link: "/admin/sportsIntelligenceReports"
   },
   {
-    title: "Curriculum Layer",
-    description: "Daily Curriculum Layer — proactive 1 protocol + 1 sim per day per athlete, balanced across composure / focus / decisioning. Engine config, pillar weights, 30-day adherence rollups.",
-    icon: <Brain className="w-5 h-5" />,
-    link: "/admin/curriculumLayer"
-  },
-  {
     title: "Curriculum Outline",
-    description: "PulseCheck curriculum outline by track — Rookie (7-12), Junior (13-17), and Pro (18+), with the Junior guided curriculum seed and module mapping workflow.",
+    description: "Skill sequence, Rookie/Junior/Pro tracks, lesson previews, assignment settings, and athlete reports.",
     icon: <GraduationCap className="w-5 h-5" />,
     link: "/curriculum-outline"
   },

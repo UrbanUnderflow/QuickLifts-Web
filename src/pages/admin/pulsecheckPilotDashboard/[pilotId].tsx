@@ -327,7 +327,7 @@ const resolveAthleteNextStep = (
   if (!athlete.journey.hasPulseCheckPushToken) return 'Open the app once';
   if (athlete.journey.checkInCount === 0) return 'First daily check-in';
   if (athlete.journey.noraConversationCount === 0) return 'Start first Nora chat';
-  if (athlete.journey.assignmentCount > athlete.journey.assignmentCompletedCount) return 'Complete assigned practice';
+  if (athlete.journey.practiceBacklog.dueToday + athlete.journey.practiceBacklog.overdue > 0) return 'Complete primary practice';
   return athlete.engineSummary.stablePatternCount > 0 ? 'Review patterns' : 'Keep collecting days';
 };
 const getInviteShareOrigin = () =>
@@ -2330,7 +2330,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     const emailReady = visibleActiveAthletes.filter((athlete) => athlete.journey.hasEmail).length;
     const assignmentCount = visibleActiveAthletes.reduce((sum, athlete) => sum + athlete.journey.assignmentCount, 0);
     const assignmentCompletedCount = visibleActiveAthletes.reduce((sum, athlete) => sum + athlete.journey.assignmentCompletedCount, 0);
-    const openAssignmentCount = Math.max(0, assignmentCount - assignmentCompletedCount);
+    const practiceBacklog = visibleActiveAthletes.reduce((total, athlete) => ({
+      dueToday: total.dueToday + athlete.journey.practiceBacklog.dueToday,
+      overdue: total.overdue + athlete.journey.practiceBacklog.overdue,
+      upcoming: total.upcoming + athlete.journey.practiceBacklog.upcoming,
+      additionalDue: total.additionalDue + athlete.journey.practiceBacklog.additionalDue,
+      undated: total.undated + athlete.journey.practiceBacklog.undated,
+    }), { dueToday: 0, overdue: 0, upcoming: 0, additionalDue: 0, undated: 0 });
+    const openAssignmentCount = practiceBacklog.dueToday + practiceBacklog.overdue;
     const focusCounts = visibleActiveAthletes.reduce<Record<string, number>>((counts, athlete) => {
       athlete.journey.startingPoint.startingFocus.forEach((focus) => {
         const label = mentalSkillLabel(focus);
@@ -2377,6 +2384,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       assignmentCount,
       assignmentCompletedCount,
       openAssignmentCount,
+      practiceBacklog,
       assignmentCompletionRate: assignmentCount > 0 ? (assignmentCompletedCount / assignmentCount) * 100 : 0,
       topFocus,
       nextPriority,
@@ -4314,7 +4322,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <h2 className="mt-2 text-xl font-semibold text-white">{visibleActivityStory.nextPriority}</h2>
                         <p className="mt-2 max-w-4xl text-sm leading-6 text-zinc-400">
                           {visibleActivityStory.totalAthletes > 0
-                            ? `${visibleActivityStory.startingPointComplete} of ${visibleActivityStory.totalAthletes} athletes have completed the Starting Point. ${visibleActivityStory.checkInStarted} have recorded a daily check-in, ${visibleActivityStory.noraStarted} have started a Nora conversation, and ${visibleActivityStory.assignmentCompletedCount} of ${visibleActivityStory.assignmentCount} assigned practices are complete.`
+                            ? `${visibleActivityStory.startingPointComplete} of ${visibleActivityStory.totalAthletes} athletes have completed the Starting Point. ${visibleActivityStory.checkInStarted} have recorded a daily check-in, ${visibleActivityStory.noraStarted} have started a Nora conversation, and ${visibleActivityStory.assignmentCompletedCount} practices have been completed. ${visibleActivityStory.openAssignmentCount} primary practices are currently due.`
                             : 'No active athletes are in this view yet. Invite athletes before activity and outcomes can build.'}
                         </p>
                       </div>
@@ -4364,14 +4372,15 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         </div>
                       </div>
                       <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Assigned practice</div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Primary practice due</div>
                         <div className="mt-3 text-3xl font-semibold text-white">
-                          {visibleActivityStory.assignmentCompletedCount}/{visibleActivityStory.assignmentCount}
+                          {visibleActivityStory.openAssignmentCount}
                         </div>
                         <div className="mt-2 text-sm leading-6 text-zinc-400">
-                          {visibleActivityStory.assignmentCount > 0
-                            ? `${visibleActivityStory.assignmentCompletionRate.toFixed(1)}% complete. ${visibleActivityStory.openAssignmentCount} still open.`
-                            : 'No assigned practices have been created yet.'}
+                          {`${visibleActivityStory.practiceBacklog.dueToday} due today · ${visibleActivityStory.practiceBacklog.overdue} overdue started · ${visibleActivityStory.practiceBacklog.upcoming} upcoming primary practices.`}
+                          <p className="mt-2">{visibleActivityStory.practiceBacklog.additionalDue} additional practices available. {visibleActivityStory.assignmentCompletedCount} completed across retained history.</p>
+                          <p className="mt-2 text-xs">Expired, superseded, paused, deferred, and past-day unstarted work is excluded. Additional practices are separate from primary work. Dates follow each athlete’s 4 a.m. day boundary.</p>
+                          {visibleActivityStory.practiceBacklog.undated > 0 && <p className="mt-2">{visibleActivityStory.practiceBacklog.undated} active records need a date before they can be classified.</p>}
                         </div>
                       </div>
                       <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
@@ -5946,8 +5955,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                       {athlete.journey.checkInCount} daily check-in{athlete.journey.checkInCount === 1 ? '' : 's'}
                                     </div>
                                     <div>
-                                      {athlete.journey.assignmentCompletedCount}/{athlete.journey.assignmentCount} assigned practice
-                                      {athlete.journey.assignmentCount === 1 ? '' : 's'} complete
+                                      {athlete.journey.assignmentCompletedCount} practices completed in retained history · {athlete.journey.practiceBacklog.dueToday} primary due today · {athlete.journey.practiceBacklog.overdue} overdue started · {athlete.journey.practiceBacklog.upcoming} upcoming
                                     </div>
                                     <div className="text-[11px] text-zinc-500">
                                       {athlete.journey.lastCheckInAt

@@ -126,7 +126,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       relatedAdminRoutes: [
         { label: 'Translation Preview', href: '/admin/adminLevers#nora-translation-preview' },
         { label: 'Nora Guard', href: '/admin/noraGuard' },
-        { label: 'Curriculum Layer', href: '/admin/curriculumLayer' },
+        { label: 'Curriculum Outline', href: '/curriculum-outline?view=settings' },
       ],
     });
   }
