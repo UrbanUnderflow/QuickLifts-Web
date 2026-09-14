@@ -1,3 +1,4 @@
+const { commitLegacyStart } = require('../../src/api/firebase/dailyCurriculum/linearEnrollmentHandshake');
 const { initializeFirebaseAdmin, getFirebaseAdminApp, admin, headers } = require('./config/firebase');
 const { runtimeHelpers: pulseCheckSubmissionRuntime } = require('./submit-pulsecheck-checkin');
 const { syncTrainingPlanProgression } = require('../../src/api/firebase/mentaltraining/trainingPlanAuthoringShared.js');
@@ -856,13 +857,13 @@ exports.handler = async (event) => {
       throw createError(404, 'PulseCheck daily assignment not found.');
     }
 
-    const assignment = { id: assignmentSnap.id, ...(assignmentSnap.data() || {}) };
+    let assignment = { id: assignmentSnap.id, ...(assignmentSnap.data() || {}) };
     const requesterRole = await assertAuthorized(db, assignment, eventType, decodedToken.uid);
     const eventAt = Date.now();
     const plannedRestPolicy = eventType === 'planned_rest'
       ? await resolvePlannedRestPolicy(db, assignment)
       : null;
-    const updates = buildAssignmentUpdates(assignment, eventType, actorUserId, reason, eventAt, plannedRestPolicy);
+    let updates = buildAssignmentUpdates(assignment, eventType, actorUserId, reason, eventAt, plannedRestPolicy);
     if (updates && eventType === 'completed' && metadata?.completionSummary) {
       updates.completionSummary = metadata.completionSummary;
     }
@@ -872,12 +873,20 @@ exports.handler = async (event) => {
         ...metadata.executionLock,
       };
     }
+    if (eventType === 'started' || eventType === 'resumed') {
+      const committed = await commitLegacyStart(db, assignmentRef, assignment.athleteId, current => {
+        const next = buildAssignmentUpdates(current, eventType, actorUserId, reason, eventAt, plannedRestPolicy);
+        if (next && metadata?.executionLock) next.executionLock = { ...(current.executionLock || {}), ...metadata.executionLock };
+        return next;
+      });
+      assignment = committed.assignment; updates = committed.updates;
+    }
     const nextAssignment = updates ? { ...assignment, ...updates } : assignment;
     const actorType = resolveActorType({ eventType, requesterRole, assignment, requesterId: decodedToken.uid });
     const previousExecutionTruthOwner = resolveExecutionTruthOwner({ assignment, actorType, eventType: 'viewed' });
     const nextExecutionTruthOwner = resolveExecutionTruthOwner({ assignment: nextAssignment, actorType, eventType });
 
-    if (updates) {
+    if (updates && eventType !== 'started' && eventType !== 'resumed') {
       await assignmentRef.set(updates, { merge: true });
     }
 

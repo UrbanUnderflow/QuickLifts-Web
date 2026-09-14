@@ -5,7 +5,7 @@
  * including recurring assignments and scheduling.
  */
 
-import { db } from '../config';
+import { db, auth, getFirebaseModeRequestHeaders } from '../config';
 import {
   collection,
   doc,
@@ -233,11 +233,12 @@ export const assignmentService = {
    * Mark assignment as started
    */
   async markStarted(id: string): Promise<void> {
-    const docRef = doc(db, COLLECTION, id);
-    await updateDoc(docRef, {
-      status: AssignmentStatus.InProgress,
-      updatedAt: Date.now(),
-    });
+    if (!auth.currentUser) throw new Error('Sign in before starting your assignment.');
+    const response = await fetch('/api/curriculum/legacy-start', { method: 'POST', headers: {
+      'Content-Type': 'application/json', Authorization: `Bearer ${await auth.currentUser.getIdToken()}`, ...getFirebaseModeRequestHeaders(),
+    }, body: JSON.stringify({ collection: COLLECTION, assignmentId: id }) });
+    const result = await response.json();
+    if (!response.ok || result.status !== 'recorded') throw new Error(result.error || 'Refresh your skill journey before starting.');
   },
 
   /**

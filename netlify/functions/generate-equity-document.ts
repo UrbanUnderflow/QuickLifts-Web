@@ -658,9 +658,18 @@ const ensureBoardConsentSafeguards = (content: string, data: RequestBody) => {
   return result;
 };
 
-const buildEipRequiredTail = (data: RequestBody) => {
-  const effectiveDate = getDocumentDate(data);
+const buildEipDraftApproval = () => `11. Adoption and Approval
+DRAFT — NOT ADOPTED OR APPROVED
+This proposed Plan has no effect until the required corporate approvals are actually obtained. Preparation or generation does not constitute approval, a signature, a share issuance, or a grant. The Plan reserve is not itself an issuance or grant; individual grants require separate Board approval and an award agreement. Any ISO provisions are subject to timely stockholder approval as required by applicable tax law.
 
+Board approval reference: ____________________
+Stockholder approval reference (if required): ____________________
+Effective date upon actual approval: ____________________
+Authorized signer's name and capacity: ____________________
+Signature: ____________________
+Actual signature date: ____________________`;
+
+const buildEipRequiredTail = (_data: RequestBody) => {
   return `
 7. Restricted Stock and RSUs
 7.1 Restricted Stock
@@ -701,16 +710,7 @@ The Board may amend, suspend, or terminate the Plan at any time, subject to any 
 10.6 Securities Law Compliance
 No shares will be issued under the Plan unless the Company determines that issuance complies with applicable securities laws and any applicable exemption from registration. The Administrator must confirm the applicable securities-law exemption for every grant. Plan eligibility alone does not supply an exemption.
 
-11. Adoption and Approval
-The Plan was adopted and approved effective as of ${effectiveDate}. The Plan reserve is not itself an issuance or grant; individual grants remain ineffective until separately approved by the Board and documented in an award agreement.
-
-Any ISO provisions are subject to timely stockholder approval as required by applicable tax law.
-
-/s/ Tremaine Grant
-Tremaine Grant
-Founder & Sole Director
-Sole Stockholder
-Date: ${effectiveDate}
+${buildEipDraftApproval()}
 `.trim();
 };
 
@@ -720,10 +720,10 @@ const ensureCompleteEip = (content: string, data: RequestBody) => {
   const hasCorporateTransactions = /(?:^|\n)(?:#{1,6}\s*)?9[\.)]?\s+Corporate Transactions/i.test(result);
   const hasGeneralProvisions = /(?:^|\n)(?:#{1,6}\s*)?10[\.)]?\s+General Provisions/i.test(result);
   const hasAdoption = /(?:^|\n)(?:#{1,6}\s*)?11[\.)]?\s+Adoption/i.test(result);
-  const hasAdoptionSignature = /\/s\/\s*Tremaine Grant[\s\S]{0,220}Founder\s*&\s*Sole Director[\s\S]{0,160}Sole Stockholder/i.test(result);
-
-  if (hasTermination && hasCorporateTransactions && hasGeneralProvisions && hasAdoption && hasAdoptionSignature) {
-    return result;
+  if (hasTermination && hasCorporateTransactions && hasGeneralProvisions && hasAdoption) {
+    // The model may echo an old executed footer. New generation never certifies
+    // approval or copies an old signature into a newly proposed plan.
+    return result.replace(/(?:^|\n)(?:#{1,6}\s*)?11[\.)]?\s+Adoption[\s\S]*$/i, `\n\n${buildEipDraftApproval()}`);
   }
 
   const tailStartPatterns = [
@@ -784,13 +784,19 @@ const ensureEipSafeguards = (content: string, data: RequestBody) => {
   }
 
   if (additions.length) {
-    result = insertBeforeSignatureSection(
-      result,
-      `## Plan Administration Safeguards\n${additions.map(item => `- ${item}`).join('\n')}`,
-    );
+    const safeguards = `## Plan Administration Safeguards\n${additions.map(item => `- ${item}`).join('\n')}`;
+    const adoptionStart = result.search(/(?:^|\n)(?:#{1,6}\s*)?11[\.)]?\s+Adoption/i);
+    result = adoptionStart >= 0
+      ? `${result.slice(0, adoptionStart)}\n\n${safeguards}\n${result.slice(adoptionStart)}`
+      : insertBeforeSignatureSection(result, safeguards);
   }
 
-  return ensureCompleteEip(result, data);
+  const draft = ensureCompleteEip(result, data)
+    .replace(/^.*\/s\/[^\n]*$/gim, '')
+    .replace(/^(?:PLAN )?EFFECTIVE DATE\s*:[^\n]*$/gim, 'PROPOSED EFFECTIVE DATE: Subject to actual required approvals')
+    .replace(/\b(?:the plan|this plan)\s+(?:was|is|has been)\s+(?:hereby\s+)?(?:adopted|approved)[^.!?\n]*(?:[.!?]|$)/gi,
+      'This proposed Plan remains subject to actual required corporate approvals.');
+  return `DRAFT — NOT ADOPTED OR APPROVED\n\n${draft}`;
 };
 
 const collectGeneratedContentIssues = (documentType: string, content: string, data: RequestBody) => {
@@ -869,8 +875,11 @@ const collectGeneratedContentIssues = (documentType: string, content: string, da
     if (!/(?:^|\n)(?:#{1,6}\s*)?11[\.)]?\s+Adoption/i.test(content)) {
       issues.push('EIP adoption section is missing.');
     }
-    if (!/\/s\/\s*Tremaine Grant[\s\S]{0,220}Founder\s*&\s*Sole Director[\s\S]{0,160}Sole Stockholder/i.test(content)) {
-      issues.push('EIP executed adoption signature is missing.');
+    if (!content.includes('DRAFT — NOT ADOPTED OR APPROVED') || !/Signature:\s*_{3,}/i.test(content)) {
+      issues.push('EIP unsigned draft approval fields are missing.');
+    }
+    if (/\/s\/|\b(?:the plan|this plan)\s+(?:was|is|has been)\s+(?:hereby\s+)?(?:adopted|approved)/i.test(content)) {
+      issues.push('EIP must not claim actual adoption or contain an executed signature.');
     }
     if (
       lower.includes('section 83(b) election deadline') &&
@@ -1222,7 +1231,8 @@ Format this as a professional legal document ready for e-signature. Use clear se
       return `Generate a comprehensive Equity Incentive Plan for:
 
 COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
-PLAN EFFECTIVE DATE: ${currentDate}
+PREPARATION DATE (not an approval or effective date): ${currentDate}
+STATUS: UNSIGNED DRAFT, subject to actual corporate approvals
 PLAN SHARE RESERVE: ${(data.planShareReserve || 1_000_000).toLocaleString()} shares of Common Stock
 ${formatAdditionalContext(data.prompt)}
 
@@ -1292,21 +1302,16 @@ Please create a full Equity Incentive Plan that includes:
     - No right to employment
     - Governing law (Delaware)
     - Amendment and termination
-    - Effective date, which must be stated as ${currentDate}
+    - Effective date remains blank until the required corporate approvals are actually obtained
 
 11. ADOPTION FOOTER
-    - Add a short final adoption section confirming the Plan was adopted and approved effective as of ${currentDate}
-    - Show it as already executed by the sole company approver, not pending signature
-    - Use this exact executed signature format:
-      /s/ Tremaine Grant
-      Tremaine Grant
-      Founder & Sole Director
-      Sole Stockholder
-      Date: ${currentDate}
+    - Label the document DRAFT — NOT ADOPTED OR APPROVED
+    - Leave actual board approval reference, applicable stockholder approval reference, effective date, authorized signer name and capacity, signature, and actual signature date blank
+    - Never insert /s/, a typed execution signature, a presumed approval, or a generated adoption date
     - State that individual grants remain ineffective until separately approved by the Board and documented in an award agreement
     - State that any ISO provisions are subject to timely stockholder approval as required by applicable tax law
 
-Make it comprehensive and suitable for a venture-backed startup. Include standard 409A compliance language. Do not leave blank signature lines or placeholder dates.`;
+Make it comprehensive and suitable for a venture-backed startup. Include standard 409A compliance language. Preserve blank actual approval and signature fields. Generation is preparation only and cannot approve, sign, issue shares, or change the existing adopted Plan.`;
     },
   },
 };

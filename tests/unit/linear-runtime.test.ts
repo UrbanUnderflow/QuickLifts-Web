@@ -9,20 +9,21 @@ const copy = (x: any) => x === undefined ? undefined : JSON.parse(JSON.stringify
 function store() {
   const data = new Map<string, any>(); let queue = Promise.resolve(); let failCommit = false;
   class Ref {
-    constructor(public path: string, public cap?: number) {}
+    constructor(public path: string, public cap?: number, public filters: Array<[string, unknown]> = []) {}
     get id() { return this.path.split('/').pop()!; }
     doc(id: string) { return new Ref(`${this.path}/${id}`); }
     collection(id: string) { return new Ref(`${this.path}/${id}`); }
-    limit(cap: number) { return new Ref(this.path, cap); }
+    where(field: string, _op: string, value: unknown) { return new Ref(this.path, this.cap, [...this.filters, [field, value]]); }
+    limit(cap: number) { return new Ref(this.path, cap, this.filters); }
   }
   const snap = (ref: Ref) => ({ id: ref.id, exists: data.has(ref.path), data: () => copy(data.get(ref.path)) });
   const db: any = { collection: (id: string) => new Ref(id), runTransaction: (fn: any) => {
     const next = queue.then(async () => {
       const writes: Array<() => void> = [];
-      const tx = { get: async (ref: Ref) => { assert.equal(writes.length, 0, 'all reads precede writes'); if (ref.cap) { const docs = [...data.keys()].filter(k => k.startsWith(ref.path + '/') && k.split('/').length === ref.path.split('/').length + 1).slice(0,ref.cap).map(k => snap(new Ref(k))); return { size: docs.length, docs }; } return snap(ref); },
+      const tx = { get: async (ref: Ref) => { assert.equal(writes.length, 0, 'all reads precede writes'); if (ref.cap) { const docs = [...data.keys()].filter(k => k.startsWith(ref.path + '/') && k.split('/').length === ref.path.split('/').length + 1 && ref.filters.every(([field,value]) => data.get(k)?.[field] === value)).slice(0,ref.cap).map(k => snap(new Ref(k))); return { size: docs.length, docs }; } return snap(ref); },
         create: (ref: Ref, value: any) => writes.push(() => { assert(!data.has(ref.path)); data.set(ref.path,copy(value)); }),
         update: (ref: Ref, value: any) => writes.push(() => { assert(data.has(ref.path)); data.set(ref.path,{...data.get(ref.path),...copy(value)}); }),
-        set: (ref: Ref, value: any) => writes.push(() => data.set(ref.path,copy(value))) };
+        set: (ref: Ref, value: any, options?: {merge?: boolean}) => writes.push(() => data.set(ref.path, options?.merge ? {...data.get(ref.path),...copy(value)} : copy(value))) };
       const result = await fn(tx); if (failCommit) throw new Error('injected commit failure'); writes.forEach(w => w()); return result;
     }); queue = next.catch(() => {}); return next;
   } }; return { db, data, fail: () => { failCommit = true; } };
@@ -74,4 +75,24 @@ test('check-in lookup uses pinned local day rather than UTC or assignment source
  const s=setup();s.data.delete('pulsecheck-morning-checkins/a_2026-09-02');
  const now=Date.parse('2026-09-02T02:00:00Z');const r=await runLinearRuntime(s.db,{athleteId:'a',action:'today'},{enabled:true,now});
  assert.equal((r as any).assignment.sourceDate,'2026-09-01');assert.equal((r as any).assignment.requiresCheckIn,false);
+});
+
+test('enrollment defers active legacy work across owner aliases, but preserves completed history', async () => {
+ for (const [collection, field, status] of [['pulsecheck-daily-assignments','athleteId','started'], ['sim-assignments','athleteUserId','in_progress'], ['mental-exercise-assignments','athleteUserId','paused']]) {
+  const s=setup();s.data.delete(`${ROOT}/states/items/a`);s.data.set('users/a',{});s.data.set(`${collection}/old`,{[field]:'a',status});
+  const handler=createLinearEnrollmentHandler({enabled:()=>true,authorize:async()=>({uid:'admin',email:'admin@test.invalid',db:s.db,projectId:'test'}),now:()=>time(1)});
+  const r=response();await handler({method:'POST',body:{action:'enroll',audienceId:'team',athleteId:'a',timezone:'America/New_York',confirmOptIn:true,preserveHistory:true,expectedStateRevision:null}} as any,r);
+  assert.equal(r.code,409);assert.equal(s.data.has(`${ROOT}/states/items/a`),false);assert.equal(s.data.get(`${collection}/old`).status,status);
+ }
+});
+test('shared transaction handshake serializes both start/enrollment orderings', async () => {
+ const { commitLegacyStart }=await import('../../src/api/firebase/dailyCurriculum/linearEnrollmentHandshake');
+ for (const startFirst of [true,false]) {
+  const s=setup();s.data.delete(`${ROOT}/states/items/a`);s.data.set('users/a',{});s.data.set('pulsecheck-daily-assignments/old',{athleteId:'a',status:'assigned'});
+  const handler=createLinearEnrollmentHandler({enabled:()=>true,authorize:async()=>({uid:'admin',email:'admin@test.invalid',db:s.db,projectId:'test'}),now:()=>time(1)});
+  const enroll=async()=>{const r=response();await handler({method:'POST',body:{action:'enroll',audienceId:'team',athleteId:'a',timezone:'America/New_York',confirmOptIn:true,preserveHistory:true,expectedStateRevision:null}} as any,r);return r.code;};
+  const start=()=>commitLegacyStart(s.db,s.db.collection('pulsecheck-daily-assignments').doc('old'),'a',()=>({status:'started',startedAt:time(1)}));
+  if(startFirst){await start();assert.equal(await enroll(),409);assert.equal(s.data.has(`${ROOT}/states/items/a`),false);}
+  else {assert.equal(await enroll(),200);await assert.rejects(start,/versioned skill journey/);assert.equal(s.data.get('pulsecheck-daily-assignments/old').status,'assigned');}
+ }
 });

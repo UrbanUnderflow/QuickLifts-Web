@@ -384,10 +384,10 @@ Early exercise is permitted only when an individual award agreement expressly pe
   assert.match(normalized, /9\. Corporate Transactions/);
   assert.match(normalized, /10\. General Provisions/);
   assert.match(normalized, /11\. Adoption and Approval/);
-  assert.match(normalized, /\/s\/ Tremaine Grant/);
-  assert.match(normalized, /Founder & Sole Director/);
-  assert.match(normalized, /Sole Stockholder/);
-  assert.match(normalized, /Date: August 6, 2026/);
+  assert.match(normalized, /DRAFT — NOT ADOPTED OR APPROVED/);
+  assert.match(normalized, /Signature: _+/);
+  assert.match(normalized, /Actual signature date: _+/);
+  assert.doesNotMatch(normalized, /\/s\/|Date: August 6, 2026/);
   assert.deepEqual(issues, []);
 });
 
@@ -410,5 +410,31 @@ An 83(b) election is not triggered merely by the grant of an unexercised option.
   assert.ok(issues.some(issue => /Corporate Transactions/i.test(issue)));
   assert.ok(issues.some(issue => /General Provisions/i.test(issue)));
   assert.ok(issues.some(issue => /adoption section/i.test(issue)));
-  assert.ok(issues.some(issue => /adoption signature/i.test(issue)));
+  assert.ok(issues.some(issue => /unsigned draft approval fields/i.test(issue)));
+});
+
+test('new EIP generation strips an old executed adoption footer without replacing complete body sections', () => {
+  const content = `Equity Incentive Plan
+PLAN EFFECTIVE DATE: August 6, 2026
+This Plan was adopted and approved effective as of August 6, 2026.
+8. Termination of Service
+Preserve this custom termination provision.
+9. Corporate Transactions
+Preserve this custom transaction provision.
+10. General Provisions
+Preserve this custom general provision.
+11. Adoption and Approval
+The Plan was adopted and approved effective as of August 6, 2026.
+/s/ Tremaine Grant
+Tremaine Grant
+Founder & Sole Director
+Sole Stockholder
+Date: August 6, 2026`;
+  const normalized = __test.normalizeGeneratedContent('eip', content, {documentType: 'eip', planShareReserve: 1_600_000});
+  assert.match(normalized, /Preserve this custom termination provision/);
+  assert.match(normalized, /Preserve this custom transaction provision/);
+  assert.match(normalized, /Preserve this custom general provision/);
+  assert.match(normalized, /Effective date upon actual approval: _+/);
+  assert.doesNotMatch(normalized, /\/s\/|was adopted|Date: August 6, 2026/i);
+  assert.deepEqual(__test.collectGeneratedContentIssues('eip', normalized, {documentType: 'eip'}), []);
 });

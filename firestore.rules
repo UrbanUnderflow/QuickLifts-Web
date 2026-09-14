@@ -1469,7 +1469,58 @@ service cloud.firestore {
     // Internal admin workspaces, CRM data, campaign data, logs, and equity records.
     match /{collectionName}/{document=**} {
       allow read, create, update, delete: if isAdminOnlyCollection(collectionName)
+        && collectionName != 'equity-documents'
         && isAdminUser();
+    }
+
+    // An EIP is a retained corporate record. Revisions get a new document ID;
+    // draft signing metadata may change until approval. Approved and legacy
+    // auto-executed records retain all saved approval and signature evidence.
+    // Admin SDK writes bypass rules and must enforce the same policy server-side.
+    match /equity-documents/{documentId} {
+      function isEip(data) {
+        return data.get('documentType', '') == 'eip';
+      }
+      function unsignedDraft(data) {
+        return data.get('approvalStatus', '') == 'draft'
+          && data.get('autoSigned', false) == false
+          && data.get('autoSignedAt', null) == null;
+      }
+      function approvalEvidenceExists(data) {
+        return data.get('approvalStatus', '') == 'approved'
+          || data.get('autoSigned', false) == true
+          || data.get('autoSignedAt', null) != null;
+      }
+      function signingMetadataOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'signingRequestId', 'signingRequestIds', 'requiresSignature',
+          'needsResendSignature', 'status', 'approvalStatus', 'approvedAt',
+          'approvedBy', 'updatedAt', 'errorMessage'
+        ]);
+      }
+      function completesNewDraft() {
+        return resource.data.get('status', '') == 'generating'
+          && resource.data.get('content', '') == ''
+          && unsignedDraft(resource.data)
+          && unsignedDraft(request.resource.data)
+          && request.resource.data.get('status', '') == 'completed'
+          && request.resource.data.get('content', '') is string
+          && request.resource.data.get('content', '').size() > 0
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'content', 'title', 'legalTemplateVersion', 'requiresSignature',
+            'status', 'updatedAt', 'errorMessage'
+          ]);
+      }
+      allow read: if isAdminUser();
+      allow create: if isAdminUser()
+        && (!isEip(request.resource.data) || unsignedDraft(request.resource.data));
+      allow update: if isAdminUser() && (
+        (!isEip(resource.data) && !isEip(request.resource.data))
+        || (isEip(resource.data) && isEip(request.resource.data)
+          && !approvalEvidenceExists(resource.data)
+          && (signingMetadataOnly() || completesNewDraft()))
+      );
+      allow delete: if isAdminUser() && !isEip(resource.data);
     }
 
     // Purchase observability. The apps write their own purchase attempts,
@@ -3229,6 +3280,34 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    function pcHasLinearState(owner) {
+      return owner is string && owner.size() > 0
+        && exists(/databases/$(database)/documents/pulsecheck-linear-curriculum/states/items/$(owner));
+    }
+    function pcLegacyOwnerEnrolled(data) {
+      return pcHasLinearState(data.get('athleteUserId', ''))
+        || pcHasLinearState(data.get('athleteId', ''))
+        || pcHasLinearState(data.get('userId', ''));
+    }
+    function pcLegacyExecuting(data) {
+      return data.get('status', '') in ['started', 'in_progress', 'inProgress', 'paused']
+        || (!(data.get('status', '') in ['completed', 'done', 'expired', 'superseded', 'overridden', 'deferred', 'skipped', 'cancelled', 'canceled'])
+          && data.get('startedAt', 0) is number && data.get('startedAt', 0) > 0);
+    }
+    function pcLegacyAssignmentWriteAllowed(collectionName) {
+      return !(collectionName in ['sim-assignments', 'mental-exercise-assignments'])
+        || (request.resource.data.get('source', '') != 'standalone_reservation'
+          && (resource == null || resource.data.get('source', '') != 'standalone_reservation')
+          && (resource == null || (!pcLegacyOwnerEnrolled(resource.data) && !pcLegacyExecuting(resource.data))
+            || (request.resource.data.get('athleteUserId', '') == resource.data.get('athleteUserId', '')
+              && request.resource.data.get('athleteId', '') == resource.data.get('athleteId', '')
+              && request.resource.data.get('userId', '') == resource.data.get('userId', '')))
+          && (!pcLegacyExecuting(request.resource.data)
+          || (!pcHasLinearState(request.auth.uid)
+            && !pcLegacyOwnerEnrolled(request.resource.data)
+            && (resource == null || !pcLegacyOwnerEnrolled(resource.data)))));
+    }
+
     match /pulsecheck-daily-assignments/{assignmentId} {
       allow read: if isAdminUser()
         || (
@@ -3251,6 +3330,7 @@ service cloud.firestore {
           isSignedIn()
           && resource.data.athleteId == request.auth.uid
           && request.resource.data.athleteId == resource.data.athleteId
+          && !pcLegacyOwnerEnrolled(resource.data)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'protocolPracticeSession',
             'updatedAt'
@@ -3370,8 +3450,12 @@ service cloud.firestore {
     match /{collectionName}/{document=**} {
       allow read: if isSignedIn()
         && !isExplicitlyRuledCollection(collectionName);
-      allow create, update, delete: if isSignedIn()
-        && !isExplicitlyRuledCollection(collectionName);
+      allow create, update: if isSignedIn()
+        && !isExplicitlyRuledCollection(collectionName)
+        && pcLegacyAssignmentWriteAllowed(collectionName);
+      allow delete: if isSignedIn()
+        && !isExplicitlyRuledCollection(collectionName)
+        && (!(collectionName in ['sim-assignments', 'mental-exercise-assignments']) || (resource.data.get('source', '') != 'standalone_reservation' && !pcLegacyOwnerEnrolled(resource.data) && !pcLegacyExecuting(resource.data)));
     }
   }
 }

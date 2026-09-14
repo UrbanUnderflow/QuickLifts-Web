@@ -6,6 +6,7 @@ import { auth, db } from '../../api/firebase/config';
 import { getManagedAdvisorEquityProfile, type ManagedAdvisorEquityProfile } from '../../lib/equityAdvisorProfiles';
 import { formatEquityContentForPdf as formatContentForPdf } from '../../lib/equityDocumentFormatting';
 import { PreparedDocumentSigner } from '../../lib/strategicDocumentSigning';
+import { buildEipDraftVersion, eipDraftText, isApprovedEip, nextEipVersion } from '../../lib/eipVersions';
 import { buildScopedEquityDocumentUrl } from '../../lib/equityDocumentPreview';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -160,6 +161,10 @@ interface EquityDocument {
   updatedAt?: Timestamp | Date;
   status: 'generating' | 'completed' | 'error';
   errorMessage?: string;
+  approvalStatus?: 'draft' | 'approved';
+  versionNumber?: number;
+  sourceDocumentId?: string;
+  changeSummary?: string;
   revisionHistory?: { prompt: string; timestamp: Timestamp | Date }[];
   // Exhibits - other documents attached as exhibits
   exhibits?: string[];
@@ -389,7 +394,7 @@ const sortEquityDocumentsNewest = (documents: EquityDocument[]) =>
   [...documents].sort((a, b) => getDateValue(b.updatedAt || b.createdAt) - getDateValue(a.updatedAt || a.createdAt));
 
 const getEquityDocumentFamilyKey = (equityDoc: EquityDocument) =>
-  `${equityDoc.stakeholderId || 'company'}::${equityDoc.documentType}`;
+  equityDoc.documentType === 'eip' ? 'company::eip' : `${equityDoc.stakeholderId || 'company'}::${equityDoc.documentType}`;
 
 const getLatestRelevantDocuments = (documents: EquityDocument[]) => {
   const latestByFamily = new Map<string, EquityDocument>();
@@ -414,7 +419,7 @@ const getEquityDocumentRevisionEntries = (equityDoc: EquityDocument) =>
     (a, b) => getDateValue(b.timestamp) - getDateValue(a.timestamp)
   );
 
-const AUTO_EXECUTED_COMPANY_DOC_TYPES = ['board_consent', 'stockholder_consent', 'eip'] as const;
+const AUTO_EXECUTED_COMPANY_DOC_TYPES = ['board_consent', 'stockholder_consent'] as const;
 const ADVISOR_PACKET_TEMPLATE_VERSION = '2026-08-02-advisor-nso-v2';
 const LOCAL_EQUITY_FUNCTION_FALLBACK_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
 
@@ -959,6 +964,7 @@ const EquityAdminPage: React.FC = () => {
   const [editingEquityDoc, setEditingEquityDoc] = useState<EquityDocument | null>(null);
   const [editEquityDocTitle, setEditEquityDocTitle] = useState('');
   const [editEquityDocPrompt, setEditEquityDocPrompt] = useState('');
+  const [editEipContent, setEditEipContent] = useState('');
   const [editRequiresSignature, setEditRequiresSignature] = useState(false);
   const [isRevisingEquityDoc, setIsRevisingEquityDoc] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
@@ -1034,7 +1040,7 @@ const EquityAdminPage: React.FC = () => {
     // Reasonable defaults (user can override):
     // - Most people-facing agreements should be signable.
     // - Internal plan approvals are auto-executed in-app and should not open e-sign.
-    const defaultOn = ['option_agreement', 'fast_agreement'].includes(selectedDocType);
+    const defaultOn = ['option_agreement', 'fast_agreement', 'eip'].includes(selectedDocType);
     const defaultForType = selectedDocIsAutoExecuted ? false : defaultOn;
     setRequiresSignatureChecked(defaultForType);
   }, [selectedDocIsAutoExecuted, selectedDocType]);
@@ -1495,7 +1501,7 @@ const EquityAdminPage: React.FC = () => {
     }
 
     if (newStakeholder.type === 'advisor') {
-      if (!equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')) {
+      if (!equityDocuments.some(d => isApprovedEip(d))) {
         setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before approving an advisor option grant.' });
         return;
       }
@@ -1728,7 +1734,7 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
-    if (!equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')) {
+    if (!equityDocuments.some(d => isApprovedEip(d))) {
       setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before creating an advisor Board Consent.' });
       return;
     }
@@ -1852,7 +1858,7 @@ const EquityAdminPage: React.FC = () => {
       return;
     }
 
-    if (!equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')) {
+    if (!equityDocuments.some(d => isApprovedEip(d))) {
       setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before creating an advisor agreement.' });
       return;
     }
@@ -1911,7 +1917,7 @@ const EquityAdminPage: React.FC = () => {
       : newGrant;
 
     if (usesStoredAdvisorGrant) {
-      if (!equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')) {
+      if (!equityDocuments.some(d => isApprovedEip(d))) {
         setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before creating advisor grant documents.' });
         return;
       }
@@ -1922,6 +1928,11 @@ const EquityAdminPage: React.FC = () => {
       }
     }
 
+    if (selectedDocType === 'eip' && equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')) {
+      setMessage({ type: 'info', text: 'Open the existing EIP and choose Edit to create a linked draft version with its history preserved.' });
+      return;
+    }
+
     if (selectedDocType === 'eip' && equityPool.totalReserved <= 0) {
       setMessage({ type: 'error', text: 'Set a positive option-pool reserve before generating the Equity Incentive Plan.' });
       return;
@@ -1930,7 +1941,7 @@ const EquityAdminPage: React.FC = () => {
     setGenerating(true);
     try {
       const docTypeConfig = DOCUMENT_TYPES.find(d => d.id === selectedDocType);
-      const effectiveRequiresSignature = selectedDocIsAutoExecuted ? false : Boolean(requiresSignatureChecked);
+      const effectiveRequiresSignature = selectedDocType === 'eip' ? true : selectedDocIsAutoExecuted ? false : Boolean(requiresSignatureChecked);
       const shouldAutoExecuteDoc = selectedDocIsAutoExecuted;
       const documentExecutionDate = formatLegalDate(new Date());
 
@@ -1940,6 +1951,7 @@ const EquityAdminPage: React.FC = () => {
         prompt: generationPrompt,
         content: '',
         documentType: selectedDocType,
+        ...(selectedDocType === 'eip' ? { approvalStatus: 'draft', versionNumber: 1 } : {}),
         requiresSignature: effectiveRequiresSignature,
         stakeholderId: selectedStakeholder?.id ?? null,
         stakeholderName: selectedStakeholder?.name ?? null,
@@ -2012,13 +2024,15 @@ const EquityAdminPage: React.FC = () => {
     }
 
     setEditingEquityDoc(docToEdit);
-    setEditEquityDocTitle(docToEdit.title);
+    setEditEquityDocTitle(docToEdit.documentType === 'eip' ? `${docToEdit.title} - New Draft` : docToEdit.title);
+    setEditEipContent(docToEdit.documentType === 'eip' ? eipDraftText(docToEdit.content) : '');
     setEditEquityDocPrompt('');
     setEditRequiresSignature(isAutoExecutedCompanyDoc(docToEdit) ? false : Boolean(docToEdit.requiresSignature));
     setIsEditEquityDocModalOpen(true);
   };
 
   const regenerateCompanyApprovalDocCleanly = async (equityDoc: EquityDocument, nextTitle: string, additionalInstructions: string): Promise<EquityDocument> => {
+    if (equityDoc.documentType === 'eip') throw new Error('EIP changes must be saved as a new draft version.');
     const founder = stakeholders.find(s => s.type === 'founder' && s.email);
     const preservedExecutionSource = equityDoc.autoSignedAt || equityDoc.createdAt;
     const preservedExecutionDate = formatLegalDate(preservedExecutionSource);
@@ -2132,6 +2146,23 @@ const EquityAdminPage: React.FC = () => {
 
   const handleReviseEquityDoc = async () => {
     if (!editingEquityDoc) return;
+    if (editingEquityDoc.documentType === 'eip') {
+      setIsRevisingEquityDoc(true);
+      try {
+        const version = buildEipDraftVersion(editingEquityDoc, {
+          title: editEquityDocTitle, content: editEipContent, changeSummary: editEquityDocPrompt,
+          versionNumber: nextEipVersion(editingEquityDoc, equityDocuments), now: Timestamp.now(),
+        });
+        await addDoc(collection(db, 'equity-documents'), version);
+        setIsEditEquityDocModalOpen(false);
+        setEditingEquityDoc(null);
+        setMessage({ type: 'success', text: 'New EIP draft saved. Prior versions and their approval records are preserved.' });
+        await loadData();
+      } catch (error) {
+        setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to save EIP version.' });
+      } finally { setIsRevisingEquityDoc(false); }
+      return;
+    }
 
     const titleChanged = editEquityDocTitle.trim() !== editingEquityDoc.title;
     const hasRevisionPrompt = editEquityDocPrompt.trim().length > 0;
@@ -2345,7 +2376,11 @@ const EquityAdminPage: React.FC = () => {
   const getEquityDocStatusBadge = (equityDoc: EquityDocument) => {
     const state = getEquityDocSignatureState(equityDoc);
 
-    if (isAutoExecutedCompanyDoc(equityDoc) && (equityDoc.autoSigned || equityDoc.autoSignedAt)) {
+    if (equityDoc.documentType === 'eip' && equityDoc.approvalStatus === 'draft') {
+      return { label: 'Draft - awaiting approval', className: 'bg-amber-900/40 text-amber-200 border border-amber-700' };
+    }
+
+    if ((isAutoExecutedCompanyDoc(equityDoc) || equityDoc.documentType === 'eip') && (equityDoc.autoSigned || equityDoc.autoSignedAt)) {
       return { label: 'Auto-executed', className: 'bg-emerald-900/40 text-emerald-300 border border-emerald-700' };
     }
 
@@ -3126,7 +3161,7 @@ const EquityAdminPage: React.FC = () => {
     documentList: EquityDocument[] = equityDocuments,
   ) =>
     getLatestRelevantDocuments(
-      documentList.filter(d => d.documentType === documentType && d.status === 'completed')
+      documentList.filter(d => d.documentType === documentType && d.status === 'completed' && (documentType !== 'eip' || isApprovedEip(d)))
     )[0] || null;
 
   const requiresEquityReviewPacket = (equityDoc: EquityDocument) =>
@@ -3206,7 +3241,7 @@ const EquityAdminPage: React.FC = () => {
   };
 
   const isProtectedStakeholderDocument = (equityDoc: EquityDocument) => {
-    return Boolean(
+    return equityDoc.documentType === 'eip' || Boolean(
       equityDoc.stakeholderId &&
       ['board_consent', 'advisor_nso_agreement'].includes(equityDoc.documentType) &&
       isLatestDocumentInFamily(equityDoc)
@@ -3215,6 +3250,10 @@ const EquityAdminPage: React.FC = () => {
 
   const handleDeleteEquityDoc = async (equityDocId: string) => {
     const equityDoc = equityDocuments.find(d => d.id === equityDocId);
+    if (equityDoc?.documentType === 'eip') {
+      setMessage({ type: 'error', text: 'EIP versions are retained as company records and cannot be deleted.' });
+      return;
+    }
     if (equityDoc && isProtectedStakeholderDocument(equityDoc)) {
       setMessage({
         type: 'error',
@@ -3692,6 +3731,8 @@ const EquityAdminPage: React.FC = () => {
   };
 
   const isEquityDocLockedForEditing = (equityDoc: EquityDocument) => {
+    // EIP revisions create a separate draft, including when the source is signed.
+    if (equityDoc.documentType === 'eip') return false;
     return requiresExternalSignature(equityDoc) && getEquityDocSignatureState(equityDoc).isFullyExecuted;
   };
 
@@ -3728,7 +3769,7 @@ const EquityAdminPage: React.FC = () => {
 
     if (
       stakeholder.type === 'advisor' &&
-      !equityDocuments.some(d => d.documentType === 'eip' && d.status === 'completed')
+      !equityDocuments.some(d => isApprovedEip(d))
     ) {
       setMessage({ type: 'error', text: 'Generate and review the company Equity Incentive Plan before changing advisor grant terms.' });
       return;
@@ -5100,7 +5141,8 @@ const EquityAdminPage: React.FC = () => {
                                               <span className="px-2 py-0.5 rounded-full text-xs bg-green-900/50 text-green-400 border border-green-700">
                                                 ✓ Completed
                                               </span>
-                                              {edoc.isAmendment && (
+                                              {edoc.documentType === 'eip' && <span className="text-xs text-zinc-300">Version {edoc.versionNumber || 1}</span>}
+                          {edoc.isAmendment && (
                                                 <span className="px-2 py-0.5 rounded-full text-xs bg-fuchsia-900/40 text-fuchsia-300 border border-fuchsia-700">
                                                   Amendment
                                                 </span>
@@ -5647,6 +5689,7 @@ const EquityAdminPage: React.FC = () => {
                               Error
                             </span>
                           )}
+                          {edoc.documentType === 'eip' && <span className="text-xs text-zinc-300">Version {edoc.versionNumber || 1}</span>}
                           {edoc.isAmendment && (
                             <span className="inline-flex items-center gap-1 px-2 py-1 bg-fuchsia-900/30 text-fuchsia-300 rounded-full text-xs border border-fuchsia-800">
                               <RefreshCw className="w-3 h-3" />
@@ -5723,7 +5766,7 @@ const EquityAdminPage: React.FC = () => {
                               }`}
                             >
                               <Edit3 className="w-4 h-4" />
-                              {isEquityDocLockedForEditing(edoc) ? 'Locked' : 'Edit'}
+                              {isEquityDocLockedForEditing(edoc) ? 'Locked' : edoc.documentType === 'eip' ? 'New Version' : 'Edit'}
                             </button>
 
                             <button
@@ -6578,7 +6621,14 @@ const EquityAdminPage: React.FC = () => {
                   />
                 </div>
 
-                {isAutoExecutedCompanyDoc(editingEquityDoc) ? (
+                {editingEquityDoc.documentType === 'eip' ? (
+                  <div className="p-4 rounded-xl border border-blue-800 bg-blue-950/30">
+                    <p className="text-sm font-medium text-blue-100">Create a new EIP version</p>
+                    <p className="text-xs text-blue-200 mt-1">The original text and approval record stay unchanged. This version remains a draft until separately approved.</p>
+                    <label className="block text-sm text-zinc-300 mt-4 mb-2" htmlFor="eip-version-text">Full draft text</label>
+                    <textarea id="eip-version-text" value={editEipContent} onChange={e => setEditEipContent(e.target.value)} className="w-full h-72 p-3 rounded bg-zinc-900 text-zinc-100 text-sm" />
+                  </div>
+                ) : isAutoExecutedCompanyDoc(editingEquityDoc) ? (
                   <div className="flex items-start gap-3 p-4 bg-emerald-900/20 rounded-xl border border-emerald-800">
                     <Shield className="w-5 h-5 text-emerald-300 mt-0.5" />
                     <div>
@@ -6621,7 +6671,7 @@ const EquityAdminPage: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-zinc-400 mb-2">
-                    Revision Instructions <span className="text-zinc-500 font-normal">(optional if only updating title)</span>
+                    {editingEquityDoc.documentType === 'eip' ? 'Change summary' : 'Revision Instructions'} <span className="text-zinc-500 font-normal">(optional if only updating title)</span>
                   </label>
                   <textarea
                     value={editEquityDocPrompt}
@@ -6630,7 +6680,9 @@ const EquityAdminPage: React.FC = () => {
                     className="w-full h-40 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition-colors resize-none"
                   />
                   <p className="text-xs text-zinc-500 mt-2">
-                    {isAutoExecutedCompanyDoc(editingEquityDoc)
+                    {editingEquityDoc.documentType === 'eip'
+                      ? 'Describe the changes for the version history. Saving never applies a prior signature to this draft.'
+                      : isAutoExecutedCompanyDoc(editingEquityDoc)
                       ? 'Use this to cleanly regenerate the document with updated language while preserving the original date and auto-executed signature.'
                       : 'This will regenerate the full document with your changes (mirrors the Legal Docs workflow).'}
                   </p>
@@ -6680,7 +6732,9 @@ const EquityAdminPage: React.FC = () => {
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      {isAutoExecutedCompanyDoc(editingEquityDoc)
+                      {editingEquityDoc.documentType === 'eip'
+                        ? 'Save New Draft Version'
+                        : isAutoExecutedCompanyDoc(editingEquityDoc)
                         ? 'Regenerate Cleanly'
                         : editEquityDocPrompt.trim()
                         ? 'Apply Changes'
@@ -6745,19 +6799,21 @@ const EquityAdminPage: React.FC = () => {
                     {familyHistoryDocs.length > 0 && (
                       <div className="space-y-3">
                         <div>
-                          <p className="text-sm font-semibold text-white">Older Document Versions</p>
+                          <p className="text-sm font-semibold text-white">Saved Document Versions</p>
                           <p className="text-xs text-zinc-500 mt-1">
-                            These are older document records for the same grant/document family.
+                            Each version keeps its own full text and approval record. Draft versions do not replace an approved EIP.
                           </p>
                         </div>
                         {familyHistoryDocs.map((historyDoc) => {
                           const statusBadge = getEquityDocStatusBadge(historyDoc);
+                          const historySignatures = getSigningRequestsForEquityDoc(historyDoc.id).filter(r => r.status === 'signed');
                           return (
                             <div key={historyDoc.id} className="p-4 rounded-xl bg-zinc-900/60 border border-zinc-700">
                               <div className="flex items-start justify-between gap-4">
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <p className="text-white font-medium truncate">{historyDoc.title}</p>
+                                    {historyDoc.documentType === 'eip' && <span className="text-xs text-zinc-300">Version {historyDoc.versionNumber || 1}</span>}
                                     {historyDoc.isAmendment && (
                                       <span className="px-2 py-0.5 rounded-full text-xs bg-fuchsia-900/40 text-fuchsia-300 border border-fuchsia-700">
                                         Amendment
@@ -6792,9 +6848,14 @@ const EquityAdminPage: React.FC = () => {
                                       Download PDF
                                     </button>
                                   )}
+                                  {historySignatures.map(request => (
+                                    <button key={request.id} onClick={() => window.open(`/sign/${request.id}?download=true`, '_blank', 'noopener,noreferrer')} className="px-3 py-2 bg-green-900/40 text-green-200 rounded-lg text-sm">
+                                      Signed record: {request.recipientName || 'Signer'}
+                                    </button>
+                                  ))}
                                   <button
                                     onClick={() => handleDeleteEquityDoc(historyDoc.id)}
-                                    disabled={deletingEquityDocId === historyDoc.id}
+                                    disabled={historyDoc.documentType === 'eip' || deletingEquityDocId === historyDoc.id}
                                     className="flex items-center gap-1 px-3 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm transition-colors disabled:opacity-50"
                                   >
                                     {deletingEquityDocId === historyDoc.id ? (
