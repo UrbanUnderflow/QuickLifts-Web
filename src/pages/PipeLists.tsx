@@ -3565,6 +3565,7 @@ const PipelinePage: NextPage = () => {
   const [resendingInviteEmails, setResendingInviteEmails] = useState<string[]>([]);
   const [removingAccessEmails, setRemovingAccessEmails] = useState<string[]>([]);
   const [addingListsForEmail, setAddingListsForEmail] = useState('');
+  const [savingListAccess, setSavingListAccess] = useState('');
   const [additionalListIds, setAdditionalListIds] = useState<string[]>([]);
   const [additionalListAccess, setAdditionalListAccess] = useState<ShareAccess>('read');
   const [savingAdditionalListsForEmail, setSavingAdditionalListsForEmail] = useState('');
@@ -5018,6 +5019,11 @@ const PipelinePage: NextPage = () => {
   const activeOpenValue = activeListItems
     .filter((item) => !isClosedStage(activeList, item.stage))
     .reduce((sum, item) => sum + itemValue(item), 0);
+
+  const activeAcv = activeListItems
+    .filter((item) => !isClosedStage(activeList, item.stage))
+    .reduce((sum, item) => sum + parseMoney(item.acv), 0);
+  const showOpportunityMetrics = !isUniversitySuccessList && !isContactListActive && !isTaskListActive && !isInvestorUpdateContactsList;
 
   const scorecardMetrics = useMemo(() => {
     const scopedRows = metricsScope === 'workspace' ? allRows : allRows.filter(({ list }) => list.id === activeList.id);
@@ -8944,6 +8950,53 @@ Rules:
     }
   };
 
+  const updateCollaboratorListAccess = async (
+    invite: InviteHistoryEntry,
+    entry: InviteHistoryEntry['listAccess'][number],
+    access: ShareAccess,
+  ) => {
+    if (!user || !isOwner || isSharedView || !ownerSharesReady || savingListAccess) return;
+    if (access === entry.access) return;
+    setSavingListAccess(`${invite.email}:${entry.shareId}`);
+    setShareMessage(null);
+    try {
+      const shareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, entry.shareId);
+      await runTransaction(simpBudgetDb, async (transaction) => {
+        const snapshot = await transaction.get(shareRef);
+        if (!snapshot.exists()) throw new Error('This shared PipeList is no longer available.');
+        const current = snapshot.data();
+        if (current.ownerUid !== user.uid) throw new Error('Only the owner can change access.');
+        const viewers = Array.isArray(current.viewerEmails) ? current.viewerEmails : [];
+        const editors = Array.isArray(current.editorEmails) ? current.editorEmails : [];
+        if (![...viewers, ...editors].includes(invite.email)) {
+          throw new Error('This person no longer has access. Refresh before making changes.');
+        }
+        const viewerEmails = viewers.filter((email: string) => email !== invite.email);
+        const editorEmails = editors.filter((email: string) => email !== invite.email);
+        (access === 'edit' ? editorEmails : viewerEmails).push(invite.email);
+        transaction.update(shareRef, {
+          viewerEmails,
+          editorEmails,
+          access: editorEmails.length > 0 ? 'edit' : 'read',
+          inviteStatuses: {
+            ...(current.inviteStatuses || {}),
+            [invite.email]: {
+              ...(current.inviteStatuses?.[invite.email] || { status: entry.status }),
+              email: invite.email,
+              access,
+            },
+          },
+          updatedAt: serverTimestamp(),
+        });
+      });
+      setShareMessage({ type: 'success', text: `${entry.listName}: ${invite.displayName || invite.email} ${access === 'edit' ? 'can now edit' : 'now has read-only access'}.` });
+    } catch (error) {
+      setShareMessage({ type: 'error', text: readFirestoreError(error, 'Unable to update list access.') });
+    } finally {
+      setSavingListAccess('');
+    }
+  };
+
   const removeCollaboratorAccess = async (invite: InviteHistoryEntry) => {
     if (!user || !isOwner) return;
     if (
@@ -10912,7 +10965,7 @@ Rules:
 
             {viewMode === 'pipeline' && (
               <>
-                <div className={`grid gap-2 sm:grid-cols-2 xl:grid-cols-4 ${isUniversitySuccessList ? 'mb-3' : 'mb-5 gap-3'}`}>
+                <div className={`grid gap-2 sm:grid-cols-2 ${showOpportunityMetrics ? 'xl:grid-cols-5' : 'xl:grid-cols-4'} ${isUniversitySuccessList ? 'mb-3' : 'mb-5 gap-3'}`}>
                   {isUniversitySuccessList ? (
                     <>
                       {[
@@ -10959,6 +11012,13 @@ Rules:
                         isFundSizeList(activeList) ? 'Fund sizes for active items' : 'ACV or amount for active items',
                         <DollarSign className="h-4 w-4" />,
                         'bg-amber-50 text-amber-700',
+                      )}
+                      {renderMetricCard(
+                        'ACV',
+                        formatMoney(activeAcv),
+                        'Total annual contract value for active items',
+                        <TrendingUp className="h-4 w-4" />,
+                        'bg-indigo-50 text-indigo-700',
                       )}
                     </>
                   )}
@@ -12026,18 +12086,26 @@ Rules:
                         <div className="min-w-0">
                           <div className="grid gap-2 sm:grid-cols-2">
                             {invite.listAccess.map((entry) => (
-                              <div
+                              <label
                                 key={entry.listId}
-                                className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2"
+                                className="flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2"
                               >
                                 <span className="flex min-w-0 items-center gap-2">
                                   <span className={`h-2 w-2 shrink-0 rounded-full ${entry.accent}`} />
                                   <span className="truncate text-sm font-medium text-stone-700">{entry.listName}</span>
                                 </span>
                                 <span className="flex shrink-0 items-center gap-1.5">
-                                  <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-stone-600">
-                                    {entry.access === 'edit' ? 'Can edit' : 'Read only'}
-                                  </span>
+                                  <select
+                                    aria-label={`Access to ${entry.listName} for ${memberLabel}`}
+                                    title={`${entry.listName}: change access`}
+                                    value={entry.access}
+                                    disabled={!ownerSharesReady || Boolean(savingListAccess) || removingAccessEmails.includes(invite.email) || savingAdditionalListsForEmail === invite.email}
+                                    onChange={(event) => void updateCollaboratorListAccess(invite, entry, event.target.value as ShareAccess)}
+                                    className="cursor-pointer rounded-full border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-700 focus:outline-none focus:ring-2 focus:ring-stone-400 disabled:cursor-wait disabled:opacity-50"
+                                  >
+                                    <option value="edit">Can edit</option>
+                                    <option value="read">Read only</option>
+                                  </select>
                                   {entry.status === 'sent' ? (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
                                       <Clock className="h-3 w-3" />
@@ -12050,7 +12118,7 @@ Rules:
                                     </span>
                                   )}
                                 </span>
-                              </div>
+                              </label>
                             ))}
                           </div>
 

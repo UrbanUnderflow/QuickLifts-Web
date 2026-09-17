@@ -6,47 +6,7 @@ import { db } from '../../api/firebase/config';
 import { FileText, Download, Trash2, Loader2, Sparkles, Clock, AlertCircle, CheckCircle, RefreshCw, Eye, ChevronUp, Edit3, ClipboardCheck, X, AlertTriangle, CheckCircle2, Send, Mail, Check, PenTool, Share2, Copy, Paperclip, Link2 } from 'lucide-react';
 import { formatDiagram, previewFormattedDiagram, extractSectionHeaders, insertDiagramIntoDocument } from '../../utils/diagramFormatter';
 
-// Companies available for document generation
-const COMPANIES = [
-  { id: 'pulse', name: 'Pulse Intelligence Labs, Inc.' },
-  { id: 'tres', name: 'TresProperties LLC' },
-];
-
-// Wire transfer instructions keyed by company
-const WIRE_INSTRUCTIONS: Record<string, {
-  bankName: string;
-  accountNumber: string;
-  routingNumber: string;
-  accountType?: string;
-  beneficiaryName: string;
-  beneficiaryAddress?: string;
-  swift?: string;
-  bankAddress?: string;
-  intermediarySwift?: string;
-  note?: string;
-}> = {
-  'Pulse Intelligence Labs, Inc.': {
-    bankName: 'Column N.A. (via Mercury)',
-    routingNumber: '121145433',
-    accountNumber: '118879863125743',
-    accountType: 'Checking',
-    beneficiaryName: 'Pulse Intelligence Labs, Inc.',
-    beneficiaryAddress: '1111B S Governors Ave, STE 50759, Dover, DE 19904',
-    bankAddress: '1 Letterman Drive, Building A, Suite A4-700, San Francisco, CA 94129',
-    swift: 'CLNOUS66MER',
-    intermediarySwift: 'CHASUS33XXX',
-    note: 'For international wires use SWIFT: CLNOUS66MER. Intermediary bank SWIFT: CHASUS33XXX.',
-  },
-  'TresProperties LLC': {
-    bankName: 'JPMorgan Chase Bank, N.A.',
-    routingNumber: '021000021',
-    accountNumber: '888397715',
-    accountType: 'Checking',
-    beneficiaryName: 'TresProperties LLC',
-    bankAddress: '383 Madison Avenue\nNew York, NY 10179',
-    note: 'Routing number 021000021 applies to both ACH/direct deposit and wire transfers.',
-  },
-};
+import { COMPANIES, WIRE_INSTRUCTIONS } from '../../lib/documentIssuers';
 
 // Invoice line item type
 interface InvoiceLineItem {
