@@ -3390,6 +3390,8 @@ const PipelinePage: NextPage = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [viewMode, setViewModeState] = useState<ViewMode>('pipeline');
   const [pipelineDisplayMode, setPipelineDisplayMode] = useState<PipelineDisplayMode>('list');
+  const [draggedKanbanItem, setDraggedKanbanItem] = useState<{ listId: string; itemId: string } | null>(null);
+  const [kanbanDropStageId, setKanbanDropStageId] = useState<string | null>(null);
   const [metricsScope, setMetricsScope] = useState<MetricsScope>('selected-list');
   const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>('90');
   const [runbookHasUnsavedChanges, setRunbookHasUnsavedChanges] = useState(false);
@@ -7943,6 +7945,27 @@ Rules:
     resetEditor();
   };
 
+  const clearKanbanDrag = () => {
+    setDraggedKanbanItem(null);
+    setKanbanDropStageId(null);
+  };
+
+  const handleKanbanDrop = (event: React.DragEvent<HTMLElement>, stageId: string) => {
+    event.preventDefault();
+    clearKanbanDrag();
+    if (!canModify || isBulkSelectionMode || draggedKanbanItem?.listId !== activeList.id) return;
+    const itemId = draggedKanbanItem.itemId;
+    setLists((currentLists) => currentLists.map((list) => {
+      if (list.id !== activeList.id || !list.stages.some((stage) => stage.id === stageId)) return list;
+      return {
+        ...list,
+        items: list.items.map((item) => item.id === itemId && !item.deletedAt && item.stage !== stageId
+          ? { ...item, stage: stageId, updatedAt: new Date().toISOString() }
+          : item),
+      };
+    }));
+  };
+
   const handleEditItem = (item: PipelineItem) => {
     if (!canModify) return;
     const { id, createdAt, updatedAt, weeklyLogs, deletedAt, deletedByLogId, restorableUntil, movedToListId, ...editableItem } = item;
@@ -11566,7 +11589,23 @@ Rules:
                         return (
                           <section
                             key={stage.id}
-                            className="flex w-[280px] shrink-0 flex-col rounded-lg border border-stone-200 bg-[#FAFAF7] md:w-[304px]"
+                            onDragOver={(event) => {
+                              if (!canModify || isBulkSelectionMode || draggedKanbanItem?.listId !== activeList.id) return;
+                              event.preventDefault();
+                              event.dataTransfer.dropEffect = 'move';
+                              setKanbanDropStageId(stage.id);
+                            }}
+                            onDragLeave={(event) => {
+                              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                                setKanbanDropStageId(null);
+                              }
+                            }}
+                            onDrop={(event) => handleKanbanDrop(event, stage.id)}
+                            className={`flex w-[280px] shrink-0 flex-col rounded-lg border bg-[#FAFAF7] transition md:w-[304px] ${
+                              kanbanDropStageId === stage.id && draggedKanbanItem?.listId === activeList.id
+                                ? 'border-stone-500 ring-2 ring-stone-300'
+                                : 'border-stone-200'
+                            }`}
                           >
                             <header className="border-b border-stone-200 px-3 py-3">
                               <div className="flex items-center justify-between gap-3">
@@ -11597,6 +11636,18 @@ Rules:
                                   return (
                                     <article
                                       key={item.id}
+                                      draggable={canModify && !isBulkSelectionMode}
+                                      onDragStart={(event) => {
+                                        if (!canModify || isBulkSelectionMode || (event.target as HTMLElement).closest('button, input, select, textarea, a')) {
+                                          event.preventDefault();
+                                          return;
+                                        }
+                                        event.dataTransfer.effectAllowed = 'move';
+                                        event.dataTransfer.setData('text/plain', item.id);
+                                        setDraggedKanbanItem({ listId: activeList.id, itemId: item.id });
+                                        setNextStepTooltip(null);
+                                      }}
+                                      onDragEnd={clearKanbanDrag}
                                       role="button"
                                       tabIndex={0}
                                       aria-label={isBulkSelectionMode ? `Select ${item.title}` : `Open details for ${item.title}`}
@@ -11619,7 +11670,7 @@ Rules:
                                           }
                                         }
                                       }}
-                                      className={`rounded-md border bg-white p-3 shadow-sm transition hover:border-stone-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-stone-300 ${
+                                      className={`rounded-md border bg-white p-3 shadow-sm transition hover:border-stone-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-stone-300 ${canModify && !isBulkSelectionMode ? 'cursor-grab active:cursor-grabbing' : ''} ${draggedKanbanItem?.listId === activeList.id && draggedKanbanItem.itemId === item.id ? 'opacity-40' : ''} ${
                                         isSelectedForBulkAction ? 'border-stone-900 ring-1 ring-inset ring-stone-900' : 'border-stone-200'
                                       }`}
                                     >

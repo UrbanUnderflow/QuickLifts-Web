@@ -176,7 +176,7 @@ const PulseCheckLoginPage: NextPage = () => {
     if (currentUser) {
       // Already signed in — go straight to the app
       localStorage.setItem(STORAGE_KEY_PC, 'true');
-      router.replace('/PulseCheck?web=1');
+      router.replace(router.query.returnTo === '/PulseCheck/questionnaire/cau' ? '/PulseCheck/questionnaire/cau' : '/PulseCheck?web=1');
     }
   }, [currentUser, router]);
 
@@ -212,7 +212,7 @@ const PulseCheckLoginPage: NextPage = () => {
 
   const enterApp = useCallback(() => {
     localStorage.setItem(STORAGE_KEY_PC, 'true');
-    router.replace('/PulseCheck?web=1');
+    router.replace(router.query.returnTo === '/PulseCheck/questionnaire/cau' ? '/PulseCheck/questionnaire/cau' : '/PulseCheck?web=1');
   }, [router]);
 
   const ensureFirestoreUser = async (firebaseUser: any) => {

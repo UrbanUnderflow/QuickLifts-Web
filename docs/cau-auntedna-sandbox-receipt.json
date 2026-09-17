@@ -1,0 +1,21 @@
+{
+  "environment": "SANDBOX",
+  "first": {
+    "baselineId": "ef0cb72a-cdc5-4466-8a77-5bc8e2c50880",
+    "athleteId": "cdc4d027-b972-4142-8b55-5068ec1b3df3",
+    "externalId": "sandbox-pulse-a001fa01-0763-4142-a812-7eb3cadead9f",
+    "submissionId": "bff49234-997e-474d-a493-b8bd9d4fc6a7",
+    "receivedAt": "2026-09-16T12:16:40.100612+00:00",
+    "created": true,
+    "requestId": "1237febe-9329-4a1e-94bd-6f14d7b330ad"
+  },
+  "replay": {
+    "baselineId": "ef0cb72a-cdc5-4466-8a77-5bc8e2c50880",
+    "athleteId": "cdc4d027-b972-4142-8b55-5068ec1b3df3",
+    "externalId": "sandbox-pulse-a001fa01-0763-4142-a812-7eb3cadead9f",
+    "submissionId": "bff49234-997e-474d-a493-b8bd9d4fc6a7",
+    "receivedAt": "2026-09-16T12:16:40.100612+00:00",
+    "created": false,
+    "requestId": "813e9a2f-de93-418d-8dfe-62273d87fcec"
+  }
+}
