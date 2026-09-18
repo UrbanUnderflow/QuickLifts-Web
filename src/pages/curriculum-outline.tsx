@@ -356,7 +356,7 @@ const DEV_MODE_STORAGE_KEY = 'pulsecheck-curriculum-dev-mode';
 // the live Firestore doc (the same content the apps play).
 // ---------------------------------------------------------------------------
 
-type PreviewTarget = { exercise: ExerciseOption; lesson?: LessonRow };
+type PreviewTarget = { exercise: ExerciseOption; lesson?: LessonRow; play?: boolean };
 
 const asStringList = (value: any): string[] => {
   if (!Array.isArray(value)) return [];
@@ -404,7 +404,7 @@ const ModulePreviewModal: React.FC<ModulePreviewModalProps> = ({
   const interaction = data?.interaction && typeof data.interaction === 'object' ? data.interaction : null;
   const reflectionQuestions: any[] = Array.isArray(data?.reflection?.questions) ? data.reflection.questions : [];
   const steps = phases.length ? [] : prompts.length ? prompts : instructions;
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(Boolean(target.play));
   const playableExercise = React.useMemo(
     () => exerciseFromFirestore(exercise.id, data),
     [data, exercise.id],
@@ -852,18 +852,18 @@ const JuniorCurriculumPage: React.FC = () => {
   const lessonCount = bundled.length - checkpointCount;
   const totalMinutes = bundled.reduce((sum, l) => sum + (Number(l.durationMinutes) || 0), 0);
 
-  const previewSequenceSkill = useCallback(async (entry: LinearCurriculumEntry) => {
+  const previewSequenceSkill = useCallback(async (entry: LinearCurriculumEntry, play = false) => {
     setPreviewError(''); setPreviewLoading(true);
     try {
       const known = exercises.find(exercise => entry.aliases.includes(exercise.id) || exercise.id === entry.id);
-      if (known) { setPreview({ exercise: known }); return; }
+      if (known) { setPreview({ exercise: known, play }); return; }
       const refs = entry.sourceRefs.filter(ref => ref.startsWith('sim-modules/') || ref.startsWith('mental-exercises/'));
       for (const ref of refs) {
         const [collectionName, id] = ref.split('/');
         const snapshot = await getDoc(doc(db, collectionName, id));
         if (!snapshot.exists()) continue;
         const data = snapshot.data();
-        setPreview({ exercise: { id, name: String(data.name || entry.name), category: String(data.category || ''), durationMinutes: Number(data.durationMinutes || 0), handoffRisk: exerciseHandoffRisk(data), isSim: Boolean(data.simSpecId), data } });
+        setPreview({ play, exercise: { id, name: String(data.name || entry.name), category: String(data.category || ''), durationMinutes: Number(data.durationMinutes || 0), handoffRisk: exerciseHandoffRisk(data), isSim: Boolean(data.simSpecId), data } });
         return;
       }
       setPreviewError('A compatible module preview is not available for this skill yet. Review its readiness details.');

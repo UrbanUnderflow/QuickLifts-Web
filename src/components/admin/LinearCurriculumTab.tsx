@@ -2,12 +2,12 @@ import LinearPublicationReview from './LinearPublicationReview';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { validateLinearOrder, type LinearCurriculumEntry } from '../../api/firebase/dailyCurriculum/linearCurriculum';
 import { loadLinearCurriculumCatalog, loadLinearCurriculumDraft, saveLinearCurriculumDraft } from '../../api/firebase/dailyCurriculum/linearCurriculumDraft';
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Loader2, Lock, Save, Search } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Loader2, Lock, Play, Save, Search } from 'lucide-react';
 
 // Data binding is supplied by the curriculum draft service below.
 type Entry = LinearCurriculumEntry;
 type Draft = { orderedIds: string[]; rationales?: Record<string, string> };
-type DataSource = { active: Entry[]; candidates: Entry[]; proposedOrder: string[]; load: () => Promise<Draft | null>; save: (draft: Draft) => Promise<void>; onPreview?: (entry: Entry) => void };
+type DataSource = { active: Entry[]; candidates: Entry[]; proposedOrder: string[]; load: () => Promise<Draft | null>; save: (draft: Draft) => Promise<void>; onPreview?: (entry: Entry, play?: boolean) => void };
 
 export const LinearCurriculumEditor: React.FC<DataSource> = ({ active, candidates, proposedOrder, load, save, onPreview }) => {
   const [ids, setIds] = useState<string[]>(proposedOrder);
@@ -83,6 +83,17 @@ export const LinearCurriculumEditor: React.FC<DataSource> = ({ active, candidate
   const rows = ids.map((id, index) => ({ id, index, entry: lookup.get(id) })).filter(({ entry }) => filter === 'all' || (filter === 'classification' ? Boolean(entry && entry.catalogType !== entry.type) : filter === 'adaptation' ? Boolean(entry?.readiness.includes('adaptation')) : entry?.type === filter)).filter(({ id, entry }) => !search || `${entry?.name || id} ${entry?.type || ''} ${entry?.readiness || ''}`.toLowerCase().includes(search.toLowerCase()));
   const field = 'rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-950 focus:border-teal-700 focus:outline-none';
   const button = 'rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-800 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-35';
+  const playButton = (entry: Entry) => onPreview && (
+    <button
+      type="button"
+      onClick={() => onPreview(entry, true)}
+      aria-label={`Play ${entry.name}`}
+      className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700"
+    >
+      <Play className="h-4 w-4 fill-current text-[#E0FE10]" aria-hidden="true" />
+      Play skill
+    </button>
+  );
   if (loading) return <div className="flex items-center gap-2 rounded-2xl border border-stone-200 p-6 text-stone-600"><Loader2 className="h-4 w-4 animate-spin" /> Loading linear curriculum…</div>;
   return <section className="space-y-3">
     <div className="sticky top-0 z-20 rounded-lg border border-stone-200 bg-[#FAFAF7]/95 p-4 shadow-sm backdrop-blur">
@@ -111,6 +122,7 @@ export const LinearCurriculumEditor: React.FC<DataSource> = ({ active, candidate
     <ol className="space-y-3" aria-label="Ordered active curriculum">
       {rows.map(({ id, index, entry }) => <li key={`${id}-${index}`} className="rounded-2xl border border-stone-200 bg-white p-4">
         <div className="flex flex-wrap items-start gap-4"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-100 font-semibold text-teal-800">{index + 1}</span><div className="min-w-0 flex-1"><h3 className="font-semibold">{entry?.name || id}</h3><div className="mt-1 flex flex-wrap gap-2 text-xs"><span className="rounded bg-stone-100 px-2 py-1 capitalize">{entry?.type || 'Unknown'}</span><span className="rounded bg-stone-100 px-2 py-1">{entry?.readiness || 'Needs review'}</span>{index === 0 && <span className="flex items-center gap-1 text-teal-800"><Lock className="h-3 w-3" /> Fixed first</span>}</div></div>
+          {entry && playButton(entry)}
           <div className="flex flex-wrap items-center gap-2"><button aria-label={`Move ${entry?.name || id} up`} className={button} disabled={index <= 1 || saving} onClick={() => move(index, index - 1)}><ArrowUp className="h-4 w-4" /></button><button aria-label={`Move ${entry?.name || id} down`} className={button} disabled={index === 0 || index === ids.length - 1 || saving} onClick={() => move(index, index + 1)}><ArrowDown className="h-4 w-4" /></button><label className="text-xs text-stone-600">Position <input type="number" min={2} max={ids.length} value={positions[id] ?? index + 1} disabled={index === 0 || saving} onChange={e => setPositions(p => ({ ...p, [id]: e.target.value }))} aria-label={`Destination position for ${entry?.name || id}`} className={`${field} ml-1 w-20`} /></label><button className={button} disabled={index === 0 || saving || !Number.isInteger(Number(positions[id] ?? index + 1)) || Number(positions[id] ?? index + 1) < 2 || Number(positions[id] ?? index + 1) > ids.length} onClick={() => move(index, Number(positions[id] ?? index + 1) - 1)}>Move</button></div>
         </div>
         <details className="mt-2"><summary className="cursor-pointer text-xs font-semibold text-teal-800">Rationale & review details</summary>
@@ -122,11 +134,11 @@ export const LinearCurriculumEditor: React.FC<DataSource> = ({ active, candidate
     </ol>
     {rows.length === 0 && <p className="text-sm text-stone-600">No ordered skills match this search.</p>}
     </div>
-    {candidateView && <section aria-label="Candidate skills" className="rounded-lg border border-stone-200 bg-white p-4"><h3 className="font-semibold">Unpublished / candidate skills ({candidates.length})</h3><p className="mt-3 text-sm text-stone-600">Held outside the active sequence. These entries are not activated by saving this draft.</p><ul className="mt-4 divide-y divide-stone-200">{candidates.map(entry => <li key={entry.id} className="py-3"><p className="text-sm font-medium">{entry.name} <span className="ml-2 text-xs capitalize text-stone-600">{entry.type}</span></p><p className="mt-1 text-xs text-stone-600">{entry.readiness} · {entry.rationale}</p></li>)}</ul></section>}
+    {candidateView && <section aria-label="Candidate skills" className="rounded-lg border border-stone-200 bg-white p-4"><h3 className="font-semibold">Unpublished / candidate skills ({candidates.length})</h3><p className="mt-3 text-sm text-stone-600">Held outside the active sequence. These entries are not activated by saving this draft.</p><ul className="mt-4 divide-y divide-stone-200">{candidates.map(entry => <li key={entry.id} className="flex flex-wrap items-start justify-between gap-3 py-3"><div className="min-w-0 flex-1"><p className="text-sm font-medium">{entry.name} <span className="ml-2 text-xs capitalize text-stone-600">{entry.type}</span></p><p className="mt-1 text-xs text-stone-600">{entry.readiness} · {entry.rationale}</p></div>{playButton(entry)}</li>)}</ul></section>}
   </section>;
 };
 
-export default function LinearCurriculumTab({ onPreview }: { onPreview?: (entry: Entry) => void }) {
+export default function LinearCurriculumTab({ onPreview }: { onPreview?: (entry: Entry, play?: boolean) => void }) {
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof loadLinearCurriculumCatalog>> | null>(null);
   const [error, setError] = useState('');
   const revision = useRef<number | null>(null);

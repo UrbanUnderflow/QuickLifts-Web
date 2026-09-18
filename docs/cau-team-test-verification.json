@@ -1,0 +1,15 @@
+{
+  "environment": "SANDBOX",
+  "campaign": "team-20260918",
+  "verifiedAt": "2026-09-18T14:02:28.687Z",
+  "pulseCheckFields": 13,
+  "auntEdnaReferences": 48,
+  "clinicalMarkerAbsentFromPulseCheck": true,
+  "clientReadDenied": true,
+  "externalId": "sandbox-pulse-2240c11f60e6c54ee304288b655bf310",
+  "submissionId": "team-test-team-20260918-2240c11f60e6c54ee304288b655bf310",
+  "baselineId": "8fc8091b-a866-421a-b821-f8938b4c6be4",
+  "athleteId": "1e1fd94c-f430-4ce4-8d2f-9b837357c973",
+  "receivedAt": "2026-09-18T14:02:15.269653+00:00",
+  "requestId": "6a3b6bb7-b8d2-49a9-b44e-b16ee1844929"
+}
