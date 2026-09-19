@@ -1,0 +1,620 @@
+{
+  "status": "proposed_review_not_runtime_policy",
+  "counts": {
+    "A: operational/performance candidate": 20,
+    "B: private wellness candidate": 30,
+    "C: retain external-only pending review": 11
+  },
+  "questions": [
+    {
+      "questionId": "cau-operational-01",
+      "question": "I understand the purpose of this onboarding questionnaire and how my responses will be used.",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-02",
+      "question": "I understand that individual mental-health responses will not be shared with coaches, teammates, or performance personnel.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-03",
+      "question": "I understand that I can still contact CAU counseling, medical, or emergency services directly when I need help.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-05",
+      "question": "Date completed:",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-06",
+      "question": "Date you first accessed either platform, if known:",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-07",
+      "question": "Which platform(s) have you used before today?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-08",
+      "question": "Approximately how many total check-ins have you completed before today?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-09",
+      "question": "Current academic year:",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-10",
+      "question": "Current volleyball status:",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-11",
+      "question": "Current season phase:",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-12",
+      "question": "Are you currently managing an injury or physical condition that affects training, competition, sleep, or recovery?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Explicit injury/physical-condition disclosure.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-13",
+      "question": "If yes and you want the platforms to consider it, briefly describe the impact (optional):",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Unrestricted injury/condition narrative.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-14",
+      "question": "I felt emotionally balanced.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-15",
+      "question": "I was able to manage the demands placed on me.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-16",
+      "question": "I felt hopeful about the week ahead.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-17",
+      "question": "I had enough energy for my daily responsibilities.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-18",
+      "question": "I was able to concentrate on school, volleyball, and daily tasks.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-19",
+      "question": "Stress interfered with my ability to function the way I wanted.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Broad functional impairment assessment; retain clinical intake purpose pending review.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-20",
+      "question": "Which areas have contributed to your stress during the past 7 days? Select all that apply.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Mixed stressors include injury/health and sensitive social circumstances; do not copy whole answer by default.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-21",
+      "question": "Stress affected my sleep.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-22",
+      "question": "Stress affected my academic work.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-23",
+      "question": "Stress affected my focus during practice or competition.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-24",
+      "question": "Stress affected my relationships or willingness to connect with others.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-25",
+      "question": "Stress made it harder to recover physically.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-26",
+      "question": "Is there anything about your current stress that would help auntEDNA better support you? (Optional; do not use this space for an emergency.)",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Free text explicitly requested for auntEDNA support.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-27",
+      "question": "I get enough sleep to meet my daily demands.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-28",
+      "question": "My sleep usually is restful.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-29",
+      "question": "I normally recovered well between practices, workouts, and competitions.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-30",
+      "question": "Soreness, pain, or fatigue affected my performance readiness.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Combines pain with fatigue; health and performance cannot be separated from the answer.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-31",
+      "question": "My schedule allows enough time for recovery.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-32",
+      "question": "On most nights during the past 7 days, about how many hours did you sleep?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-33",
+      "question": "I feel physically ready to train or compete.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-34",
+      "question": "I feel mentally ready to train or compete.",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-35",
+      "question": "I am able to stay focused during volleyball activities.",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-36",
+      "question": "I feel confident in my current volleyball role.",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-37",
+      "question": "I am able to recover after mistakes or difficult moments.",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-38",
+      "question": "I feel comfortable communicating when I needed support or an adjustment.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-39",
+      "question": "What most affected your readiness during the past 7 days? Select up to three.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Mixed options include injury/pain; needs explicit field/option policy.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-40",
+      "question": "How ready do you feel to meet your current volleyball demands?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-41",
+      "question": "I feel that I belong on this team.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-42",
+      "question": "I feel respected within my athletic environment.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-43",
+      "question": "I can ask for help without being viewed as weak.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-44",
+      "question": "I know where to go for confidential mental-health support at CAU.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-45",
+      "question": "I would feel comfortable contacting a counselor or mental-health professional if I needed support.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-46",
+      "question": "I trust that my individual mental-health information will remain private from coaches and performance personnel.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-47",
+      "question": "If you wanted support, which options would you be most likely to use? Select all that apply.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-48",
+      "question": "What might make it harder for you to seek support? Select all that apply.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "B: private wellness candidate",
+      "reason": "Sensitive wellness, environment, engagement or support response; useful privately, but not cleared for independent PulseCheck retention.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-49",
+      "question": "How would you prefer auntEDNA to respond when you indicate that you may need additional support?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Preference for auntEDNA clinical response; retain in care workflow.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-50",
+      "question": "What is the best general way to remind you about a check-in?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-51",
+      "question": "What times generally work best for a brief check-in?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-52",
+      "question": "I understand the difference between performance support and mental-health support.",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-53",
+      "question": "I understand what auntEDNA is intended to help me do.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-54",
+      "question": "I understand what PulseCheck is intended to help me do.",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-55",
+      "question": "I feel comfortable using a digital platform for regular check-ins.",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-56",
+      "question": "I understand who may and may not see my individual responses.",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-57",
+      "question": "What would make you more comfortable using the platforms?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Unrestricted text can contain diagnoses, treatment or other sensitive disclosures.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-58",
+      "question": "What would make the platforms useful enough for you to continue checking in?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Unrestricted text can contain diagnoses, treatment or other sensitive disclosures.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-59",
+      "question": "Do you know how to access PulseCheck?",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-60",
+      "question": "Do you know where to ask a question about privacy or how your information is used?",
+      "currentCustodian": "PulseCheck",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": false,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-61",
+      "question": "Would you like someone to follow up with general information about available support?",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "A: operational/performance candidate",
+      "reason": "Defined non-diagnostic operational or sport-performance purpose; account context can still make the record PHI.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    },
+    {
+      "questionId": "cau-operational-62",
+      "question": "Anything else you would like the onboarding team to know? (Optional; do not use this space for an emergency.)",
+      "currentCustodian": "auntEDNA",
+      "proposedReviewGroup": "C: retain external-only pending review",
+      "reason": "Unrestricted onboarding narrative may contain clinical disclosures.",
+      "legalPHIStatus": "Context-dependent; not determined from wording",
+      "sendToAuntEdna": true,
+      "retentionChangeEnabled": false
+    }
+  ]
+}

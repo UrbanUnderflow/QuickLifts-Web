@@ -12,6 +12,7 @@ const root='pulsecheck-restricted-questionnaire-submissions/';
 function setup(){records=new Map();writes=[];providerCalls=0;process.env.CAU_QUESTIONNAIRE_COLLECTION_ENABLED='true';process.env.AUNTEDNA_PARTNER_TEST_KEY='ae_pk_test_fake';
  records.set(root+'assignment_athlete',{kind:'assignment',enabled:true,version:'cau-operational-web-v1',teamId:'team',submissionId:'sub-1',environment:'test',universityCode:'SANDBOX'});
  records.set('pulsecheck-team-memberships/team_athlete',{status:'active'});
+ records.set('athlete-mental-progress/athlete',{mentalSkillsBaseline:{version:5}});
  global.fetch=async()=>{providerCalls++;return Response.json({success:true,requestId:'request',data:{baselineId:'baseline',athleteId:'ae-athlete',externalId:'athlete',submissionId:'sub-1',receivedAt:'2026-09-16T12:00:00Z',created:providerCalls===1}});};
 }
 async function call(method,body,token='valid'){let result={status:200};const res={setHeader(){},status(n){result.status=n;return this;},json(v){result.body=v;return this;},end(){return this;}};await handler({method,headers:{authorization:'Bearer '+token},body},res);return result;}

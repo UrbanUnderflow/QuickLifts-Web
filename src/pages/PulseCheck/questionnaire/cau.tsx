@@ -1,3 +1,6 @@
+import { isDerivedQuestion, isRemovedQuestion } from '../../../lib/questionnaires/cau-derived';
+import ConsolidatedSkillsBaseline, { ConsolidatedSkillsDraft } from '../../../components/mentaltraining/ConsolidatedSkillsBaseline';
+import { VERSION } from '../../../lib/questionnaires/cau';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { auth, isUsingDevFirebase } from '../../../api/firebase/config';
 import { questionCustodian, questionVisible } from '../../../lib/questionnaires/cau-routing';
@@ -11,7 +14,7 @@ import {
 import source from '../../../content/questionnaires/cau-operational.json';
 
 // Preserve source items; the user requested name and email in place of onboarding ID.
-const allQuestions = source.questions.filter(q => q.id !== 'cau-operational-04');
+const allQuestions = source.questions.filter(q => q.id !== 'cau-operational-04' && !isDerivedQuestion(q.id) && !isRemovedQuestion(q.id));
 
 export function getServerSideProps({ res }: any) {
   res.setHeader('Cache-Control', 'no-store');
@@ -145,6 +148,10 @@ const STYLES = `
 
 @media (max-width: 480px) {
   .cau-h1 { font-size: 22px; }
+  .cau-input { font-size: 16px; min-width: 0; }
+  .cau-icon-btn { width: 44px; height: 44px; }
+  .cau-btn { min-height: 44px; touch-action: manipulation; }
+  .cau-track-title { flex-wrap: wrap; }
   .cau-question-title { font-size: 20px; }
 }
 `;
@@ -208,9 +215,17 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   const [loginPassword, setLoginPassword] = useState('');
   const [signingIn, setSigningIn] = useState(false);
   const [signOutError, setSignOutError] = useState('');
-  const [fictionalDataConfirmed, setFictionalDataConfirmed] = useState(false);
   const [receipt, setReceipt] = useState<TestReceipt | null>(null);
+  const [priorSubmission, setPriorSubmission] = useState(false);
+  const [skillsState, setSkillsState] = useState<any>(null);
+  const skillsRevision = useRef(0);
+  const [showSkills, setShowSkills] = useState(false);
+  const [performanceQuestionsComplete, setPerformanceQuestionsComplete] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const draftBusy = useRef(false);
+  const draftRevision = useRef(0);
   const testHeaders = (): Record<string, string> => sandboxTest ? {'X-Questionnaire-Test': sessionStorage.getItem('cau-team-test-invite') || ''} : {};
   useEffect(() => {
     if (!sandboxTest) return;
@@ -230,14 +245,30 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   const sessionUid = useRef<string | null>(null);
   useEffect(() => onAuthStateChanged(auth, next => {
     sessionUid.current = next?.uid || null;
+    setPriorSubmission(false);skillsRevision.current=0;setSkillsState(null);setShowSkills(false);setPerformanceQuestionsComplete(false);
+    draftRevision.current = 0; draftBusy.current = false; setDraftSaving(false); setDraftSaved(false);
     setSignOutError(''); setUser(next); setAuthReady(true); setStatus(null); setAnswers({}); setStarted(false);
     setCompleted({performance:false,health:false}); setPositions({performance:0,health:0}); setIndex(0); setTrack(null);
-    clearTimeout(timer.current); setReceipt(null); setFictionalDataConfirmed(false); setSaved(false); setSaving(false); setSubmittedOnce(false); setShareHealth(true); setError('');
+    clearTimeout(timer.current); setReceipt(null); setSaved(false); setSaving(false); setSubmittedOnce(false); setShareHealth(true); setError('');
     setName(sandboxTest ? '' : next?.displayName || ''); setEmail(next?.email || '');
     if (next) next.getIdToken().then(token => fetch(endpoint, {
       headers: {...testHeaders(), Authorization: `Bearer ${token}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod'},
     })).then(async response => { const result = await response.json(); if (!response.ok) throw Error(result.error || 'Could not check your questionnaire. Refresh to try again.'); return result; })
-      .then(result => { if (sessionUid.current === next.uid) {setStatus(result);setSaved(result.completed);setShareHealth(result.healthSharingAllowed);setReceipt(result.receipt || null);} })
+      .then(result => { if (sessionUid.current === next.uid) {setStatus(result);setSaved(result.completed);setShareHealth(result.healthSharingAllowed);setReceipt(result.receipt || null);
+        setPriorSubmission(result.questionnaireSubmitted === true);setSkillsState(result.skills || null);skillsRevision.current=result.skills?.revision || 0;
+        if (result.draft?.version === VERSION && !result.completed) {
+          const draft = result.draft; draftRevision.current = draft.revision;
+          setAnswers(draft.answers); setName(draft.name); setStarted(true); setDraftSaved(true);
+          setPerformanceQuestionsComplete(draft.completed);
+          setCompleted({performance:draft.completed && result.skills?.completed===true,health:result.questionnaireSubmitted === true});
+          const oldPerformance = source.questions.filter(q => q.id !== 'cau-operational-04' && questionCustodian(q.id) === 'PulseCheck');
+          const performance = allQuestions.filter(q=>questionCustodian(q.id)==='PulseCheck');
+          const previousOrder = draft.flowVersion === 2 ? oldPerformance.filter(q=>!isDerivedQuestion(q.id)) : oldPerformance;
+          const resume = draft.flowVersion === 3 ? Math.min(draft.position,performance.length-1) : Math.min(previousOrder.slice(0,draft.position).filter(q=>!isDerivedQuestion(q.id) && !isRemovedQuestion(q.id)).length,performance.length-1);
+          setPositions({performance:resume,health:0});
+          if (!draft.completed) {setTrack('performance');setIndex(resume);}
+          else if (!result.skills?.completed) setShowSkills(true);
+        }} })
       .catch(e => { if (sessionUid.current === next.uid) setError(e.message || 'Could not check your questionnaire. Refresh to try again.'); });
   }), [sandboxTest]);
   const [started, setStarted] = useState(false);
@@ -256,16 +287,32 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   const q = questions[index];
   const value = q && answers[q.id];
   useEffect(() => () => clearTimeout(timer.current), []);
-  const move = (next: number) => {
+  const move = async (next: number, currentAnswers = answers) => {
+    if (draftBusy.current) return;
     clearTimeout(timer.current); setError(''); setDir(next >= index ? 1 : -1);
     if (!track) return;
-    if (next >= questions.length) { setCompleted(old => ({ ...old, [track]: true })); setPositions(old => ({ ...old, [track]: 0 })); setTrack(null); setIndex(0); }
+    if (track === 'performance' && user) {
+      const uid = user.uid;
+      draftBusy.current = true; setDraftSaving(true); setDraftSaved(false);
+      try {
+        const performanceAnswers = Object.fromEntries(Object.entries(currentAnswers).filter(([id]) => questionCustodian(id) === 'PulseCheck'));
+        const response = await fetch(endpoint, {method:'POST',signal:AbortSignal.timeout(20000),headers:{...testHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase() ? 'dev' : 'prod'},body:JSON.stringify({action:'savePerformanceDraft',draft:{flowVersion:3,version:VERSION,name,answers:performanceAnswers,position:next >= questions.length ? 0 : next,completed:next >= questions.length,revision:draftRevision.current}})});
+        const result = await response.json();
+        if (!response.ok || !result.draft) throw Error(result.error || 'Could not save progress. Press Continue to retry.');
+        if (sessionUid.current !== uid) return;
+        draftRevision.current = result.draft.revision; setDraftSaved(true);
+      } catch (e) {if (sessionUid.current === uid) setError(e instanceof Error ? e.message : 'Could not save progress. Press Continue to retry.');return;}
+      finally {if (sessionUid.current === uid) {draftBusy.current = false;setDraftSaving(false);}}
+      if (sessionUid.current !== uid) return;
+    }
+    if (next >= questions.length) { if(track==='performance'){setPerformanceQuestionsComplete(true);if(!skillsState?.completed)setShowSkills(true);} setCompleted(old => ({ ...old, [track]: track==='performance' ? skillsState?.completed===true : true })); setPositions(old => ({ ...old, [track]: 0 })); setTrack(null); setIndex(0); }
     else { setIndex(next); setPositions(old => ({ ...old, [track]: next })); }
     window.scrollTo({ top: 0 });
   };
-  const openTrack = (next: 'performance' | 'health') => { clearTimeout(timer.current); setError(''); setDir(1); setTrack(next); setIndex(positions[next]); window.scrollTo({ top: 0 }); };
+  const openTrack = (next: 'performance' | 'health') => { if(next==='performance' && performanceQuestionsComplete && !skillsState?.completed){setShowSkills(true);return;} clearTimeout(timer.current); setError(''); setDir(1); setTrack(next); setIndex(positions[next]); window.scrollTo({ top: 0 }); };
   function choose(option: string) {
-    clearTimeout(timer.current);
+    if (draftBusy.current) return;
+    clearTimeout(timer.current); setDraftSaved(false);
     const previous = Array.isArray(value) ? value : [];
     const selected = previous.includes(option);
     const exclusive = q.exclusiveChoices as string[];
@@ -273,17 +320,29 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     if (q.type === 'multi_select' && q.maxSelections && next.length > q.maxSelections) { setError(`Choose up to ${q.maxSelections} answers.`); return; }
     setError('');
     setAnswers(old => { const updated = { ...old, [q.id]: q.type === 'multi_select' ? next : option }; if (q.id === 'cau-operational-12' && option !== 'Yes') delete updated['cau-operational-13']; return updated; });
-    if (q.type !== 'multi_select' && (!q.requiresConfirmation || option === 'Yes')) timer.current = setTimeout(() => move(index + 1), 450);
+    if (q.type !== 'multi_select' && (!q.requiresConfirmation || option === 'Yes')) timer.current = setTimeout(() => move(index + 1, {...answers,[q.id]:option}), 450);
+  }
+  async function saveSkillsProgress(draft: ConsolidatedSkillsDraft, complete = false) {
+    if(!user) throw Error('Sign in to continue.');
+    const uid=user.uid;
+    const response=await fetch(endpoint,{method:'POST',signal:AbortSignal.timeout(45000),headers:{...testHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase()?'dev':'prod'},body:JSON.stringify({action:complete?'completeSkills':'saveSkillsDraft',draft,revision:skillsRevision.current})});
+    const result=await response.json();
+    if(!response.ok || !result.skills)throw Error(result.error || 'Could not save your skills. Try again.');
+    if(sessionUid.current!==uid)throw Error('Your account changed. Reopen the baseline.');
+    skillsRevision.current=result.skills.revision || 0;setSkillsState(result.skills);
+    if(complete && result.completed){setSaved(true);setReceipt(result.receipt || null);}
+    if(complete){setCompleted(old=>({...old,performance:performanceQuestionsComplete && result.skills.completed}));setShowSkills(false);setTrack(null);}
   }
   async function submit() {
-    if (saving || saved || !user || !completed.health || !completed.performance || (sandboxTest && !fictionalDataConfirmed)) return;
+    if (saving || saved || !user || !completed.health || !completed.performance) return;
     setSaving(true); setSubmittedOnce(true); setError('');
     try {
-      const response = await fetch(endpoint, { method: 'POST', headers: { ...testHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' }, body: JSON.stringify({ name, email, answers, shareHealth, completedSections: completed, ...(sandboxTest ? { fictionalDataConfirmed } : {}) }) });
+      const response = await fetch(endpoint, { method: 'POST', headers: { ...testHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' }, body: JSON.stringify({ name, email, answers, shareHealth, completedSections: completed }) });
       const result = await response.json();
       if (sessionUid.current !== user.uid) return;
       if (!response.ok || !result.saved) throw Error(result.error || 'Unable to save answers.');
-      setReceipt(result.receipt || null); setSaved(true); setAnswers({}); setName(''); setEmail('');
+      setReceipt(result.receipt || null);
+ setSaved(true); setAnswers({}); setName(''); setEmail('');
     } catch (e) { if (sessionUid.current === user.uid) setError((e as Error).message); } finally { if (sessionUid.current === user.uid) setSaving(false); }
   }
   async function login(event: React.FormEvent) {
@@ -311,13 +370,13 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           {(['performance', 'health'] as const).map(section => {
             const accentClass = section === 'health' ? 'cau-accent-health' : 'cau-accent-performance';
             const Icon = section === 'health' ? HeartPulse : Target;
-            const disabled = submittedOnce || (section === 'health' && (!status.healthSharingAllowed || !shareHealth));
+            const disabled = submittedOnce || (section === 'health' && (priorSubmission || !status.healthSharingAllowed || !shareHealth));
             return (
               <button key={section} type="button" disabled={disabled} data-selected={completed[section]} onClick={() => openTrack(section)} className={`cau-btn cau-track-card ${accentClass}`}>
                 <span className="cau-track-icon"><Icon size={18} /></span>
                 <span className="cau-track-copy">
-                  <span className="cau-track-title">{completed[section] && <Check size={14} />}{section === 'health' ? 'Mental Health' : 'Mental Performance'}</span>
-                  <span className="cau-body-sm">{section === 'health' ? 'Health, injury, well-being, and support.' : 'Focus, confidence, sport mindset, and general setup.'}</span>
+                  <span className="cau-track-title">{completed[section] && <Check size={14} />}{section === 'health' ? 'Well-being and support' : 'Performance baseline'}</span>
+                  <span className="cau-body-sm">{section === 'health' ? 'Health, injury, well-being, and support.' : 'Your context, how you feel today, and eight mental-skills activities.'}</span>
                   <span className="cau-track-status">{section === 'health' && !shareHealth ? 'Health sharing is optional · not shared' : completed[section] ? 'Complete · review answers' : positions[section] > 0 ? 'In progress · continue' : 'Still to do'}</span>
                 </span>
                 <ChevronRight size={16} className="cau-track-chevron" />
@@ -332,9 +391,9 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           </button>
         )}
 
-        <p className="cau-muted-sm">{Number(completed.performance) + Number(completed.health)} of 2 sections complete. Answers are saved when you submit both sections. Keep this page open until then.</p>
+        <p className="cau-muted-sm">{Number(completed.performance) + Number(completed.health)} of 2 sections complete. Performance progress saves as you go. Well-being answers save when you submit; keep this page open until then.</p>
 
-        {!submittedOnce && completed.health && completed.performance && (
+        {!priorSubmission && !submittedOnce && completed.health && completed.performance && (
           <Disclosure summary="Review all answers">
             <div className="cau-review-list">
               {allQuestions.filter(question => (shareHealth || !isHealth(question)) && questionVisible(question.id, answers)).map(question => (
@@ -367,15 +426,15 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     return (
       <motion.div key="question-flow" {...fadeMotion} className={`cau-stage ${accentClass}`}>
         <div className="cau-question-top">
-          <button type="button" onClick={() => { clearTimeout(timer.current); setTrack(null); }} className="cau-btn cau-btn-ghost">
+          <button type="button" disabled={draftSaving} onClick={() => { clearTimeout(timer.current); setTrack(null); }} className="cau-btn cau-btn-ghost">
             <ArrowLeft size={15} /> Back to sections
           </button>
         </div>
 
-        <div className="cau-progress-track" role="progressbar" aria-label="Questionnaire progress" aria-valuenow={index} aria-valuemin={0} aria-valuemax={questions.length}>
-          <motion.div className="cau-progress-fill" animate={{ width: `${questions.length ? (index / questions.length) * 100 : 0}%` }} transition={{ type: 'spring', stiffness: 280, damping: 32 }} />
+        <div className="cau-progress-track" role="progressbar" aria-label="Questionnaire progress" aria-valuenow={index} aria-valuemin={0} aria-valuemax={track === 'performance' ? 30 : questions.length}>
+          <motion.div className="cau-progress-fill" animate={{ width: `${questions.length ? (index / (track === 'performance' ? 30 : questions.length)) * 100 : 0}%` }} transition={{ type: 'spring', stiffness: 280, damping: 32 }} />
         </div>
-        <p className="cau-step-label">{index + 1} of {questions.length} · {q.sectionTitle}</p>
+        <p className="cau-step-label">{index + 1} of {track === 'performance' ? 30 : questions.length} · {q.sectionTitle.replace(/\s*[—–-]\s*auntEDNA only/gi, '')}</p>
 
         <AnimatePresence mode="wait" initial={false} custom={dir}>
           <motion.div key={q.id} custom={dir} variants={questionVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} style={{ display: 'grid', gap: 16 }}>
@@ -431,11 +490,11 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         <AnimatePresence>{error && <ErrorBanner>{error}</ErrorBanner>}</AnimatePresence>
 
         <div className="cau-nav-row">
-          <button type="button" disabled={index === 0} onClick={() => move(index - 1)} className="cau-btn cau-btn-ghost">
+          <button type="button" disabled={draftSaving || index === 0} onClick={() => move(index - 1)} className="cau-btn cau-btn-ghost">
             <ArrowLeft size={15} /> Back
           </button>
-          <button type="button" onClick={() => move(index + 1)} className="cau-btn cau-btn-primary">
-            Continue <ArrowRight size={15} />
+          <button type="button" disabled={draftSaving} onClick={() => move(index + 1)} className="cau-btn cau-btn-primary">
+            {draftSaving ? 'Saving…' : 'Continue'} <ArrowRight size={15} />
           </button>
         </div>
       </motion.div>
@@ -526,32 +585,23 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
 
     if (!started) {
       return (
-        <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim() || (sandboxTest && !fictionalDataConfirmed)) return; setStarted(true); }} className="cau-stage cau-form">
+        <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim()) return; setStarted(true); }} className="cau-stage cau-form">
           <h1 className="cau-h1">Hey, I’m Nora. Let’s start with you.</h1>
           <p className="cau-body">These questions help us understand how you’re feeling and where you’d like support. Answer from where you are today. We’ll take it one step at a time.</p>
           <label className="cau-field">
-            <span className="cau-field-label">{sandboxTest ? 'Fictional test name' : 'Your name'}</span>
+            <span className="cau-field-label">Your name</span>
             <input required maxLength={150} autoComplete="name" value={name} onChange={e => setName(e.target.value)} className="cau-input" />
           </label>
           <label className="cau-field">
             <span className="cau-field-label">Email address</span>
             <input readOnly={sandboxTest} required type="email" maxLength={254} autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} className="cau-input" />
           </label>
-          {sandboxTest && (
-            <div className="cau-note">
-              <p className="cau-body-sm">Your account links this test to you. auntEDNA receives a test identity. Use a fictional name and fictional answers throughout.</p>
-              <label className="cau-checkbox-row">
-                <input required type="checkbox" className="cau-checkbox-input" checked={fictionalDataConfirmed} onChange={e => setFictionalDataConfirmed(e.target.checked)} />
-                <span className="cau-checkbox-box" aria-hidden="true"><Check size={13} /></span>
-                <span className="cau-body-sm">I will use fictional answers for this test</span>
-              </label>
-            </div>
-          )}
           <button className="cau-btn cau-btn-primary cau-accent-performance">Begin <ArrowRight size={16} /></button>
         </motion.form>
       );
     }
 
+    if (showSkills) return <ConsolidatedSkillsBaseline sportName="Volleyball" initialDraft={skillsState?.draft} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={(_result,draft)=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
     if (track && q) return renderQuestion();
     return renderSections();
   }
@@ -576,14 +626,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           </div>
         </motion.div>
 
-        {sandboxTest && (
-          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }} role="status" className="cau-sandbox-banner">
-            <AlertCircle size={16} />
-            <span>Internal SANDBOX test. Use fictional answers only. Do not enter real health information. This test does not block or unlock your app.</span>
-          </motion.div>
-        )}
-
-        <p role="status" className="cau-muted-sm">{collectionEnabled ? 'Mental Health answers will go directly to auntEDNA. PulseCheck will keep performance answers and restricted references to the auntEDNA records.' : 'Preview. Saving is paused until the direct auntEDNA connection is ready. Keep real personal information out of this preview.'}</p>
+        <p className="cau-muted-sm">These questions help us understand how you’re feeling and where you’d like support, so we can set a starting point for your mental training.</p>
 
         <motion.div initial={{ opacity: 0, y: 16, scale: 0.99 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.5, delay: 0.08 }} style={{ position: 'relative', borderRadius: 24, border: '1px solid rgba(255,255,255,0.08)', background: 'linear-gradient(135deg, rgba(18,18,20,0.96) 0%, rgba(10,10,12,0.98) 100%)', boxShadow: '0 24px 80px rgba(0,0,0,0.45), 0 1px 0 inset rgba(255,255,255,0.06)', overflow: 'hidden' }}>
           <div aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, opacity: 0.6, background: 'linear-gradient(90deg, transparent 5%, rgba(224,254,16,0.4), transparent 95%)' }} />
@@ -594,6 +637,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           </div>
         </motion.div>
 
+        {(draftSaving || draftSaved) && <p className="cau-muted-sm" role="status">{draftSaving ? 'Saving performance progress…' : 'Performance progress saved. You can return later to continue.'}</p>}
         <AnimatePresence>{signOutError && <ErrorBanner>{signOutError}</ErrorBanner>}</AnimatePresence>
 
         {user && (

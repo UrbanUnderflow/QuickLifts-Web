@@ -1,3 +1,7 @@
+import { deriveAdministrativeAnswers, applyAdministrativeAnswers } from '../../../../lib/questionnaires/cau-derived';
+import { saveSkills } from '../../../../lib/questionnaires/cau-skills';
+import { retainedPrivateCopy, liveRetentionEnabled } from '../../../../lib/questionnaires/cau-retention';
+import { savePerformanceDraft } from '../../../../lib/questionnaires/cau-performance-draft';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { COLLECTION, VERSION, splitSubmission } from '../../../../lib/questionnaires/cau';
 import { deliverQuestionnaire } from '../../../../lib/questionnaires/cau-delivery';
@@ -43,14 +47,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       healthSharingAllowed = member?.status === 'active' && !member.revokedAt && latest?.actorUserId === user.uid &&
         healthDocs.length > 0 && accepts(member?.athleteOnboarding?.consentDecisions) && accepts(latest?.decisions);
     }
+    const draftRef = collection.doc(`performance_draft_${user.uid}_${VERSION}`);
+    const draft = active && enabled && !completed ? (await draftRef.get()).data() : null;
+    const skillsRef = collection.doc(`skills_draft_${user.uid}_${VERSION}`);
+    const savedSkills = active && enabled ? (await skillsRef.get()).data() : null;
+    const canonical = active && enabled ? (await db.collection('athlete-mental-progress').doc(user.uid).get()).data()?.mentalSkillsBaseline : null;
+    const skills = canonical?.version === 5 ? {completed:true,result:canonical,reused:true} : savedSkills ? {...savedSkills,completed:false} : null;
     if (req.method === 'GET') return res.json({ required: Boolean(active && enabled && !completed), completed, version: VERSION,
-      available: Boolean(active && enabled), healthSharingAllowed, questionnaireUrl: 'https://fitwithpulse.ai/PulseCheck/questionnaire/cau' });
+      available: Boolean(active && enabled), draft: draft || null, skills, healthSharingAllowed, questionnaireUrl: 'https://fitwithpulse.ai/PulseCheck/questionnaire/cau' });
     if (!assignment || !active || !enabled) return res.status(503).json({ error: 'Your questionnaire is not available yet. Please contact your program team.' });
     if (completed) return res.json({ saved: true, completed: true });
+    if (['saveSkillsDraft','completeSkills'].includes(req.body?.action)) {
+      if (canonical?.version === 5) return res.json({skills});
+      if (!draft?.completed) return res.status(400).json({error:'Complete your performance questions first.'});
+      try {
+        const saved = await saveSkills(db,skillsRef,req.body,user.uid,req.body.action==='completeSkills');
+        if (saved.completed) {
+          const response = await fetch('https://fitwithpulse.ai/.netlify/functions/complete-pulsecheck-baseline', {
+            method:'POST',redirect:'error',signal:AbortSignal.timeout(35000),
+            headers:{'Content-Type':'application/json',Authorization:bearer,'X-PulseCheck-Firebase-Mode':req.headers['x-pulsecheck-firebase-mode']==='dev'?'dev':'prod'},
+            body:JSON.stringify({userId:user.uid,mentalSkillsBaseline:saved.result,assessmentNeeded:false,source:'consolidated-cau-baseline'})
+          });
+          if (!response.ok) throw Error('Canonical save failed.');
+        }
+        return res.json({skills:saved});
+      } catch {return res.status(503).json({error:'Skills completion could not be confirmed. Retry to finish saving.'});}
+    }
+    if (req.body?.action === 'savePerformanceDraft') {
+      try { const draft = await savePerformanceDraft(db, draftRef, req.body.draft, user.uid); return res.json({draft}); }
+      catch { return res.status(409).json({error:'Progress could not be saved. Retry, or reopen this questionnaire if another tab changed it.'}); }
+    }
+    if (canonical?.version !== 5) return res.status(400).json({error:'Finish your skills activities before submitting.'});
     if (req.body?.completedSections?.performance !== true || req.body?.completedSections?.health !== true || typeof req.body.shareHealth !== 'boolean') return res.status(400).json({ error: 'Finish both sections before submitting.' });
     // Stable assignment ID and authenticated UID bind retries across web and apps.
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(assignment.submissionId || '')) return res.status(503).json({ error: 'Your questionnaire setup needs review.' });
-    const input = { ...req.body, submissionId: assignment.submissionId, email: user.email || req.body.email };
+    const input = applyAdministrativeAnswers({ ...req.body, submissionId: assignment.submissionId, email: user.email || req.body.email }, await deriveAdministrativeAnswers(db,user.uid));
     let split;
     try { split = splitSubmission(input); } catch { return res.status(400).json({ error: 'Please check your answers before submitting.' }); }
     if (req.body.shareHealth !== false && !healthSharingAllowed) return res.status(403).json({ error: 'Review your health-sharing authorization, or complete performance only.' });
@@ -70,7 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const create = async (_id: string, mirror: any) => db.runTransaction(async tx => {
       const current = await tx.get(recordRef);
       if (current.exists) return current.data() as any;
-      tx.create(recordRef, { ...mirror, fields: attempt.pulseCheck.fields, identity: attempt.pulseCheck.identity, recordedAt: admin.firestore.FieldValue.serverTimestamp() });
+      tx.create(recordRef, { ...mirror, ...retainedPrivateCopy(input, liveRetentionEnabled(assignment, process.env.CAU_PRIVATE_RETENTION_ENABLED)), administrativeMetadata:{...input.administrativeMetadata,firstPerformanceSaveAt:draft?.startedAt || null}, fields: attempt.pulseCheck.fields, identity: attempt.pulseCheck.identity, recordedAt: admin.firestore.FieldValue.serverTimestamp() });
       return mirror;
     });
     if (req.body.shareHealth === false) {

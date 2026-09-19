@@ -1033,7 +1033,7 @@
     {
       "id": "cau-operational-59",
       "type": "multiple_choice",
-      "question": "After completing this questionnaire, do you understand how to access auntEDNA and PulseCheck?",
+      "question": "Do you know how to access PulseCheck?",
       "required": false,
       "choices": [
         "Yes",
