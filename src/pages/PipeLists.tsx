@@ -3414,6 +3414,7 @@ const PipelinePage: NextPage = () => {
   const [draft, setDraft] = useState<ItemDraft>(defaultDraft(initialLists[0].stages[0].id));
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [itemSaveError, setItemSaveError] = useState('');
   const [isNewListModalOpen, setIsNewListModalOpen] = useState(false);
   const [isLeadUrlModalOpen, setIsLeadUrlModalOpen] = useState(false);
   const [leadUrl, setLeadUrl] = useState('');
@@ -5366,6 +5367,7 @@ const PipelinePage: NextPage = () => {
     ) : null;
 
   const resetEditor = () => {
+    setItemSaveError('');
     setDraft(defaultDraft(activeList.stages[0]?.id));
     setContactEmailInput('');
     setContactEmailError('');
@@ -7829,7 +7831,22 @@ Rules:
 
   const handleSaveItem = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!canModify) return;
+    setItemSaveError('');
+    if (!canModify) {
+      setItemSaveError('You no longer have permission to edit this lead. Your draft is still open.');
+      return;
+    }
+    const liveList = lists.find((list) => list.id === activeList.id);
+    const liveItem = liveList?.items.find((item) => item.id === editingItemId);
+    const cachedItem = detailSnapshotRef.current?.list.id === activeList.id &&
+      detailSnapshotRef.current.item.id === editingItemId
+      ? detailSnapshotRef.current.item
+      : undefined;
+    const editingSnapshot = liveItem || cachedItem;
+    if (!liveList || (editingItemId && (!editingSnapshot || editingSnapshot.deletedAt || editingSnapshot.movedToListId))) {
+      setItemSaveError('This lead or list was removed or moved. Your draft is still open; copy your changes before closing it.');
+      return;
+    }
     if (itemResearchResult && selectedDetailItem?.id === editingItemId) {
       handleApplyItemResearch();
       return;
@@ -7841,12 +7858,13 @@ Rules:
     const invalidPendingContactEmails = pendingContactTokens.filter((email) => !isValidContactEmail(email));
     if (invalidPendingContactEmails.length > 0) {
       setContactEmailError('Enter a valid email address.');
+      setItemSaveError('Check Contact Email below. Enter a valid email address or remove the unfinished entry.');
       return;
     }
 
     const normalizedContactEmails = Array.from(new Set([...draft.contactEmails, ...pendingContactTokens]));
     const inferredContactName = normalizedContactEmails.map(contactNameFromEmail).find(Boolean) || '';
-    const currentEditingItem = editingItemId ? activeList.items.find((item) => item.id === editingItemId) : undefined;
+    const currentEditingItem = editingItemId ? editingSnapshot : undefined;
     const shouldSaveCustomerSuccess =
       activeList.templateKey === 'university-pilot' &&
       (Boolean(draft.customerSuccess) || isUniversityCustomerSuccessStage(draft.stage));
@@ -7900,7 +7918,10 @@ Rules:
       ...baseDraftToSave,
       deadlineSource: normalizeDeadlineSourceForSave(baseDraftToSave, currentEditingItem),
     };
-    if (!draftToSave.title.trim() && !draftToSave.organization.trim()) return;
+    if (!draftToSave.title.trim() && !draftToSave.organization.trim()) {
+      setItemSaveError('Enter a name or organization before saving.');
+      return;
+    }
     setContactEmailInput('');
     setContactEmailError('');
 
@@ -7908,20 +7929,21 @@ Rules:
       currentLists.map((list) => {
         if (list.id !== activeList.id) return list;
 
-        if (editingItemId) {
+        if (editingItemId && editingSnapshot) {
+          const currentItem = list.items.find((item) => item.id === editingItemId) || editingSnapshot;
+          const savedItem: PipelineItem = {
+            ...currentItem,
+            ...draftToSave,
+            title: draftToSave.title.trim() || currentItem.title,
+            organization: draftToSave.organization.trim(),
+            updatedAt: new Date().toISOString(),
+          };
           return {
             ...list,
-            items: list.items.map((item) =>
-              item.id === editingItemId
-                ? {
-                    ...item,
-                    ...draftToSave,
-                    title: draftToSave.title.trim() || item.title,
-                    organization: draftToSave.organization.trim(),
-                    updatedAt: new Date().toISOString(),
-                  }
-                : item,
-            ),
+            // Keep an explicitly saved edit when a sync snapshot temporarily omitted its lead.
+            items: list.items.some((item) => item.id === editingItemId)
+              ? list.items.map((item) => item.id === editingItemId ? savedItem : item)
+              : [...list.items, savedItem],
           };
         }
 
@@ -7974,6 +7996,7 @@ Rules:
 
   const handleEditItem = (item: PipelineItem) => {
     if (!canModify) return;
+    setItemSaveError('');
     const { id, createdAt, updatedAt, weeklyLogs, deletedAt, deletedByLogId, restorableUntil, movedToListId, ...editableItem } = item;
     void id;
     void createdAt;
@@ -9733,7 +9756,17 @@ Rules:
     : null;
 
   const renderItemEditor = () => (
-    <form id="pipe-item-editor-form" onSubmit={handleSaveItem} className="space-y-4">
+    <form
+      id="pipe-item-editor-form"
+      onSubmit={handleSaveItem}
+      onInvalid={(event) => {
+        const input = event.target as HTMLInputElement;
+        const label = input.labels?.[0]?.textContent?.trim() || 'the highlighted field';
+        setItemSaveError(`Check ${label}: ${input.validationMessage}`);
+      }}
+      onChange={() => setItemSaveError('')}
+      className="space-y-4"
+    >
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {(isContactListActive
           ? [
@@ -13875,6 +13908,9 @@ Rules:
                 </div>
               </div>
 
+              {selectedDetailIsEditing && itemSaveError && (
+                <p role="alert" className="mt-3 text-sm font-medium text-rose-600">{itemSaveError}</p>
+              )}
               <div className="mt-4 flex flex-wrap gap-2">
                 {!selectedDetailIsEditing && detailModalMode !== 'details' && detailModalMode !== 'email' && (
                   <button

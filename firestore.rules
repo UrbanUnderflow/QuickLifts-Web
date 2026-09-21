@@ -188,6 +188,7 @@ service cloud.firestore {
         'company-config',
         'curriculum-notes',
         'pulsecheck-linear-curriculum',
+        'pulsecheck-evidence-journals',
         'dailySentimentAnalysis',
         'document-notes',
         'escalation-conditions',
@@ -3443,6 +3444,11 @@ service cloud.firestore {
     // Compatibility fallback: unknown collections are no longer public. They
     // remain available to signed-in clients unless a stricter rule exists above.
     // Versioned curriculum is server-only; API authorization and feature gates apply.
+    // Private evidence is accessed only through the owner-authorized API.
+    match /pulsecheck-evidence-journals/{document=**} {
+      allow read, write: if false;
+    }
+
     match /pulsecheck-linear-curriculum/{document=**} {
       allow read, write: if false;
     }

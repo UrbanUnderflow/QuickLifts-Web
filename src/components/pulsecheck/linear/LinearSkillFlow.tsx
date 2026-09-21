@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import EvidenceJournal from '../evidence/EvidenceJournal';
 import { ActiveExercise } from '../../mentaltraining/ExercisePlayer';
 import { requestLinearRuntime, saveLinearJournal, loadLinearJournal, type LinearRuntimeAssignment, type LinearUseOutcome } from '../../../api/firebase/dailyCurriculum/linearRuntimeClient';
 const phaseLabel = { learn: 'Learn', practice: 'Practice', use_it: 'Use it' };
@@ -17,6 +18,7 @@ export default function LinearSkillFlow({ assignment, preview = false, onSaved }
   const [elapsed, setElapsed] = useState(0), [saving, setSaving] = useState(false), [saved, setSaved] = useState(false);
   const [error, setError] = useState(''), [outcome, setOutcome] = useState<LinearUseOutcome | null>(null);
   const [journal, setJournal] = useState(''), [journalSaved, setJournalSaved] = useState(false);
+  const [evidencePrefill, setEvidencePrefill] = useState<string | null>(null);
   const journalEdited = useRef(false);
   const [journalLoading, setJournalLoading] = useState(false);
   const [journalError, setJournalError] = useState(''), [journalSaving, setJournalSaving] = useState(false);
@@ -77,6 +79,8 @@ export default function LinearSkillFlow({ assignment, preview = false, onSaved }
       <textarea id="private-use-journal" value={journal} disabled={journalSaving || journalLoading} maxLength={4000} rows={4} onChange={event => { journalEdited.current = true; setJournal(event.target.value); setJournalSaved(false); }} className="w-full rounded-lg border border-white/25 bg-zinc-900 p-3 text-white" aria-describedby="private-journal-status" />
       <p id="private-journal-status" className="text-xs text-zinc-400">{journalLoading ? 'Loading saved journal…' : `${journal.length} / 4,000 characters.`} {preview ? 'Preview writing stays on this page only.' : journalSaved ? 'Private journal saved.' : 'Changes stay on this page until you save the journal.'}</p>
       <button type="button" disabled={!journal.trim() || journalSaving || journalSaved} onClick={() => void saveJournal()} className="rounded-lg border border-white/30 px-4 py-2 disabled:opacity-40">{journalSaving ? 'Saving journal…' : journalSaved ? preview ? 'Journal kept in preview' : 'Journal saved' : journalError ? 'Retry journal save' : 'Save private journal'}</button>
+      {!preview && <button type="button" disabled={!journal.trim() || journalLoading} onClick={() => setEvidencePrefill(journal)} className="ml-3 rounded-lg border border-white/30 px-4 py-2 disabled:opacity-40">Save this to my evidence</button>}
+      {evidencePrefill !== null && <EvidenceJournal initialMoment={evidencePrefill} sourceAssignmentId={assignment.id} sourceSkillName={assignment.skillName} onClose={() => setEvidencePrefill(null)} />}
       {journalError && <p role="alert" className="text-sm text-rose-200">{journalError} Your writing is still here.</p>}
       {saved && <button type="button" disabled={journalSaving || (!!journal.trim() && !journalSaved)} onClick={onSaved} className="ml-3 text-sm underline disabled:opacity-40">Refresh skill plan</button>}
     </div>}

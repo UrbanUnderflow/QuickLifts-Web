@@ -17,6 +17,7 @@ import { useUser, useUserLoading } from '../../hooks/useUser';
 import PulseCheckAccessHub, { teamDestinationForMembership } from './PulseCheckAccessHub';
 import CurriculumIntentPanel from './CurriculumIntentPanel';
 import LinearSkillEntry from './linear/LinearSkillEntry';
+import EvidenceJournal from './evidence/EvidenceJournal';
 
 type ReadinessLevel = 'drained' | 'low' | 'okay' | 'solid' | 'locked';
 
@@ -1178,6 +1179,7 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
               RIGHT COLUMN — Access Hub + Status
               ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
           <div className="space-y-6">
+            <EvidenceJournal />
             {/* Access Hub */}
             <motion.section
               id="pulsecheck-access-hub-panel"
