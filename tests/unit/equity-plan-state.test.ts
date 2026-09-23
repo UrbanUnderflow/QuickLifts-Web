@@ -1,10 +1,49 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveEquityBalances, issuedShares, readPlanReserve, resolveEquityPlan } from '../../src/lib/equityPlanState';
+import { deriveEquityBalances, issuedShares, readPlanReserve, resolveEquityPlan, resolveWorkingEquityPlan } from '../../src/lib/equityPlanState';
 
 const body = (n: string) => `### 3.1 Share Reserve\nThe maximum number of shares of Common Stock shall be **${n} shares**.\n### 3.2 Share Counting\n`;
 const original = { id: 'v1', documentType: 'eip', status: 'completed', autoSigned: true, content: body('1,000,000') };
 const draft = { ...original, id: 'v2', originalDocumentId: 'v1', versionNumber: 2, autoSigned: false, approvalStatus: 'draft', content: body('1,600,000') };
+
+test('working setup displays the latest saved draft without changing issuance capacity', () => {
+  const documents = [original, draft];
+  const working = resolveWorkingEquityPlan(documents);
+  assert.equal(working.plan?.id, 'v2');
+  assert.equal(working.reserve, 1600000);
+  assert.equal(working.isEffective, false);
+  assert.equal(resolveEquityPlan(documents).reserve, 1000000);
+  assert.deepEqual(documents.map(d => d.id), ['v1', 'v2']);
+});
+
+test('a newer effective setup takes precedence over an older pending plan', () => {
+  const pending = { ...draft, createdAt: { seconds: 1000 } };
+  const approved = { ...draft, id: 'v3', versionNumber: 3, approvalStatus: 'approved', effectiveAt: '2026-09-01', createdAt: { toMillis: () => 2000000 } };
+  const working = resolveWorkingEquityPlan([pending, approved], Date.parse('2026-09-23'));
+  assert.equal(working.plan?.id, 'v3');
+  assert.equal(working.isEffective, true);
+});
+
+test('working setup preserves an unknown reserve and ignores unfinished or unrelated documents', () => {
+  const working = resolveWorkingEquityPlan([
+    original,
+    { ...draft, content: 'Unrecognized reserve language' },
+    { ...draft, id: 'in-progress', versionNumber: 3, status: 'generating' },
+    { ...draft, id: 'other', versionNumber: 4, documentType: 'board_consent' },
+  ]);
+  assert.equal(working.plan?.id, 'v2');
+  assert.equal(working.reserve, null);
+  assert.deepEqual(resolveWorkingEquityPlan([]), { plan: undefined, reserve: null, isEffective: false });
+});
+
+test('a newly saved restoration wins by creation time and tied records have stable selection', () => {
+  const newer = { ...draft, createdAt: '2026-09-22' };
+  const restored = { ...draft, id: 'restored', versionNumber: 1, content: original.content, createdAt: '2026-09-23' };
+  assert.equal(resolveWorkingEquityPlan([newer, restored]).reserve, 1000000);
+  const tied = { ...newer, id: 'a-tied' };
+  assert.equal(resolveWorkingEquityPlan([newer, tied]).plan?.id, 'a-tied');
+  assert.equal(resolveWorkingEquityPlan([tied, newer]).plan?.id, 'a-tied');
+});
 
 test('pending amendments show separately and provide no usable reserve', () => {
   const state = resolveEquityPlan([draft, original]);

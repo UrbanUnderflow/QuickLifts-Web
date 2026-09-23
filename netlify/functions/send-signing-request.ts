@@ -1,9 +1,33 @@
+import { isSendableEquityDocument } from '../../src/lib/equityDocumentScope';
+import {validatePreparedPackage} from '../../src/lib/equitySigningPackage';
+import {getEquitySigningRequirements, requiresEquitySigningPackage} from '../../src/lib/equitySigningRequirements';
+import {evaluateDocumentSignatures} from '../../src/lib/equityExecution';
+import {CAPITALIZATION_APPROVAL_IDS, capitalizationActionHash, isCapitalizationApprovalDocument, readCapitalizationExecutionState} from '../../src/lib/equityCapitalizationApprovals';
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
-import { admin } from "./config/firebase";
+import {URL} from 'node:url';
+import { admin, getFirebaseAdminApp } from "./config/firebase";
 import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
+const fail = (statusCode: number, message: string) => Object.assign(new Error(message), { statusCode });
+const isEquityRequest = (value: any) => Boolean(value && (Object.prototype.hasOwnProperty.call(value, 'equityDocumentId')
+  || ['eip', 'option_agreement', 'board_consent', 'stockholder_consent', 'fast_agreement', 'advisor_nso_agreement', 'warrant', 'restricted_stock_agreement', 'stock_purchase_agreement'].includes(value.documentType)
+  || String(value.documentType || '').startsWith('strategic_')));
+const isClosed = (value: any) => Boolean(value?.invalidatedAt || value?.status === 'signed' || value?.signatureData || value?.signedAt);
+
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
-const BASE_URL = process.env.CUSTOM_BASE_URL || "https://fitwithpulse.ai";
+const resolveSigningBaseUrl = () => {
+  // Netlify CLI sets this internal flag and URL for its local function runtime.
+  if (process.env.NETLIFY_DEV === 'true') {
+    try {
+      const local = new URL(process.env.URL || 'http://localhost:8888');
+      if (['http:', 'https:'].includes(local.protocol) && ['localhost', '127.0.0.1', '[::1]'].includes(local.hostname)
+        && !local.username && !local.password) return local.origin;
+    } catch { /* Fall back to this repository's configured local Netlify port. */ }
+    return 'http://localhost:8888';
+  }
+  return process.env.CUSTOM_BASE_URL || 'https://fitwithpulse.ai';
+};
+const BASE_URL = resolveSigningBaseUrl();
 
 type SupportingDocument = {
   id?: string;
@@ -67,7 +91,64 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
   }
 
   try {
-    const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName, previewMode, sendAttemptId, supportingDocuments: rawSupportingDocuments } = JSON.parse(event.body || "{}");
+    const payload = JSON.parse(event.body || "{}");
+    const { documentId, sendAttemptId } = payload;
+    let { documentName, recipientName, recipientEmail, companyName, previewMode, supportingDocuments: rawSupportingDocuments } = payload;
+    if (typeof documentId !== 'string' || !/^[A-Za-z0-9_-]{1,150}$/.test(documentId)) throw fail(400, 'Invalid signing request.');
+    const app = getFirebaseAdminApp(event);
+    const db = admin.firestore(app);
+    const requestRef = db.collection('signingRequests').doc(documentId);
+    const snapshot = await requestRef.get();
+    const saved = snapshot.data();
+    const equity = isEquityRequest(saved) || isEquityRequest(payload);
+    if (equity) {
+      const token = (event.headers.authorization || event.headers.Authorization || '').match(/^Bearer (.+)$/i)?.[1];
+      if (!token) throw fail(401, 'Sign in as an administrator to send equity documents.');
+      let identity;
+      try { identity = await admin.auth(app).verifyIdToken(token, true); }
+      catch { throw fail(401, 'Your sign-in has expired.'); }
+      if (!identity.email || !(await db.collection('admin').doc(identity.email).get()).exists) throw fail(403, 'Administrator access required.');
+      if (!snapshot.exists || (!saved?.equityDocumentId && saved?.documentType !== 'strategic_signing_package')) throw fail(409, 'Create a linked equity signing request before sending.');
+      if (isClosed(saved)) throw fail(409, 'This signing request is signed or invalidated.');
+      if (saved.documentType !== 'strategic_signing_package' && requiresEquitySigningPackage({id: saved.equityDocumentId, documentType: saved.documentType})) throw fail(409, 'Send this document through its complete equity package with the signed approval attachments.');
+      if (saved.documentType === 'strategic_signing_package') {
+        if (!Array.isArray(saved.packageDocuments) || saved.packageDocuments.length > 24) throw fail(409, 'The package document list is invalid.');
+        const sources = await Promise.all(saved.packageDocuments.map((item: any) => db.collection('equity-documents').doc(item.id).get()));
+        const documents = sources.map(source => ({...source.data(), id: source.id}));
+        const ids = [...new Set<string>(documents.flatMap((source: any) => source.signingRequestIds || []))];
+        const childSnapshots = await Promise.all(ids.map(id => db.collection('signingRequests').doc(id).get()));
+        const records = childSnapshots.map(child => ({...child.data(), id: child.id}));
+        const errors = validatePreparedPackage({...saved, id: documentId}, documents, records);
+        for (const source of documents.filter((item: any) => /board.consent/i.test(item.documentType || ''))) {
+          if (!evaluateDocumentSignatures(source as any, records as any).verified) errors.push('Board consent signatures are no longer verified.');
+        }
+        if (errors.length) throw fail(409, errors.join(' '));
+        if (saved.childRequestIds.every((id: string) => records.some((record: any) => record.id === id && record.status === 'signed'))) throw fail(409, 'This recipient has already signed every document in the package.');
+      } else if (!saved.previewMode) {
+        const document = (await db.collection('equity-documents').doc(saved.equityDocumentId).get()).data();
+        if (document && !isSendableEquityDocument(document)) throw fail(409, 'Reference, operational, incoming, or archived documents cannot be sent from the PIL issuance workspace.');
+        if (!document || document.status !== 'completed' || document.content !== saved.documentContent
+          || document.needsResendSignature || !saved.signingGroupId
+          || !Array.isArray(document.signingRequestIds) || !document.signingRequestIds.includes(documentId)) throw fail(409, 'This request is not part of the current document packet.');
+        if (requiresEquitySigningPackage({...document, id: saved.equityDocumentId})) throw fail(409, 'Send this document through its complete equity package with the signed approval attachments.');
+        if (getEquitySigningRequirements({...document, id: saved.equityDocumentId}).length) throw fail(409, 'Resolve the document closing requirements before sending.');
+        if (isCapitalizationApprovalDocument(document) || document.capitalizationRevision !== undefined || saved.equityDocumentId === CAPITALIZATION_APPROVAL_IDS.certificate) {
+          await db.runTransaction(async transaction => {
+            const currentSnapshot = await transaction.get(db.collection('equity-documents').doc(saved.equityDocumentId));
+            const currentRequest = (await transaction.get(requestRef)).data();
+            const currentDocument = currentSnapshot.data();
+            if (!currentDocument || !currentRequest || isClosed(currentRequest) || currentRequest.documentContent !== currentDocument.content
+              || currentRequest.documentContent !== saved.documentContent || currentRequest.signingGroupId !== saved.signingGroupId
+              || currentDocument.signingGroupId !== saved.signingGroupId || currentDocument.needsResendSignature) throw fail(409, 'This approval changed. Prepare its current signature request before sending.');
+            await readCapitalizationExecutionState(db, transaction, saved.equityDocumentId, currentDocument);
+            if (currentRequest.capitalizationActionHash !== capitalizationActionHash(currentDocument)) throw fail(409, 'The capitalization instructions changed. Prepare a new signature request.');
+          });
+        }
+      }
+      if (recipientEmail && String(recipientEmail).trim().toLowerCase() !== String(saved.recipientEmail || '').trim().toLowerCase()) throw fail(400, 'Recipient does not match the saved signing request.');
+      ({ documentName, recipientName, recipientEmail, companyName, previewMode, supportingDocuments: rawSupportingDocuments } = saved);
+    }
+    if (saved && isClosed(saved)) throw fail(409, 'This signing request is signed or invalidated.');
 
     if (!documentId || !recipientEmail) {
       return { statusCode: 400, body: JSON.stringify({ message: "Missing required fields." }) };
@@ -94,7 +175,7 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
     ` : '';
 
     const signingUrl = `${BASE_URL}/sign/${documentId}${previewMode ? '?preview=1' : ''}`;
-    const subject = previewMode
+    const subject = saved?.documentType === 'strategic_signing_package' ? `Action Required: Review and sign your equity package` : previewMode
       ? `🧪 Preview Signature Test: "${documentName}"`
       : `📝 Action Required: Please Sign "${documentName}"`;
 
@@ -266,12 +347,14 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
                 <p class="message">
                   ${previewMode
                     ? 'This is a sandbox preview of the signing flow. You can click through, sign, and test the full experience without affecting the live document packet.'
-                    : 'Please use the secure link below to review, download, and sign this document. The signing process takes less than a minute.'}
+                    : saved?.documentType === 'strategic_signing_package'
+                      ? 'Use this single link to review your equity package. Sign each required agreement individually, and open the supporting records for reference. Your progress is saved as you complete each document.'
+                      : 'Please use the secure link below to review, download, and sign this document.'}
                 </p>
                 
                 <div style="text-align: center;">
                   <a href="${signingUrl}" class="cta-button">
-                    ${previewMode ? 'Open Preview Signing Flow →' : 'Review & Sign Document →'}
+                    ${previewMode ? 'Open Preview Signing Flow →' : saved?.documentType === 'strategic_signing_package' ? 'Open Signing Package →' : 'Review & Sign Document →'}
                   </a>
                 </div>
                 
@@ -334,19 +417,29 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
 
     // Update the signing request status in Firestore
     try {
-      const db = admin.firestore();
       const FieldValue = admin.firestore.FieldValue;
       const now = new Date();
-      await db.collection("signingRequests").doc(documentId).set({
-        status: "sent",
-        sentAt: now,
-        lastSentAt: now,
-        emailStatus: "sent",
-        messageId: sendResult.messageId || null,
-        sendCount: FieldValue.increment(1),
-        supportingDocuments,
-        updatedAt: now,
-      }, { merge: true });
+      await db.runTransaction(async transaction => {
+        const latestSnapshot = await transaction.get(requestRef);
+        const latest = latestSnapshot.data();
+        // An in-flight signature or invalidation must never be overwritten by delivery tracking.
+        if (isClosed(latest)) return;
+        if (equity && (!latestSnapshot.exists || latest?.recipientEmail !== saved?.recipientEmail
+          || latest?.documentContent !== saved?.documentContent || latest?.equityDocumentId !== saved?.equityDocumentId)) return;
+        const children = latest?.documentType === 'strategic_signing_package'
+          ? await Promise.all((latest.childRequestIds || []).map((id: string) => transaction.get(db.collection('signingRequests').doc(id)))) : [];
+        transaction.set(requestRef, {
+          status: latest?.status === 'viewed' ? 'viewed' : 'sent',
+          sentAt: now, lastSentAt: now, emailStatus: 'sent',
+          messageId: sendResult.messageId || null,
+          sendCount: FieldValue.increment(1), supportingDocuments, updatedAt: now,
+        }, { merge: true });
+        for (const child of children) {
+          const record = child.data();
+          if (!record || record.packageId !== documentId || isClosed(record)) continue;
+          transaction.update(child.ref, {status: ['viewed', 'opened'].includes(record.status) ? record.status : 'sent', sentAt: record.sentAt || now, lastSentAt: now, emailStatus: 'sent', updatedAt: now});
+        }
+      });
     } catch (dbError) {
       console.error("Failed to update Firestore:", dbError);
       // Don't fail the request if Firestore update fails
@@ -359,10 +452,9 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
   } catch (error: any) {
     console.error("Error in send-signing-request function:", error);
     return {
-      statusCode: 500,
+      statusCode: error.statusCode || 500,
       body: JSON.stringify({
-        message: "Internal server error while sending email.",
-        details: error.message
+        message: error.statusCode ? error.message : "Internal server error while sending email."
       })
     };
   }

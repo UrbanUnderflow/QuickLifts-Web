@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { downloadEquityCleanPdf } from '../../lib/equityCleanPdf';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 import { Download, Loader2, FileText, AlertCircle } from 'lucide-react';
@@ -38,6 +39,10 @@ const formatDate = (date: Timestamp | Date | string | undefined): string => {
 
 // Note: Signature lines are controlled by the AI-generated document content itself (based on requiresSignature flag during generation)
 const generatePdf = (document: EquityDocument) => {
+  if (document.documentType.startsWith('strategic_') || ['founder_share_return', 'equity_reserve_approval'].includes(document.documentType)) {
+    downloadEquityCleanPdf(document.title, document.content);
+    return;
+  }
   const html = `
     <!DOCTYPE html>
     <html>

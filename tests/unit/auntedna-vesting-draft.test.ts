@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { buildAuntEdnaVestingDraft } from '../../src/lib/auntEdnaVestingDraft';
+import { documentMatchesAllocation } from '../../src/lib/equityDocumentScope';
+test('vesting draft preserves source evidence, unresolved economics, and instrument separation', () => {
+  const template = {id:'template',title:'Advisor Agreement - Valerie Alexander',content:'Source advisor terms'};
+  const source = {id:'source',title:'Reciprocal Strategic Equity Side Letter',content:'Source strategic terms'};
+  const draft = buildAuntEdnaVestingDraft(template, source);
+  assert.equal(draft.approvalStatus, 'draft');
+  assert.ok(draft.closingRequirements.length >= 6);
+  assert.equal(documentMatchesAllocation(draft, 'vesting_shares'), true);
+  assert.equal(documentMatchesAllocation(draft, 'warrant'), false);
+  assert.deepEqual(draft.sourceReferences, [template,source]);
+  assert.match(draft.content, /No signature, corporate approval, issuance, or vesting is established/);
+  assert.match(draft.content, /does not itself create an aggregate 4.0% entitlement/);
+  assert.match(draft.content, /EXACT NUMBER OF SHARES TO BE APPROVED/);
+  assert.match(draft.content, /six-month anniversary/);
+  assert.match(draft.content, /months seven through twenty-four/);
+  assert.match(draft.content, /No advisor intellectual-property assignment/);
+  assert.throws(() => buildAuntEdnaVestingDraft({...template,content:''},source));
+});

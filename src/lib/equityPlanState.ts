@@ -44,6 +44,29 @@ export function resolveEquityPlan(documents: PlanDocument[], now = Date.now()) {
   return { active, pending, reserve, proposedReserve: pending ? readPlanReserve(pending.content) : null, issue };
 }
 
+export interface WorkingEquityPlan {
+  plan: PlanDocument | undefined;
+  reserve: number | null;
+  isEffective: boolean;
+}
+
+/** Latest saved setup for planning displays. Issuance must use resolveEquityPlan. */
+export function resolveWorkingEquityPlan(documents: PlanDocument[], now = Date.now()): WorkingEquityPlan {
+  const timestamp = (value: unknown) => {
+    const result = time(value);
+    return Number.isFinite(result) ? result : 0;
+  };
+  const plan = documents.filter(d => d.documentType === 'eip' && d.status === 'completed')
+    .sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt)
+      || (b.versionNumber || 1) - (a.versionNumber || 1)
+      || a.id.localeCompare(b.id))[0];
+  return {
+    plan,
+    reserve: plan ? readPlanReserve(plan.content) : null,
+    isEffective: plan ? isEffectiveEip(plan, now) : false,
+  };
+}
+
 export interface EquityHolding {
   type: string;
   sharesOwned?: number;

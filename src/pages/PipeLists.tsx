@@ -105,7 +105,7 @@ import { matchesPipelineFilters, toggleFilterSelection } from '../utils/pipelist
 
 type PipelinePriority = 'high' | 'medium' | 'low';
 
-type SortColumn = 'item' | 'organization' | 'stage' | 'value' | 'dueDate' | 'nextStep';
+type SortColumn = 'item' | 'organization' | 'stage' | 'value' | 'dueDate' | 'createdAt' | 'nextStep';
 type ViewMode = 'pipeline' | 'success' | 'metrics' | 'logs' | 'runbook';
 type PipelineDisplayMode = 'list' | 'kanban';
 type MetricsScope = 'selected-list' | 'workspace';
@@ -4903,6 +4903,13 @@ const PipelinePage: NextPage = () => {
               const valueFor = (item: PipelineItem) => (isContactListActive ? 0 : itemValue(item));
               return (valueFor(left) - valueFor(right)) * direction;
             }
+            case 'createdAt': {
+              const leftDate = pipeTimestampToDate(left.createdAt)?.getTime();
+              const rightDate = pipeTimestampToDate(right.createdAt)?.getTime();
+              if (leftDate === undefined) return rightDate === undefined ? 0 : 1;
+              if (rightDate === undefined) return -1;
+              return (leftDate - rightDate) * direction;
+            }
             case 'dueDate':
               return (dueTime(left) - dueTime(right)) * direction;
             case 'nextStep': {
@@ -8535,6 +8542,7 @@ Rules:
         'Amount',
         'Expected Close Date',
         'Due Date',
+        'Date Added',
         'Scope',
         'Count',
         'Margin Notes',
@@ -8590,6 +8598,7 @@ Rules:
           item.amount,
           item.expectedCloseDate,
           item.dueDate,
+          pipeTimestampToDate(item.createdAt)?.toISOString().slice(0, 10) || '',
           item.pilotScope,
           item.athleteCount,
           item.grossMargin,
@@ -11344,10 +11353,10 @@ Rules:
                   <div
                     className={`hidden gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid ${
                       isInvestorUpdateContactsList
-                        ? 'min-w-[1180px] grid-cols-[280px_240px_160px_140px_280px_104px]'
+                        ? 'min-w-[1336px] grid-cols-[280px_240px_160px_140px_140px_280px_104px]'
                         : isContactListActive
-                          ? 'min-w-[1320px] grid-cols-[260px_220px_140px_150px_140px_280px_104px]'
-                          : 'min-w-[1280px] grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
+                          ? 'min-w-[1476px] grid-cols-[260px_220px_140px_150px_140px_140px_280px_104px]'
+                          : 'min-w-[1436px] grid-cols-[260px_210px_128px_120px_140px_140px_280px_104px]'
                     }`}
                   >
                     {renderSortableHeader(isContactListActive ? 'Contact' : isTaskListActive ? 'Task' : 'Item', 'item')}
@@ -11366,12 +11375,13 @@ Rules:
                       </>
                     )}
                     {renderSortableHeader(isContactListActive ? 'Follow-Up' : 'Due Date', 'dueDate')}
+                    {renderSortableHeader('Date Added', 'createdAt')}
                     {renderSortableHeader('Next Step', 'nextStep')}
                     <span className="text-right">Actions</span>
                   </div>
 
                   {filteredItems.length > 0 ? (
-                    <div className={`divide-y divide-stone-100 ${isInvestorUpdateContactsList ? 'lg:min-w-[1180px]' : isContactListActive ? 'lg:min-w-[1320px]' : 'lg:min-w-[1280px]'}`}>
+                    <div className={`divide-y divide-stone-100 ${isInvestorUpdateContactsList ? 'lg:min-w-[1336px]' : isContactListActive ? 'lg:min-w-[1476px]' : 'lg:min-w-[1436px]'}`}>
                       {filteredItems.map((item, itemIndex) => {
                         const stage = getStage(activeList, item.stage);
                         const itemValueText = itemAmountDisplay(activeList, item);
@@ -11411,10 +11421,10 @@ Rules:
                               isSelectedForBulkAction ? 'bg-stone-50 ring-1 ring-inset ring-stone-300' : ''
                             } ${
                               isInvestorUpdateContactsList
-                                ? 'lg:grid-cols-[280px_240px_160px_140px_280px_104px]'
+                                ? 'lg:grid-cols-[280px_240px_160px_140px_140px_280px_104px]'
                                 : isContactListActive
-                                  ? 'lg:grid-cols-[260px_220px_140px_150px_140px_280px_104px]'
-                                  : 'lg:grid-cols-[260px_210px_128px_120px_140px_280px_104px]'
+                                  ? 'lg:grid-cols-[260px_220px_140px_150px_140px_140px_280px_104px]'
+                                  : 'lg:grid-cols-[260px_210px_128px_120px_140px_140px_280px_104px]'
                             }`}
                           >
                             <div className="flex min-w-0 items-center gap-3">
@@ -11557,6 +11567,11 @@ Rules:
                                   <span className="truncate">{dueDate}</span>
                                 </span>
                               )}
+                            </div>
+
+                            <div className="min-w-0 text-sm text-stone-600">
+                              <span className="mr-2 text-xs font-semibold text-stone-400 lg:hidden">Date Added</span>
+                              <span className="whitespace-nowrap">{pipeTimestampToDate(item.createdAt)?.toISOString().slice(0, 10) || 'Unknown'}</span>
                             </div>
 
                             <div className={`min-w-0 ${nextStepText ? '' : 'hidden lg:block'}`}>
@@ -14863,6 +14878,7 @@ Rules:
                             ]),
                         { label: 'Expected Close', value: selectedDetailItem.expectedCloseDate },
                         { label: 'Due Date', value: selectedDetailItem.dueDate },
+                        { label: 'Date Added', value: pipeTimestampToDate(selectedDetailItem.createdAt)?.toISOString().slice(0, 10) || 'Unknown' },
                         {
                           label: 'Email Notifications',
                           value: selectedDetailItem.deadlineEmailNotificationsEnabled ? 'On' : 'Off',

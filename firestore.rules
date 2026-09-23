@@ -1687,11 +1687,59 @@ service cloud.firestore {
     }
 
     match /signingRequests/{requestId} {
-      allow get, list: if true;
-      allow create, delete: if isAdminUser();
-      allow update: if isAdminUser()
-        || isPublicSigningViewUpdate()
-        || isPublicSigningSignatureUpdate();
+      function isEquityRequest(data) {
+        return data.keys().hasAny(['equityDocumentId'])
+          || data.get('documentType', '') in [
+            'eip', 'option_agreement', 'board_consent', 'stockholder_consent',
+            'fast_agreement', 'advisor_nso_agreement', 'warrant',
+            'restricted_stock_agreement', 'stock_purchase_agreement'
+          ]
+          || data.get('documentType', '').matches('strategic_.*');
+      }
+      function isVerifiedRecipient() {
+        return hasEmail() && request.auth.token.get('email_verified', false) == true
+          && resource.data.get('recipientEmail', '').lower() == request.auth.token.email.lower();
+      }
+      function hasSignatureEvidence(data) {
+        return data.get('status', '') == 'signed'
+          || data.keys().hasAny(['signatureData', 'signedAt']);
+      }
+      function hasVerifiedProof(data) {
+        return data.keys().hasAny(['verificationMethod', 'verifiedEmail', 'verifiedUid'])
+          || (data.get('signatureData', {}) is map
+            && data.get('signatureData', {}).keys().hasAny(['verificationMethod', 'verifiedEmail', 'verifiedUid']));
+      }
+      function safeEquityAdminUpdate() {
+        return isAdminUser()
+          && isEquityRequest(request.resource.data)
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'signatureData', 'signedAt', 'verificationMethod', 'verifiedEmail', 'verifiedUid'
+          ])
+          && (hasSignatureEvidence(resource.data)
+            ? request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'invalidatedAt', 'invalidatedReason', 'updatedAt'
+              ])
+            : request.resource.data.get('status', '') != 'signed');
+      }
+      allow get: if !isEquityRequest(resource.data) || isAdminUser() || isVerifiedRecipient();
+      allow list: if isAdminUser();
+      allow create: if isAdminUser()
+        && !hasVerifiedProof(request.resource.data)
+        && (!isEquityRequest(request.resource.data) || !hasSignatureEvidence(request.resource.data));
+      allow delete: if isAdminUser()
+        && (!isEquityRequest(resource.data) || !hasSignatureEvidence(resource.data));
+      allow update: if isEquityRequest(resource.data)
+        ? (safeEquityAdminUpdate()
+          || (isVerifiedRecipient()
+            && !hasSignatureEvidence(resource.data)
+            && resource.data.get('invalidatedAt', null) == null
+            && isPublicSigningViewUpdate()))
+        : (!isEquityRequest(request.resource.data)
+          && !hasVerifiedProof(request.resource.data)
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'verificationMethod', 'verifiedEmail', 'verifiedUid'
+          ])
+          && (isAdminUser() || isPublicSigningViewUpdate() || isPublicSigningSignatureUpdate()));
     }
 
     // User documents: allow clients to set partnerSource only at creation.

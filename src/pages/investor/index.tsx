@@ -7096,7 +7096,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             <span className="text-white font-medium">{formatWholeNumber(capTablePoolReserved)}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-zinc-400">Granted</span>
+                            <span className="text-zinc-400">Allocated (including pending)</span>
                             <span className="text-white font-medium">{formatWholeNumber(capTablePoolGranted)}</span>
                           </div>
                           <div className="flex items-center justify-between">

@@ -837,6 +837,12 @@ const collectGeneratedContentIssues = (documentType: string, content: string, da
     }
   }
 
+  if (['board_consent', 'stockholder_consent'].includes(documentType)) {
+    if (/\/s\/|already executed|has executed this|hereby certifies.*executed/i.test(content)) issues.push('Prepared consent must not contain an executed signature or claim execution.');
+    if (!/draft|awaiting.*(?:approval|signature)/i.test(content)) issues.push('Prepared consent must be identified as awaiting approval and signature.');
+    if (!/(?:signature|signed)\s*(?:date)?\s*:\s*_{3,}/i.test(content)) issues.push('Prepared consent requires blank signature fields.');
+  }
+
   if (documentType === 'board_consent') {
     if (!lower.includes('fair market value determination date')) {
       issues.push('Board Consent FMV determination date is missing.');
@@ -953,22 +959,13 @@ Use formal legal language but keep it readable. Include standard Delaware corpor
     systemPrompt: `You are an expert corporate attorney. Generate a formal Board Consent document (Written Consent of the Board of Directors in Lieu of Meeting) for approving equity grants at a Delaware corporation. 
 
 CRITICAL REQUIREMENTS:
-1. This is for a SOLE DIRECTOR company - Tremaine Grant is the SOLE member of the Board of Directors. Do NOT create signature blocks for multiple directors.
+1. Prepare an UNSIGNED DRAFT for actual board review and execution. Generation never constitutes approval or a signature.
 2. Reference DGCL §141(f) for written consent authority.
 3. Include explicit Plan incorporation language.
-4. Do NOT include a separate "FURTHER RESOLVED" for fair market value determination - establish FMV in the recitals only, not as a redundant resolution.
-5. This board consent should appear ALREADY EXECUTED by the sole director. Do NOT use blank signature lines, underscores, or placeholder signature fields.
-
-MANDATORY DATE REQUIREMENTS (CRITICAL - VERIFICATION WILL FAIL WITHOUT THESE):
-- You MUST include the approval date in at least TWO places:
-  1. In an effectiveness clause: "This Written Consent shall be effective as of [DATE]"
-  2. In the signature block: "Date: [DATE]"
-- You MUST also include a date in the recitals or header: "Dated as of [DATE]" or "Approved on [DATE]"
-- The date format must be human-readable like "January 23, 2026" or "Jan 23, 2026"
-- DO NOT use placeholders like [DATE], [CURRENT_DATE], or blank lines for dates
-- DO NOT leave date fields empty or with underscores
-- The approval date and signature date must be the SAME date and must be explicitly written out
-- If you fail to include these dates, the document will fail verification`,
+4. Establish FMV in the recitals, not a redundant separate resolution.
+5. Do not presume a sole director or director identity. Use only an explicitly supplied board roster; otherwise leave director names and capacities blank for confirmation.
+6. Leave signatures, actual approval/effective date, and actual execution dates blank. Do not insert /s/ signatures or copy execution evidence from prior documents.
+7. Preparation dates may be shown only as preparation dates. Service/vesting dates are separate from approval and execution dates.`,
     userPrompt: (data: RequestBody) => {
       const currentDate = data.boardApprovalDate || getCurrentHumanDate();
       
@@ -977,7 +974,7 @@ MANDATORY DATE REQUIREMENTS (CRITICAL - VERIFICATION WILL FAIL WITHOUT THESE):
 COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
 GRANTEE: ${data.stakeholderName}
 ROLE: ${data.stakeholderType}
-APPROVAL DATE: ${currentDate}
+PREPARATION / PROPOSED ACTION DATE (NOT PROOF OF APPROVAL): ${currentDate}
 ${data.grantDetails ? `
 GRANT TO APPROVE:
 - Type: ${data.grantDetails.equityType === 'iso' ? 'Incentive Stock Option' : data.grantDetails.equityType === 'nso' ? 'Non-Qualified Stock Option' : data.grantDetails.equityType}
@@ -994,9 +991,9 @@ ${formatAdditionalContext(data.prompt)}
 
 DOCUMENT STRUCTURE REQUIREMENTS:
 
-1. OPENING: Title as "WRITTEN CONSENT OF THE SOLE DIRECTOR OF PULSE INTELLIGENCE LABS, INC. IN LIEU OF MEETING"
+1. OPENING: Title as "DRAFT — WRITTEN CONSENT OF THE BOARD OF DIRECTORS OF PULSE INTELLIGENCE LABS, INC. IN LIEU OF MEETING"
 
-2. AUTHORITY STATEMENT: "The undersigned, being the sole member of the Board of Directors of Pulse Intelligence Labs, Inc., a Delaware corporation (the "Company"), acting pursuant to Section 141(f) of the Delaware General Corporation Law, hereby adopts the following resolutions by written consent without a meeting:"
+2. AUTHORITY STATEMENT: "The undersigned members of the Board of Directors of Pulse Intelligence Labs, Inc., a Delaware corporation (the "Company"), acting pursuant to Section 141(f) of the Delaware General Corporation Law, hereby adopts the following resolutions by written consent without a meeting:"
 
 3. RECITALS (WHEREAS clauses):
    - Establish that the Company has adopted the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the "Plan")
@@ -1019,38 +1016,16 @@ DOCUMENT STRUCTURE REQUIREMENTS:
    - Do NOT include a separate FMV resolution - the FMV is already established in the recitals
    ${getVestingInstructionBlock(data.grantDetails, currentDate)}
 
-5. EFFECTIVENESS AND DATE (MANDATORY - VERIFICATION WILL FAIL WITHOUT THIS):
-   - You MUST include this EXACT text with the date filled in: "This Written Consent shall be effective as of ${currentDate} and may be executed in counterparts."
-   - You MUST also include one of these lines near the top (in header or first recital): "Dated as of ${currentDate}" OR "Approved on ${currentDate}" OR "Written Consent dated ${currentDate}"
-   - CRITICAL: The date "${currentDate}" MUST be written out in full - DO NOT use placeholders, underscores, or leave blank
+5. EFFECTIVENESS AND DATE:
+   - Identify this as a proposed consent awaiting actual required approvals and signatures.
+   - Leave actual approval and effective dates blank; never use the preparation or vesting date as an execution date.
+   - State that preparation does not approve a grant and effectiveness requires actual required board consents.
 
-6. SIGNATURE BLOCK - CRITICAL FORMAT (SOLE DIRECTOR ONLY):
-   Use this EXACT format - do NOT add multiple director signature lines and do NOT leave any blank signature line:
-
-   IN WITNESS WHEREOF, the undersigned, being the sole member of the Board of Directors of Pulse Intelligence Labs, Inc., has executed this Written Consent as of the date set forth below.
-
-   /s/ Tremaine Grant
-   Tremaine Grant
-   Sole Director
-
-   Date: ${currentDate}
-   
-   MANDATORY DATE REQUIREMENTS (VERIFICATION WILL FAIL IF THESE ARE MISSING):
-   - The signature block Date field MUST contain: "${currentDate}" - write it out in full
-   - DO NOT use underscores, blank lines, or placeholders in the Date field
-   - The date "${currentDate}" must appear in AT LEAST these three places:
-     1. In the effectiveness clause: "effective as of ${currentDate}"
-     2. In a header/recital: "Dated as of ${currentDate}" or "Approved on ${currentDate}"
-     3. In the signature block: "Date: ${currentDate}"
-   - All three dates must be the same: "${currentDate}"
-   - Write the date in full text format like "January 23, 2026" - do not abbreviate
-   - If any date is missing or left blank, the document verification will fail
-   - The signature should appear already executed as "/s/ Tremaine Grant" and must not be left blank
-
-EXAMPLE OF CORRECT DATE USAGE:
-- Header: "Dated as of January 23, 2026"
-- Effectiveness: "This Written Consent shall be effective as of January 23, 2026"
-- Signature: "Date: January 23, 2026"
+6. SIGNATURE BLOCKS:
+   - Use blank signature and actual execution date lines for every director in the explicitly supplied board roster.
+   - If no roster is supplied, use a blank Director name, Signature, and Actual signature date block pending roster confirmation. Do not identify a sole director or assume Tremaine is the only director.
+   - Do not include the recipient as a board signer unless explicitly identified as a director.
+   - Never insert a typed execution signature, /s/ marker, or statement that this draft has already been executed.
 
 Make it formal and suitable for corporate records. This document will be investor-diligence ready.`;
     },
@@ -1061,46 +1036,38 @@ Make it formal and suitable for corporate records. This document will be investo
     systemPrompt: `You are an expert corporate attorney. Generate a Stockholder Consent document for corporate actions requiring stockholder approval.
 
 CRITICAL REQUIREMENTS:
-1. This is for a SOLE STOCKHOLDER company context. Tremaine Grant is the sole holder of the Company's outstanding voting stock for purposes of this consent.
-2. The document must appear ALREADY EXECUTED. Do NOT use blank signature lines, placeholders, or underscore fields.
-3. Use the same execution date consistently in the header/recitals, effectiveness clause, and signature block.
-4. The signature should appear already executed as "/s/ Tremaine Grant".`,
+1. Prepare an UNSIGNED DRAFT. Generation does not approve, sign, ratify, or establish effectiveness.
+2. Do not presume sole ownership, a stockholder identity, or voting percentages. Use only an explicitly supplied stockholder roster and voting information; otherwise leave them blank for confirmation.
+3. Leave signatures, actual approval/effective date, and actual execution dates blank.
+4. Never insert /s/ signatures or copy execution evidence from a previous document.`,
     userPrompt: (data: RequestBody) => {
       const currentDate = getDocumentDate(data);
-      const stockholderName = data.stakeholderName || 'Tremaine Grant';
+      const stockholderName = data.stakeholderName || '[Stockholder identity to be confirmed]';
 
       return `Generate a Written Consent of Stockholders for:
 
 COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
-SOLE STOCKHOLDER: ${stockholderName}
-CONSENT DATE: ${currentDate}
+PROVIDED STAKEHOLDER NAME (NOT A VERIFIED VOTING ROSTER): ${stockholderName}
+PREPARATION DATE: ${currentDate}
 
 This consent is for ratifying equity grants and/or adopting/amending the Equity Incentive Plan.
 ${formatAdditionalContext(data.prompt)}
 
 Please include:
-1. Title: "WRITTEN CONSENT OF THE SOLE STOCKHOLDER OF PULSE INTELLIGENCE LABS, INC. IN LIEU OF MEETING"
-2. Recitals establishing authority and confirming that the undersigned is the sole holder of the Company's outstanding capital stock entitled to vote on these matters
+1. Title: "DRAFT — WRITTEN CONSENT OF STOCKHOLDERS OF PULSE INTELLIGENCE LABS, INC. IN LIEU OF MEETING"
+2. Recitals describing the proposed action and required stockholder approval without presuming ownership, voting power, or that approval already occurred
 3. Resolution to adopt/ratify the Equity Incentive Plan
 4. Resolution to approve the share reserve and related equity actions
 5. Waiver of notice provisions
-6. Effectiveness clause using this exact date: ${currentDate}
-7. Already-executed signature block showing ownership approval, not a blank e-sign section
+6. Effectiveness clause requiring actual requisite stockholder approval, with actual approval/effective date left blank
+7. Blank signature blocks for the explicitly supplied stockholders, with name, capacity, voting shares if supplied, signature, and actual signature date
 
-MANDATORY DATE AND EXECUTION REQUIREMENTS:
-- Include the date "${currentDate}" in the header or opening recital, in the effectiveness clause, and in the signature block
-- Do NOT use a different approval/effective date anywhere else in the document
-- Make clear this is a clean, finalized consent, not a draft awaiting signature
-
-SIGNATURE BLOCK REQUIREMENTS:
-Use an already-executed stockholder signature block in substantially this form, with no blanks:
-
-/s/ Tremaine Grant
-Tremaine Grant
-Sole Stockholder
-Holder of 100% of the outstanding voting shares
-
-Date: ${currentDate}
+DRAFT AND EXECUTION REQUIREMENTS:
+- Mark the document as awaiting stockholder review and signature.
+- Show ${currentDate} only as a preparation date, never as an actual approval or signature date.
+- Do not assert sole ownership, 100% voting power, or a sole stockholder without an explicitly supplied roster establishing that fact.
+- If no roster is supplied, leave stockholder identities and voting information blank for confirmation.
+- Do not insert any /s/ signature, typed execution signature, or statement that approval or execution has already occurred.
 
 Make it formal, diligence-ready, and internally consistent.`;
     },
@@ -1400,7 +1367,9 @@ BULLET & LIST FORMATTING (CRITICAL - follow exactly):
             template.systemPrompt +
             `\n\nIMPORTANT: Generate the document in clean, professional format. Use proper section numbering.` +
             `\n${bulletFormattingRules}` +
-            (body.requiresSignature
+            (['board_consent', 'stockholder_consent'].includes(documentType)
+              ? `\n\nSIGNATURE REQUIREMENT:\nThis is an unsigned draft consent. Include blank signature and actual execution date lines only for the required directors or stockholders, using an explicitly supplied roster. Do not add a Company/Recipient pair, presume a sole signer, or fabricate execution. Preparation never constitutes approval.`
+              : body.requiresSignature
               ? `\n\nSIGNATURE REQUIREMENT:\nInclude a clear signature section at the end with signature blocks for BOTH parties (Company and Recipient), including printed name + title + date lines.`
               : `\n\nSIGNATURE REQUIREMENT:\nDo NOT include signature lines unless the document type inherently requires it.`),
         },

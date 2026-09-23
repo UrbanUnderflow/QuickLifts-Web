@@ -1,0 +1,42 @@
+PULSE INTELLIGENCE LABS, INC.
+FOUNDER SHARE SURRENDER AND RETIREMENT AGREEMENT
+AND SOLE DIRECTOR WRITTEN CONSENT
+
+Document date: September 23, 2026
+
+This agreement is between Pulse Intelligence Labs, Inc., a Delaware corporation (the "Company"), and Tremaine Grant (the "Founder"). It becomes effective when Tremaine Grant signs and delivers it in each capacity stated in the execution block below (the "Effective Time"). The electronic signature record establishes the actual execution date.
+
+1. SHARES AND PURPOSE
+
+The Founder holds 9,000,000 shares of the Company's Common Stock, par value $0.00001 per share, acquired under the Restricted Stock Purchase Agreement dated December 12, 2025 (the "RSPA"). The Founder voluntarily contributes 1,000,000 of those shares to the Company without cash or other property being paid by the Company. The purpose is to make shares available for the Company's approved equity reserves. Immediately after this transaction, the Founder will hold 8,000,000 shares.
+
+2. PRESENT SURRENDER AND COMPANY ACCEPTANCE
+
+At the Effective Time, the Founder irrevocably assigns, transfers and surrenders to the Company all right, title and interest in exactly 1,000,000 Common shares from the RSPA issuance. The Company accepts those shares as a voluntary capital contribution. This agreement is the Founder's written stock-transfer instruction and the Company's acceptance. No termination of service, exercise of the RSPA termination repurchase option, refund of the original purchase price, or release of the original property and intellectual-property assignment occurs.
+
+The Founder represents that he owns the surrendered shares and has authority to transfer them, free of third-party liens or transfers, other than restrictions held by the Company under the RSPA. The Company expressly consents to this transfer and waives the RSPA Section 6(h) transfer restriction solely for these 1,000,000 shares and this surrender. All restrictions on the remaining shares continue.
+
+3. BOARD ACCEPTANCE, RETIREMENT AND SHARE RECORDS
+
+Tremaine Grant, acting as the Company's sole director, adopts these resolutions under Section 141(f) of the Delaware General Corporation Law: the Company accepts the surrender under Section 160; immediately after acquisition, the Company retires the 1,000,000 surrendered shares under Section 243. They resume the status of authorized and unissued Common Stock, available for lawful reservation and future issuance. The Company's total authorized Common Stock remains 10,000,000 shares. This transaction authorizes no cash distribution and directs no reduction of stated capital.
+
+The officers are directed to record the surrender and retirement in the stock ledger at the Effective Time, retain this signed instrument with the corporate records, and cancel or appropriately endorse the surrendered portion of any existing stock certificate or electronic position. Any replacement evidence of the Founder's remaining position shall show 8,000,000 shares, without changing its original acquisition history, legends or continuing restrictions. A record entry must identify this signed agreement and the actual execution date; preparation or upload alone does not transfer shares.
+
+4. CONTINUING VESTING OF THE REMAINING SHARES
+
+The RSPA is amended by agreement of the Company and the Founder solely to reflect this proportionate reduction. The surrendered shares are allocated proportionately across the original vesting schedule. The remaining 8,000,000 shares retain the December 11, 2025 vesting commencement date, four-year vesting period, twelve-month cliff, continued-service conditions, and applicable acceleration provisions in the RSPA. There is no new vesting commencement date or acceleration caused by this surrender.
+
+Subject to those existing conditions, 2,000,000 of the remaining shares become released from the repurchase option on December 11, 2026. The remaining 6,000,000 become released in thirty-six monthly installments through December 11, 2029. At month m following the cliff (m = 1 through 36), the cumulative number released is 2,000,000 plus the whole number obtained by rounding down 6,000,000 multiplied by m divided by 36. Each installment equals the increase in that cumulative amount. This produces exactly 8,000,000 shares over the schedule and preserves any release already earned under the governing agreement.
+
+5. PRESERVATION OF OTHER RIGHTS
+
+Except for this surrender, the specific transfer consent and the proportionate share-count adjustment, the RSPA and its related agreements remain in force. The original purchase consideration and intellectual-property assignment remain with the Company. This instrument grants no replacement award, fixes no tax valuation, waives no third-party financing right, and promises no tax result. Existing financing notice and consent obligations remain applicable according to their terms.
+
+6. EXECUTION AND GOVERNING LAW
+
+Delaware law governs this agreement. Electronic signatures and counterparts are effective. The single signature below is expressly given by Tremaine Grant individually as surrendering stockholder, on behalf of the Company as Chief Executive Officer to accept the surrender and amend the RSPA, and as sole director to adopt the resolutions in Section 3. Each capacity is independently assented to by that signature.
+
+Tremaine Grant
+Individually as surrendering stockholder; for Pulse Intelligence Labs, Inc. as Chief Executive Officer; and as its Sole Director
+Signature: ________________________________
+Execution date: recorded with the electronic signature

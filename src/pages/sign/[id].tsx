@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import Link from 'next/link';
+import SigningPackage, { PackageDocument } from '../../components/equity/SigningPackage';
 import { FileText, Check, AlertCircle, Download, ExternalLink } from 'lucide-react';
 import { doc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../api/firebase/config';
+import { auth, db, isUsingDevFirebase } from '../../api/firebase/config';
+import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
 import { renderHtmlToPdf } from '../../utils/pdf';
 import { isStrategicDocument, renderStrategicSigningHtml } from '../../lib/strategicDocumentSigning';
 
@@ -31,8 +34,12 @@ interface SigningRequest {
     timestamp: Timestamp | Date | string;
   };
   documentContent?: string;
+  packageId?: string;
+  packageDocuments?: PackageDocument[];
+  expiresAt?: Timestamp | Date | string;
   signingGroupId?: string;
   legalDocumentId?: string;
+  equityDocumentId?: string;
   invalidatedAt?: Timestamp | Date;
   invalidatedReason?: string;
   previewMode?: boolean;
@@ -43,6 +50,8 @@ interface SigningRequest {
     url: string;
   }[];
 }
+
+const isEquityRequest = (request: SigningRequest) => 'equityDocumentId' in request || isStrategicDocument(request.documentType) || ['eip', 'option_agreement', 'board_consent', 'stockholder_consent', 'fast_agreement', 'advisor_nso_agreement', 'warrant', 'restricted_stock_agreement', 'stock_purchase_agreement'].includes(request.documentType);
 
 // Signature fonts available
 const signatureFonts = [
@@ -66,6 +75,19 @@ const SignDocument: React.FC = () => {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [signing, setSigning] = useState(false);
   const [signed, setSigned] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const emailSignIn = async () => {
+    try { await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword); setLoginPassword(''); }
+    catch { setError('Email sign-in failed. Check your email and password, or use Google sign-in.'); }
+  };
+  const [authReady, setAuthReady] = useState(false);
+  const [authVersion, setAuthVersion] = useState(0);
+  useEffect(() => onAuthStateChanged(auth, () => { setAuthReady(true); setAuthVersion(v => v + 1); }), []);
+  const signIn = async () => {
+    try { const provider = new GoogleAuthProvider(); provider.setCustomParameters({ prompt: 'select_account' }); await signInWithPopup(auth, provider); }
+    catch { setError('Sign-in did not complete. Please try again with the recipient account.'); }
+  };
   const downloadTriggeredRef = useRef(false);
 
   const legalName = useMemo(() => {
@@ -74,14 +96,20 @@ const SignDocument: React.FC = () => {
   }, [request?.recipientName, request?.signatureData?.typedName, typedName]);
 
   useEffect(() => {
-    if (router.isReady && id) {
+    if (router.isReady && id && authReady) {
       fetchSigningRequest(id as string, isPreviewMode);
     }
-  }, [router.isReady, id, isPreviewMode]);
+  }, [router.isReady, id, isPreviewMode, authReady, authVersion]);
 
   const fetchSigningRequest = async (documentId: string, previewMode: boolean) => {
     try {
       setLoading(true);
+      setError(null);
+      setRequest(null);
+      setSigned(false);
+      setTypedName('');
+      setAgreedToTerms(false);
+      downloadTriggeredRef.current = false;
 
       if (previewMode) {
         const raw = window.localStorage.getItem(getMockSigningStorageKey(documentId));
@@ -109,12 +137,21 @@ const SignDocument: React.FC = () => {
       }
 
       const data = docSnap.data() as SigningRequest;
+      setRequest({ ...data, id: docSnap.id, previewMode: previewMode || data.previewMode });
       if (data.invalidatedAt) {
         setError(data.invalidatedReason || 'This signing link is no longer valid because the document was revised. Please use the latest signature email or request a new link.');
         return;
       }
 
-      setRequest({ ...data, id: docSnap.id, previewMode: previewMode || data.previewMode });
+      const expiresAt = data.expiresAt && (typeof (data.expiresAt as Timestamp).toMillis === 'function' ? (data.expiresAt as Timestamp).toMillis() : new Date(data.expiresAt as string).getTime());
+      if (data.expiresAt && data.status !== 'signed' && (!Number.isFinite(expiresAt) || Number(expiresAt) <= Date.now())) {
+        setError('This signing request has expired. Contact the sender for a new link.');
+        return;
+      }
+      if (!['pending', 'sent', 'delivered', 'opened', 'viewed', 'signed'].includes(data.status)) {
+        setError('This document is not available for signing. Contact the sender.');
+        return;
+      }
 
       // Mark as viewed if not already signed
       if (data.status !== 'signed' && data.status !== 'viewed') {
@@ -134,7 +171,7 @@ const SignDocument: React.FC = () => {
       }
     } catch (err) {
       console.error('Error fetching signing request:', err);
-      setError('Failed to load document. Please try again.');
+      setError('Sign in with the verified email address that received this request. If you are already signed in, check that you are using the correct account.');
     } finally {
       setLoading(false);
     }
@@ -150,7 +187,7 @@ const SignDocument: React.FC = () => {
   }, [download, request, signed]);
 
   const handleSign = async () => {
-    if (!request || !typedName.trim() || !agreedToTerms) return;
+    if (!request || request.documentType === 'strategic_signing_package' || !typedName.trim() || !agreedToTerms) return;
 
     setSigning(true);
 
@@ -179,6 +216,22 @@ const SignDocument: React.FC = () => {
           JSON.stringify(updatedPreviewRequest)
         );
         setRequest(updatedPreviewRequest);
+        setSigned(true);
+        return;
+      }
+
+      if (isEquityRequest(request)) {
+        if (!request.equityDocumentId) throw new Error('This older equity request must be linked to its approved document before signing. Contact the sender for a new link.');
+        if (isPreviewMode || request.previewMode) throw new Error('Email previews cannot execute an equity document. Use the live signing request.');
+        const user = auth.currentUser;
+        if (!user || !user.emailVerified || user.email?.toLowerCase() !== request.recipientEmail.toLowerCase()) throw new Error('Sign in with the verified recipient email before signing.');
+        const response = await fetch('/.netlify/functions/record-equity-signature', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken(true)}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' },
+          body: JSON.stringify({ requestId: request.id, typedName: typedName.trim(), signatureFont: signatureFonts[selectedFont].name }),
+        });
+        const receipt = await response.json();
+        if (!response.ok) throw new Error(receipt.error || 'Unable to record signature.');
+        setRequest({ ...request, status: 'signed', signedAt: receipt.signedAt, signatureData: receipt.signatureData });
         setSigned(true);
         return;
       }
@@ -248,7 +301,7 @@ const SignDocument: React.FC = () => {
       setSigned(true);
     } catch (err) {
       console.error('Error signing document:', err);
-      setError('Failed to sign document. Please try again.');
+      setError(err instanceof Error ? err.message : 'Failed to sign document. Please try again.');
     } finally {
       setSigning(false);
     }
@@ -271,7 +324,7 @@ const SignDocument: React.FC = () => {
     const company = request.companyName || 'Pulse Intelligence Labs, Inc.';
 
     if (request.documentContent) {
-      if (isStrategicDocument(request.documentType)) {
+      if (isEquityRequest(request)) {
         const signatureTimestamp = request.signatureData?.timestamp || request.signedAt;
         const signatureDate = signatureTimestamp && typeof (signatureTimestamp as Timestamp).toDate === 'function'
           ? (signatureTimestamp as Timestamp).toDate()
@@ -640,6 +693,14 @@ const SignDocument: React.FC = () => {
     );
   }
 
+  const accountControls = <div className="mt-4 space-y-3">
+    <button onClick={signIn} className="rounded-lg bg-white px-4 py-2 text-black">Sign in with Google</button>
+    <p className="text-sm text-zinc-400">Or use your existing email account:</p>
+    <input aria-label="Account email" autoComplete="username" type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} placeholder="Email" className="w-full rounded bg-zinc-800 p-2 text-white" />
+    <input aria-label="Account password" autoComplete="current-password" type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} placeholder="Password" className="w-full rounded bg-zinc-800 p-2 text-white" />
+    <button onClick={emailSignIn} disabled={!loginEmail || !loginPassword} className="text-white underline disabled:opacity-40">Sign in with email</button>
+  </div>;
+
   if (error) {
     return (
       <div className="min-h-screen bg-[#0d1117] flex items-center justify-center p-4">
@@ -647,12 +708,16 @@ const SignDocument: React.FC = () => {
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
           <h1 className="text-white text-xl font-semibold mb-2">Unable to Load Document</h1>
           <p className="text-zinc-400">{error}</p>
+          {request?.packageId && <Link href={`/sign/${encodeURIComponent(request.packageId)}`} className="mt-4 block text-blue-300 underline">Back to document package</Link>}
+          {accountControls}
+          <button onClick={() => fetchSigningRequest(id as string, isPreviewMode)} className="mt-4 ml-3 text-white">Try again</button>
         </div>
       </div>
     );
   }
 
   if (!request) return null;
+  if (request.documentType === 'strategic_signing_package') return <><Head><title>Document package | {request.documentName}</title></Head><SigningPackage request={request} /></>;
 
   return (
     <>
@@ -688,6 +753,7 @@ const SignDocument: React.FC = () => {
         </div>
 
         <div className="max-w-4xl mx-auto p-6">
+          {request.packageId && <Link href={`/sign/${encodeURIComponent(request.packageId)}`} className="mb-6 inline-flex rounded-lg border border-zinc-700 px-4 py-2 text-blue-300">← Back to document package</Link>}
           {(isPreviewMode || request.previewMode) && (
             <div className="bg-blue-900/20 border border-blue-800 rounded-2xl p-4 mb-6">
               <p className="text-blue-300 text-sm">
@@ -776,7 +842,7 @@ const SignDocument: React.FC = () => {
               <p className="text-zinc-400 mb-6">
                 {isPreviewMode || request.previewMode
                   ? 'Preview signature complete. This was a mock signing run and did not notify anyone or update the live request.'
-                  : 'Thank you for signing. A confirmation email has been sent to all parties.'}
+                  : isEquityRequest(request) ? 'Your signature was recorded. This receipt covers your signature only; other parties may still need to sign.' : 'Thank you for signing. A confirmation email has been sent to all parties.'}
               </p>
 
               <div className="bg-zinc-800/50 rounded-xl p-4 mb-6 inline-block">
@@ -792,7 +858,7 @@ const SignDocument: React.FC = () => {
                   className="flex items-center gap-2 px-6 py-3 bg-[#E0FE10] hover:bg-[#c8e60e] text-black rounded-xl font-medium transition-colors mx-auto"
                 >
                   <Download className="w-5 h-5" />
-                  Download Signed Document
+                  {isEquityRequest(request) ? 'Download Your Signature Receipt' : 'Download Signed Document'}
                 </button>
               </div>
             </div>
@@ -801,6 +867,7 @@ const SignDocument: React.FC = () => {
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
               <h2 className="text-lg font-semibold mb-6">Sign Document</h2>
 
+              {isEquityRequest(request) && <div className="mb-5 text-sm text-zinc-300"><p>Sign in with {request.recipientEmail}. This records your signature only; it does not confirm that every party has signed.</p>{(!auth.currentUser?.emailVerified || auth.currentUser?.email?.toLowerCase() !== request.recipientEmail.toLowerCase()) ? accountControls : <p className="mt-2">Verified account: {auth.currentUser.email}</p>}</div>}
               {/* Type Name */}
               <div className="mb-6">
                 <label className="block text-zinc-400 text-sm mb-2">Type your full legal name</label>
