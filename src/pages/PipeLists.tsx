@@ -503,8 +503,15 @@ const priorityStyles: Record<PipelinePriority, string> = {
   low: 'bg-emerald-50 text-emerald-700 border-emerald-100',
 };
 
-const importanceLabel = (priority: PipelinePriority) =>
-  `Importance: ${priority.charAt(0).toUpperCase()}${priority.slice(1)}`;
+// Preserve stored priority keys so existing lists and shared records remain compatible.
+const easeOfContactLabels: Record<PipelinePriority, string> = {
+  low: 'Easy',
+  medium: 'Medium',
+  high: 'Hard',
+};
+
+const easeOfContactLabel = (priority: PipelinePriority) =>
+  `Ease of Contact: ${easeOfContactLabels[priority]}`;
 
 const logTypeLabels: Record<ActivityLogType, string> = {
   update: 'General Update',
@@ -860,8 +867,11 @@ const legacyPilotContractStages: StageConfig[] = [
 const contractStages: StageConfig[] = legacyPilotContractStages.filter((stage) => stage.track === 'run');
 
 const pilotContractStages: StageConfig[] = [
-  ...['identified', 'outreach-queued', 'engaged', 'proposal-sent', 'negotiating', 'pilot-agreed']
-    .map((id, index) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: [10, 10, 25, 40, 60, 80][index] })),
+  ...['identified', 'outreach-queued', 'engaged']
+    .map((id, index) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: [10, 10, 25][index] })),
+  { id: 'meeting-scheduled', label: 'Meeting Scheduled', probability: 30, track: 'build', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  ...['proposal-sent', 'negotiating', 'pilot-agreed']
+    .map((id, index) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: [40, 60, 80][index] })),
   { id: 'contract-signed', label: 'Contract Signed', probability: 100, track: 'run', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
   ...['pilot-active', 'pilot-complete', 'closed-lost-paused']
     .map((id) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: id === 'closed-lost-paused' ? 0 : 100 })),
@@ -6924,7 +6934,7 @@ Rules:
       isInvestorUpdateContactsList
         ? ['Email Status', emailStatusLabel(item)]
         : ['Stage', `${stage.label} (${item.stage})`],
-      ['Importance', importanceLabel(item.priority)],
+      ['Ease of Contact', easeOfContactLabel(item.priority)],
       ...(isContactListActive || isTaskListActive ? [] : [[isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText] as [string, string | number | undefined]]),
       [isContactListActive ? 'Relationship Owner' : 'Owner', item.owner],
       ['Contact Emails', item.contactEmails.join(', ')],
@@ -8533,7 +8543,7 @@ Rules:
         'Organization',
         'Description',
         'Stage',
-        'Importance',
+        'Ease of Contact',
         'Owner',
         'Contact Emails',
         'Segment',
@@ -8589,7 +8599,7 @@ Rules:
           item.organization,
           item.description,
           stage.label,
-          item.priority,
+          easeOfContactLabels[item.priority],
           item.owner,
           item.contactEmails.join('\n'),
           item.segment,
@@ -9900,7 +9910,7 @@ Rules:
         )}
 
         <label className="block" htmlFor="pipe-priority">
-          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Importance</span>
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Ease of Contact</span>
           <select
             id="pipe-priority"
             value={draft.priority}
@@ -9909,9 +9919,9 @@ Rules:
             }
             className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm capitalize outline-none transition focus:border-stone-400 focus:bg-white"
           >
-            <option value="high">High</option>
+            <option value="low">Easy</option>
             <option value="medium">Medium</option>
-            <option value="low">Low</option>
+            <option value="high">Hard</option>
           </select>
         </label>
 
@@ -11315,7 +11325,7 @@ Rules:
 
                 {!isInvestorUpdateContactsList && (
                   <div className="mb-4 grid grid-cols-3 gap-2">
-                    {(['high', 'medium', 'low'] as PipelinePriority[]).map((priorityKey) => {
+                    {(['low', 'medium', 'high'] as PipelinePriority[]).map((priorityKey) => {
                       const isSelected = priorityFilters.includes(priorityKey);
                       return (
                         <button
@@ -11330,6 +11340,7 @@ Rules:
                               : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
                           }`}
                           aria-pressed={isSelected}
+                          aria-label={easeOfContactLabel(priorityKey)}
                         >
                           <span
                             className={`h-2.5 w-2.5 shrink-0 rounded-full ${
@@ -11337,7 +11348,7 @@ Rules:
                             }`}
                           />
                           <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold capitalize">{priorityKey} priority</span>
+                            <span className="block truncate text-sm font-semibold capitalize">{easeOfContactLabels[priorityKey]}</span>
                             <span className={isSelected ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
                               {formatCount(countsByPriority[priorityKey] || 0, 'item')}
                             </span>
@@ -11371,7 +11382,7 @@ Rules:
                     ) : (
                       <>
                         {renderSortableHeader('Stage', 'stage')}
-                        {isTaskListActive ? <span>Importance</span> : renderSortableHeader(isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', 'value')}
+                        {isTaskListActive ? <span>Ease of Contact</span> : renderSortableHeader(isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', 'value')}
                       </>
                     )}
                     {renderSortableHeader(isContactListActive ? 'Follow-Up' : 'Due Date', 'dueDate')}
@@ -11385,7 +11396,7 @@ Rules:
                       {filteredItems.map((item, itemIndex) => {
                         const stage = getStage(activeList, item.stage);
                         const itemValueText = itemAmountDisplay(activeList, item);
-                        const tableValueText = isContactListActive ? item.contactEmails[0] || '' : isTaskListActive ? importanceLabel(item.priority) : itemValueText;
+                        const tableValueText = isContactListActive ? item.contactEmails[0] || '' : isTaskListActive ? easeOfContactLabel(item.priority) : itemValueText;
                         const hasItemValue = Boolean(tableValueText);
                         const dueDate = itemPrimaryDate(activeList, item);
                         const nextStepText = item.nextStep || item.notes || item.expansionPath;
@@ -11466,7 +11477,7 @@ Rules:
                                           ? 'bg-amber-500'
                                           : 'bg-emerald-500'
                                     }`}
-                                    title={importanceLabel(item.priority)}
+                                    title={easeOfContactLabel(item.priority)}
                                   />
                                   <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
                                 </div>
@@ -11818,7 +11829,7 @@ Rules:
                                                     ? 'bg-amber-500'
                                                     : 'bg-emerald-500'
                                               }`}
-                                              title={importanceLabel(item.priority)}
+                                              title={easeOfContactLabel(item.priority)}
                                             />
                                             <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
                                           </div>
@@ -13850,7 +13861,7 @@ Rules:
                       </span>
                     )}
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityStyles[selectedDetailItem.priority]}`}>
-                      {importanceLabel(selectedDetailItem.priority)}
+                      {easeOfContactLabel(selectedDetailItem.priority)}
                     </span>
                   </div>
                   <h3 id="pipe-detail-title" className="break-words text-2xl font-bold tracking-normal text-stone-950">
