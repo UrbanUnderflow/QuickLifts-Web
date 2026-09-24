@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import { admin } from './config/firebase';
 import { getSimpBudgetFirestore } from './utils/getSimpBudgetServiceAccount';
+import { applyBrevoEmailEvent, getEquityEmailDelivery, isEquityEmailRequest, normalizeBrevoMessageId } from '../../src/lib/equityEmailDelivery';
 
 const {
   MACRA_MIXPANEL_EVENTS,
@@ -61,6 +62,7 @@ interface BrevoWebhookEvent {
   sending_ip?: string;
   ts_epoch?: number;
   link?: string; // For click events
+  reason?: string;
   'X-Mailin-custom'?: string; // Custom headers we set (contains friendId, signingRequestId, emailRecordId)
 }
 
@@ -682,6 +684,8 @@ const updateSigningRequestEmailStatus = async (args: {
   messageId?: string;
   link?: string;
   now: Date;
+  webhookEvent: BrevoWebhookEvent;
+  authenticatedWebhook: boolean;
 }) => {
   const requestRef = db.collection('signingRequests').doc(args.signingRequestId);
   const requestSnap = await requestRef.get();
@@ -692,6 +696,32 @@ const updateSigningRequestEmailStatus = async (args: {
   }
 
   const data = requestSnap.data() || {};
+  if (isEquityEmailRequest(data)) {
+    // A callback is evidence only when authenticated and bound to the saved send attempt.
+    // A callback arriving before the send's message ID is saved is reconciled by the Brevo status check.
+    if (!args.authenticatedWebhook) return;
+    await db.runTransaction(async transaction => {
+      const latestSnapshot = await transaction.get(requestRef);
+      const latest = latestSnapshot.data();
+      const messageId = normalizeBrevoMessageId(args.messageId);
+      if (!latestSnapshot.exists || !isEquityEmailRequest(latest) || !messageId
+        || normalizeBrevoMessageId(latest?.messageId) !== messageId
+        || !latest?.recipientEmail || String(latest.recipientEmail).trim().toLowerCase() !== String(args.email || '').trim().toLowerCase()) return;
+      const current = getEquityEmailDelivery(latest);
+      const next = applyBrevoEmailEvent(current, args.webhookEvent);
+      if (next === current) return;
+      transaction.set(requestRef, {
+        emailDelivery: next,
+        emailStatus: next.status,
+        lastEmailEvent: next.providerEvent,
+        lastEmailEventAt: new Date(next.eventAt),
+        lastEmailError: next.reason || next.unresolvedFailure?.reason || null,
+        updatedAt: args.now,
+      }, {merge: true});
+    });
+    // Email delivery never changes equity signature, viewed, or execution status.
+    return;
+  }
   const FieldValue = admin.firestore.FieldValue;
   const updateData: Record<string, any> = {
     recipientEmail: data.recipientEmail || args.email,
@@ -761,11 +791,12 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  // Verify the webhook secret if configured (recommended for production)
+  // Preserve legacy webhook configuration; equity updates additionally require a verified secret.
   const webhookSecret = process.env.BREVO_WEBHOOK_SECRET;
+  const providedSecret = event.headers['x-brevo-secret'] || event.headers['X-Brevo-Secret'];
+  const authenticatedWebhook = Boolean(webhookSecret && providedSecret === webhookSecret);
   if (webhookSecret) {
-    const providedSecret = event.headers['x-brevo-secret'] || event.headers['X-Brevo-Secret'];
-    if (providedSecret !== webhookSecret) {
+    if (!authenticatedWebhook) {
       console.warn('[brevo-webhook] Invalid webhook secret');
       return {
         statusCode: 401,
@@ -945,6 +976,8 @@ export const handler: Handler = async (event) => {
           messageId,
           link,
           now,
+          webhookEvent,
+          authenticatedWebhook,
         });
       }
 

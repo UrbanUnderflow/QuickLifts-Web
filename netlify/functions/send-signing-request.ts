@@ -5,6 +5,8 @@ import {evaluateDocumentSignatures} from '../../src/lib/equityExecution';
 import {CAPITALIZATION_APPROVAL_IDS, capitalizationActionHash, isCapitalizationApprovalDocument, readCapitalizationExecutionState} from '../../src/lib/equityCapitalizationApprovals';
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 import {URL} from 'node:url';
+import {randomUUID} from 'node:crypto';
+import {getEquityEmailDelivery, type EquityEmailDelivery} from '../../src/lib/equityEmailDelivery';
 import { admin, getFirebaseAdminApp } from "./config/firebase";
 import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
 
@@ -375,6 +377,33 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
       </html>
     `;
 
+    const attemptId = typeof sendAttemptId === 'string' && /^[A-Za-z0-9_-]{1,150}$/.test(sendAttemptId) ? sendAttemptId : randomUUID();
+    let startingDelivery: EquityEmailDelivery | undefined;
+    if (equity) {
+      const alreadyAccepted = await db.runTransaction(async transaction => {
+        const latestSnapshot = await transaction.get(requestRef);
+        const latest = latestSnapshot.data();
+        if (!latestSnapshot.exists || isClosed(latest) || latest?.recipientEmail !== saved?.recipientEmail
+          || latest?.documentContent !== saved?.documentContent || latest?.equityDocumentId !== saved?.equityDocumentId) throw fail(409, 'This signature request changed. Review it before sending.');
+        const previous = getEquityEmailDelivery(latest);
+        if (previous.attemptId === attemptId && previous.messageId) return previous;
+        const attempted = previous.attemptedAt as any;
+        const attemptedMs = attempted?.toMillis?.() ?? (attempted?.seconds ? attempted.seconds * 1000 : new Date(attempted || 0).getTime());
+        if (previous.status === 'sending' && Date.now() - attemptedMs < 120000) throw fail(409, 'This email is already being submitted. Check its delivery status before retrying.');
+        if (previous.attemptId === attemptId) throw fail(409, 'This send attempt has already been recorded. Check its status, then use Resend to make a new attempt.');
+        const now = new Date();
+        startingDelivery = {status: 'sending', messageId: null, attemptId, recipientEmail, attemptedAt: now,
+          reason: null, checkError: null, ...(previous.unresolvedFailure ? {unresolvedFailure: previous.unresolvedFailure} : {})};
+        transaction.set(requestRef, {emailDelivery: startingDelivery, emailStatus: 'sending', messageId: null,
+          emailDeliveryAttempts: [...(Array.isArray(latest.emailDeliveryAttempts) ? latest.emailDeliveryAttempts : []),
+            ...(previous.attemptId || previous.messageId ? [previous] : [])].slice(-20), updatedAt: now}, {merge: true});
+        return null;
+      });
+      if (alreadyAccepted) return {statusCode: alreadyAccepted.status === 'failed' ? 502 : 200,
+        body: JSON.stringify({message: 'This email attempt is already recorded. Check its delivery status before retrying.', emailDelivery: alreadyAccepted, messageId: alreadyAccepted.messageId, skipped: true})};
+    }
+
+    let transportUncertain = false;
     const sendResult = await sendBrevoTransactionalEmail({
       toEmail: recipientEmail,
       toName: recipientName || recipientEmail,
@@ -389,65 +418,74 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
         'X-Mailin-custom': JSON.stringify({
           sequence: 'signing-request',
           signingRequestId: documentId,
+          sendAttemptId: attemptId,
           recipientEmail,
           previewMode: Boolean(previewMode),
         }),
       },
-      idempotencyKey: buildEmailDedupeKey(['signing-request-v2', documentId, recipientEmail, sendAttemptId || Date.now()]),
+      idempotencyKey: buildEmailDedupeKey(['signing-request-v2', documentId, recipientEmail, attemptId]),
       idempotencyMetadata: {
         sequence: 'signing-request',
         documentId,
         recipientEmail,
-        sendAttemptId: sendAttemptId || null,
+        sendAttemptId: attemptId,
       },
       bypassDailyRecipientLimit: true,
       dailyRecipientMetadata: {
         sequence: 'signing-request',
         documentId,
       },
+    }).catch(() => {
+      transportUncertain = true;
+      return {success: false, error: 'The email provider did not confirm the submission. Check delivery status before retrying.', messageId: undefined, skipped: false, suppressed: false, suppressionReason: undefined};
     });
 
-    if (!sendResult.success) {
-      console.error("Brevo API Error:", sendResult.error);
-      return {
-        statusCode: 502,
-        body: JSON.stringify({ message: "Failed to send email via Brevo.", details: sendResult.error })
-      };
-    }
-
-    // Update the signing request status in Firestore
+    const accepted = sendResult.success && Boolean(sendResult.messageId) && !sendResult.suppressed;
+    const reason = sendResult.suppressed
+      ? `Email was not sent: ${sendResult.suppressionReason || 'the recipient is suppressed by the email service'}.`
+      : sendResult.error || (!accepted ? 'Brevo did not return a message ID. Delivery is not confirmed; check status before retrying.' : null);
+    const deliveryState = accepted ? 'accepted' : transportUncertain || (sendResult.success && !sendResult.suppressed) ? 'unknown' : 'failed';
+    let recordedDelivery: EquityEmailDelivery | undefined;
+    const now = new Date();
     try {
       const FieldValue = admin.firestore.FieldValue;
-      const now = new Date();
       await db.runTransaction(async transaction => {
         const latestSnapshot = await transaction.get(requestRef);
         const latest = latestSnapshot.data();
-        // An in-flight signature or invalidation must never be overwritten by delivery tracking.
+        // Delivery tracking must never overwrite a concurrent signature, invalidation, or later send.
         if (isClosed(latest)) return;
         if (equity && (!latestSnapshot.exists || latest?.recipientEmail !== saved?.recipientEmail
-          || latest?.documentContent !== saved?.documentContent || latest?.equityDocumentId !== saved?.equityDocumentId)) return;
-        const children = latest?.documentType === 'strategic_signing_package'
+          || latest?.documentContent !== saved?.documentContent || latest?.equityDocumentId !== saved?.equityDocumentId
+          || latest?.emailDelivery?.attemptId !== attemptId)) return;
+        const children = accepted && latest?.documentType === 'strategic_signing_package'
           ? await Promise.all((latest.childRequestIds || []).map((id: string) => transaction.get(db.collection('signingRequests').doc(id)))) : [];
-        transaction.set(requestRef, {
-          status: latest?.status === 'viewed' ? 'viewed' : 'sent',
-          sentAt: now, lastSentAt: now, emailStatus: 'sent',
-          messageId: sendResult.messageId || null,
-          sendCount: FieldValue.increment(1), supportingDocuments, updatedAt: now,
-        }, { merge: true });
+        if (equity) {
+          recordedDelivery = {...startingDelivery!, status: deliveryState, messageId: sendResult.messageId || null, reason,
+            ...(accepted ? {acceptedAt: now} : {}),
+            ...(!accepted ? {unresolvedFailure: {reason: reason || 'Email delivery is not confirmed.', at: now, messageId: sendResult.messageId || null}} : {})};
+          transaction.set(requestRef, {emailDelivery: recordedDelivery, emailStatus: deliveryState,
+            messageId: sendResult.messageId || null, lastEmailError: accepted ? (recordedDelivery.unresolvedFailure?.reason || null) : reason,
+            ...(accepted ? {status: ['viewed', 'opened'].includes(latest?.status) ? latest.status : 'sent', sentAt: latest?.sentAt || now, lastSentAt: now, sendCount: FieldValue.increment(1), supportingDocuments} : {}), updatedAt: now}, {merge: true});
+        } else if (accepted) {
+          transaction.set(requestRef, {status: latest?.status === 'viewed' ? 'viewed' : 'sent', sentAt: now, lastSentAt: now,
+            emailStatus: 'sent', messageId: sendResult.messageId, sendCount: FieldValue.increment(1), supportingDocuments, updatedAt: now}, {merge: true});
+        }
         for (const child of children) {
           const record = child.data();
           if (!record || record.packageId !== documentId || isClosed(record)) continue;
-          transaction.update(child.ref, {status: ['viewed', 'opened'].includes(record.status) ? record.status : 'sent', sentAt: record.sentAt || now, lastSentAt: now, emailStatus: 'sent', updatedAt: now});
+          transaction.update(child.ref, {status: ['viewed', 'opened'].includes(record.status) ? record.status : 'sent', sentAt: record.sentAt || now, lastSentAt: now, emailStatus: 'accepted', updatedAt: now});
         }
       });
     } catch (dbError) {
-      console.error("Failed to update Firestore:", dbError);
-      // Don't fail the request if Firestore update fails
+      console.error('Unable to persist signing email delivery status.');
+      if (equity) return {statusCode: 503, body: JSON.stringify({message: accepted
+        ? 'Brevo accepted the email, but its delivery status could not be saved. Check delivery status before sending again.'
+        : 'Email delivery is not confirmed and its status could not be saved. Check delivery status before sending again.', messageId: sendResult.messageId || null})};
     }
 
-    console.log("Signing request email sent successfully:", sendResult.messageId);
-
-    return { statusCode: 200, body: JSON.stringify({ message: "Signing request sent successfully.", messageId: sendResult.messageId, skipped: sendResult.skipped || false }) };
+    if (!accepted) return {statusCode: 502, body: JSON.stringify({message: reason, emailDelivery: recordedDelivery})};
+    return {statusCode: 200, body: JSON.stringify({message: 'Brevo accepted the email. Delivery has not yet been confirmed.', messageId: sendResult.messageId,
+      emailDelivery: recordedDelivery, skipped: sendResult.skipped || false})};
 
   } catch (error: any) {
     console.error("Error in send-signing-request function:", error);

@@ -14,6 +14,9 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import EquityClosingAction, { closingActionKind, closingActionLabels } from '../../components/admin/EquityClosingAction';
 import EquityWorkingSetup, { type WorkingCapitalization } from '../../components/admin/EquityWorkingSetup';
 import EquityRecipientPackage from '../../components/admin/EquityRecipientPackage';
+import EquityEmailDeliveryPanel, {useEquityDeliveryChecks, emailDeliveryNeedsAttention, emailDeliveryLabel, emailDeliveryIsUnconfirmed, emailDeliverySendInProgress, withPackageEmailDelivery} from '../../components/admin/EquityEmailDeliveryPanel';
+import EquityEmailSendConfirmation from '../../components/admin/EquityEmailSendConfirmation';
+import {getEquityEmailDelivery, type EquityEmailDelivery} from '../../lib/equityEmailDelivery';
 import { collection, runTransaction, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp, getDoc, deleteField, onSnapshot } from 'firebase/firestore';
 import { auth, db, isUsingDevFirebase } from '../../api/firebase/config';
 import { getManagedAdvisorEquityProfile, type ManagedAdvisorEquityProfile } from '../../lib/equityAdvisorProfiles';
@@ -229,6 +232,8 @@ type SigningRequestStatus =
   | 'unsubscribed';
 
 interface SigningRequest extends ExecutionRequest {
+  emailDelivery?: EquityEmailDelivery;
+  packageId?: string;
   id: string;
   documentType: string;
   documentName: string;
@@ -967,6 +972,13 @@ const EquityAdminPage: React.FC = () => {
   const [equityDocuments, setEquityDocuments] = useState<EquityDocument[]>([]);
   const [recipientPackageOpen, setRecipientPackageOpen] = useState(false);
   const [signingRequests, setSigningRequests] = useState<SigningRequest[]>([]);
+  const applyDeliveryResults = useCallback((results: Array<{requestId: string; emailDelivery?: EquityEmailDelivery}>) => {
+    const updates = new Map(results.filter(result => result.emailDelivery).map(result => [result.requestId, result.emailDelivery]));
+    setSigningRequests(previous => previous.map(request => updates.has(request.packageId || request.id) ? {...request, emailDelivery: updates.get(request.packageId || request.id)} : request));
+  }, []);
+  const deliveryControls = useEquityDeliveryChecks(signingRequests, applyDeliveryResults);
+  const [pendingEmailConfirmation, setPendingEmailConfirmation] = useState<{documents: string[]; deliveries: Array<Record<string, any>>; accepted: string[]; preview?: boolean} | null>(null);
+  const [confirmationError, setConfirmationError] = useState('');
   const [syncErrors, setSyncErrors] = useState<Record<string, boolean>>({});
   const liveSyncUnavailable = Object.values(syncErrors).some(Boolean);
   const [poolRecord, setPoolRecord] = useState<Partial<EquityPool>>({});
@@ -1232,15 +1244,11 @@ const EquityAdminPage: React.FC = () => {
 
       // Load signing requests linked to equity docs
       try {
-        const q = query(
-          collection(db, 'signingRequests'),
-          where('equityDocumentId', '!=', null),
-          orderBy('equityDocumentId'),
-          orderBy('createdAt', 'desc')
-        );
+        const q = query(collection(db, 'signingRequests'), orderBy('createdAt', 'desc'));
         const snapshot = await getDocs(q);
-        const reqs = snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as SigningRequest[];
-        setSigningRequests(reqs);
+        const reqs = snapshot.docs.map(d => ({ ...d.data(), id: d.id }) as SigningRequest)
+          .filter(request => Boolean(request.equityDocumentId) || request.documentType === 'strategic_signing_package');
+        setSigningRequests(withPackageEmailDelivery(reqs));
       } catch {
         // Fallback when compound index isn't available
         try {
@@ -1248,10 +1256,10 @@ const EquityAdminPage: React.FC = () => {
           const fallbackSnapshot = await getDocs(fallbackQ);
           const reqs = fallbackSnapshot.docs
             .map(d => ({ ...d.data(), id: d.id } as SigningRequest))
-            .filter(r => Boolean((r as any).equityDocumentId));
-          setSigningRequests(reqs);
+            .filter(r => Boolean(r.equityDocumentId) || r.documentType === 'strategic_signing_package');
+          setSigningRequests(withPackageEmailDelivery(reqs));
         } catch {
-          setSigningRequests([]);
+          setSyncErrors(previous => ({...previous, signatures: true}));
         }
       }
       
@@ -1294,8 +1302,8 @@ const EquityAdminPage: React.FC = () => {
         }, onError('stakeholders')),
         onSnapshot(collection(db, 'signingRequests'), snapshot => {
           recovered('signatures');
-          setSigningRequests(snapshot.docs.map(d => ({ ...d.data(), id: d.id })).filter((r: any) => r.equityDocumentId) as SigningRequest[]);
-        }, () => { setSigningRequests([]); onError('signatures')(); }),
+          setSigningRequests(withPackageEmailDelivery(snapshot.docs.map(d => ({ ...d.data(), id: d.id })).filter((r: any) => r.equityDocumentId || r.documentType === 'strategic_signing_package') as SigningRequest[]));
+        }, onError('signatures')),
         onSnapshot(collection(db, 'equity-pool'), snapshot => {
           recovered('pool');
           const record = snapshot.docs[0];
@@ -2450,10 +2458,7 @@ const EquityAdminPage: React.FC = () => {
     }
 
     if (step === 'delivered') {
-      return Boolean(
-        request.deliveredAt ||
-        ['delivered', 'opened', 'viewed', 'signed'].includes(status)
-      );
+      return getEquityEmailDelivery(request).status === 'delivered';
     }
 
     return Boolean(
@@ -2478,6 +2483,7 @@ const EquityAdminPage: React.FC = () => {
   };
 
   const getSignerCurrentStatus = (request: SigningRequest) => {
+    if (emailDeliveryNeedsAttention(request)) return {label: emailDeliveryLabel(request), className: 'bg-red-900/30 text-red-300 border-red-800', icon: AlertTriangle};
     if (request.signedAt || request.status === 'signed') {
       return { label: 'Signed', className: 'bg-green-900/30 text-green-300 border-green-800', icon: Check };
     }
@@ -2491,7 +2497,7 @@ const EquityAdminPage: React.FC = () => {
       return { label: 'Delivered', className: 'bg-cyan-900/30 text-cyan-300 border-cyan-800', icon: CheckCircle };
     }
     if (request.sentAt || request.status === 'sent') {
-      return { label: 'Sent', className: 'bg-blue-900/30 text-blue-300 border-blue-800', icon: Mail };
+      return { label: 'Delivery pending', className: 'bg-blue-900/30 text-blue-300 border-blue-800', icon: Mail };
     }
     if (['failed', 'soft_bounce', 'hard_bounce', 'blocked', 'spam', 'unsubscribed'].includes(request.status)) {
       return { label: 'Needs attention', className: 'bg-red-900/30 text-red-300 border-red-800', icon: AlertTriangle };
@@ -2507,7 +2513,7 @@ const EquityAdminPage: React.FC = () => {
     label: string;
     Icon: typeof Mail;
   }> = [
-    { id: 'sent', label: 'Sent', Icon: Mail },
+    { id: 'sent', label: 'Submitted', Icon: Mail },
     { id: 'delivered', label: 'Delivered', Icon: CheckCircle },
     { id: 'opened', label: 'Opened', Icon: Eye },
     { id: 'signed', label: 'Signed', Icon: Check },
@@ -2528,13 +2534,13 @@ const EquityAdminPage: React.FC = () => {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              loadData();
+              void deliveryControls.check(requests.map(request => request.packageId || request.id));
             }}
-            disabled={loading}
+            disabled={deliveryControls.checkingIds.length > 0}
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-60 text-xs text-zinc-200 transition-colors"
           >
             <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            Check delivery status
           </button>
         </div>
 
@@ -2562,6 +2568,7 @@ const EquityAdminPage: React.FC = () => {
                   </span>
                 </div>
 
+                <div className="mb-3"><EquityEmailDeliveryPanel requests={[request]} controls={deliveryControls} compact /></div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {SIGNER_STATUS_STEPS.map(({ id, label, Icon }) => {
                     const reached = hasSignerReachedStep(request, id);
@@ -2813,7 +2820,7 @@ const EquityAdminPage: React.FC = () => {
         return;
       }
 
-      setSigningModalStatus({ type: 'info', text: `Sending signature request${normalized.length === 1 ? '' : 's'}...` });
+      setSigningModalStatus({ type: 'info', text: 'Preparing the signature emails for your review…' });
       const signingGroupId = `${currentSigningDoc.id}-${Date.now()}`;
       const signingRequestIds: string[] = [];
       const deliveries: Array<Record<string, unknown>> = [];
@@ -2891,31 +2898,15 @@ const EquityAdminPage: React.FC = () => {
         updatedAt: Timestamp.now(),
       });
 
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('Sign in before sending a signature request.');
-      for (const delivery of deliveries) {
-        const response = await fetch('/.netlify/functions/send-signing-request', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' },
-          body: JSON.stringify(delivery),
-        });
-        if (!response.ok) {
-          const result = await response.json().catch(() => ({}));
-          throw new Error(result.message || result.error || 'Unable to send a signature request. The prepared packet has been retained.');
-        }
-      }
-
-      setSigners(prev => prev.map((signer, idx) => ({
-        ...signer,
-        signingRequestId: signingRequestIds[idx] || signer.signingRequestId,
-      })));
-      setSigningModalStatus({
-        type: 'success',
-        text: `Signature request${signingRequestIds.length === 1 ? '' : 's'} sent successfully to ${signingRequestIds.length} signer${signingRequestIds.length === 1 ? '' : 's'}${supportingDocuments.length ? ` with ${supportingDocuments.length} supporting document${supportingDocuments.length === 1 ? '' : 's'}.` : '.'}`,
-      });
-      setMessage({ type: 'success', text: `Sent for signature to ${signingRequestIds.length} signer(s)!` });
-      loadData();
+      setSigners(previous => previous.map((signer, index) => ({...signer, signingRequestId: signingRequestIds[index] || signer.signingRequestId})));
+      setConfirmationError('');
+      deliveryControls.clearSubmissionIssue(currentSigningDoc.id);
+      setPendingEmailConfirmation({documents: [currentSigningDoc.title, ...supportingDocuments.map(document => `${document.title} (reference)`)], deliveries, accepted: []});
+      setSigningModalStatus({type: 'info', text: 'Review the prepared recipients and confirm to send. No email has been sent yet.'});
+      void loadData();
     } catch (error) {
-      console.error('Error sending document for signature:', error);
+      console.error('Error preparing document for signature:', error);
+      deliveryControls.recordSubmissionIssue({stage: 'prepare', documentId: signingDoc.id, documentName: signingDoc.title, message: error instanceof Error ? error.message : 'Unable to prepare the signature request.'});
       setSigningModalStatus({
         type: 'error',
         text: error instanceof Error ? error.message : 'Failed to send the signature request.',
@@ -2961,7 +2952,7 @@ const EquityAdminPage: React.FC = () => {
         return;
       }
 
-      setSigningModalStatus({ type: 'info', text: `Sending preview email to ${previewEmail}...` });
+      setSigningModalStatus({ type: 'info', text: `Preparing the preview for ${previewEmail}…` });
       const supportingDocuments = getSignaturePacketDocuments(
         currentSigningDoc,
         documentList,
@@ -2991,43 +2982,13 @@ const EquityAdminPage: React.FC = () => {
         updatedAt: serverTimestamp(),
       });
 
-      const resp = await fetch('/.netlify/functions/send-signing-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await auth.currentUser?.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' },
-        body: JSON.stringify({
-          documentId: previewRequestRef.id,
-          documentName: `${currentSigningDoc.title} (Preview)`,
-          documentType: currentSigningDoc.documentType,
-          recipientName: previewName,
-          recipientEmail: previewEmail,
-          companyName: company.name || 'Pulse Intelligence Labs, Inc.',
-          previewMode: true,
-          supportingDocuments: requestSupportingDocuments,
-          sendAttemptId: `preview-${currentSigningDoc.id}-${Date.now()}`,
-        }),
-      });
-
-      if (!resp.ok) {
-        let errorMessage = `Failed to send preview email to ${previewEmail}`;
-        try {
-          const data = await resp.json();
-          errorMessage = data?.message || data?.error || errorMessage;
-        } catch {
-          try {
-            const text = await resp.text();
-            if (text) errorMessage = text;
-          } catch {}
-        }
-        throw new Error(errorMessage);
-      }
-
-      setSigningModalStatus({
-        type: 'success',
-        text: `Preview email sent to ${previewEmail}. The link opens a sandbox signing flow and will not change the live document state.`,
-      });
-      setMessage({ type: 'success', text: `Preview email sent to ${previewEmail}.` });
+      setConfirmationError('');
+      deliveryControls.clearSubmissionIssue(currentSigningDoc.id);
+      setPendingEmailConfirmation({documents: [`${currentSigningDoc.title} (Preview)`, ...supportingDocuments.map(document => `${document.title} (reference)`)], deliveries: [{documentId: previewRequestRef.id, documentName: `${currentSigningDoc.title} (Preview)`, documentType: currentSigningDoc.documentType, recipientName: previewName, recipientEmail: previewEmail, companyName: company.name || 'Pulse Intelligence Labs, Inc.', previewMode: true, supportingDocuments: requestSupportingDocuments, sendAttemptId: `preview-${currentSigningDoc.id}-${Date.now()}`}], accepted: [], preview: true});
+      setSigningModalStatus({type: 'info', text: 'Review the preview recipient and confirm to send. No email has been sent yet.'});
     } catch (error) {
-      console.error('Error sending preview signature email:', error);
+      console.error('Error preparing preview signature email:', error);
+      deliveryControls.recordSubmissionIssue({stage: 'prepare', documentId: signingDoc.id, documentName: `${signingDoc.title} (Preview)`, recipientName: previewName, recipientEmail: previewEmail, message: error instanceof Error ? error.message : 'Unable to prepare the preview request.'});
       setSigningModalStatus({
         type: 'error',
         text: error instanceof Error ? error.message : 'Failed to send preview email.',
@@ -3036,6 +2997,37 @@ const EquityAdminPage: React.FC = () => {
     } finally {
       setIsSending(false);
     }
+  };
+
+  const confirmPreparedEmails = async () => {
+    if (!pendingEmailConfirmation || isSending) return;
+    setIsSending(true); setConfirmationError('');
+    let attemptedDelivery: Record<string, any> | undefined;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Sign in before sending.');
+      for (const delivery of pendingEmailConfirmation.deliveries) {
+        if (pendingEmailConfirmation.accepted.includes(delivery.documentId)) continue;
+        attemptedDelivery = delivery;
+        const existing = signingRequests.find(request => request.id === delivery.documentId);
+        if (emailDeliverySendInProgress(existing)) {void deliveryControls.check([delivery.documentId]); throw new Error('Your previous send is still being processed. Check delivery status in a moment.');}
+        const sendPayload = existing && (getEquityEmailDelivery(existing).status === 'failed' || emailDeliveryIsUnconfirmed(existing)) ? {...delivery, sendAttemptId: crypto.randomUUID()} : delivery;
+        const response = await fetch('/.netlify/functions/send-signing-request', {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod'}, body: JSON.stringify(sendPayload)});
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || result.error || `Unable to send to ${delivery.recipientEmail}.`);
+        deliveryControls.clearSubmissionIssue('', delivery.documentId);
+        setPendingEmailConfirmation(previous => previous && ({...previous, accepted: [...previous.accepted, delivery.documentId]}));
+      }
+      const ids = pendingEmailConfirmation.deliveries.map(delivery => delivery.documentId);
+      const text = `Submitted to Brevo for ${pendingEmailConfirmation.deliveries.map(delivery => delivery.recipientEmail).join(', ')}. Delivery confirmation appears in Email delivery.`;
+      setSigningModalStatus({type: 'info', text}); setMessage({type: 'info', text});
+      setPendingEmailConfirmation(null);
+      void deliveryControls.check(ids);
+    } catch (error) {
+      const text = error instanceof Error ? error.message : 'Unable to send the signature email.';
+      if (attemptedDelivery) {const request = signingRequests.find(item => item.id === attemptedDelivery!.documentId); deliveryControls.recordSubmissionIssue({stage: 'send', documentId: request?.equityDocumentId || 'edna-package', documentName: pendingEmailConfirmation.documents[0] || 'Signature package', requestId: attemptedDelivery.documentId, recipientName: attemptedDelivery.recipientName, recipientEmail: attemptedDelivery.recipientEmail, message: text});}
+      setConfirmationError(text); setSigningModalStatus({type: 'error', text});
+    } finally { setIsSending(false); void loadData(); }
   };
 
   const copySigningLink = async (signingRequestId: string) => {
@@ -3390,22 +3382,15 @@ const EquityAdminPage: React.FC = () => {
   );
 
   const resendExistingSignatureRequest = async (request: SigningRequest) => {
-    setResendingRequestId(request.id);
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('Sign in before resending.');
-      const response = await fetch('/.netlify/functions/send-signing-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' },
-        body: JSON.stringify({ documentId: request.id, documentType: request.documentType, recipientEmail: request.recipientEmail, sendAttemptId: `resend-${request.id}-${Date.now()}` }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || result.error || 'Unable to resend this request.');
-      setMessage({ type: 'success', text: `Signature email resent to ${request.recipientEmail}. The existing document and signing link were preserved.` });
-      setResendRequestId(null);
-    } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to resend.' });
-    } finally { setResendingRequestId(null); }
+    const source = signingRequests.find(item => item.id === (request.packageId || request.id)) || request;
+    if (emailDeliveryIsUnconfirmed(source)) {
+      await deliveryControls.check([source.id]);
+      if (emailDeliverySendInProgress(source)) {setMessage({type: 'info', text: 'Your previous send is still being processed. Check delivery status in a moment.'}); return;}
+    }
+    setConfirmationError('');
+    const packageDocuments = (source as any).packageDocuments;
+    setPendingEmailConfirmation({documents: Array.isArray(packageDocuments) ? packageDocuments.map((document: any) => `${document.title || document.documentName || source.documentName}${document.mode === 'reference' ? ' (reference)' : ''}`) : [source.documentName], deliveries: [{documentId: source.id, documentType: source.documentType, recipientName: source.recipientName, recipientEmail: source.recipientEmail, sendAttemptId: crypto.randomUUID()}], accepted: []});
+    setResendRequestId(null);
   };
 
   const reconcileEdnaDocuments = async () => {
@@ -3550,14 +3535,15 @@ const EquityAdminPage: React.FC = () => {
           return <div key={request.id} className="mt-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800">
             <div className="flex flex-wrap justify-between gap-2"><div><p className="text-white">{request.signerRole || 'Signer'} · {request.recipientName}</p><p className="text-xs text-zinc-400">{request.recipientEmail}</p></div><span className="text-sm text-amber-200">{signed ? 'Signature recorded' : old ? 'Previous request' : 'Waiting for signature'}</span></div>
             {renderSignerStatusPanel([request], true)}
-            {request.lastSentAt && <p className="text-xs text-zinc-400 mt-2">Last email sent: {formatDateTime(request.lastSentAt)}{request.sendCount ? ` · ${request.sendCount} sends` : ''}</p>}
+            {request.lastSentAt && <p className="text-xs text-zinc-400 mt-2">Last email submitted: {formatDateTime(request.lastSentAt)}{request.sendCount ? ` · ${request.sendCount} submissions` : ''}</p>}
             <p className="text-xs text-zinc-400 mt-3">Documents included with this request</p>
             <ul className="text-sm mt-1 space-y-1"><li><button className="text-blue-300 underline" onClick={() => window.open(`/sign/${request.id}`, '_blank')}>{request.documentName || document.title} · signature document</button></li>
               {(request.supportingDocuments || []).map((attachment, index) => <li key={`${attachment.id}-${index}`}><a className="text-blue-300 underline" href={attachment.url} target="_blank" rel="noopener noreferrer">{attachment.title}</a><span className="text-xs text-zinc-500"> · supporting document</span></li>)}
             </ul>
             {!request.supportingDocuments?.length && <p className="text-xs text-zinc-500 mt-1">No supporting attachments recorded for this request.</p>}
+            {!old && <div className="mt-3"><EquityEmailDeliveryPanel requests={[request]} controls={deliveryControls} compact /></div>}
             {!old && <div className="flex gap-3 mt-3"><button className="text-blue-300 text-xs underline" onClick={() => copySigningLink(request.id)}>Copy signing link</button>{canResend && <button className="text-blue-300 text-xs underline" onClick={() => setResendRequestId(request.id)}>Resend email</button>}</div>}
-            {resendRequestId === request.id && canResend && <div className="mt-3 p-3 border border-blue-800 rounded-lg"><p className="text-sm text-zinc-300">Resend this existing package to {request.recipientEmail}? The document, attachments, and signing link stay the same.</p><div className="flex gap-3 mt-2"><button disabled={Boolean(resendingRequestId)} className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-50" onClick={() => resendExistingSignatureRequest(request)}>{resendingRequestId === request.id ? 'Sending…' : 'Send reminder'}</button><button disabled={Boolean(resendingRequestId)} onClick={() => setResendRequestId(null)}>Cancel</button></div></div>}
+            {resendRequestId === request.id && canResend && <div className="mt-3 p-3 border border-blue-800 rounded-lg"><p className="text-sm text-zinc-300">Resend {request.documentName || document.title} to {request.recipientName} at {request.recipientEmail}? The document, attachments, and signing link stay the same.</p><div className="flex gap-3 mt-2"><button disabled={Boolean(resendingRequestId)} className="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-50" onClick={() => resendExistingSignatureRequest(request)}>{resendingRequestId === request.id ? 'Sending…' : 'Send reminder'}</button><button disabled={Boolean(resendingRequestId)} onClick={() => setResendRequestId(null)}>Cancel</button></div></div>}
           </div>;
         };
         return <section key={document.id} className="border border-zinc-800 rounded-xl bg-zinc-900/50 overflow-hidden p-4 sm:p-5">
@@ -6174,6 +6160,8 @@ const EquityAdminPage: React.FC = () => {
               </div>
             </motion.div>
 
+            <div className="mb-6"><EquityEmailDeliveryPanel requests={signingRequests} controls={deliveryControls} /></div>
+
             {/* Tabs */}
             <div className="mb-8">
               <div className="flex items-center gap-2 p-1.5 rounded-xl bg-zinc-900/50 border border-zinc-800 w-fit">
@@ -7380,6 +7368,8 @@ const EquityAdminPage: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {pendingEmailConfirmation && <EquityEmailSendConfirmation documents={pendingEmailConfirmation.documents} recipients={pendingEmailConfirmation.deliveries.filter(delivery => !pendingEmailConfirmation.accepted.includes(delivery.documentId)).map(delivery => ({recipientName: delivery.recipientName, recipientEmail: delivery.recipientEmail}))} busy={isSending} error={confirmationError} warning={pendingEmailConfirmation.deliveries.some(delivery => emailDeliveryIsUnconfirmed(signingRequests.find(request => request.id === delivery.documentId))) ? 'Previous delivery could not be verified. Sending again may deliver a duplicate email.' : undefined} confirmLabel={pendingEmailConfirmation.deliveries.some(delivery => emailDeliveryIsUnconfirmed(signingRequests.find(request => request.id === delivery.documentId))) ? 'Confirm resend' : undefined} onCheckDelivery={() => {void deliveryControls.check(pendingEmailConfirmation.deliveries.map(delivery => delivery.documentId));}} onConfirm={() => {void confirmPreparedEmails();}} onCancel={() => {setPendingEmailConfirmation(null); setConfirmationError('');}} />}
+
       {/* Floating Toast */}
       <AnimatePresence>
         {message && (
@@ -7418,7 +7408,7 @@ const EquityAdminPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
-      {recipientPackageOpen && <EquityRecipientPackage documents={equityDocuments} requests={signingRequests} onClose={() => setRecipientPackageOpen(false)} onSent={() => { void loadData(); }} />}
+      {recipientPackageOpen && <EquityRecipientPackage documents={equityDocuments} requests={signingRequests} deliveryControls={deliveryControls} onClose={() => setRecipientPackageOpen(false)} onSent={() => { void loadData(); }} />}
     </AdminRouteGuard>
   );
 };

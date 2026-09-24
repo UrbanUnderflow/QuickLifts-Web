@@ -3,6 +3,9 @@ import {X, FileText, Send, CheckCircle2, AlertCircle, ExternalLink, Upload} from
 import {auth, isUsingDevFirebase} from '../../api/firebase/config';
 import {evaluateDocumentSignatures, type ExecutionRequest} from '../../lib/equityExecution';
 import EquityDocumentUpload from './EquityDocumentUpload';
+import EquityEmailDeliveryPanel, {type DeliveryControls, type DeliveryRequest, emailDeliveryIsUnconfirmed, emailDeliverySendInProgress} from './EquityEmailDeliveryPanel';
+import EquityEmailSendConfirmation from './EquityEmailSendConfirmation';
+import {getEquityEmailDelivery} from '../../lib/equityEmailDelivery';
 import {getEquitySigningRequirements} from '../../lib/equitySigningRequirements';
 import {isEquityDocumentLocked} from '../../lib/equityDocumentUpload';
 
@@ -37,8 +40,8 @@ const capitalizationRecordRequirements = new Set([
   'Confirm authorized shares against charter, complete founder share return and reserve approvals, and certify outstanding shares and convertible-note treatment.',
   'Complete founder share return and reserve approvals, and certify outstanding shares and convertible-note treatment.',
 ]);
-export default function EquityRecipientPackage({documents, requests, onClose, onSent}: {
-  documents: PackageDocument[]; requests: ExecutionRequest[]; onClose: () => void; onSent: () => void;
+export default function EquityRecipientPackage({documents, requests, onClose, onSent, deliveryControls}: {
+  documents: PackageDocument[]; requests: ExecutionRequest[]; onClose: () => void; onSent: () => void; deliveryControls: DeliveryControls;
 }) {
   const [capitalizationId, setCapitalizationId] = useState('');
   const [considerationId, setConsiderationId] = useState('');
@@ -48,6 +51,8 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
   const [message, setMessage] = useState('');
   const [deliveries, setDeliveries] = useState<Array<{documentId: string; recipientEmail: string; recipientName: string; sendAttemptId: string}>>([]);
   const [sent, setSent] = useState<string[]>([]);
+  const [pendingSend, setPendingSend] = useState<{mode: 'self' | 'package'; documents: string[]; deliveries: Array<{documentId: string; recipientEmail: string; recipientName: string; sendAttemptId: string}>; accepted: string[]} | null>(null);
+  const [sendError, setSendError] = useState('');
   const attemptId = useRef<string>('');
   const signDocuments = signIds.map(id => documents.find(d => d.id === id));
   const board = documents.find(d => d.id === boardId);
@@ -87,7 +92,9 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
   };
   const sendToMe = async (documentId: string) => {
     if (busy || selfSending || pendingUpload) return;
-    setSelfSending(documentId); setMessage('Preparing your signature request…');
+    const existingRequest = (requests as DeliveryRequest[]).find(request => request.equityDocumentId === documentId && !request.invalidatedAt && emailDeliveryIsUnconfirmed(request));
+    if (existingRequest) {await deliveryControls.check([existingRequest.packageId || existingRequest.id]); if (emailDeliverySendInProgress(existingRequest)) {setMessage('Your previous send is still being processed. Check delivery status in a moment.'); return;}}
+    setSelfSending(documentId); setMessage('Preparing your signature request for review…'); setSendError('');
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('Sign in before sending.');
@@ -95,12 +102,12 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
       const prepared = await fetch('/.netlify/functions/prepare-equity-self-signature', {method: 'POST', headers, body: JSON.stringify({documentId})});
       const result = await prepared.json();
       if (!prepared.ok) throw new Error(result.error || result.message || 'Unable to prepare your signature request.');
-      const response = await fetch('/.netlify/functions/send-signing-request', {method: 'POST', headers, body: JSON.stringify(result.delivery)});
-      const sentResult = await response.json();
-      if (!response.ok) throw new Error(sentResult.error || sentResult.message || 'Unable to send. Your request is saved for retry.');
-      setMessage(`Sent to ${result.delivery.recipientEmail} for your signature. This does not send the EDNA package.`);
+      if (!result.delivery?.recipientEmail || !result.delivery?.documentId) throw new Error('The prepared request is missing its recipient address. No email was sent.');
+      deliveryControls.clearSubmissionIssue(documentId);
+      setPendingSend({mode: 'self', documents: [documents.find(document => document.id === documentId)?.title || 'Approval document'], deliveries: [result.delivery], accepted: []});
+      setMessage('Review the recipient address and confirm to send your signature email.');
       onSent();
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to send your signature request.'); }
+    } catch (error) { const text = error instanceof Error ? error.message : 'Unable to prepare your signature request.'; setMessage(text); const document = documents.find(item => item.id === documentId); deliveryControls.recordSubmissionIssue({stage: 'prepare', documentId, documentName: document?.title || 'Approval document', recipientName: document?.preparedSigners?.[0]?.name, recipientEmail: document?.preparedSigners?.[0]?.email, message: text}); }
     finally { setSelfSending(null); }
   };
   const hasActiveRequest = (document: PackageDocument | undefined) => requests.some(request => document?.signingRequestIds?.includes(request.id) && !request.invalidatedAt && !request.previewMode && (request.sentAt || ['sent', 'delivered', 'opened', 'viewed'].includes(request.status)));
@@ -118,6 +125,7 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
         {verified ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300 mt-0.5" /> : <span className="w-4 shrink-0 text-zinc-500">{index + 1}.</span>}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-zinc-100">{step.label}</p>
+          {document?.preparedSigners?.map(signer => <p key={signer.email} className="mt-1 break-words text-xs text-blue-200">To: {signer.name} · {signer.email}</p>)}
           <p className="mt-1 text-xs text-zinc-400">{step.description}</p>
           <p className={`mt-2 text-xs ${verified ? 'text-emerald-300' : needsFounderReturn || incomplete || activeRequest ? 'text-amber-200' : 'text-zinc-300'}`}>{label}</p>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 items-center">
@@ -126,7 +134,7 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
               <Upload className="h-3 w-3" />{document ? 'Replace' : 'Upload'}
               <input className="sr-only" type="file" accept=".pdf,.html,.htm,.txt" disabled={disabled} aria-label={`Upload ${step.label.toLowerCase()}`} onChange={event => {const file = event.target.files?.[0]; event.target.value = ''; if (file) beginUpload(file, document, step.id, step.documentType, step.label, true);}} />
             </label>}
-            {!signed && <button disabled={disabled || incomplete || needsFounderReturn} onClick={() => document && sendToMe(document.id)} className="rounded-lg border border-blue-500/40 px-3 py-1.5 text-sm text-blue-200 disabled:opacity-40">{selfSending === document?.id ? 'Sending…' : activeRequest ? 'Resend for signature' : 'Send for signature'}</button>}
+            {!signed && <button disabled={disabled || incomplete || needsFounderReturn} onClick={() => document && sendToMe(document.id)} className="rounded-lg border border-blue-500/40 px-3 py-1.5 text-sm text-blue-200 disabled:opacity-40">{selfSending === document?.id ? 'Preparing…' : activeRequest ? 'Resend for signature' : 'Send for signature'}</button>}
           </div>
           {!!document?.closingRequirements?.length && <ul className="list-disc pl-4 mt-2 space-y-1 text-xs text-amber-200">{document.closingRequirements.map(item => <li key={item}>{item}</li>)}</ul>}
         </div>
@@ -150,6 +158,7 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
         {verified ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300 mt-0.5" /> : <FileText className="h-5 w-5 shrink-0 text-zinc-400 mt-0.5" />}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">{approvalLabels[index]}</p>
+          {document?.preparedSigners?.map(signer => <p key={signer.email} className="mt-1 break-words text-xs text-blue-200">To: {signer.name} · {signer.email}</p>)}
           <p className={`mt-1 text-xs ${verified ? 'text-emerald-300' : incomplete || activeRequest ? 'text-amber-300' : 'text-zinc-400'}`}>{label}</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3">
             {document && <a href={`/equity-doc/${document.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-blue-200">View <ExternalLink className="w-3 h-3" /></a>}
@@ -158,7 +167,7 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
               <Upload className="w-3.5 h-3.5" />{document ? 'Upload replacement' : 'Upload'}
               <input className="sr-only" type="file" accept=".pdf,.html,.htm,.txt" disabled={disabled} aria-label={`Upload ${approvalLabels[index].toLowerCase()}`} onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) beginUpload(file, document, document?.id || fallbackApprovalIds[index], approvalTypes[index], approvalLabels[index], true); }} />
             </label>}
-            {document && !verified && <button disabled={disabled || incomplete} onClick={() => sendToMe(document.id)} className="ml-auto rounded-lg border border-blue-500/40 px-3 py-1.5 text-sm text-blue-200 disabled:opacity-40">{selfSending === document.id ? 'Sending…' : activeRequest ? 'Resend to me' : 'Send to me for signing'}</button>}
+            {document && !verified && <button disabled={disabled || incomplete} onClick={() => sendToMe(document.id)} className="ml-auto rounded-lg border border-blue-500/40 px-3 py-1.5 text-sm text-blue-200 disabled:opacity-40">{selfSending === document.id ? 'Preparing…' : activeRequest ? 'Resend to me' : 'Send to me for signing'}</button>}
           </div>
         </div>
       </div>
@@ -172,7 +181,7 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
           <p className={`mt-2 text-xs ${boardVerified ? 'text-emerald-300' : 'text-amber-200'}`}>{boardVerified ? 'Signed' : 'Your board signature is required'}</p>
           <div className="flex flex-wrap gap-3 items-center mt-3">
             {board && <a href={`/equity-doc/${board.id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-blue-200">View board consent <ExternalLink className="w-3 h-3" /></a>}
-            {board && !boardVerified && <button disabled={disabled || board.status !== 'completed' || !board.content?.trim() || Boolean(board.closingRequirements?.length)} onClick={() => sendToMe(board.id)} className="rounded-lg border border-blue-500/40 px-3 py-1.5 text-sm text-blue-200 disabled:opacity-40">{selfSending === board.id ? 'Sending…' : hasActiveRequest(board) ? 'Resend for signature' : 'Send for signature'}</button>}
+            {board && !boardVerified && <button disabled={disabled || board.status !== 'completed' || !board.content?.trim() || Boolean(board.closingRequirements?.length)} onClick={() => sendToMe(board.id)} className="rounded-lg border border-blue-500/40 px-3 py-1.5 text-sm text-blue-200 disabled:opacity-40">{selfSending === board.id ? 'Preparing…' : hasActiveRequest(board) ? 'Resend for signature' : 'Send for signature'}</button>}
           </div>
         </div>
         <p className="mt-3 text-zinc-400">{revisedCertificate ? 'The revised certificate explains the 10,000,000-share allocation basis and separately discloses the LAUNCH note’s future conversion. Once the three approvals are recorded, you can sign the certificate above.' : 'The certificate still needs its revised calculation basis before it can be signed.'}</p>
@@ -198,18 +207,47 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
         if (!Array.isArray(prepared) || !prepared.length) throw new Error('No recipient packages were prepared.');
         setDeliveries(prepared);
       }
-      for (const delivery of prepared) {
-        if (sent.includes(delivery.documentId)) continue;
-        const response = await fetch('/.netlify/functions/send-signing-request', {method: 'POST', headers, body: JSON.stringify(delivery)});
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || result.message || `Unable to send to ${delivery.recipientName}.`);
-        setSent(previous => [...new Set([...previous, delivery.documentId])]);
-      }
-      setMessage('Package sent. Each recipient has one link for their documents and reference materials.');
+      setSendError('');
+      deliveryControls.clearSubmissionIssue('edna-package');
+      setPendingSend({mode: 'package', documents: [...signDocuments.map(document => document!.title), ...references.filter(Boolean).map(document => `${document!.title} (reference)`), ...capitalizationDocuments.filter(Boolean).map(document => `${document!.title} (reference)`)], deliveries: prepared, accepted: sent});
+      setMessage('Review every recipient address and confirm to send the package.');
       onSent();
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to send package. Prepared links are retained for retry.'); }
+    } catch (error) { const text = error instanceof Error ? error.message : 'Unable to prepare the package.'; setMessage(text); deliveryControls.recordSubmissionIssue({stage: 'prepare', documentId: 'edna-package', documentName: 'PIL and EDNA strategic equity package', message: text}); }
     finally { setBusy(false); }
   };
+  const confirmSend = async () => {
+    if (!pendingSend || busy) return;
+    setBusy(true); setSendError('');
+    let attemptedDelivery: typeof pendingSend.deliveries[number] | undefined;
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Sign in before sending.');
+      for (const delivery of pendingSend.deliveries) {
+        if (pendingSend.accepted.includes(delivery.documentId)) continue;
+        attemptedDelivery = delivery;
+        const existing = (requests as DeliveryRequest[]).find(request => request.id === delivery.documentId);
+        if (emailDeliverySendInProgress(existing)) {void deliveryControls.check([delivery.documentId]); throw new Error('Your previous send is still being processed. Check delivery status in a moment.');}
+        const sendPayload = existing && (getEquityEmailDelivery(existing).status === 'failed' || emailDeliveryIsUnconfirmed(existing)) ? {...delivery, sendAttemptId: crypto.randomUUID()} : delivery;
+        const response = await fetch('/.netlify/functions/send-signing-request', {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod'}, body: JSON.stringify(sendPayload)});
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || result.message || `Unable to send to ${delivery.recipientEmail}.`);
+        deliveryControls.clearSubmissionIssue('', delivery.documentId);
+        setPendingSend(previous => previous && ({...previous, accepted: [...previous.accepted, delivery.documentId]}));
+        if (pendingSend.mode === 'package') setSent(previous => [...new Set([...previous, delivery.documentId])]);
+      }
+      setMessage(`Submitted to Brevo for ${pendingSend.deliveries.map(delivery => delivery.recipientEmail).join(', ')}. Delivery confirmation appears below.`);
+      const ids = pendingSend.deliveries.map(delivery => delivery.documentId);
+      setPendingSend(null);
+      onSent();
+      void deliveryControls.check(ids);
+    } catch (error) {
+      const text = error instanceof Error ? error.message : 'Unable to send. The prepared request is retained.';
+      if (attemptedDelivery) {const request = requests.find(item => item.id === attemptedDelivery!.documentId); deliveryControls.recordSubmissionIssue({stage: 'send', documentId: request?.equityDocumentId || 'edna-package', documentName: pendingSend.documents[0] || 'Signature package', requestId: attemptedDelivery.documentId, recipientName: attemptedDelivery.recipientName, recipientEmail: attemptedDelivery.recipientEmail, message: text});}
+      setSendError(text); setMessage(text); onSent();
+    } finally { setBusy(false); }
+  };
+  const packageDocumentIds = new Set(['edna-package', ...signIds, ...fallbackApprovalIds, ...capitalizationSteps.map(step => step.id), capitalizationId, considerationId]);
+  const packageRequests = (requests as DeliveryRequest[]).filter(request => packageDocumentIds.has(request.equityDocumentId || '') || request.documentType === 'strategic_signing_package');
   const allSent = deliveries.length > 0 && deliveries.every(d => sent.includes(d.documentId));
   const working = busy || Boolean(selfSending) || Boolean(pendingUpload);
   return <><div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="recipient-package-title">
@@ -219,6 +257,7 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
         <button aria-label="Close package" onClick={onClose} disabled={working}><X /></button>
       </div>
       <div className="p-6 space-y-7">
+        <EquityEmailDeliveryPanel requests={packageRequests} controls={deliveryControls} documentIds={[...packageDocumentIds]} />
         <section aria-labelledby="your-approvals-title">
           <div className="flex items-center justify-between gap-3 mb-2"><h3 id="your-approvals-title" className="font-semibold">Your approvals</h3><span className="text-xs text-zinc-400">{references.filter(document => document && evaluateDocumentSignatures(document as any, requests).verified).length} of 3 signed</span></div>
           <p className="text-sm text-zinc-400 mb-4">Signed copies are automatically included for EDNA to read.</p>
@@ -234,9 +273,9 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
         {!!blockers.length && <details className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3"><summary className="cursor-pointer text-sm text-amber-200">Complete approvals before sending to EDNA</summary><ul className="list-disc pl-5 text-xs text-amber-100/80 space-y-2 mt-3">{[...new Set(blockers)].map(item => <li key={item}>{item}</li>)}</ul></details>}
         {message && <p role="status" className="text-sm text-blue-200">{message}</p>}
       </div>
-      <div className="p-5 border-t border-zinc-800 flex justify-end gap-3"><button onClick={onClose} disabled={working} className="px-4 py-2 rounded-lg border border-zinc-700 text-sm">Close</button><button disabled={working || !!blockers.length || allSent} onClick={send} className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm disabled:opacity-40 inline-flex gap-2 items-center">{allSent ? <CheckCircle2 className="w-4" /> : blockers.length ? <AlertCircle className="w-4" /> : <Send className="w-4" />}{busy ? 'Sending package…' : allSent ? 'Package sent' : deliveries.length ? 'Retry unsent recipients' : 'Send EDNA package'}</button></div>
+      <div className="p-5 border-t border-zinc-800 flex justify-end gap-3"><button onClick={onClose} disabled={working} className="px-4 py-2 rounded-lg border border-zinc-700 text-sm">Close</button><button disabled={working || !!blockers.length || allSent} onClick={send} className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm disabled:opacity-40 inline-flex gap-2 items-center">{allSent ? <CheckCircle2 className="w-4" /> : blockers.length ? <AlertCircle className="w-4" /> : <Send className="w-4" />}{busy ? 'Sending package…' : allSent ? 'Submitted. Check delivery above' : deliveries.length ? 'Retry unsent recipients' : 'Send EDNA package'}</button></div>
     </div>
-  </div>{pendingUpload && <EquityDocumentUpload {...pendingUpload} onClose={() => setPendingUpload(null)} onSaved={id => {
+  </div>{pendingSend && <EquityEmailSendConfirmation documents={pendingSend.documents} recipients={pendingSend.deliveries.filter(delivery => !pendingSend.accepted.includes(delivery.documentId))} busy={busy} error={sendError} warning={pendingSend.deliveries.some(delivery => emailDeliveryIsUnconfirmed((requests as DeliveryRequest[]).find(request => request.id === delivery.documentId))) ? 'Previous delivery could not be verified. Sending again may deliver a duplicate email.' : undefined} confirmLabel={pendingSend.deliveries.some(delivery => emailDeliveryIsUnconfirmed((requests as DeliveryRequest[]).find(request => request.id === delivery.documentId))) ? 'Confirm resend' : undefined} onCheckDelivery={() => {void deliveryControls.check(pendingSend.deliveries.map(delivery => delivery.documentId));}} onConfirm={() => {void confirmSend();}} onCancel={() => {setPendingSend(null); setSendError('');}} />}{pendingUpload && <EquityDocumentUpload {...pendingUpload} onClose={() => setPendingUpload(null)} onSaved={id => {
     if (pendingUpload.documentType === approvalTypes[1]) setCapitalizationId(id);
     if (pendingUpload.documentType === approvalTypes[2]) setConsiderationId(id);
     setPendingUpload(null); setMessage('Document saved. It is ready for review in your package.'); onSent();
