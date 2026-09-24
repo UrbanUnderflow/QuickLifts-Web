@@ -124,3 +124,19 @@ test('per-request check errors remain visible without duplicating stored provide
   assert.doesNotMatch(html, /Brevo unavailable/);
   assert.equal(JSON.stringify(request), before);
 });
+test('clearing an issue hides only that attempt and does not change delivery evidence', () => {
+ const copy=JSON.stringify(request); const key=delivery.deliveryIssueKey(request);
+ assert.equal(render([request],{controls:{...controls,clearedIssues:[key]}}),'');
+ assert.equal(JSON.stringify(request),copy);
+ assert.match(render([request]),/Clear this issue/);
+ const polled={...request,emailDelivery:{...request.emailDelivery,checkedAt:'2026-09-24'}};
+ assert.equal(delivery.deliveryIssueKey(polled),key);
+ const retried={...request,emailDelivery:{...request.emailDelivery,attemptId:'new-attempt'}};
+ assert.match(render([retried],{controls:{...controls,clearedIssues:[key]}}),/Email delivery failed/);
+});
+test('a newly repeated preparation error appears after the earlier issue was cleared',()=>{
+ const issue={stage:'prepare',documentId:'reserve',documentName:'Reserve approval',message:'Missing ledger',occurredAt:'first'};
+ const options={...controls,submissionIssues:[issue],clearedIssues:[delivery.submissionIssueKey(issue)]};
+ assert.equal(render([],{controls:options}),'');
+ assert.match(render([],{controls:{...options,submissionIssues:[{...issue,occurredAt:'second'}]}}),/Missing ledger/);
+});

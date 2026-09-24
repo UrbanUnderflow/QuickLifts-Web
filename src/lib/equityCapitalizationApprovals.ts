@@ -109,12 +109,14 @@ export async function readCapitalizationExecutionState(db: any, transaction: any
       || terms.founderReturnDocumentId !== CAPITALIZATION_APPROVAL_IDS.founder || terms.planContentHash !== hash(plan.document.content)) throw fail('The EIP text no longer matches the plan attached to this approval.');
     if (plan.document.approvalStatus === 'approved' || plan.document.effectiveAt) throw fail('This EIP already has an adoption record. Review it before signing another approval.');
     const pools = await transaction.get(db.collection('equity-pool'));
-    if (pools.docs.length !== 1) throw fail('Select one existing equity reserve ledger before recording this approval.');
-    const pool = {...pools.docs[0].data(), id: pools.docs[0].id};
-    if (!Number.isSafeInteger(pool.totalReserved) || ![1000000,1600000].includes(pool.totalReserved) || !Number.isSafeInteger(pool.exercised || 0) || (pool.exercised || 0) < 0) throw fail('The equity reserve ledger changed. Review it before adopting this plan.');
+    if (pools.docs.length > 1) throw fail('Multiple equity reserve ledgers exist. Reconcile them before recording this approval.');
+    // Some companies have plan documents but no bookkeeping ledger yet. Create it only at execution.
+    const createPool = pools.docs.length === 0;
+    const pool = createPool ? {id: 'pil-eip', totalReserved: 0, exercised: 0} : {...pools.docs[0].data(), id: pools.docs[0].id};
+    if (!createPool && (!Number.isSafeInteger(pool.totalReserved) || ![1000000,1600000].includes(pool.totalReserved) || !Number.isSafeInteger(pool.exercised || 0) || (pool.exercised || 0) < 0)) throw fail('The equity reserve ledger changed. Review it before adopting this plan.');
     const balances = deriveEquityBalances(holders, 1600000, pool.exercised || 0, 10000000);
     if (balances.available === null || balances.available < 0 || balances.unallocated === null || balances.unallocated < 400000) throw fail('The proposed EIP reserve leaves insufficient authorized shares for the separately approved strategic reserve.');
-    return {kind: 'reserve' as const, eventRef, plan, pool, poolRef: db.collection('equity-pool').doc(pool.id), balances};
+    return {kind: 'reserve' as const, eventRef, plan, pool, createPool, poolRef: db.collection('equity-pool').doc(pool.id), balances};
   }
   assertPrerequisites(document, [CAPITALIZATION_APPROVAL_IDS.founder, CAPITALIZATION_APPROVAL_IDS.reserve, CAPITALIZATION_APPROVAL_IDS.board]);
   const reserve = await readDocument(db, transaction, CAPITALIZATION_APPROVAL_IDS.reserve);
@@ -157,9 +159,11 @@ export function recordCapitalizationExecution(transaction: any, state: any, opti
       effectiveAt: timestamp, approvedBy: uid, updatedAt: timestamp};
     const nextPool = {totalReserved: 1600000, granted: state.balances.committed, available: state.balances.available,
       approvalDocumentId: documentId, approvalRequestId: requestId, approvedAt: timestamp, updatedAt: timestamp};
-    transaction.update(state.plan.ref, nextPlan); transaction.update(state.poolRef, nextPool);
+    transaction.update(state.plan.ref, nextPlan);
+    if (state.createPool) transaction.create(state.poolRef, {...nextPool, exercised: 0, createdAt: timestamp});
+    else transaction.update(state.poolRef, nextPool);
     transaction.create(state.eventRef, {...proof, eventType: 'equity_reserve_approval', planDocumentId: CAPITALIZATION_APPROVAL_IDS.plan,
       poolId: state.pool.id, reserveShares: 1600000, planContentHash: hash(state.plan.document.content),
-      before: {planApprovalStatus: state.plan.document.approvalStatus || null, pool: state.pool}, after: {plan: nextPlan, pool: nextPool}});
+      before: {planApprovalStatus: state.plan.document.approvalStatus || null, pool: state.createPool ? null : state.pool}, after: {plan: nextPlan, pool: nextPool}});
   }
 }

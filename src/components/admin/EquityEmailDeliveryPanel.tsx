@@ -11,9 +11,18 @@ export type DeliveryRequest = {
 };
 export type SubmissionIssue = {stage: 'prepare' | 'send'; documentId: string; documentName: string; requestId?: string; recipientName?: string; recipientEmail?: string; message: string; occurredAt?: string};
 export type DeliveryControls = {
+  clearedIssues?: string[]; clearIssue?: (key: string) => void;
   submissionIssues: SubmissionIssue[]; recordSubmissionIssue: (issue: SubmissionIssue) => void; clearSubmissionIssue: (documentId: string, requestId?: string) => void;
   check: (requestIds?: string[]) => Promise<void>; checkingIds: string[]; error: string;
 };
+// Ignore polling timestamps: a new attempt or changed outcome must show again.
+export function deliveryIssueKey(request: DeliveryRequest) {
+  const state = getEquityEmailDelivery(request);
+  return JSON.stringify([request.packageId || request.id, state.attemptId || state.messageId || 'legacy', state.status, state.reason || '', state.unresolvedFailure?.reason || '', state.eventAt || '', state.checkError || '']);
+}
+export function submissionIssueKey(issue: SubmissionIssue) {
+  return JSON.stringify(['submission', issue.stage, issue.documentId, issue.requestId || '', issue.occurredAt || '', issue.message]);
+}
 export function deliveryRequests(requests: DeliveryRequest[]) {
   const roots = new Map(requests.map(request => [request.id, request]));
   return [...new Map(requests.filter(request => !request.invalidatedAt).map(request => {
@@ -43,6 +52,7 @@ export function useEquityDeliveryChecks(requests: DeliveryRequest[], applyResult
   const [error, setError] = useState('');
   const [submissionIssues, setSubmissionIssues] = useState<SubmissionIssue[]>([]);
   const issueRef = useRef<SubmissionIssue[]>([]);
+  const [clearedIssues, setClearedIssues] = useState<string[]>([]);
   const storageKey = auth.currentUser?.uid ? `equity-email-submission:${isUsingDevFirebase() ? 'dev' : 'prod'}:${auth.currentUser.uid}` : '';
   const storeIssues = useCallback((issues: SubmissionIssue[]) => {
     issueRef.current = issues; setSubmissionIssues(issues);
@@ -52,6 +62,14 @@ export function useEquityDeliveryChecks(requests: DeliveryRequest[], applyResult
     let issues: SubmissionIssue[] = [];
     if (storageKey) {try {const saved = JSON.parse(window.localStorage.getItem(storageKey) || '[]'); if (Array.isArray(saved)) issues = saved.filter(item => item && ['prepare', 'send'].includes(item.stage) && typeof item.documentId === 'string' && typeof item.message === 'string');} catch {}}
     issueRef.current = issues; setSubmissionIssues(issues);
+    try {const cleared = JSON.parse(window.localStorage.getItem(`${storageKey}:cleared`) || '[]'); setClearedIssues(Array.isArray(cleared) ? cleared.filter(key => typeof key === 'string') : []);} catch {setClearedIssues([]);}
+  }, [storageKey]);
+  const clearIssue = useCallback((key: string) => {
+    setClearedIssues(previous => {
+      const next = [...new Set([...previous, key])];
+      if (storageKey) {try {window.localStorage.setItem(`${storageKey}:cleared`, JSON.stringify(next));} catch {}}
+      return next;
+    });
   }, [storageKey]);
   const recordSubmissionIssue = useCallback((issue: SubmissionIssue) => {
     storeIssues([...issueRef.current.filter(item => !(item.stage === issue.stage && item.documentId === issue.documentId && item.requestId === issue.requestId)), {...issue, occurredAt: new Date().toISOString()}]);
@@ -99,7 +117,7 @@ export function useEquityDeliveryChecks(requests: DeliveryRequest[], applyResult
     }, delay));
     return () => timers.forEach(timer => window.clearTimeout(timer));
   }, [sendKey, check]);
-  return {check, checkingIds, error, submissionIssues, recordSubmissionIssue, clearSubmissionIssue};
+  return {check, checkingIds, error, submissionIssues, recordSubmissionIssue, clearSubmissionIssue, clearedIssues, clearIssue};
 }
 
 export function emailDeliveryIsUnconfirmed(request: DeliveryRequest | undefined) {
@@ -129,8 +147,8 @@ const dateLabel = (value: any) => {
 export default function EquityEmailDeliveryPanel({requests, controls, compact = false, heading = 'Email delivery', documentIds}: {
   requests: DeliveryRequest[]; controls: DeliveryControls; compact?: boolean; heading?: string; documentIds?: string[];
 }) {
-  const tracked = deliveryRequests(requests);
-  const issues = (controls.submissionIssues || []).filter(issue => documentIds ? documentIds.includes(issue.documentId) : compact ? requests.some(request => (request.packageId || request.id) === issue.requestId || request.equityDocumentId === issue.documentId) : true).filter(issue => !issue.requestId || !tracked.some(request => (request.packageId || request.id) === issue.requestId && ['accepted', 'delivered', 'failed', 'deferred'].includes(getEquityEmailDelivery(request).status)));
+  const tracked = deliveryRequests(requests).filter(request => !controls.clearedIssues?.includes(deliveryIssueKey(request)));
+  const issues = (controls.submissionIssues || []).filter(issue => !controls.clearedIssues?.includes(submissionIssueKey(issue))).filter(issue => documentIds ? documentIds.includes(issue.documentId) : compact ? requests.some(request => (request.packageId || request.id) === issue.requestId || request.equityDocumentId === issue.documentId) : true).filter(issue => !issue.requestId || !tracked.some(request => (request.packageId || request.id) === issue.requestId && ['accepted', 'delivered', 'failed', 'deferred'].includes(getEquityEmailDelivery(request).status)));
   if (!tracked.length && !issues.length) return null;
   const failed = tracked.filter(emailDeliveryNeedsAttention);
   const attentionCount = failed.length + issues.length;
@@ -138,13 +156,13 @@ export default function EquityEmailDeliveryPanel({requests, controls, compact = 
   const checking = tracked.some(request => controls.checkingIds.includes(request.packageId || request.id)) || issues.some(issue => issue.requestId && controls.checkingIds.includes(issue.requestId));
   return <section aria-label={heading} className={`rounded-xl border p-4 ${attentionCount ? 'border-red-500/50 bg-red-950/30' : 'border-zinc-700 bg-zinc-900/40'}`}>
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <p className={`text-sm font-semibold flex items-center gap-2 ${attentionCount ? 'text-red-200' : 'text-zinc-200'}`}>{attentionCount ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}{attentionCount ? `${attentionCount} email${attentionCount === 1 ? '' : 's'} need attention` : heading}</p>
+      <p className={`text-sm font-semibold flex items-center gap-2 ${attentionCount ? 'text-red-200' : 'text-zinc-200'}`}>{attentionCount ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}{attentionCount ? `${attentionCount} email${attentionCount === 1 ? ' needs' : 's need'} attention` : heading}</p>
       {(tracked.length > 0 || issues.some(issue => issue.requestId)) && <button type="button" disabled={checking} onClick={event => {event.stopPropagation(); void controls.check([...tracked.map(request => request.packageId || request.id), ...issues.flatMap(issue => issue.requestId ? [issue.requestId] : [])]);}} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-600 px-2.5 py-1.5 text-xs text-zinc-200 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />{checking ? 'Checking Brevo…' : 'Check delivery status'}</button>}
     </div>
-    {attentionCount > 0 && <p className="mt-2 text-xs text-red-100/80">This alert stays here until the submission issue is resolved or delivery is confirmed. Review the reason before trying again.</p>}
+    {attentionCount > 0 && <p className="mt-2 text-xs text-red-100/80">Issues stay visible until resolved or manually cleared. Clearing an issue does not mark the email delivered or the document signed.</p>}
     {rows.length === 0 && issues.length === 0 && <p className="mt-2 text-xs text-emerald-300">Brevo confirms delivery for {tracked.length} email{tracked.length === 1 ? '' : 's'}.</p>}
     <div className="space-y-3">{issues.map(issue => <div key={`${issue.stage}:${issue.documentId}:${issue.requestId || ''}`} className="pt-3 text-xs">
-      <p className="font-medium text-zinc-100">{issue.documentName}</p>
+      <div className="flex items-start justify-between gap-3"><p className="font-medium text-zinc-100">{issue.documentName}</p><button type="button" className="shrink-0 text-xs text-zinc-300 underline hover:text-white" onClick={() => controls.clearIssue?.(submissionIssueKey(issue))}>Clear this issue</button></div>
       {issue.recipientEmail && <p className="mt-1 break-words text-zinc-300">{issue.recipientName ? `${issue.recipientName} · ` : ''}{issue.recipientEmail}</p>}
       <p className="mt-1 text-red-200">{issue.stage === 'prepare' ? 'Could not prepare request. No email was submitted.' : 'Email submission could not be confirmed.'}</p>
       <p className="mt-1 break-words text-red-100/90">{issue.message}</p>
@@ -156,7 +174,7 @@ export default function EquityEmailDeliveryPanel({requests, controls, compact = 
       const reason = state.reason || failure?.reason;
       const checkedAt = dateLabel(state.checkedAt);
       return <div key={request.packageId || request.id} className="pt-3 text-xs">
-        <p className="font-medium text-zinc-100">{request.documentName || 'Signature request'}{request.previewMode ? ' (preview)' : ''}</p>
+        <div className="flex items-start justify-between gap-3"><p className="font-medium text-zinc-100">{request.documentName || 'Signature request'}{request.previewMode ? ' (preview)' : ''}</p>{state.status !== 'delivered' && <button type="button" className="shrink-0 text-xs text-zinc-300 underline hover:text-white" onClick={() => controls.clearIssue?.(deliveryIssueKey(request))}>Clear this issue</button>}</div>
         <p className="mt-1 break-words text-zinc-300">{request.recipientName ? `${request.recipientName} · ` : ''}{state.recipientEmail || request.recipientEmail}</p>
         <p className={`mt-1 flex gap-1.5 items-center ${attention ? 'text-red-200' : state.status === 'delivered' ? 'text-emerald-300' : 'text-amber-200'}`}>{attention ? <AlertCircle className="h-3.5 w-3.5 shrink-0" /> : <Clock className="h-3.5 w-3.5 shrink-0" />}{emailDeliveryLabel(request)}</p>
         {reason && <p className={`mt-1 break-words ${attention ? 'text-red-100/90' : 'text-zinc-300'}`}>{reason}</p>}

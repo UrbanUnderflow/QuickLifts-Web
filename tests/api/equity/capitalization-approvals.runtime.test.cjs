@@ -103,3 +103,16 @@ test('sending an approval rechecks its dependency and reviewed action immediatel
 test('a retry with missing ledger audit never recreates a completed founder return',async()=>{
  const s=setup();const requestId=await s.complete(ids.founder);s.rows.delete(`equity-ledger-events/${ids.founder}`);const writes=s.writes();const result=await s.execute(requestId);assert.equal(result.statusCode,409,result.body);assert.equal(s.writes(),writes);assert.equal(s.rows.get('equity-stakeholders/founder-ledger').totalShares,8000000);
 });
+test('missing reserve ledger is created only by verified execution, and certificate accepts it',async()=>{
+ const s=setup();s.rows.delete('equity-pool/pool');await s.complete(ids.founder);
+ const prepared=await s.invoke(ids.reserve);assert.equal(prepared.statusCode,200,prepared.body);
+ assert.equal(s.rows.has('equity-pool/pil-eip'),false);
+ const signed=await s.execute(JSON.parse(prepared.body).delivery.documentId);assert.equal(signed.statusCode,200,signed.body);
+ const pool=s.rows.get('equity-pool/pil-eip');assert.equal(pool.totalReserved,1600000);assert.equal(pool.granted,50000);assert.equal(pool.available,1550000);assert.equal(pool.exercised,0);
+ assert.equal(s.rows.get(`equity-ledger-events/${ids.reserve}`).before.pool,null);
+ assert.equal((await s.invoke(ids.cap)).statusCode,200);
+});
+test('multiple reserve ledgers still block approval without writing',async()=>{
+ const s=setup();await s.complete(ids.founder);s.rows.set('equity-pool/duplicate',{...s.rows.get('equity-pool/pool')});
+ const writes=s.writes();const result=await s.invoke(ids.reserve);assert.equal(result.statusCode,409);assert.match(result.body,/Multiple equity reserve ledgers/);assert.equal(s.writes(),writes);
+});
