@@ -1,11 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { authorizeLinearAthlete } from '../curriculum/runtime';
-import { evidenceJournalEnabled, EvidenceError, evidenceEntries, validEvidenceId } from '../../../lib/evidence-journal';
+import { EvidenceError, evidenceEntries, validEvidenceId } from '../../../lib/evidence-journal';
 
-export const createEvidenceEventHandler = (deps: { authorize?: typeof authorizeLinearAthlete; now?: () => number; enabled?: () => boolean } = {}) => async (req: NextApiRequest, res: NextApiResponse) => {
+export const createEvidenceEventHandler = (deps: { authorize?: typeof authorizeLinearAthlete; now?: () => number } = {}) => async (req: NextApiRequest, res: NextApiResponse) => {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!(deps.enabled || evidenceJournalEnabled)()) return res.status(503).json({ error: 'Your evidence journal is not available yet. Please try again later.' });
   let identity;
   try { identity = await (deps.authorize || authorizeLinearAthlete)(req); if (!identity.uid) throw Error(); }
   catch { return res.status(401).json({ error: 'Sign in to open your evidence.' }); }
