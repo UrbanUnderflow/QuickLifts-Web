@@ -24,7 +24,7 @@ test('validates source and preserves reflection text; ignores supplied ownership
 });
 test('both endpoints reject unauthenticated reads/writes before database access', async () => {
   for (const create of [createEvidenceJournalHandler, createEvidenceEventHandler]) {
-    const res = response(); await create({ enabled: () => true, authorize: async () => { throw Error('unauthorized'); } })({ method: 'POST', body: {} } as any, res as any); assert.equal(res.code, 401);
+    const res = response(); await create({ authorize: async () => { throw Error('unauthorized'); } })({ method: 'POST', body: {} } as any, res as any); assert.equal(res.code, 401);
   }
 });
 test('retries are idempotent and conflicting IDs cannot overwrite an entry', async () => {
@@ -42,11 +42,11 @@ test('saving the same assignment from another device returns original entry', as
 });
 test('events are owner scoped, deduplicated and exclude reflection text', async () => {
   const { db, records } = database(); await saveEvidence(db, 'owner', parseEvidence({ entryId: id, moment: 'Private text' }), 100);
-  const handler = createEvidenceEventHandler({ enabled: () => true, authorize: async () => ({ uid: 'owner', db }), now: () => 200 });
+  const handler = createEvidenceEventHandler({ authorize: async () => ({ uid: 'owner', db }), now: () => 200 });
   for (let i = 0; i < 2; i++) { const res = response(); await handler({ method: 'POST', body: { entryId: id, eventId: secondId, event: 'used', moment: 'Private text' } } as any, res as any); assert.equal(res.code, 200); }
   const base = `pulsecheck-evidence-journals/owner/entries/${id}`;
   assert.equal(records.get(base).useCount, 1); assert.deepEqual(records.get(`${base}/events/${secondId}`), { event: 'used', createdAt: 200 });
-  const res = response(); await createEvidenceEventHandler({ enabled: () => true, authorize: async () => ({ uid: 'other', db }) })({ method: 'POST', body: { entryId: id, eventId: secondId, event: 'used' } } as any, res as any); assert.equal(res.code, 404);
+  const res = response(); await createEvidenceEventHandler({ authorize: async () => ({ uid: 'other', db }) })({ method: 'POST', body: { entryId: id, eventId: secondId, event: 'used' } } as any, res as any); assert.equal(res.code, 404);
 });
 test('rules exclude evidence from permissive compatibility fallback', () => {
   const rules = readFileSync('firestore.rules', 'utf8');
@@ -58,7 +58,7 @@ test('listing pages only within owner and deleting cannot select another account
   const docs = [{ id, data: () => ({ id, moment: 'Mine' }) }, { id: secondId, data: () => ({ id: secondId }) }];
   const ref = (path: string): any => ({ path, collection: (s: string) => ref(`${path}/${s}`), doc: (s: string) => ref(`${path}/${s}`), orderBy: (...args: any[]) => { calls.push(args); return ref(path); }, limit: (n: number) => { calls.push(n); return ref(path); }, get: async () => { paths.push(path); return { docs }; } });
   const db: any = { collection: (s: string) => ref(s), recursiveDelete: async (r: any) => paths.push(r.path) };
-  const handler = createEvidenceJournalHandler({ enabled: () => true, authorize: async () => ({ uid: 'owner', db }) });
+  const handler = createEvidenceJournalHandler({ authorize: async () => ({ uid: 'owner', db }) });
   const res = response(); await handler({ method: 'GET', query: { limit: '1', uid: 'victim' } } as any, res as any);
   assert.equal(res.code, 200); assert.equal(res.body.entries.length, 1); assert.equal(res.body.nextCursor, id); assert.ok(calls.includes(2));
   const deleted = response(); await handler({ method: 'DELETE', query: { entryId: id, uid: 'victim' } } as any, deleted as any);
@@ -66,14 +66,40 @@ test('listing pages only within owner and deleting cannot select another account
   const invalid = response(); await handler({ method: 'GET', query: { limit: '99999' } } as any, invalid as any); assert.equal(invalid.code, 400);
 });
 
-test('disabled journal rejects every operation before authorization or database access', async () => {
-  let touched = false;
-  for (const [create, methods] of [[createEvidenceJournalHandler, ['GET', 'POST', 'DELETE']], [createEvidenceEventHandler, ['POST']]] as const) {
-    for (const method of methods) {
-      const res = response();
-      await create({ enabled: () => false, authorize: async () => { touched = true; throw Error(); } })({ method } as any, res as any);
-      assert.equal(res.code, 503);
-    }
-  }
-  assert.equal(touched, false);
+
+test('journal types validate per type and default to evidence', () => {
+  assert.equal(parseEvidence({ entryId: id, moment: 'a' }).type, 'evidence');
+  assert.equal(parseEvidence({ entryId: id, moment: 'a', type: 'gratitude', action: 'It mattered' }).type, 'gratitude');
+  assert.throws(() => parseEvidence({ entryId: id, moment: 'a', type: 'diary' }), /valid journal type/);
+  assert.equal(parseEvidence({ entryId: id, moment: 'a'.repeat(8000), type: 'freewrite' }).moment.length, 8000);
+  assert.throws(() => parseEvidence({ entryId: id, moment: 'a'.repeat(4001), type: 'gratitude' }));
+  assert.throws(() => parseEvidence({ entryId: id, moment: 'a', type: 'freewrite', action: 'second field' }), /one field/);
+  assert.throws(() => parseEvidence({ entryId: id, moment: 'a', type: 'gratitude', sourceAssignmentId: 'assignment-1' }), /evidence/);
+});
+test('entries saved before types existed read as evidence and retry cleanly', async () => {
+  const { db, records } = database(); const input = parseEvidence({ entryId: id, moment: 'Old entry' });
+  const { type, ...legacy } = input; records.set(`pulsecheck-evidence-journals/owner/entries/${id}`, { ...legacy, createdAt: 1, revisitCount: 0, useCount: 0 });
+  const retry = await saveEvidence(db, 'owner', input, 200);
+  assert.equal(retry.created, false); assert.equal(retry.entry.type, 'evidence');
+});
+test('type filter scans newest first, includes legacy evidence and pages with a cursor', async () => {
+  const stored = [
+    { id: 'a', type: 'gratitude' }, { id: 'b' }, { id: 'c', type: 'freewrite' }, { id: 'd', type: 'evidence' }, { id: 'e', type: 'gratitude' },
+  ].map((data, i) => ({ id: `ef1be120-cc70-4abc-8ccc-e8b64dace86${i}`, data: () => ({ ...data, id: `ef1be120-cc70-4abc-8ccc-e8b64dace86${i}` }) }));
+  const query = (after: number, size: number): any => ({
+    orderBy: () => query(after, size), limit: (n: number) => query(after, n),
+    startAfter: (doc: any) => query(stored.findIndex(s => s.id === doc.id) + 1, size),
+    get: async () => ({ docs: stored.slice(after, after + size) }),
+  });
+  const entries: any = { ...query(0, 50), doc: (docId: string) => ({ get: async () => ({ exists: stored.some(s => s.id === docId), id: docId }) }) };
+  const db: any = { collection: () => ({ doc: () => ({ collection: () => entries }) }) };
+  const handler = createEvidenceJournalHandler({ authorize: async () => ({ uid: 'owner', db }) });
+  const first = response(); await handler({ method: 'GET', query: { type: 'evidence', limit: '1' } } as any, first as any);
+  assert.equal(first.code, 200); assert.deepEqual(first.body.entries.map((e: any) => e.type), ['evidence']);
+  assert.equal(first.body.entries[0].id, stored[1].id); assert.equal(first.body.nextCursor, stored[1].id);
+  const second = response(); await handler({ method: 'GET', query: { type: 'evidence', limit: '1', cursor: first.body.nextCursor } } as any, second as any);
+  assert.equal(second.body.entries[0].id, stored[3].id); assert.equal(second.body.nextCursor, null);
+  const all = response(); await handler({ method: 'GET', query: {} } as any, all as any);
+  assert.equal(all.body.entries[1].type, 'evidence');
+  const invalid = response(); await handler({ method: 'GET', query: { type: 'diary' } } as any, invalid as any); assert.equal(invalid.code, 400);
 });

@@ -38,13 +38,18 @@ import {
     Maximize2,
     Minimize2,
     X,
+    Dumbbell,
+    Radar,
+    Link2,
+    Stethoscope,
+    ArrowRight,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────
 
-type DemoAct = 'intro' | 'act1' | 'act2' | 'act2b' | 'act3' | 'act4' | 'act5';
+type DemoAct = 'overview' | 'merge' | 'personas' | 'intro' | 'act1' | 'act2' | 'act2b' | 'act3' | 'act4' | 'act5';
 
 interface ScriptMessage {
     role: 'nora' | 'athlete' | 'system';
@@ -1158,6 +1163,435 @@ const AnimatedDataStream: React.FC<{ delay?: number; duration?: number; color?: 
         animate={{ left: '100%', opacity: [0, 1, 1, 0], scale: [0.5, 1, 1, 0.5] }}
         transition={{ duration, delay, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
     />
+);
+
+const OVERVIEW_STAGES = [
+    { label: 'Train', icon: Dumbbell, detail: 'Daily mental reps with Nora' },
+    { label: 'Detect', icon: Radar, detail: 'Signals surface early' },
+    { label: 'Connect', icon: Link2, detail: 'Consent-based handoff' },
+    { label: 'Care', icon: Stethoscope, detail: 'Clinical follow-through' },
+];
+
+const DemoOverview: React.FC<{ onStart: () => void }> = ({ onStart }) => (
+    <div onClick={onStart} className="min-h-full flex flex-col items-center justify-center px-4 sm:px-8 py-12 cursor-pointer">
+        <div className="w-full max-w-5xl">
+            {/* Stage flow */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-0">
+                {OVERVIEW_STAGES.map((stage, i) => {
+                    const Icon = stage.icon;
+                    const isAuntEdna = i >= 2;
+                    return (
+                        <motion.div
+                            key={stage.label}
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.15 + i * 0.25, duration: 0.5 }}
+                            className="relative flex items-center"
+                        >
+                            <div className="flex-1 flex flex-col items-center text-center gap-2 md:px-3">
+                                <div
+                                    className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${isAuntEdna
+                                        ? 'bg-red-500/10 border-red-500/30'
+                                        : 'bg-[#E0FE10]/10 border-[#E0FE10]/25'
+                                        }`}
+                                >
+                                    <Icon className={`w-6 h-6 ${isAuntEdna ? 'text-red-400' : 'text-[#E0FE10]'}`} />
+                                </div>
+                                <div className="text-2xl md:text-3xl font-bold text-white tracking-tight">{stage.label}</div>
+                                <div className="text-xs text-zinc-500">{stage.detail}</div>
+                            </div>
+                            {i < OVERVIEW_STAGES.length - 1 && (
+                                <motion.div
+                                    initial={{ opacity: 0, x: -6 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: 0.35 + i * 0.25, duration: 0.4 }}
+                                    className="hidden md:block absolute right-0 top-7 translate-x-1/2 -translate-y-1/2"
+                                >
+                                    <ArrowRight className="w-5 h-5 text-zinc-600" />
+                                </motion.div>
+                            )}
+                        </motion.div>
+                    );
+                })}
+            </div>
+
+            {/* Platform split: PulseCheck owns Train/Detect, AuntEdna owns Connect/Care */}
+            <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.3, duration: 0.6 }}
+                className="mt-10 grid grid-cols-1 md:grid-cols-4"
+            >
+                <div className="md:col-span-2 md:pr-6 flex flex-col items-center">
+                    <div className="w-full h-3 border-x border-b border-[#E0FE10]/30 rounded-b-lg" />
+                    <div className="mt-6 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/15 flex items-center justify-center">
+                            <Brain className="w-5 h-5 text-[#E0FE10]" />
+                        </div>
+                        <span className="text-2xl font-bold text-white">PulseCheck</span>
+                    </div>
+                    <div className="mt-4 flex flex-wrap justify-center gap-2">
+                        {['Athletes', 'Coaches', 'Trainers'].map((audience) => (
+                            <span
+                                key={audience}
+                                className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-[#E0FE10]/10 border border-[#E0FE10]/25 text-[#E0FE10]"
+                            >
+                                {audience}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="relative md:col-span-2 md:pl-6 mt-10 md:mt-0 flex flex-col items-center">
+                    {/* Separator */}
+                    <div className="hidden md:block absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-zinc-700/0 via-zinc-600 to-zinc-700/0" />
+                    <div className="md:hidden absolute -top-5 left-8 right-8 h-px bg-gradient-to-r from-zinc-700/0 via-zinc-600 to-zinc-700/0" />
+                    <div className="w-full h-3 border-x border-b border-red-500/35 rounded-b-lg" />
+                    <div className="mt-6 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-red-500/15 flex items-center justify-center">
+                            <Shield className="w-5 h-5 text-red-400" />
+                        </div>
+                        <span className="text-2xl font-bold text-white">AuntEdna</span>
+                    </div>
+                    <div className="mt-4 flex flex-wrap justify-center gap-2">
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-red-500/10 border border-red-500/30 text-red-400">
+                            Clinical Staff
+                        </span>
+                    </div>
+                </div>
+            </motion.div>
+        </div>
+    </div>
+);
+
+// Clockwise around the athlete, starting at the top.
+const ATHLETIC_MIND_RING = [
+    { label: 'Train', icon: Dumbbell, angle: -90, color: '#E0FE10' },
+    { label: 'Detect', icon: Radar, angle: 0, color: '#E0FE10' },
+    { label: 'Connect', icon: Link2, angle: 90, color: '#f87171' },
+    { label: 'Care', icon: Stethoscope, angle: 180, color: '#f87171' },
+];
+
+const AthleticMindMerge: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
+    // 0: platforms apart, 1: platforms fuse, 2: ring wraps the athlete, 3: title + audiences
+    const [phase, setPhase] = useState(0);
+
+    useEffect(() => {
+        const timers = [
+            setTimeout(() => setPhase(1), 500),
+            setTimeout(() => setPhase(2), 1500),
+            setTimeout(() => setPhase(3), 2600),
+        ];
+        return () => timers.forEach(clearTimeout);
+    }, []);
+
+    const ringSize = 300;
+    const radius = ringSize / 2;
+
+    return (
+        <div onClick={onContinue} className="min-h-full flex flex-col items-center justify-center px-4 sm:px-8 py-10 cursor-pointer overflow-hidden">
+            {/* Title */}
+            <div className="h-16 flex items-center justify-center">
+                <AnimatePresence>
+                    {phase >= 2 && (
+                        <motion.h2
+                            initial={{ opacity: 0, y: 12, filter: 'blur(8px)' }}
+                            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                            transition={{ duration: 0.9, ease: 'easeOut' }}
+                            className="text-4xl md:text-5xl font-bold tracking-tight text-center bg-clip-text text-transparent"
+                            style={{ backgroundImage: 'linear-gradient(90deg, #E0FE10 0%, #ffffff 50%, #f87171 100%)' }}
+                        >
+                            The Athletic Mind
+                        </motion.h2>
+                    )}
+                </AnimatePresence>
+            </div>
+
+            {/* Stage: platforms merge, then the ring wraps the athlete */}
+            <div className="relative mt-14" style={{ width: ringSize, height: ringSize }}>
+                {/* PulseCheck and AuntEdna slide together and fuse */}
+                {[
+                    { name: 'PulseCheck', icon: Brain, from: -220, tint: 'bg-[#E0FE10]/15', text: 'text-[#E0FE10]' },
+                    { name: 'AuntEdna', icon: Shield, from: 220, tint: 'bg-red-500/15', text: 'text-red-400' },
+                ].map((platform) => {
+                    const Icon = platform.icon;
+                    return (
+                        <motion.div
+                            key={platform.name}
+                            className="absolute left-1/2 top-1/2 flex items-center gap-2 whitespace-nowrap"
+                            initial={{ x: `calc(-50% + ${platform.from}px)`, y: '-50%', opacity: 0 }}
+                            animate={
+                                phase === 0
+                                    ? { x: `calc(-50% + ${platform.from}px)`, y: '-50%', opacity: 1, scale: 1 }
+                                    : { x: '-50%', y: '-50%', opacity: 0, scale: 0.4 }
+                            }
+                            transition={{ duration: phase === 0 ? 0.4 : 0.9, ease: [0.65, 0, 0.35, 1] }}
+                        >
+                            <div className={`w-10 h-10 rounded-xl ${platform.tint} flex items-center justify-center`}>
+                                <Icon className={`w-5 h-5 ${platform.text}`} />
+                            </div>
+                            <span className="text-2xl font-bold text-white">{platform.name}</span>
+                        </motion.div>
+                    );
+                })}
+
+                {/* Fusion flash */}
+                <AnimatePresence>
+                    {phase === 1 && (
+                        <motion.div
+                            key="flash"
+                            className="absolute left-1/2 top-1/2 w-24 h-24 -ml-12 -mt-12 rounded-full pointer-events-none"
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: [0, 1.6, 2.4], opacity: [0, 0.9, 0] }}
+                            transition={{ duration: 1.1, delay: 0.5, ease: 'easeOut' }}
+                            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(224,254,16,0.45) 35%, rgba(248,113,113,0.25) 60%, transparent 75%)' }}
+                        />
+                    )}
+                </AnimatePresence>
+
+                {phase >= 2 && (
+                    <>
+                        {/* Ring */}
+                        <svg className="absolute inset-0 overflow-visible" width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`}>
+                            <defs>
+                                <linearGradient id="athleticMindRing" x1="0" y1="0" x2="1" y2="1">
+                                    <stop offset="0%" stopColor="#E0FE10" />
+                                    <stop offset="100%" stopColor="#f87171" />
+                                </linearGradient>
+                            </defs>
+                            <motion.circle
+                                cx={radius}
+                                cy={radius}
+                                r={radius - 1}
+                                fill="none"
+                                stroke="url(#athleticMindRing)"
+                                strokeOpacity={0.55}
+                                strokeWidth={2}
+                                initial={{ pathLength: 0, rotate: -90 }}
+                                animate={{ pathLength: 1, rotate: -90 }}
+                                transition={{ duration: 1.2, ease: 'easeInOut' }}
+                                style={{ originX: '50%', originY: '50%' }}
+                            />
+                        </svg>
+
+                        {/* Pulse travelling around the ring */}
+                        <motion.div
+                            className="absolute inset-0 pointer-events-none"
+                            initial={{ opacity: 0, rotate: 0 }}
+                            animate={{ opacity: 1, rotate: 360 }}
+                            transition={{ opacity: { delay: 1.2, duration: 0.4 }, rotate: { duration: 6, repeat: Infinity, ease: 'linear', delay: 1.2 } }}
+                        >
+                            <div
+                                className="absolute left-1/2 -top-[5px] -ml-[5px] w-[10px] h-[10px] rounded-full bg-white"
+                                style={{ boxShadow: '0 0 12px 4px rgba(224,254,16,0.6)' }}
+                            />
+                        </motion.div>
+
+                        {/* Athlete core */}
+                        <motion.div
+                            className="absolute left-1/2 top-1/2 -ml-[60px] -mt-[60px] w-[120px] h-[120px] rounded-full flex flex-col items-center justify-center gap-1 border border-white/15 bg-zinc-900/90"
+                            initial={{ scale: 0.3, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ type: 'spring', stiffness: 180, damping: 16 }}
+                            style={{ boxShadow: '0 0 40px rgba(224,254,16,0.18), 0 0 60px rgba(248,113,113,0.12)' }}
+                        >
+                            <motion.div
+                                className="absolute inset-0 rounded-full"
+                                animate={{ opacity: [0.3, 0.7, 0.3] }}
+                                transition={{ duration: 3, repeat: Infinity }}
+                                style={{ background: 'radial-gradient(circle, rgba(224,254,16,0.18) 0%, rgba(248,113,113,0.1) 55%, transparent 75%)' }}
+                            />
+                            <Brain className="relative w-8 h-8 text-white" />
+                            <span className="relative text-xs font-bold uppercase tracking-widest text-white">Athlete</span>
+                        </motion.div>
+
+                        {/* Stages on the ring */}
+                        {ATHLETIC_MIND_RING.map((stage, i) => {
+                            const Icon = stage.icon;
+                            const rad = (stage.angle * Math.PI) / 180;
+                            const x = radius + radius * Math.cos(rad);
+                            const y = radius + radius * Math.sin(rad);
+                            return (
+                                <motion.div
+                                    key={stage.label}
+                                    className="absolute flex flex-col items-center gap-1.5"
+                                    style={{ left: x, top: y, translateX: '-50%', translateY: '-50%' }}
+                                    initial={{ opacity: 0, scale: 0.5 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ delay: 0.3 * i + 0.2, type: 'spring', stiffness: 220, damping: 18 }}
+                                >
+                                    <div
+                                        className="w-12 h-12 rounded-2xl flex items-center justify-center border bg-zinc-950"
+                                        style={{ borderColor: `${stage.color}55`, boxShadow: `0 0 18px ${stage.color}22` }}
+                                    >
+                                        <Icon className="w-5 h-5" style={{ color: stage.color }} />
+                                    </div>
+                                    <span className="text-sm font-bold text-white px-2 rounded bg-[#0a0a0b]">{stage.label}</span>
+                                </motion.div>
+                            );
+                        })}
+                    </>
+                )}
+            </div>
+
+            {/* Tagline + audiences */}
+            <div className="mt-14 min-h-[88px] flex flex-col items-center">
+                <AnimatePresence>
+                    {phase >= 3 && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.7 }}
+                            className="flex flex-col items-center"
+                        >
+                            <p className="text-sm md:text-base text-zinc-400 text-center max-w-md">
+                                One continuous system wrapped around the athlete, from daily training to clinical care.
+                            </p>
+                            <div className="mt-4 flex flex-wrap justify-center gap-2">
+                                {['Athletes', 'Coaches', 'Trainers'].map((audience) => (
+                                    <span
+                                        key={audience}
+                                        className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-[#E0FE10]/10 border border-[#E0FE10]/25 text-[#E0FE10]"
+                                    >
+                                        {audience}
+                                    </span>
+                                ))}
+                                <span className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-red-500/10 border border-red-500/30 text-red-400">
+                                    Clinical Staff
+                                </span>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </div>
+    );
+};
+
+// Stylized previews for the persona lineup. Deliberately free of numbers.
+const PersonaPhonePreview: React.FC = () => (
+    <div className="w-[150px] h-[300px] rounded-[28px] border-2 border-zinc-700/70 bg-gradient-to-b from-[#111113] to-[#0a0a0b] p-3 flex flex-col shadow-2xl shadow-black/60">
+        <div className="mx-auto w-12 h-3 rounded-full bg-zinc-800 mb-3" />
+        <div className="flex items-center gap-1.5 mb-3">
+            <div className="w-5 h-5 rounded-md bg-[#E0FE10]/15 flex items-center justify-center">
+                <Brain className="w-3 h-3 text-[#E0FE10]" />
+            </div>
+            <span className="text-[9px] font-bold text-white uppercase tracking-wider">Nora</span>
+        </div>
+        <div className="flex flex-col gap-2 flex-1">
+            <div className="self-start max-w-[85%] rounded-xl rounded-tl-sm bg-zinc-800/80 px-2 py-1.5">
+                <div className="h-1.5 w-20 rounded bg-zinc-500/70 mb-1" />
+                <div className="h-1.5 w-14 rounded bg-zinc-500/70" />
+            </div>
+            <div className="self-end max-w-[85%] rounded-xl rounded-tr-sm bg-[#E0FE10]/80 px-2 py-1.5">
+                <div className="h-1.5 w-16 rounded bg-black/40" />
+            </div>
+            <div className="self-start max-w-[85%] rounded-xl rounded-tl-sm bg-zinc-800/80 px-2 py-1.5">
+                <div className="h-1.5 w-20 rounded bg-zinc-500/70 mb-1" />
+                <div className="h-1.5 w-10 rounded bg-zinc-500/70" />
+            </div>
+            <div className="mt-auto mx-auto w-14 h-14 rounded-full border border-[#E0FE10]/40 flex items-center justify-center">
+                <Wind className="w-5 h-5 text-[#E0FE10]" />
+            </div>
+        </div>
+        <div className="mt-3 h-6 rounded-full bg-zinc-800/80" />
+    </div>
+);
+
+const PersonaDashboardPreview: React.FC<{ accent: string; variant: 'coach' | 'clinician' }> = ({ accent, variant }) => (
+    <div
+        className="w-[280px] h-[190px] rounded-xl border bg-[#0d0d0f] overflow-hidden flex shadow-2xl shadow-black/60"
+        style={{ borderColor: `${accent}40`, boxShadow: `0 0 40px ${accent}14` }}
+    >
+        {/* Sidebar */}
+        <div className="w-10 border-r border-white/5 flex flex-col items-center gap-2.5 py-3" style={{ background: `${accent}0d` }}>
+            <div className="w-5 h-5 rounded-md" style={{ background: `${accent}40` }} />
+            {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="w-4 h-1.5 rounded" style={{ background: i === 0 ? accent : 'rgba(255,255,255,0.12)' }} />
+            ))}
+        </div>
+        {/* Body */}
+        <div className="flex-1 p-3 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+                <div className="h-2 w-20 rounded bg-white/70" />
+                <div className="h-4 w-10 rounded-full" style={{ background: `${accent}30` }} />
+            </div>
+            {variant === 'coach' ? (
+                <>
+                    <div className="grid grid-cols-3 gap-1.5">
+                        {[0.9, 0.6, 0.75].map((w, i) => (
+                            <div key={i} className="rounded-md border border-white/5 bg-white/[0.03] p-1.5">
+                                <div className="h-1 w-8 rounded bg-white/25 mb-1.5" />
+                                <div className="h-1.5 rounded" style={{ width: `${w * 100}%`, background: accent }} />
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex-1 flex flex-col gap-1">
+                        {[0, 1, 2, 3].map((i) => (
+                            <div key={i} className="flex items-center gap-1.5 rounded border border-white/5 bg-white/[0.02] px-1.5 py-1">
+                                <div className="w-3 h-3 rounded-full bg-white/15" />
+                                <div className="h-1.5 w-16 rounded bg-white/30" />
+                                <div className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: i === 2 ? '#f59e0b' : accent }} />
+                            </div>
+                        ))}
+                    </div>
+                </>
+            ) : (
+                <>
+                    <div className="rounded-md border px-2 py-1.5 flex items-center gap-1.5" style={{ borderColor: `${accent}55`, background: `${accent}18` }}>
+                        <AlertTriangle className="w-3 h-3" style={{ color: accent }} />
+                        <div className="h-1.5 w-24 rounded" style={{ background: `${accent}aa` }} />
+                    </div>
+                    <div className="flex-1 grid grid-cols-2 gap-1.5">
+                        <div className="rounded-md border border-white/5 bg-white/[0.03] p-1.5 flex flex-col gap-1">
+                            <div className="h-1 w-10 rounded bg-white/25" />
+                            {[0, 1, 2].map((i) => (
+                                <div key={i} className="h-1.5 rounded bg-white/15" style={{ width: `${90 - i * 18}%` }} />
+                            ))}
+                        </div>
+                        <div className="rounded-md border border-white/5 bg-white/[0.03] p-1.5 flex flex-col gap-1">
+                            <div className="h-1 w-8 rounded bg-white/25" />
+                            {[0, 1, 2].map((i) => (
+                                <div key={i} className="flex items-center gap-1">
+                                    <div className="w-1.5 h-1.5 rounded-sm" style={{ background: i === 0 ? accent : 'rgba(255,255,255,0.2)' }} />
+                                    <div className="h-1.5 flex-1 rounded bg-white/15" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="h-5 rounded-md" style={{ background: `${accent}35` }} />
+                </>
+            )}
+        </div>
+    </div>
+);
+
+const PERSONAS = [
+    { title: 'Athlete', subtitle: 'Daily check-ins with Nora', color: '#E0FE10', preview: <PersonaPhonePreview /> },
+    { title: 'The Coach + Trainer', subtitle: 'Team readiness at a glance', color: '#4ade80', preview: <PersonaDashboardPreview accent="#4ade80" variant="coach" /> },
+    { title: 'Clinician', subtitle: 'Escalations with full context', color: '#a855f7', preview: <PersonaDashboardPreview accent="#a855f7" variant="clinician" /> },
+];
+
+const PersonaLineup: React.FC<{ onContinue: () => void }> = ({ onContinue }) => (
+    <div onClick={onContinue} className="min-h-full flex flex-col items-center justify-center px-4 sm:px-8 py-12 cursor-pointer">
+        <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-0">
+            {PERSONAS.map((persona, i) => (
+                <motion.div
+                    key={persona.title}
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + i * 0.3, duration: 0.6, ease: 'easeOut' }}
+                    className={`flex flex-col items-center text-center md:px-6 ${i > 0 ? 'md:border-l md:border-white/10' : ''}`}
+                >
+                    <h2 className="text-2xl md:text-3xl font-bold tracking-tight" style={{ color: persona.color }}>
+                        {persona.title}
+                    </h2>
+                    <p className="mt-1 text-xs text-zinc-500">{persona.subtitle}</p>
+                    <div className="mt-8 h-[300px] flex items-center justify-center">{persona.preview}</div>
+                </motion.div>
+            ))}
+        </div>
+    </div>
 );
 
 const PulseCheckToAuntEdnaFlow: React.FC = () => {
@@ -3748,7 +4182,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
 
 const PulseCheckDemo: React.FC = () => {
     // ── State ─────────────────────────────────────────────
-    const [currentAct, setCurrentAct] = useState<DemoAct>('intro');
+    const [currentAct, setCurrentAct] = useState<DemoAct>('overview');
     const [escalationStep, setEscalationStep] = useState(0);
     const [messages, setMessages] = useState<ChatMsg[]>([]);
     const [input, setInput] = useState('');
@@ -3970,7 +4404,7 @@ const PulseCheckDemo: React.FC = () => {
         setIsSpeaking(false);
     }, [stopVoiceOrb]);
 
-    const DEMO_ACT_ORDER: DemoAct[] = ['intro', 'act1', 'act2', 'act2b', 'act3', 'act4', 'act5'];
+    const DEMO_ACT_ORDER: DemoAct[] = ['overview', 'merge', 'personas', 'intro', 'act1', 'act2', 'act2b', 'act3', 'act4', 'act5'];
 
     const goBackOneStep = useCallback(() => {
         if (currentAct === 'act2b' && escalationStep > 0) {
@@ -4397,8 +4831,8 @@ const PulseCheckDemo: React.FC = () => {
                 {/* Noise texture */}
                 <div className="absolute inset-0 opacity-[0.015] bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxwYXRoIGQ9Ik0wIDBoMzAwdjMwMEgweiIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIuMDUiLz48L3N2Zz4=')]" />
 
-                {/* Header — hide on intro */}
-                {currentAct !== 'intro' && (
+                {/* Header — hide on the opening screens */}
+                {currentAct !== 'overview' && currentAct !== 'merge' && currentAct !== 'personas' && currentAct !== 'intro' && (
                     <header className="relative z-20 flex items-center justify-between px-6 py-4 backdrop-blur-xl bg-zinc-900/30 border-b border-white/5">
                         <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/15 flex items-center justify-center">
@@ -4521,6 +4955,45 @@ const PulseCheckDemo: React.FC = () => {
                 {/* Main Content */}
                 <main className="flex-1 relative z-10 overflow-hidden">
                     <AnimatePresence mode="wait">
+                        {/* ── OVERVIEW: Train → Detect → Connect → Care ──── */}
+                        {currentAct === 'overview' && (
+                            <motion.div
+                                key="overview"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0, scale: 0.97 }}
+                                className="h-full overflow-y-auto"
+                            >
+                                <DemoOverview onStart={() => setCurrentAct('merge')} />
+                            </motion.div>
+                        )}
+
+                        {/* ── MERGE: PulseCheck + AuntEdna become The Athletic Mind ──── */}
+                        {currentAct === 'merge' && (
+                            <motion.div
+                                key="merge"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0, scale: 0.97 }}
+                                className="h-full overflow-y-auto"
+                            >
+                                <AthleticMindMerge onContinue={() => setCurrentAct('personas')} />
+                            </motion.div>
+                        )}
+
+                        {/* ── PERSONAS: who the demo follows ──── */}
+                        {currentAct === 'personas' && (
+                            <motion.div
+                                key="personas"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0, scale: 0.97 }}
+                                className="h-full overflow-y-auto"
+                            >
+                                <PersonaLineup onContinue={() => setCurrentAct('intro')} />
+                            </motion.div>
+                        )}
+
                         {/* ── INTRO: Phone Notification ──── */}
                         {currentAct === 'intro' && (
                             <motion.div
