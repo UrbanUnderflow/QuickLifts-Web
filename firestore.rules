@@ -189,6 +189,7 @@ service cloud.firestore {
         'curriculum-notes',
         'pulsecheck-linear-curriculum',
         'pulsecheck-evidence-journals',
+        'pulsecheck-activity-records',
         'dailySentimentAnalysis',
         'document-notes',
         'escalation-conditions',
@@ -3494,6 +3495,11 @@ service cloud.firestore {
     // Versioned curriculum is server-only; API authorization and feature gates apply.
     // Private evidence is accessed only through the owner-authorized API.
     match /pulsecheck-evidence-journals/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Workout and food records are read and written only through the owner-authorized activity records API.
+    match /pulsecheck-activity-records/{document=**} {
       allow read, write: if false;
     }
 

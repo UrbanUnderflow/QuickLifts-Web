@@ -906,6 +906,7 @@ const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrgani
   legalName: data.legalName || '',
   organizationType: data.organizationType || '',
   invitePreviewImageUrl: data.invitePreviewImageUrl || '',
+  journalSafetyScreeningDisabled: data.journalSafetyScreeningDisabled === true,
   status: (data.status as PulseCheckOrganizationStatus) || 'provisioning',
   legacySource: data.legacySource || undefined,
   legacyCoachId: data.legacyCoachId || '',
@@ -3842,6 +3843,13 @@ export const pulseCheckProvisioningService = {
   async updateOrganizationInvitePreviewImage(organizationId: string, invitePreviewImageUrl: string): Promise<void> {
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizeString(organizationId)), {
       invitePreviewImageUrl: normalizeString(invitePreviewImageUrl),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async setOrganizationJournalSafetyScreening(organizationId: string, enabled: boolean): Promise<void> {
+    await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizeString(organizationId)), {
+      journalSafetyScreeningDisabled: !enabled,
       updatedAt: serverTimestamp(),
     });
   },

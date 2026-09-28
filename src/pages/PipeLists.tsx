@@ -4361,6 +4361,21 @@ const PipelinePage: NextPage = () => {
       const listsToPersist = purgeExpiredDeletedItems(lists.filter((list) => !sharedListIds.has(list.id)).map(normalizeList));
       const baseLists = personalSnapshotBaselineRef.current;
       if (!universityStageMigrationPending && pipeListSnapshotsEqual(listsToPersist, baseLists)) return;
+      // DEBUG-SAVE-LOOP
+      {
+        const findDiff = (a: unknown, b: unknown, path: string): string | null => {
+          if (pipeListSnapshotsEqual(a, b)) return null;
+          if (a && b && typeof a === 'object' && typeof b === 'object') {
+            const keys = Array.from(new Set([...Object.keys(a as object), ...Object.keys(b as object)]));
+            for (const key of keys) {
+              const found = findDiff((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key], `${path}.${key}`);
+              if (found) return found;
+            }
+          }
+          return `${path}: ${JSON.stringify(b)?.slice(0, 200)} -> ${JSON.stringify(a)?.slice(0, 200)}`;
+        };
+        console.warn('[PipeLists save-loop debug] personal save', { migration: universityStageMigrationPending, diff: findDiff(listsToPersist, baseLists, 'lists') });
+      }
       setPendingPersonalSaves((count) => count + 1);
       const previousSave = personalSaveQueueRef.current;
       let releaseSave: () => void = () => {};

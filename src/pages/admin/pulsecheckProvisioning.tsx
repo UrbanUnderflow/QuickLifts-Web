@@ -4005,6 +4005,24 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
                         {organizationExpanded ? (
                           <div className="pcp-org-overview">
+                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14, fontSize: 13, color: 'rgba(255,255,255,0.78)' }}>
+                              <input
+                                type="checkbox"
+                                checked={organization.journalSafetyScreeningDisabled !== true}
+                                onChange={async (event) => {
+                                  const enabled = event.target.checked;
+                                  try {
+                                    await pulseCheckProvisioningService.setOrganizationJournalSafetyScreening(organization.id, enabled);
+                                    await loadData();
+                                  } catch (error) {
+                                    setMessage({ type: 'error', text: 'Journal safety screening could not be updated. Please try again.' });
+                                  }
+                                }}
+                              />
+                              <span>
+                                <strong>Journal safety screening:</strong> private journal entries are checked for safety and routed through Tier 2 and Tier 3. Turn off only with clinical sign-off for this organization.
+                              </span>
+                            </label>
                             <div className="pcp-org-grid">
                               <div className="pcp-card">
                                 <button

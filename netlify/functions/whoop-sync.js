@@ -1,3 +1,4 @@
+const { nudgeForNewWhoopWorkouts } = require('./utils/connected-session-nudge');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
   CONNECTIONS_COLLECTION,
@@ -799,6 +800,14 @@ async function syncWhoopForConnection({ firestore, connectionRef, connection, da
     lastName: whoopData.profile?.last_name || freshConnection.lastName || null,
   }, { merge: true });
   await batch.commit();
+
+  // Invite the athlete to add how a new workout went. Never blocks or fails the sync.
+  const trainingRecord = sourceRecordDocs.find((record) => record.domain === 'training');
+  if (trainingRecord) {
+    let messaging = null;
+    try { messaging = admin.messaging(); } catch (_error) { messaging = null; }
+    await nudgeForNewWhoopWorkouts({ firestore, messaging, userId, workouts: trainingRecord.payload?.workouts });
+  }
 
   return {
     status: sourceRecordDocs.length > 0 ? 'synced' : 'waiting_for_data',

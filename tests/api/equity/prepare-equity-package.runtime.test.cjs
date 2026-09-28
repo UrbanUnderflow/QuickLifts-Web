@@ -63,3 +63,31 @@ test('known closing conditions do not bypass required signed board approval',asy
  const s=setup({award:{contractualBuybackRevision:1,closingRequirements:[condition]},boardSignature:{status:'pending'}});s.rows.set(`equity-documents/${id}`,s.rows.get('equity-documents/award'));
  const result=await s.invoke({documentIds:[id,'warrant']});assert.equal(result.statusCode,409,result.body);assert.equal(s.writes(),0);
 });
+
+test('reopening and resending reuse links and preserve signed children without writes', async () => {
+ const s=setup(); const first=JSON.parse((await s.invoke()).body);
+ const signedRoot=s.rows.get(`signingRequests/${first.deliveries[0].documentId}`);
+ for(const id of signedRoot.childRequestIds) Object.assign(s.rows.get(`signingRequests/${id}`),{status:'signed',signatureData:{typedName:'Director'}});
+ const before=JSON.stringify([...s.rows]);const writes=s.writes();s.advanceDay();
+ const response=await s.invoke({attemptId:'resend-2'});assert.equal(response.statusCode,200,response.body);
+ const result=JSON.parse(response.body);assert.equal(result.reused,true);assert.equal(result.deliveries.length,1);
+ assert.equal(result.deliveries[0].documentId,first.deliveries[1].documentId);
+ assert.notEqual(result.deliveries[0].sendAttemptId,first.deliveries[1].sendAttemptId);
+ assert.equal(JSON.stringify([...s.rows]),before);assert.equal(s.writes(),writes);
+ assert.equal((await s.invoke({attemptId:'resend-2'})).body,response.body);
+});
+for(const change of ['content','invalidated','roster','selection','missing-root','board']) test(`resend rejects ${change} without replacing the packet`,async()=>{
+ const s=setup();const first=JSON.parse((await s.invoke()).body);
+ if(change==='content')s.rows.get('equity-documents/award').content='Changed terms';
+ if(change==='invalidated')s.rows.get(`signingRequests/${first.requestIds[0]}`).invalidatedAt='2026-09-25';
+ if(change==='roster')s.rows.get('equity-documents/award').preparedSigners=[];
+ if(change==='missing-root')s.rows.delete(`signingRequests/${first.deliveries[0].documentId}`);
+ if(change==='board')s.rows.get('signingRequests/board-signed').status='pending';
+ const before=JSON.stringify([...s.rows]);const response=await s.invoke({attemptId:'resend-2',...(change==='selection'?{documentIds:['award']}:{})});
+ assert.equal(response.statusCode,409,response.body);assert.equal(JSON.stringify([...s.rows]),before);
+});
+test('a fully signed package has no remaining email recipients',async()=>{
+ const s=setup();const first=JSON.parse((await s.invoke()).body);
+ for(const id of first.requestIds)s.rows.get(`signingRequests/${id}`).status='signed';
+ const response=await s.invoke({attemptId:'resend-2'});assert.equal(response.statusCode,200,response.body);assert.deepEqual(JSON.parse(response.body).deliveries,[]);
+});

@@ -1325,16 +1325,31 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
     sourceTriggerMessageId,
     incident,
   } = body;
+  // Journal entries are a second signal source. They have no conversation document, so the record keys on the
+  // entry instead and every conversation write below is skipped for them.
+  // journal_draft is text the athlete sent to the Nora guide before saving (decision D5); it has no saved entry yet.
+  const sourceType = ['journal', 'journal_draft'].includes(body.sourceType) ? body.sourceType : 'conversation';
+  const isJournalSource = sourceType !== 'conversation';
+  const sourceRef = normalizeString(body.sourceRef);
   const syntheticRedTeam = runtimeOptions.syntheticRedTeam === true;
   const syntheticRedTeamRunId = normalizeString(runtimeOptions.syntheticRedTeamRunId);
 
-  if (!userId || !conversationId || tier === undefined) {
+  if (!userId || !conversationId || tier === undefined || (isJournalSource && !sourceRef)) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) };
   }
 
-  const conversationDoc = await runtimeDb.collection('conversations').doc(conversationId).get();
-  if (conversationDoc.exists && normalizeString(conversationDoc.data()?.userId) !== normalizeString(userId)) {
-    return { statusCode: 403, headers, body: JSON.stringify({ error: 'Conversation does not belong to this athlete' }) };
+  if (sourceType === 'journal_draft') {
+    // Nothing to check: the caller is the trusted guide runtime acting for the signed-in athlete.
+  } else if (sourceType === 'journal') {
+    const entryDoc = await runtimeDb.collection('pulsecheck-evidence-journals').doc(userId).collection('entries').doc(sourceRef).get();
+    if (!entryDoc.exists) {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Journal entry does not belong to this athlete' }) };
+    }
+  } else {
+    const conversationDoc = await runtimeDb.collection('conversations').doc(conversationId).get();
+    if (conversationDoc.exists && normalizeString(conversationDoc.data()?.userId) !== normalizeString(userId)) {
+      return { statusCode: 403, headers, body: JSON.stringify({ error: 'Conversation does not belong to this athlete' }) };
+    }
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
@@ -1386,6 +1401,7 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
       nowSec,
       existingRecord,
     });
+    if (isJournalSource) Object.assign(escalationData, { sourceType, sourceRef });
     escalationData.dedupeMergedCount = Number(existingRecord.dedupeMergedCount || 0) + 1;
     escalationData.dedupeLastMergedAt = nowSec;
     escalationData.dedupeLastTriggerMessageId = triggerMessageId || '';
@@ -1449,6 +1465,7 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
       model,
       nowSec,
     });
+    if (isJournalSource) Object.assign(escalationData, { sourceType, sourceRef });
     if (stateSnapshot) escalationData.stateSnapshot = stateSnapshot;
     const docRef = await runtimeDb.collection('escalation-records').add(escalationData);
     escalationId = docRef.id;
@@ -1523,7 +1540,7 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
         supportContext,
       }, runtimeDb)
     : null;
-  await runtimeDb.collection('conversations').doc(conversationId).set({
+  if (!isJournalSource) await runtimeDb.collection('conversations').doc(conversationId).set({
     escalationTier: activeTier,
     escalationStatus: EscalationRecordStatus.Active,
     escalationRecordId: escalationId,
@@ -2009,9 +2026,11 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
     };
   }
 
-  await runtimeDb.collection('conversations').doc(data.conversationId).set({
-    escalationStatus: EscalationRecordStatus.Declined
-  }, { merge: true });
+  if (!String(data.sourceType || '').startsWith('journal') && normalizeString(data.conversationId)) {
+    await runtimeDb.collection('conversations').doc(data.conversationId).set({
+      escalationStatus: EscalationRecordStatus.Declined
+    }, { merge: true });
+  }
 
   await refreshPilotOutcomeRollupsForAthlete(userId, nowSec * 1000, runtimeDb);
 
@@ -2974,7 +2993,7 @@ async function handleResolve(body, runtimeDb = db, bridgeFactory = createClinica
     }
   }
 
-  if (normalizeString(data.conversationId)) {
+  if (!String(data.sourceType || '').startsWith('journal') && normalizeString(data.conversationId)) {
     await runtimeDb.collection('conversations').doc(data.conversationId).set({
       escalationStatus: EscalationRecordStatus.Resolved,
     }, { merge: true });
@@ -3196,12 +3215,17 @@ async function performClinicalHandoff(
     }
   }
 
-  // Load conversation for summary
-  const convoDoc = await runtimeDb.collection('conversations').doc(conversationId).get();
-  const convoData = convoDoc.exists ? convoDoc.data() : {};
+  // Load conversation for summary. A journal escalation has no conversation; its summary is the approved excerpt.
+  const isJournalSource = String(escalationData.sourceType || '').startsWith('journal');
+  const convoDoc = isJournalSource ? null : await runtimeDb.collection('conversations').doc(conversationId).get();
+  const convoData = convoDoc?.exists ? convoDoc.data() : {};
   
   // Generate summary if not already done
   let summary = escalationData.conversationSummary;
+  if (!summary && isJournalSource) {
+    summary = `From a private journal entry the athlete wrote in PulseCheck: "${escalationData.triggerContent || ''}"`;
+    await runtimeDb.collection('escalation-records').doc(escalationId).update({ conversationSummary: summary });
+  }
   if (!summary) {
     const summaryResult = await generateConversationSummaryInternal(convoData.messages || []);
     summary = summaryResult;

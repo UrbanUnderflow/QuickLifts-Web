@@ -197,19 +197,23 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('Sign in before sending.');
       const headers = {'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod'};
-      let prepared = deliveries;
+      const resending = deliveries.length > 0 && deliveries.every(delivery => sent.includes(delivery.documentId));
+      let prepared = resending ? [] : deliveries;
+      if (resending) attemptId.current = crypto.randomUUID();
       if (!prepared.length) {
         if (!attemptId.current) attemptId.current = crypto.randomUUID();
         const response = await fetch('/.netlify/functions/prepare-equity-package', {method: 'POST', headers, body: JSON.stringify({attemptId: attemptId.current, packageName: 'PIL and EDNA strategic equity package', documentIds: signIds, referenceDocumentIds: [boardId, capitalizationId, considerationId, ...capitalizationSteps.map(step => step.id)]})});
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || result.message || 'Unable to prepare the package.');
         prepared = result.deliveries;
-        if (!Array.isArray(prepared) || !prepared.length) throw new Error('No recipient packages were prepared.');
+        if (!Array.isArray(prepared)) throw new Error('No recipient packages were prepared.');
+        if (!prepared.length) {setMessage('Every recipient has already signed the package.'); return;}
         setDeliveries(prepared);
+        if (resending) setSent([]);
       }
       setSendError('');
       deliveryControls.clearSubmissionIssue('edna-package');
-      setPendingSend({mode: 'package', documents: [...signDocuments.map(document => document!.title), ...references.filter(Boolean).map(document => `${document!.title} (reference)`), ...capitalizationDocuments.filter(Boolean).map(document => `${document!.title} (reference)`)], deliveries: prepared, accepted: sent});
+      setPendingSend({mode: 'package', documents: [...signDocuments.map(document => document!.title), ...references.filter(Boolean).map(document => `${document!.title} (reference)`), ...capitalizationDocuments.filter(Boolean).map(document => `${document!.title} (reference)`)], deliveries: prepared, accepted: resending ? [] : sent});
       setMessage('Review every recipient address and confirm to send the package.');
       onSent();
     } catch (error) { const text = error instanceof Error ? error.message : 'Unable to prepare the package.'; setMessage(text); deliveryControls.recordSubmissionIssue({stage: 'prepare', documentId: 'edna-package', documentName: 'PIL and EDNA strategic equity package', message: text}); }
@@ -273,7 +277,7 @@ export default function EquityRecipientPackage({documents, requests, onClose, on
         {!!blockers.length && <details className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3"><summary className="cursor-pointer text-sm text-amber-200">Complete approvals before sending to EDNA</summary><ul className="list-disc pl-5 text-xs text-amber-100/80 space-y-2 mt-3">{[...new Set(blockers)].map(item => <li key={item}>{item}</li>)}</ul></details>}
         {message && <p role="status" className="text-sm text-blue-200">{message}</p>}
       </div>
-      <div className="p-5 border-t border-zinc-800 flex justify-end gap-3"><button onClick={onClose} disabled={working} className="px-4 py-2 rounded-lg border border-zinc-700 text-sm">Close</button><button disabled={working || !!blockers.length || allSent} onClick={send} className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm disabled:opacity-40 inline-flex gap-2 items-center">{allSent ? <CheckCircle2 className="w-4" /> : blockers.length ? <AlertCircle className="w-4" /> : <Send className="w-4" />}{busy ? 'Sending package…' : allSent ? 'Submitted. Check delivery above' : deliveries.length ? 'Retry unsent recipients' : 'Send EDNA package'}</button></div>
+      <div className="p-5 border-t border-zinc-800 flex justify-end gap-3"><button onClick={onClose} disabled={working} className="px-4 py-2 rounded-lg border border-zinc-700 text-sm">Close</button><button disabled={working || !!blockers.length} onClick={send} className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm disabled:opacity-40 inline-flex gap-2 items-center">{allSent ? <CheckCircle2 className="w-4" /> : blockers.length ? <AlertCircle className="w-4" /> : <Send className="w-4" />}{busy ? 'Sending package…' : allSent ? 'Resend EDNA package' : deliveries.length ? 'Retry unsent recipients' : signDocuments.some(document => document?.signingRequestIds?.length || document?.signingRequestId) ? 'Resend EDNA package' : 'Send EDNA package'}</button></div>
     </div>
   </div>{pendingSend && <EquityEmailSendConfirmation documents={pendingSend.documents} recipients={pendingSend.deliveries.filter(delivery => !pendingSend.accepted.includes(delivery.documentId))} busy={busy} error={sendError} warning={pendingSend.deliveries.some(delivery => emailDeliveryIsUnconfirmed((requests as DeliveryRequest[]).find(request => request.id === delivery.documentId))) ? 'Previous delivery could not be verified. Sending again may deliver a duplicate email.' : undefined} confirmLabel={pendingSend.deliveries.some(delivery => emailDeliveryIsUnconfirmed((requests as DeliveryRequest[]).find(request => request.id === delivery.documentId))) ? 'Confirm resend' : undefined} onCheckDelivery={() => {void deliveryControls.check(pendingSend.deliveries.map(delivery => delivery.documentId));}} onConfirm={() => {void confirmSend();}} onCancel={() => {setPendingSend(null); setSendError('');}} />}{pendingUpload && <EquityDocumentUpload {...pendingUpload} onClose={() => setPendingUpload(null)} onSaved={id => {
     if (pendingUpload.documentType === approvalTypes[1]) setCapitalizationId(id);

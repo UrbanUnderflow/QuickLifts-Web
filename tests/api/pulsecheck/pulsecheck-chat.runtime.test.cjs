@@ -641,11 +641,16 @@ function createEscalationFlowDb({
   userDocs = [],
   athleticProgressDocs = [],
   assignmentDocs = [],
+  // Direct chat is pro-track only, so the default athlete is on a pro team.
+  teamMemberships = [{ id: 'team-pro_athlete-1', userId: 'athlete-1', role: 'athlete', teamId: 'team-pro' }],
+  teams = [{ id: 'team-pro', commercialConfig: { youthTrack: 'pro' } }],
 } = {}) {
   const writes = {
     conversations: [],
     records: [],
   };
+  const membershipStore = new Map(teamMemberships.map((entry) => [entry.id, { ...entry }]));
+  const teamStore = new Map(teams.map((entry) => [entry.id, { ...entry }]));
 
   const conversationStore = new Map(conversations.map((entry) => [entry.id, { ...entry }]));
   const userStore = new Map(userDocs.map((entry) => [entry.id, { ...entry }]));
@@ -815,6 +820,12 @@ function createEscalationFlowDb({
       }
       if (name === 'pulsecheck-daily-assignments') {
         return makeSimpleDocCollection(assignmentStore, 'pulsecheck-daily-assignments');
+      }
+      if (name === 'pulsecheck-team-memberships') {
+        return makeSimpleDocCollection(membershipStore, 'pulsecheck-team-memberships');
+      }
+      if (name === 'pulsecheck-teams') {
+        return makeSimpleDocCollection(teamStore, 'pulsecheck-teams');
       }
       return {
         doc() {
@@ -1457,4 +1468,121 @@ test('production cannot activate the synthetic preflight', async () => {
   const response=await runtime.handler({httpMethod:'POST',headers:{authorization:'Bearer synthetic-token','x-pulsecheck-firebase-mode':'prod','x-nora-red-team-synthetic':'true'},body:JSON.stringify({userId:'nora-red-team-probe',runtimeProbe:true})});
   assert.equal(response.statusCode,403);
   assert.equal(runtime.firestoreReads(),0);
+});
+
+function loadTrackGateHandler({ db, decoded = { uid: 'athlete-1' } }) {
+  delete require.cache[chatPath];
+  delete require.cache[configPath];
+  delete require.cache[submitPath];
+  const collectionsRead = [];
+  const trackedDb = {
+    collection(name) {
+      collectionsRead.push(name);
+      return db.collection(name);
+    },
+  };
+  require.cache[configPath] = {
+    id: configPath,
+    filename: configPath,
+    loaded: true,
+    exports: {
+      initializeFirebaseAdmin: () => {},
+      getFirebaseAdminApp: () => ({
+        auth: () => ({ verifyIdToken: async () => decoded }),
+        firestore: () => trackedDb,
+      }),
+      admin: { firestore: () => trackedDb },
+      headers: {},
+      isDevMode: (request) => String(request?.headers?.['x-pulsecheck-firebase-mode'] || '').toLowerCase() === 'dev',
+    },
+  };
+  require.cache[submitPath] = { id: submitPath, filename: submitPath, loaded: true, exports: { runtimeHelpers: {} } };
+  return { handler: require(chatPath).handler, collectionsRead };
+}
+
+async function withFetchCounter(run) {
+  const originalFetch = global.fetch;
+  let fetchCalls = 0;
+  global.fetch = async () => {
+    fetchCalls += 1;
+    throw new Error('Model must not be called');
+  };
+  try {
+    return await run(() => fetchCalls);
+  } finally {
+    global.fetch = originalFetch;
+  }
+}
+
+const trackRefusalCases = [
+  { name: 'an athlete with no team (junior default)', teamMemberships: [], teams: [] },
+  {
+    name: 'a junior team athlete',
+    teamMemberships: [{ id: 'm1', userId: 'athlete-1', role: 'athlete', teamId: 'team-junior' }],
+    teams: [{ id: 'team-junior', commercialConfig: { youthTrack: 'junior' } }],
+  },
+  {
+    name: 'a rookie override on a pro team',
+    teamMemberships: [{ id: 'm1', userId: 'athlete-1', role: 'athlete', teamId: 'team-pro', athleteTrackOverride: 'rookie' }],
+    teams: [{ id: 'team-pro', commercialConfig: { youthTrack: 'pro' } }],
+  },
+  {
+    name: 'an athlete whose only pro team is paused',
+    teamMemberships: [{ id: 'm1', userId: 'athlete-1', role: 'athlete', teamId: 'team-pro' }],
+    teams: [{ id: 'team-pro', status: 'paused', commercialConfig: { youthTrack: 'pro' } }],
+  },
+];
+
+for (const trackCase of trackRefusalCases) {
+  test(`direct chat refuses ${trackCase.name} before reading private context or calling the model`, async () => {
+    const { db } = createEscalationFlowDb({ teamMemberships: trackCase.teamMemberships, teams: trackCase.teams });
+    const runtime = loadTrackGateHandler({ db });
+    await withFetchCounter(async (fetchCalls) => {
+      const response = await runtime.handler({
+        httpMethod: 'POST',
+        headers: { authorization: 'Bearer athlete-token' },
+        body: JSON.stringify({ userId: 'athlete-1', message: 'Hey Nora, can we talk?' }),
+      });
+      assert.equal(response.statusCode, 403);
+      const body = JSON.parse(response.body);
+      assert.equal(body.errorCode, 'nora_track_restricted');
+      assert.match(body.error, /988/);
+      assert.equal(fetchCalls(), 0);
+      const expectedReads = trackCase.teamMemberships.length
+        ? ['pulsecheck-team-memberships', 'pulsecheck-teams']
+        : ['pulsecheck-team-memberships'];
+      assert.deepEqual([...new Set(runtime.collectionsRead)].sort(), expectedReads);
+    });
+  });
+}
+
+test('direct chat opens for a pro override on a junior team', async () => {
+  const { db } = createEscalationFlowDb({
+    teamMemberships: [{ id: 'm1', userId: 'athlete-1', role: 'athlete', teamId: 'team-junior', athleteTrackOverride: 'pro' }],
+    teams: [{ id: 'team-junior', commercialConfig: { youthTrack: 'junior' } }],
+  });
+  const runtime = loadTrackGateHandler({ db });
+  await withFetchCounter(async () => {
+    const response = await runtime.handler({
+      httpMethod: 'POST',
+      headers: { authorization: 'Bearer athlete-token' },
+      body: JSON.stringify({ userId: 'athlete-1', message: 'Hey Nora, can we talk?' }),
+    });
+    assert.notEqual(JSON.parse(response.body).errorCode, 'nora_track_restricted');
+    assert.ok(runtime.collectionsRead.includes('conversations'));
+  });
+});
+
+test('signed synthetic red-team accounts in development skip the track gate', async () => {
+  const { db } = createEscalationFlowDb({ teamMemberships: [], teams: [] });
+  const runtime = loadTrackGateHandler({ db, decoded: { uid: 'nora-red-team-run-1', noraRedTeamSynthetic: true } });
+  await withFetchCounter(async () => {
+    const response = await runtime.handler({
+      httpMethod: 'POST',
+      headers: { authorization: 'Bearer synthetic-token', 'x-pulsecheck-firebase-mode': 'dev', 'x-nora-red-team-synthetic': 'true', 'x-nora-red-team-run-id': 'run-1' },
+      body: JSON.stringify({ userId: 'nora-red-team-run-1', message: 'Synthetic probe' }),
+    });
+    assert.notEqual(JSON.parse(response.body).errorCode, 'nora_track_restricted');
+    assert.ok(runtime.collectionsRead.includes('conversations'));
+  });
 });

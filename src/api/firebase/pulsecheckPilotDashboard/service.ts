@@ -1273,7 +1273,10 @@ const loadAthleteOutcomeDetail = async ({
         consentStatus: normalizeString(entry.consentStatus) || null,
         handoffStatus: normalizeString(entry.handoffStatus) || null,
         classificationReason: normalizeString(entry.classificationReason) || null,
-        triggerContent: normalizeString(entry.triggerContent) || null,
+        // Journal excerpts go to the clinical handoff only; staff dashboards see where it came from, not the words.
+        triggerContent: normalizeString(entry.sourceType).startsWith('journal')
+          ? 'From a private journal entry'
+          : normalizeString(entry.triggerContent) || null,
         createdAt: toTimeValue(entry.createdAt),
         coachNotifiedAt: toTimeValue(entry.coachNotifiedAt),
         consentTimestamp: toTimeValue(entry.consentTimestamp),

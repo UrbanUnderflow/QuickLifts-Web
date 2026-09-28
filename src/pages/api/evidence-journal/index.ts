@@ -1,12 +1,42 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { authorizeLinearAthlete } from '../curriculum/runtime';
-import { EvidenceError, evidenceEntries, isJournalType, journalTypeOf, parseEvidence, saveEvidence, validEvidenceId, withJournalType } from '../../../lib/evidence-journal';
+import { EVIDENCE_COLLECTION, EvidenceError, evidenceEntries, isJournalType, journalTypeOf, parseEvidence, saveEvidence, validEvidenceId, withJournalType } from '../../../lib/evidence-journal';
 
 // A type filter scans newest first in batches, because entries saved before types existed have no type field to query on.
 const FILTER_BATCH = 50;
 const FILTER_SCAN_LIMIT = 500;
+// Screening runs in the journal-safety-screen function next to Nora chat, which owns the classifier and escalation
+// code. The save waits this long for it; anything slower finishes in the scheduled sweep.
+const SCREENING_BUDGET_MS = 9000;
 
-export const createEvidenceJournalHandler = (deps: { authorize?: typeof authorizeLinearAthlete; now?: () => number } = {}) => async (req: NextApiRequest, res: NextApiResponse) => {
+type SafetyBlock = { status: string; escalationId?: string | null; handoff?: string };
+export async function requestScreening(req: NextApiRequest, entryId: string): Promise<SafetyBlock> {
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SCREENING_BUDGET_MS);
+  try {
+    const response = await fetch(`${proto}://${host}/.netlify/functions/journal-safety-screen`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: String(req.headers.authorization || ''),
+        'x-pulsecheck-firebase-mode': String(req.headers['x-pulsecheck-firebase-mode'] || ''),
+      },
+      body: JSON.stringify({ entryId }),
+      signal: controller.signal,
+    });
+    if (!response.ok) return { status: 'pending' };
+    const payload = await response.json();
+    return payload?.safety || { status: 'pending' };
+  } catch {
+    return { status: 'pending' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export const createEvidenceJournalHandler = (deps: { authorize?: typeof authorizeLinearAthlete; now?: () => number; screen?: typeof requestScreening } = {}) => async (req: NextApiRequest, res: NextApiResponse) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!['GET', 'POST', 'DELETE'].includes(req.method || '')) return res.status(405).json({ error: 'Method not allowed' });
   let identity;
@@ -15,8 +45,18 @@ export const createEvidenceJournalHandler = (deps: { authorize?: typeof authoriz
   try {
     const entries = evidenceEntries(identity.db, identity.uid);
     if (req.method === 'POST') {
-      const result = await saveEvidence(identity.db, identity.uid, parseEvidence(req.body), (deps.now || Date.now)());
-      return res.status(200).json(result);
+      const now = (deps.now || Date.now)();
+      const input = parseEvidence(req.body);
+      if ('photoStoragePath' in input && input.photoStoragePath && !input.photoStoragePath.startsWith(`pulsecheck-journal-photos/${identity.uid}/`)) {
+        throw new EvidenceError(403, 'That photo belongs to another account.');
+      }
+      const result = await saveEvidence(identity.db, identity.uid, input, now);
+      const entryId = String(result.entry.id);
+      // Mark the screening pending before asking for it, so the sweep finishes it if this request never gets an answer.
+      const screening = identity.db.collection(EVIDENCE_COLLECTION).doc(identity.uid).collection('screenings').doc(entryId);
+      if (result.created) await screening.set({ status: 'pending', attempts: 0, createdAt: now }, { merge: true });
+      const safety = await (deps.screen || requestScreening)(req, entryId);
+      return res.status(200).json({ ...result, safety });
     }
     if (req.method === 'DELETE') {
       if (!validEvidenceId(req.query.entryId)) throw new EvidenceError(400, 'Choose a valid entry.');

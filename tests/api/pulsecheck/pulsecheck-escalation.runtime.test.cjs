@@ -1392,3 +1392,55 @@ for (const exclusions of [{ excludedRecipientIds: ['coach-test'] }, { implicated
     assert.equal(JSON.parse(response.body).reason, 'recipient_excluded');
   });
 }
+
+function withJournalEntries(db, entries) {
+  const entryDoc = (userId, entryId) => ({ async get() { return { exists: Boolean(entries[`${userId}/${entryId}`]), data: () => entries[`${userId}/${entryId}`] }; } });
+  return {
+    ...db,
+    runTransaction: db.runTransaction,
+    collection(name) {
+      if (name === 'pulsecheck-evidence-journals') {
+        return { doc: (userId) => ({ collection: () => ({ doc: (entryId) => entryDoc(userId, entryId) }) }) };
+      }
+      return db.collection(name);
+    },
+  };
+}
+
+test('journal Tier 2 escalations key on the entry and never write a conversation document', async () => {
+  const { db: baseDb, state } = createClinicalRuntimeDb();
+  const db = withJournalEntries(baseDb, { 'athlete-1/entry-1': { moment: 'Private entry' } });
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+
+  const payload = await runtimeHelpers.createEscalationFromTrustedRuntime({
+    userId: 'athlete-1',
+    conversationId: 'journal-entry-1',
+    sourceType: 'journal',
+    sourceRef: 'entry-1',
+    tier: 2,
+    category: 'persistent-distress',
+    triggerMessageId: 'entry-1',
+    triggerContent: 'Private entry',
+    classificationReason: 'Journal screening test.',
+    classificationConfidence: 0.9,
+    classificationFamily: 'care_escalation',
+    requiresClinicalHandoff: true,
+  }, db);
+
+  assert.equal(payload.consentRequired, true);
+  assert.equal(state.record.sourceType, 'journal');
+  assert.equal(state.record.sourceRef, 'entry-1');
+  assert.equal(state.conversationWrites.length, 0);
+});
+
+test('journal escalations are refused when the entry does not belong to the athlete', async () => {
+  const { db: baseDb } = createClinicalRuntimeDb();
+  const db = withJournalEntries(baseDb, { 'someone-else/entry-1': { moment: 'Not theirs' } });
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  await assert.rejects(
+    runtimeHelpers.createEscalationFromTrustedRuntime({
+      userId: 'athlete-1', conversationId: 'journal-entry-1', sourceType: 'journal', sourceRef: 'entry-1', tier: 2, category: 'persistent-distress',
+    }, db),
+    (error) => error.statusCode === 403,
+  );
+});

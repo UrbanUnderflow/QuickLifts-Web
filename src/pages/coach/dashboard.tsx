@@ -68,6 +68,7 @@ import {
 import CoachProtectedRoute from '../../components/CoachProtectedRoute';
 import CoachProfileEditModal from '../../components/coach/CoachProfileEditModal';
 import AccountSignInMethods from '../../components/auth/AccountSignInMethods';
+import CoachWorkoutSummary from '../../components/coach/CoachWorkoutSummary';
 import AthleteReadinessCard, {
   type CoachScorecardResponse,
 } from '../../components/AthleteReadinessCard';
@@ -5148,6 +5149,9 @@ const AthleteProfileDrawer: React.FC<{
                   )}
                 </div>
               </div>
+
+              {/* Workouts the athlete chose to share with coaches */}
+              <CoachWorkoutSummary athleteId={athlete.id} firstName={first} />
 
               {/* Device coverage — one card per measured source */}
               <div>

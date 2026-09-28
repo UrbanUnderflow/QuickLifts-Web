@@ -1,6 +1,7 @@
 const console = require('./utils/noraSafeLogger');
 const { assessNoraStorage, safeTranscript, WITHHELD } = require('./utils/noraStoragePolicy');
 const { buildNoraChatActions } = require('./utils/noraChatActions');
+const { resolvePulseCheckYouthTrack, allowsDirectNoraChat } = require('./utils/pulsecheck-youth-track');
 // PulseCheck Chat Function (MVP)
 // - Accepts user message and optional conversationId
 // - Loads minimal user context
@@ -2299,6 +2300,23 @@ exports.handler = async (event, context) => {
 
     if (!message) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing message' }) };
+    }
+
+    // Direct Nora chat is pro-track only, matching the iOS gate. Junior lessons and scheduled Nora conversations use
+    // their own functions, and the classifier helpers exported below stay open to every track (journal screening).
+    // Signed synthetic red-team accounts are dev-only and have no team, so they are exempt.
+    if (!syntheticRedTeam) {
+      const youthTrack = await resolvePulseCheckYouthTrack(db, userId);
+      if (!allowsDirectNoraChat(youthTrack.track)) {
+        return {
+          statusCode: 403,
+          headers,
+          body: JSON.stringify({
+            errorCode: 'nora_track_restricted',
+            error: 'Direct chat with Nora is not part of your team plan. If you need urgent help, call 911 or call or text 988.',
+          }),
+        };
+      }
     }
 
     const clientContractVersion = String(clientCapabilities?.noraContractVersion || '').trim();

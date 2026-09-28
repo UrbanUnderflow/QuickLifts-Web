@@ -4,7 +4,7 @@ import {admin, getFirebaseAdminApp} from './config/firebase';
 import {evaluateDocumentSignatures} from '../../src/lib/equityExecution';
 import {dateUnsignedEquityDocument} from '../../src/lib/equityDocumentDating';
 import {getEquitySigningRequirements, getEquityIssuanceRequirements} from '../../src/lib/equitySigningRequirements';
-import {normalizePackageEmail, packageRecipients, validatePackageSources, type PackageSource} from '../../src/lib/equitySigningPackage';
+import {normalizePackageEmail, packageRecipients, validatePackageSources, validatePreparedPackage, type PackageSource} from '../../src/lib/equitySigningPackage';
 const fail = (statusCode: number, message: string) => Object.assign(new Error(message), {statusCode});
 const safeId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,150}$/.test(value);
 export const handler: Handler = async event => {
@@ -38,6 +38,29 @@ export const handler: Handler = async event => {
       const evidence = await Promise.all(evidenceIds.map(id => transaction.get(db.collection('signingRequests').doc(id))));
       const evidenceRecords = evidence.filter(s => s.exists).map(s => ({...s.data(), id: s.id}));
       const verifiedBoards = new Set(references.filter(d => (/board.consent/i.test(d.documentType || '') || d.requiresSignature === true) && evaluateDocumentSignatures(d as any, evidenceRecords as any).verified).map(d => d.id));
+      // Recover the current immutable packages when the dialog is reopened or resent.
+      if (signable.some(document => document.signingRequestIds?.length || document.signingRequestId)) {
+        const requestIds = [...new Set(signable.flatMap(document => document.signingRequestIds || (document.signingRequestId ? [document.signingRequestId] : [])))];
+        const children = await Promise.all(requestIds.map(id => transaction.get(db.collection('signingRequests').doc(id))));
+        const records: any[] = children.filter(snapshot => snapshot.exists).map(snapshot => ({...snapshot.data(), id: snapshot.id}));
+        if (records.length !== requestIds.length || !records.length || records.some(record => !safeId(record.packageId))) throw fail(409, 'The existing signing requests do not belong to a complete package. Open their existing signing links.');
+        const rootIds = [...new Set<string>(records.map(record => record.packageId))];
+        const roots = await Promise.all(rootIds.map(id => transaction.get(db.collection('signingRequests').doc(id))));
+        const deliveries = [];
+        for (const snapshot of roots) {
+          if (!snapshot.exists) throw fail(409, 'An existing recipient package is missing.');
+          const root = {...snapshot.data(), id: snapshot.id} as any;
+          const items = root.packageDocuments || [];
+          const selectedIds = new Set([...documentIds, ...referenceDocumentIds]);
+          if (new Set(items.map((item: any) => item.id)).size !== selectedIds.size || items.some((item: any) => !selectedIds.has(item.id)) || documentIds.some(id => !items.some((item: any) => item.id === id && item.mode === 'sign'))) throw fail(409, 'The existing package does not match the selected documents.');
+          const errors = validatePreparedPackage(root, sources, [...records, ...evidenceRecords]);
+          if (references.some(document => /board.consent/i.test(document.documentType || '') && !verifiedBoards.has(document.id))) errors.push('Board consent signatures are no longer verified.');
+          if (errors.length) throw fail(409, errors.join('\n'));
+          if (root.childRequestIds.every((id: string) => records.some(record => record.id === id && record.status === 'signed'))) continue;
+          deliveries.push({documentId: root.id, recipientEmail: root.recipientEmail, recipientName: root.recipientName, sendAttemptId: `${packageId}-${root.id}`});
+        }
+        return {packageId, deliveries, requestIds, reused: true};
+      }
       const errors = validatePackageSources(signable, references, verifiedBoards);
       if (errors.length) throw fail(409, errors.join('\n'));
       if (signable.some(document => (document as any).signatureData || (document as any).autoSignedAt || document.approvalStatus === 'approved')) throw fail(409, 'A selected signature document already has signature or approval records.');

@@ -526,6 +526,8 @@ export interface PulseCheckOrganization {
   legalName: string;
   organizationType: string;
   invitePreviewImageUrl?: string;
+  /** True turns off safety screening of private journal entries for this organization. */
+  journalSafetyScreeningDisabled?: boolean;
   status: PulseCheckOrganizationStatus;
   legacySource?: 'legacy-coach-roster';
   legacyCoachId?: string;

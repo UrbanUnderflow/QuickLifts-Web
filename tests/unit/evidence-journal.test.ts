@@ -103,3 +103,15 @@ test('type filter scans newest first, includes legacy evidence and pages with a 
   assert.equal(all.body.entries[1].type, 'evidence');
   const invalid = response(); await handler({ method: 'GET', query: { type: 'diary' } } as any, invalid as any); assert.equal(invalid.code, 400);
 });
+
+test('workout entries take an optional whole-number effort and food entries can be just a photo', () => {
+  const workout = parseEvidence({ entryId: id, type: 'workout', moment: 'Legs for 45 minutes', effortRating: 7 });
+  assert.equal((workout as any).effortRating, 7);
+  assert.throws(() => parseEvidence({ entryId: id, type: 'workout', moment: 'Legs', effortRating: 11 }), /1 to 10/);
+  assert.throws(() => parseEvidence({ entryId: id, type: 'gratitude', moment: 'x', effortRating: 5 }), /workout/);
+  const photoOnly = parseEvidence({ entryId: id, type: 'food', moment: '', photoStoragePath: 'pulsecheck-journal-photos/owner/meal.jpg' });
+  assert.equal((photoOnly as any).photoStoragePath, 'pulsecheck-journal-photos/owner/meal.jpg');
+  assert.throws(() => parseEvidence({ entryId: id, type: 'food', moment: '' }));
+  assert.throws(() => parseEvidence({ entryId: id, type: 'evidence', moment: 'x', photoStoragePath: 'pulsecheck-journal-photos/owner/a.jpg' }), /food/);
+  assert.throws(() => parseEvidence({ entryId: id, type: 'food', moment: 'x', photoStoragePath: '../other/a.jpg' }), /food/);
+});

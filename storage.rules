@@ -173,6 +173,26 @@ service firebase.storage {
       allow delete: if isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Meal photos from the Nora chat meal card are private to the athlete.
+    match /users/{userId}/mealPhotos/{fileName} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow create, update: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Food journal photos are private to the athlete who took them.
+    match /pulsecheck-journal-photos/{userId}/{fileName} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow create, update: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+
     // App sound-effect assets generated from /admin/ai-voice. Public
     // read (clients also use tokened downloadURLs); admin-only write.
     match /ritual-sfx/{allPaths=**} {
