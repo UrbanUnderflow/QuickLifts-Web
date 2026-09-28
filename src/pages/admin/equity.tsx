@@ -7,6 +7,7 @@ import {EDNA_PACKAGE_IDS, reconcileEdnaPackage} from '../../lib/ednaReconciledPa
 import { reviseEdnaAgreement, completeEdnaAgreement } from '../../lib/ednaAgreementRevision';
 import { buildAuntEdnaVestingDraft } from '../../lib/auntEdnaVestingDraft';
 import { documentMatchesAllocation, isIncomingEquityDocument, isOutgoingEquityWorkspaceDocument, isOperationalPartnershipDocument, isEquityReferenceDocument, isSendableEquityDocument } from '../../lib/equityDocumentScope';
+import { allocationPackageStatus, matchesAllocationParty } from '../../lib/equityAllocationStatus';
 import { evaluateGrantExecution, evaluateDocumentSignatures, documentWorkflowLabel, type ExecutionRequest } from '../../lib/equityExecution';
 import { onAuthStateChanged } from 'firebase/auth';
 import { resolveEquityPlan, resolveWorkingEquityPlan, deriveEquityBalances, issuedShares, isEffectiveEip } from '../../lib/equityPlanState';
@@ -3506,12 +3507,13 @@ const EquityAdminPage: React.FC = () => {
     } finally { setCreatingVestingDraft(false); }
   };
 
+  const getAllocationDocuments = (name: string, stakeholderId?: string, allocationKind?: string) =>
+    equityDocuments.filter(isOutgoingEquityWorkspaceDocument)
+      .filter(document => documentMatchesAllocation(document, allocationKind))
+      .filter(document => matchesAllocationParty(document, name, stakeholderId));
+
   const renderPersonPackage = (name: string, stakeholderId?: string, notes?: string, allocationKind?: string) => {
-    // Partnership documents record both parties in the stakeholder name.
-    const partyName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    const related = equityDocuments.filter(isOutgoingEquityWorkspaceDocument).filter(document => documentMatchesAllocation(document, allocationKind)).filter(document => stakeholderId
-      ? document.stakeholderId === stakeholderId
-      : Boolean(partyName(name)) && ` ${partyName(document.stakeholderName || '')} `.includes(` ${partyName(name)} `));
+    const related = getAllocationDocuments(name, stakeholderId, allocationKind);
     return <div className="p-4 sm:p-6 bg-zinc-950/70 space-y-3 text-left">
       <div className="flex items-center justify-between gap-4 pb-3"><div><p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">Document package</p><h4 className="text-white text-lg font-semibold">{name}</h4></div><span className="text-xs text-zinc-400 rounded-full border border-zinc-800 px-3 py-1">{getLatestRelevantDocuments(related).length} documents</span></div>
       {notes && <details className="text-sm text-zinc-400 pb-2"><summary className="cursor-pointer hover:text-zinc-200">Allocation details</summary><p className="mt-2 max-w-3xl leading-relaxed">{notes}</p></details>}
@@ -3598,15 +3600,17 @@ const EquityAdminPage: React.FC = () => {
                 <td className="p-3 text-zinc-400">{plannedFounder && amount !== issuedShares(holder) ? `${formatNumber(issuedShares(holder))} currently recorded; share return pending` : holder.grants?.length ? holder.grants.map(grant => evaluateGrantExecution({ stakeholder: holder, grant, documents: equityDocuments, requests: signingRequests }).label).join(', ') : (founder ? founderShareReturnRecorded(holder) ? 'Share return signed and recorded' : 'Recorded shares; execution unverified' : 'Recorded allocation; execution unverified')}</td>
               </tr>{expandedAllocation === holder.id && <tr><td colSpan={4}>{renderPersonPackage(holder.name, holder.id)}</td></tr>}</React.Fragment>;
             })}
-            {(workingSetup?.allocations || []).map(allocation => <React.Fragment key={allocation.id}><tr className="border-b border-zinc-800 cursor-pointer hover:bg-zinc-800/40" onClick={() => setExpandedAllocation(expandedAllocation === allocation.id ? null : allocation.id)}>
+            {(workingSetup?.allocations || []).map(allocation => {
+              const packageStatus = allocationPackageStatus(getLatestRelevantDocuments(getAllocationDocuments(allocation.name, undefined, allocation.kind)), signingRequests);
+              return <React.Fragment key={allocation.id}><tr className="border-b border-zinc-800 cursor-pointer hover:bg-zinc-800/40" onClick={() => setExpandedAllocation(expandedAllocation === allocation.id ? null : allocation.id)}>
               <td className="p-3 text-white font-medium"><button aria-label={`Show package for ${allocation.name} ${allocation.kind}`} aria-expanded={expandedAllocation === allocation.id} onClick={event => { event.stopPropagation(); setExpandedAllocation(expandedAllocation === allocation.id ? null : allocation.id); }} className="flex items-center gap-2 text-left"><ChevronDown className={`w-4 h-4 ${expandedAllocation === allocation.id ? 'rotate-180' : ''}`} />{allocation.name}</button></td>
-              <td className="p-3 text-white font-semibold">{allocation.shares != null ? formatNumber(allocation.shares) : allocation.percentage != null ? `${allocation.percentage}%` : 'To confirm'}{allocation.shares == null && allocation.percentage != null && <p className="text-xs font-normal text-zinc-400">Fully diluted; share count pending</p>}</td>
+              <td className="p-3 text-white font-semibold">{allocation.shares != null ? formatNumber(allocation.shares) : allocation.percentage != null ? `${allocation.percentage}%` : 'To confirm'}{allocation.shares == null && allocation.percentage != null && <p className="text-xs font-normal text-zinc-400">Allocation share count not recorded</p>}</td>
               <td className="p-3 text-zinc-300">{({ options: 'Options', vesting_shares: 'Vesting shares', warrant: 'Purchase warrant', other: 'Planned allocation' })[allocation.kind]}</td>
-              <td className="p-3 text-zinc-400"><span className="text-amber-200">Planned</span>{allocation.notes && <p className="text-xs mt-1 max-w-md">{allocation.notes}</p>}</td>
-            </tr>{expandedAllocation === allocation.id && <tr><td colSpan={4}>{renderPersonPackage(allocation.name, undefined, allocation.notes, allocation.kind)}</td></tr>}</React.Fragment>)}
+              <td className="p-3 text-zinc-400"><span className={packageStatus.signed ? 'text-green-400' : 'text-amber-200'}>{packageStatus.label}</span><p className="text-xs mt-1 max-w-md">{packageStatus.detail}</p></td>
+            </tr>{expandedAllocation === allocation.id && <tr><td colSpan={4}>{renderPersonPackage(allocation.name, undefined, allocation.notes, allocation.kind)}</td></tr>}</React.Fragment>; })}
           </tbody>
         </table></div>
-        <p className="text-xs text-zinc-500 mt-4">Planned → Ready to send → Awaiting signatures → Active. Status updates automatically from the documents, signatures, and required approvals.</p>
+        <p className="text-xs text-zinc-500 mt-4">Package status updates from current documents and signatures. Documents signed confirms package signatures; issuance and vesting are tracked separately. Recorded grants become Active after execution and required approvals are verified.</p>
       </div>
     </GlassCard>
   );
