@@ -292,3 +292,23 @@ test('E2E environment refuses all real calendar requests before contacting Googl
   await assert.rejects(s.api.listBookingSlots(s.profile, 30), errorStatus(503));
   assert.equal(s.calls.length, 0);
 });
+
+
+test('confirmation and private management expose the persisted invite email without adding it to public profile', async () => {
+  const s = setup();
+  const input = s.input({ email: 'Guest.Name@Example.Test' });
+  const confirmed = await s.api.createIndividualBooking(s.profile, input);
+  const { record } = await s.api.findBooking(confirmed.managementToken);
+  assert.equal(record.email, 'guest.name@example.test');
+  assert.equal(confirmed.email, record.email);
+  assert.equal(s.api.safeBooking(record).email, record.email);
+  assert.equal((await s.api.createIndividualBooking(s.profile, input)).email, record.email);
+  assert.equal(calendarWrites(s)[0].body.attendees[0].email, record.email);
+  assert.equal(Object.hasOwn(s.api.safeBooking(record), 'calendarId'), false);
+  assert.equal(Object.hasOwn(s.api.safeBooking(record), 'eventId'), false);
+  const rules = { exports: {} };
+  vm.runInNewContext(ruleSource, { module: rules, exports: rules.exports, Date, Intl });
+  const publicProfile = rules.exports.publicBookingProfile({ ...s.profile, email: record.email });
+  assert.equal(Object.hasOwn(publicProfile, 'email'), false);
+  assert.equal(Object.hasOwn(publicProfile, 'managementToken'), false);
+});

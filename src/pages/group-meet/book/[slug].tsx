@@ -1,11 +1,12 @@
 import Head from 'next/head';
+import { downloadCalendarCopy, googleCalendarCopyUrl } from '../../../lib/groupMeetCalendarExport';
 import { useRouter } from 'next/router';
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
 type Slot = { start: string; end: string };
 type Profile = { name: string; description?: string; durations: number[]; timezone: string };
 type Attempt = { key: string; id: string; payload: { name: string; email: string; start: string; duration: number } };
-type Booking = Slot & { meetLink?: string; managementToken: string };
+type Booking = Slot & { name: string; email: string; meetLink?: string; managementToken: string };
 const field = 'w-full rounded-xl border border-white/20 bg-[#11151d] p-3 text-white focus:outline-none focus:ring-2 focus:ring-[#E0FE10]';
 
 export default function BookMeetingPage() {
@@ -80,6 +81,7 @@ export default function BookMeetingPage() {
     } catch (error) { setError(error instanceof Error ? error.message : 'Unable to book this time.'); }
     finally { busy.current = false; setSaving(false); }
   }
+  const calendarCopy = booking && profile ? { ...booking, host: profile.name } : null;
   return <div className="min-h-screen bg-[#05070b] px-5 py-10 text-white">
     <Head><title>{`${profile ? `Book time with ${profile.name}` : 'Book a meeting'} | Group Meet`}</title><meta name="robots" content="noindex,nofollow" /><meta name="referrer" content="no-referrer" /></Head>
     <main className="mx-auto max-w-3xl rounded-[32px] border border-white/10 bg-white/[0.03] p-6 sm:p-10">
@@ -89,8 +91,11 @@ export default function BookMeetingPage() {
       {error && <div role="alert" className="mt-6 rounded-xl border border-red-400/30 bg-red-500/10 p-4 text-red-100">{error}</div>}
       {pending && !booking && <div className="mt-6 rounded-xl border border-white/20 p-4"><p className="text-sm text-zinc-300">A booking for {dayLabel(pending.payload.start)} at {timeLabel(pending.payload.start)} is awaiting confirmation. Retry the same request to check its result.</p><button type="button" disabled={saving} onClick={() => void submit(undefined, pending)} className="mt-3 rounded-xl bg-[#E0FE10] px-4 py-2 font-semibold text-black disabled:opacity-40">{saving ? 'Checking booking…' : 'Retry booking confirmation'}</button></div>}
       {booking ? <section className="mt-8 space-y-5">
-        <p className="text-xl">{dayLabel(booking.start)} · {timeLabel(booking.start)}–{timeLabel(booking.end)}</p><p className="text-sm text-zinc-400">Times shown in {zone}. Your calendar invitation will arrive by email.</p>
+        <h2 className="text-xl font-semibold">Confirmed on {profile?.name}’s calendar.</h2>
+        <div className="space-y-1 text-zinc-300"><p>Guest: {booking.name}</p><p className="break-words">Invitation email: {booking.email}</p></div>
+        <p className="text-xl">{dayLabel(booking.start)} · {timeLabel(booking.start)}–{timeLabel(booking.end)}</p><p className="text-sm text-zinc-400">Times shown in {zone}. Check your inbox or spam folder for your invitation. Accept it to keep your calendar up to date.</p>
         {booking.meetLink && <a className="block text-[#E0FE10] underline" href={booking.meetLink} target="_blank" rel="noreferrer">Open Google Meet</a>}
+        {calendarCopy && <div className="space-y-3 rounded-xl border border-white/15 p-4"><p className="text-sm text-zinc-300">You can also save a personal calendar copy. Skip this if you already accepted the invitation. Personal copies need to be updated manually if the meeting changes.</p><div className="flex flex-wrap gap-4"><a className="text-[#E0FE10] underline" href={googleCalendarCopyUrl(calendarCopy)} target="_blank" rel="noreferrer">Add to Google Calendar</a><button type="button" className="text-[#E0FE10] underline" onClick={() => downloadCalendarCopy(calendarCopy)}>Download calendar file (.ics)</button></div></div>}
         <a className="inline-block rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black" href={`/group-meet/booking/${encodeURIComponent(booking.managementToken)}`}>Manage this meeting</a><p className="text-sm text-zinc-400">Keep your management link private. Use it to reschedule or cancel.</p>
       </section> : <>
         {profile && <div className="mt-7"><label className="mb-2 block text-sm" htmlFor="duration">Meeting length</label><select id="duration" className={field} value={duration} disabled={saving || !!pending} onChange={event => setDuration(Number(event.target.value))}>{profile.durations.map(value => <option key={value} value={value}>{value} minutes</option>)}</select></div>}

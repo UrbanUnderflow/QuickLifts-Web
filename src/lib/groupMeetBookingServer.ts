@@ -79,7 +79,7 @@ function validateSlot(profile: BookingProfile, start: unknown, duration: unknown
   return slot;
 }
 function safeBooking(b: BookingRecord) {
-  return { name: b.name, start: b.start, end: b.end, status: b.status, meetLink: b.meetLink,
+  return { name: b.name, email: b.email, start: b.start, end: b.end, status: b.status, meetLink: b.meetLink,
     managementToken: b.managementToken, updating: Boolean(b.operation),
     pendingAction: b.operation ? { action: b.operation.action, start: b.operation.start, end: b.operation.end } : null };
 }

@@ -26,7 +26,7 @@ function response() {
 }
 function runtime(route, overrides = {}) {
   const calls = [];
-  const record = { name: 'Guest', status: 'scheduled', start: '2026-10-01T14:00:00.000Z', end: '2026-10-01T14:30:00.000Z' };
+  const record = { name: 'Guest', email: 'guest@example.test', status: 'scheduled', start: '2026-10-01T14:00:00.000Z', end: '2026-10-01T14:30:00.000Z' };
   const server = {
     requireBookingAdmin: async () => ({ email: 'admin@example.com' }),
     getBookingProfile: async () => profile,
@@ -127,6 +127,8 @@ test('private GET is uncached and refreshes confirmation without creating a book
   assert.equal(res.headers['referrer-policy'], 'no-referrer');
   assert.equal(refreshed, true);
   assert.equal(res.payload.booking.meetLink, 'https://meet.google.com/example');
+  assert.equal(res.payload.booking.email, 'guest@example.test');
+  assert.equal(Object.hasOwn(res.payload.profile, 'email'), false);
   assert.equal(calls.some(call => ['create', 'change'].includes(call[0])), false);
 });
 

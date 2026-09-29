@@ -5,7 +5,7 @@ import { expect, test, Page } from '@playwright/test';
 test.use({ storageState: { cookies: [], origins: [] } });
 const profile = { name: 'Tremaine', slug: 'tremaine-test', description: 'A conversation about your next steps.', durations: [15, 30, 60], timezone: 'America/New_York' };
 const slots = [{ start: '2099-10-01T15:00:00.000Z', end: '2099-10-01T15:30:00.000Z' }, { start: '2099-10-02T17:00:00.000Z', end: '2099-10-02T17:30:00.000Z' }];
-const initialBooking = { ...slots[0], name: 'Test Guest', status: 'confirmed', managementToken: 'mock-management-token', meetLink: 'https://meet.google.com/mock-test-room' };
+const initialBooking = { ...slots[0], name: 'Test Guest', email: 'confirmed@example.test', status: 'confirmed', managementToken: 'mock-management-token', meetLink: 'https://meet.google.com/mock-test-room' };
 
 async function isolate(page: Page) {
   await page.route('**/*', async route => {
@@ -41,6 +41,14 @@ for (const width of [320, 1280]) {
     await page.screenshot({ path: testInfo.outputPath(`booking-${width}.png`), fullPage: true });
     await page.getByRole('button', { name: 'Confirm meeting', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Your meeting is booked' })).toBeVisible();
+    await expect(page.getByText('Invitation email: confirmed@example.test')).toBeVisible();
+    await expect(page.getByText('Guest: Test Guest', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Add to Google Calendar' })).toHaveAttribute('href', /calendar.google.com/);
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download calendar file (.ics)' }).click();
+    expect((await downloadPromise).suggestedFilename()).toBe('group-meet.ics');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`confirmation-${width}.png`), fullPage: true });
     await page.getByRole('link', { name: 'Manage this meeting' }).click();
     await expect(page.getByRole('heading', { name: 'Meeting with Tremaine' })).toBeVisible();
     await page.getByRole('button', { name: 'Reschedule', exact: true }).click();
