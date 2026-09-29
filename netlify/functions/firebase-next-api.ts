@@ -349,6 +349,10 @@ const ROUTE_ENTRIES: RouteEntry[] = [
       import("../../src/pages/api/admin/group-meet/test-email.ts"),
   },
   {
+    pattern: "/api/admin/group-meet/booking",
+    loadHandler: () => import("../../src/pages/api/admin/group-meet/booking.ts"),
+  },
+  {
     pattern: "/api/admin/group-meet/[requestId]",
     loadHandler: () =>
       import("../../src/pages/api/admin/group-meet/[requestId].ts"),
@@ -435,6 +439,14 @@ const ROUTE_ENTRIES: RouteEntry[] = [
   {
     pattern: "/api/backfill-badges",
     loadHandler: () => import("../../src/pages/api/backfill-badges.ts"),
+  },
+  {
+    pattern: "/api/group-meet/book/[slug]",
+    loadHandler: () => import("../../src/pages/api/group-meet/book/[slug].ts"),
+  },
+  {
+    pattern: "/api/group-meet/booking/[token]",
+    loadHandler: () => import("../../src/pages/api/group-meet/booking/[token].ts"),
   },
   {
     pattern: "/api/group-meet/calendar/google/callback",

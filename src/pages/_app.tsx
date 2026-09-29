@@ -192,7 +192,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
 
   // Add debugging for Android issues
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/group-meet/booking/')) {
       console.log('[App] User Agent:', navigator.userAgent);
       console.log('[App] Current URL:', window.location.href);
 
@@ -241,6 +241,10 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
 
   // Isolated intake surface: no global tracking, authentication wrapper, or Redux persistence.
   if (router.pathname === '/PulseCheck/questionnaire/cau') return <Component {...pageProps} />;
+  // Guest booking links contain private management capabilities. Keep them outside analytics/auth.
+  if (router.pathname === '/group-meet/book/[slug]' || router.pathname === '/group-meet/booking/[token]') {
+    return <><Head><meta name="viewport" content="width=device-width, initial-scale=1" /></Head><Component {...pageProps} /></>;
+  }
 
   return (
     <>

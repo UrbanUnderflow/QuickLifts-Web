@@ -33,6 +33,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import AdminRouteGuard from "../../components/auth/AdminRouteGuard";
+import GroupMeetBookingSettings from "../../components/group-meet/GroupMeetBookingSettings";
 import GroupMeetAvailabilityPicker from "../../components/group-meet/GroupMeetAvailabilityPicker";
 import { auth, storage } from "../../api/firebase/config";
 import {
@@ -57,7 +58,7 @@ type HostDraft = {
   imageUrl: string;
 };
 
-type ComposerTab = "create" | "contacts" | "requests";
+type ComposerTab = "create" | "contacts" | "requests" | "booking";
 
 type ApiRequestListResponse = {
   requests: GroupMeetRequestSummary[];
@@ -2270,11 +2271,20 @@ const GroupMeetAdminPage: React.FC = () => {
             >
               Requests
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("booking")}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${activeTab === "booking" ? "bg-stone-900 text-white" : "border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:bg-white"}`}
+            >
+              Individual bookings
+            </button>
           </div>
 
           <div>
             <section className="rounded-lg border border-stone-200 bg-white p-6">
-              {activeTab === "create" ? (
+              {activeTab === "booking" ? (
+                <GroupMeetBookingSettings getAdminHeaders={getAdminHeaders} />
+              ) : activeTab === "create" ? (
                 <>
                   <div className="flex items-center gap-3 mb-6">
                     <div className="w-11 h-11 rounded-lg bg-stone-900/10 text-stone-900 flex items-center justify-center">
