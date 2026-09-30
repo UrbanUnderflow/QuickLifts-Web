@@ -1,6 +1,7 @@
 import {getEquitySigningRequirements, requiresEquitySigningPackage} from '../../lib/equitySigningRequirements';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Head from 'next/head';
+import {resolveEquityPlanPacket} from '../../lib/equityPlanPacket';
 import { downloadEquityCleanPdf } from '../../lib/equityCleanPdf';
 import { dateEdnaInstrument } from '../../lib/ednaDocumentDate';
 import {EDNA_PACKAGE_IDS, reconcileEdnaPackage} from '../../lib/ednaReconciledPackage';
@@ -2816,7 +2817,7 @@ const EquityAdminPage: React.FC = () => {
         stakeholderList,
       );
       if (missingPacketRequirements.length) {
-        const message = `Add a ${missingPacketRequirements.join(' and ')} before sending this signature request.`;
+        const message = `Resolve the review packet before sending: ${missingPacketRequirements.join(' ')}`;
         setSigningModalStatus({ type: 'error', text: message });
         setMessage({ type: 'error', text: message });
         return;
@@ -3187,17 +3188,6 @@ const EquityAdminPage: React.FC = () => {
     return documentList.filter(d => isSendableEquityDocument(d) && equityDoc.exhibits?.includes(d.id));
   };
 
-  const getLatestCompletedEquityDocumentByType = (
-    documentType: string,
-    documentList: EquityDocument[] = equityDocuments,
-  ) => {
-    if (documentType === 'eip') {
-      const governingId = resolveEquityPlan(documentList).active?.id;
-      return documentList.find(d => d.id === governingId) || null;
-    }
-    return getLatestRelevantDocuments(documentList.filter(d => d.documentType === documentType && d.status === 'completed'))[0] || null;
-  };
-
   const requiresEquityReviewPacket = (equityDoc: EquityDocument) =>
     ['advisor_nso_agreement', 'option_agreement', 'fast_agreement'].includes(equityDoc.documentType);
 
@@ -3209,9 +3199,7 @@ const EquityAdminPage: React.FC = () => {
     if (!requiresEquityReviewPacket(equityDoc)) return [];
 
     const missing: string[] = [];
-    if (!getLatestCompletedEquityDocumentByType('eip', documentList)) {
-      missing.push('completed Equity Incentive Plan');
-    }
+    missing.push(...resolveEquityPlanPacket(documentList).issues);
 
     if (equityDoc.stakeholderType === 'advisor' && equityDoc.stakeholderId) {
       const stakeholder = stakeholderList.find(s => s.id === equityDoc.stakeholderId);
@@ -3220,7 +3208,7 @@ const EquityAdminPage: React.FC = () => {
         : null;
 
       if (!linkedBoardConsent || !stakeholder?.boardConsentVerifiedAt) {
-        missing.push('verified advisor-specific Board Consent');
+        missing.push('Verify the advisor-specific Board Consent before sending.');
       }
     }
     return missing;
@@ -3232,14 +3220,16 @@ const EquityAdminPage: React.FC = () => {
     stakeholderList: Stakeholder[] = stakeholders,
   ): SignaturePacketDocument[] => {
     const docsById = new Map<string, EquityDocument>();
+    const planPacket = resolveEquityPlanPacket(documentList);
     const addDocument = (document?: EquityDocument | null) => {
-      if (document && isSendableEquityDocument(document) && document.id !== equityDoc.id && document.status === 'completed') {
+      if (document && isSendableEquityDocument(document) && document.id !== equityDoc.id && document.status === 'completed'
+        && (document.documentType !== 'eip' || planPacket.documents.some(plan => plan.id === document.id))) {
         docsById.set(document.id, document);
       }
     };
 
     if (requiresEquityReviewPacket(equityDoc)) {
-      addDocument(getLatestCompletedEquityDocumentByType('eip', documentList));
+      planPacket.documents.forEach(addDocument);
 
       if (equityDoc.stakeholderId) {
         const stakeholder = stakeholderList.find(s => s.id === equityDoc.stakeholderId);
@@ -3517,12 +3507,17 @@ const EquityAdminPage: React.FC = () => {
     if (!partyPackage) return null;
     const related = getLatestRelevantDocuments(getAllocationDocuments(partyPackage.name, partyPackage.stakeholderId, partyPackage.allocationKind));
     const instruments = related.filter(document => requiresExternalSignature(document));
-    const referenceDocuments = related.filter(document => !instruments.includes(document));
-    return <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`${partyPackage.name} signing package`}>
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-950 p-6 space-y-5">
-        <div className="flex justify-between gap-4"><div><h3 className="text-xl font-semibold text-white">{partyPackage.name}</h3><p className="text-sm text-zinc-400">Signing package</p></div><button aria-label="Close signing package" onClick={() => setPartyPackage(null)}><X className="w-5 h-5" /></button></div>
+    const referenceDocuments = [...new Map([
+      ...related.filter(document => !instruments.includes(document)).map(document => ({id: document.id, title: document.title, documentType: document.documentType, url: `/equity-doc/${encodeURIComponent(document.id)}`})),
+      ...instruments.flatMap(document => getSignaturePacketDocuments(document)),
+    ].map(document => [document.id, document])).values()];
+    const hasCapTable = referenceDocuments.some(document => /cap[ _-]?table/i.test(`${document.documentType} ${document.title}`));
+    return <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`${partyPackage.name} signing package`} onKeyDown={event => {if (event.key === 'Escape') {event.stopPropagation(); setPartyPackage(null);}}} onClick={event => {if (event.target === event.currentTarget) setPartyPackage(null);}}>
+      <div className="w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-100 shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-zinc-800 p-4 sm:p-6"><div><h3 className="text-xl font-semibold text-white">{partyPackage.name}</h3><p className="text-sm text-zinc-400">Signing package</p></div><button type="button" autoFocus aria-label="Close signing package" onClick={() => setPartyPackage(null)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-300"><X className="w-5 h-5" aria-hidden="true" />Close</button></div>
+        <div className="min-h-0 overflow-y-auto p-4 sm:p-6 space-y-5">
         {!instruments.length && <p className="text-zinc-400">No signing documents are linked to this party yet.</p>}
-        {!!referenceDocuments.length && <section className="rounded-xl border border-zinc-800 p-4 space-y-2"><h4 className="text-sm font-medium text-zinc-200">Party reference documents</h4>{referenceDocuments.map(document => <a key={document.id} href={`/equity-doc/${encodeURIComponent(document.id)}`} target="_blank" rel="noreferrer" className="block text-sm text-blue-200 underline">{document.title}</a>)}</section>}
+        {!!referenceDocuments.length && <section className="rounded-xl border border-zinc-800 p-4 space-y-2"><h4 className="text-sm font-medium text-zinc-200">Reference documents for a new request</h4>{referenceDocuments.map(document => <a key={document.id} href={document.url} target="_blank" rel="noreferrer" className="block text-sm text-blue-200 underline">{document.title}</a>)}<p className="text-xs text-zinc-400">{hasCapTable ? 'Cap table included in the reference list.' : 'Cap table not included. A reviewed cap-table document can be linked as an exhibit before preparing a new request.'}</p></section>}
         {instruments.map(document => {
           const ids = new Set([...(document.signingRequestIds || []), ...(document.signingRequestId ? [document.signingRequestId] : [])]);
           const current = signingRequests.filter(request => ids.has(request.id) && !request.previewMode && !request.invalidatedAt);
@@ -3534,7 +3529,7 @@ const EquityAdminPage: React.FC = () => {
             <p className="text-sm font-medium text-zinc-200">Reference documents for a new request</p>
             {references.map(reference => <a key={reference.id} href={reference.url} target="_blank" rel="noreferrer" className="block text-sm text-blue-200 underline">{reference.title}</a>)}
             {!references.length && <p className="text-sm text-zinc-400">No reference documents linked.</p>}
-            {!!missing.length && <p className="text-sm text-amber-200">Required before a new send: {missing.join(' and ')}.</p>}
+            {!!missing.length && <p className="text-sm text-amber-200">Resolve before a new send: {missing.join(' ')}</p>}
             {current.map(request => {
               const signed = Boolean(request.status === 'signed' || request.signedAt || request.signatureData);
               const canResend = !signed && request.documentContent === document.content && !document.needsResendSignature;
@@ -3546,9 +3541,10 @@ const EquityAdminPage: React.FC = () => {
                 <div className="flex flex-wrap gap-3"><a href={`/sign/${encodeURIComponent(request.packageId || request.id)}`} target="_blank" rel="noreferrer" className="text-sm text-blue-200 underline">Open signing link</a>{canResend && <button className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white" onClick={() => {setPartyPackage(null); void resendExistingSignatureRequest(request);}}>Resend email</button>}</div>
               </div>;
             })}
-            {!getEquityDocSignatureState(document).hasRecordedSignatures && <button disabled={Boolean(preparingSigningDocId)} className="rounded-lg border border-blue-500/40 px-3 py-2 text-sm text-blue-200 disabled:opacity-50" onClick={() => {setPartyPackage(null); void openSigningModal(document);}}>{current.length ? 'Prepare new request with current references' : 'Prepare signature request'}</button>}
+            {!getEquityDocSignatureState(document).hasRecordedSignatures && <button disabled={Boolean(preparingSigningDocId) || missing.length > 0} className="rounded-lg border border-blue-500/40 px-3 py-2 text-sm text-blue-200 disabled:opacity-50" onClick={() => {setPartyPackage(null); void openSigningModal(document);}}>{current.length ? 'Prepare new request with current references' : 'Prepare signature request'}</button>}
           </section>;
         })}
+        </div>
       </div>
     </div>;
   };
@@ -6556,7 +6552,7 @@ const EquityAdminPage: React.FC = () => {
                           Review packet incomplete
                         </p>
                         <p className="mt-2 text-xs text-amber-200">
-                          Add a {missingRequirements.join(' and ')} before sending this signature request.
+                          Resolve the review packet before sending: {missingRequirements.join(' ')}
                         </p>
                       </div>
                     );

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 import React from 'react';
+import {resolveEquityPlanPacket} from '../../src/lib/equityPlanPacket';
 import {renderToStaticMarkup} from 'react-dom/server';
 
 const source = readFileSync(new URL('../../src/pages/admin/equity.tsx', import.meta.url), 'utf8');
@@ -119,4 +120,40 @@ test('resend confirmation lists the saved references and preserves the existing 
   assert.deepEqual(Array.from(confirmation.documents), ['Advisor agreement', 'Original EIP (reference)', 'Valerie Board Consent (reference)']);
   assert.equal(confirmation.deliveries[0].documentId, 'original');
   assert.equal(confirmation.deliveries[0].recipientEmail, 'advisor@example.com');
+});
+
+
+test('package dialog closes from its visible button, Escape, and backdrop only', () => {
+  let closes = 0;
+  const render = callback('renderPartySigningPackage', {
+    React, X: () => null, partyPackage: {name: 'Valerie Alexander'},
+    getLatestRelevantDocuments: (documents: unknown) => documents,
+    getAllocationDocuments: () => [], requiresExternalSignature: () => true,
+    setPartyPackage: (value: unknown) => {assert.equal(value, null); closes++;},
+  });
+  const element = render();
+  function findClose(node: any): any {
+    if (!node || typeof node !== 'object') return undefined;
+    if (node.props?.['aria-label'] === 'Close signing package') return node;
+    return React.Children.toArray(node.props?.children).map(findClose).find(Boolean);
+  }
+  const close = findClose(element);
+  assert.ok(close.props.className.includes('text-white'));
+  assert.ok(React.Children.toArray(close.props.children).includes('Close'));
+  close.props.onClick();
+  element.props.onKeyDown({key: 'Escape', stopPropagation: () => {}});
+  element.props.onClick({target: 'backdrop', currentTarget: 'backdrop'});
+  element.props.onClick({target: 'content', currentTarget: 'backdrop'});
+  assert.equal(closes, 3);
+});
+
+test('actual packet callback includes the base EIP and does not re-add a conflicting draft from exhibits', () => {
+  const original = {id: 'base', documentType: 'eip', title: 'Full EIP', content: 'Full plan terms', status: 'completed', autoSigned: true};
+  const draft = {...original, id: 'draft', originalDocumentId: 'base', title: 'Amendment (Draft)', approvalStatus: 'approved', effectiveAt: '2026-09-01'};
+  const packet = callback('getSignaturePacketDocuments', {
+    resolveEquityPlanPacket, equityDocuments: [original, draft], stakeholders: [],
+    isSendableEquityDocument: () => true, requiresEquityReviewPacket: () => true,
+    getExhibitDocuments: () => [draft], window: {location: {origin: 'https://example.com'}},
+  });
+  assert.deepEqual(Array.from(packet({id: 'award'}), (document: any) => document.id), ['base']);
 });
