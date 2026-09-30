@@ -665,6 +665,7 @@ const parseEmailLogNotes = (notes: string) => {
 
   return {
     to: readMeta('To'),
+    cc: readMeta('Cc'),
     subject: readMeta('Subject'),
     status: readMeta('Status'),
     attachments: readMeta('Attachments'),
@@ -768,6 +769,12 @@ const EmailLogDetails: React.FC<{ log: ActivityLog }> = ({ log }) => {
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">To</div>
             <div className="mt-0.5 break-words font-medium text-stone-700">{details.to}</div>
+          </div>
+        )}
+        {details.cc && (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">CC</div>
+            <div className="mt-0.5 break-words font-medium text-stone-700">{details.cc}</div>
           </div>
         )}
         {details.subject && (

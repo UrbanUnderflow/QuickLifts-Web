@@ -30,12 +30,26 @@ export function addEasternDays(iso: string, days: number): string {
   for (let i = 0; i < 3; i++) { const q = parts(new Date(guess)); guess += target - Date.UTC(q.year, q.month - 1, q.day, q.hour, q.minute, q.second); }
   return new Date(guess).toISOString();
 }
-export function validateDraft(input: any, existing?: StoredSequence): Pick<EmailSequence, 'audience' | 'fromEmail' | 'toEmail' | 'steps'> {
+export function validateDraft(input: any, existing?: StoredSequence): Pick<EmailSequence, 'audience' | 'fromEmail' | 'toEmail' | 'ccEmails' | 'bccEmails' | 'steps'> {
   if (!input || !['athletic-directors', 'coaches', 'medical'].includes(input.audience)) throw new SequenceError(400, 'Select an email sequence.');
   const fromEmail = String(input.fromEmail || 'tre@fitwithpulse.ai').trim().toLowerCase();
   const toEmail = String(input.toEmail || '').trim().toLowerCase();
   if (!SENDERS.includes(fromEmail)) throw new SequenceError(400, 'Select an approved From address.');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail) || toEmail.length > 254) throw new SequenceError(400, 'Enter a valid recipient email.');
+  if (!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(toEmail) || toEmail.length > 254) throw new SequenceError(400, 'Enter a valid recipient email.');
+  const seen = new Set([toEmail]);
+  const copies = (value: unknown): string[] => {
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || value.length > 50) throw new SequenceError(400, 'Use up to 50 email recipients total.');
+    const result: string[] = [];
+    for (const entry of value) {
+      const email = typeof entry === 'string' ? entry.trim().toLowerCase() : '';
+      if (!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email) || email.length > 254) throw new SequenceError(400, 'Enter valid CC and BCC email addresses.');
+      if (!seen.has(email)) { seen.add(email); result.push(email); }
+    }
+    return result;
+  };
+  const ccEmails = copies(input.ccEmails), bccEmails = copies(input.bccEmails);
+  if (seen.size > 50) throw new SequenceError(400, 'Use up to 50 email recipients total.');
   if (!Array.isArray(input.steps) || input.steps.length !== 3) throw new SequenceError(400, 'The sequence requires three emails.');
   const steps = input.steps.map((s: any, i: number): SequenceStep => {
     if (!s || typeof s.subject !== 'string' || typeof s.body !== 'string' || s.subject.length > 180 || s.body.length > 12000 || !Number.isInteger(s.delayDays) || s.delayDays < (i ? 1 : 0) || s.delayDays > 365) throw new SequenceError(400, 'Check the email subject, message, and interval.');
@@ -43,8 +57,8 @@ export function validateDraft(input: any, existing?: StoredSequence): Pick<Email
     if (old?.sentAt && (s.subject !== old.subject || s.body !== old.body || s.delayDays !== old.delayDays)) throw new SequenceError(400, 'Sent emails cannot be edited.');
     return { id: old?.id || `email-${i + 1}`, delayDays: i ? s.delayDays : 0, subject: s.subject, body: s.body, sentAt: old?.sentAt || '', messageId: old?.messageId || '', ...(old?.tracking ? { tracking: old.tracking } : {}) };
   });
-  if (existing?.steps.some(s => s.sentAt) && (existing.toEmail !== toEmail || existing.audience !== input.audience)) throw new SequenceError(400, 'The recipient and sequence cannot change after sending starts.');
-  return { audience: input.audience, fromEmail, toEmail, steps };
+  if (existing?.steps.some(s => s.sentAt) && (existing.toEmail !== toEmail || JSON.stringify([...(existing.ccEmails || [])].sort()) !== JSON.stringify([...ccEmails].sort()) || JSON.stringify([...(existing.bccEmails || [])].sort()) !== JSON.stringify([...bccEmails].sort()) || existing.audience !== input.audience)) throw new SequenceError(400, 'The recipient and sequence cannot change after sending starts.');
+  return { audience: input.audience, fromEmail, toEmail, ccEmails, bccEmails, steps };
 }
 export function requireReady(sequence: Pick<EmailSequence, 'steps'>) {
   if (sequence.steps.some(s => !s.sentAt && (!s.subject.trim() || !s.body.trim() || /\[[^\]\n]+\]|\{\{[^}]+\}\}/.test(`${s.subject}\n${s.body}`)))) throw new SequenceError(400, 'Complete all three emails and replace bracketed placeholders before starting automatic follow-ups.');
@@ -75,9 +89,12 @@ async function clearScheduledDueDate(db: DB, tx: FirebaseFirestore.Transaction, 
 }
 export async function readSequences(db: DB, uid: string, listId: string, itemId?: string) {
   await db.runTransaction(tx => readLead(db, tx, uid, listId, itemId));
-  if (itemId) return (await db.collection(COLLECTION).doc(sequenceId(uid, listId, itemId)).get()).data() || null;
+  if (itemId) {
+    const data = (await db.collection(COLLECTION).doc(sequenceId(uid, listId, itemId)).get()).data();
+    return data ? { ...data, ccEmails: data.ccEmails || [], bccEmails: data.bccEmails || [] } : null;
+  }
   const snapshot = await db.collection(COLLECTION).where('ownerUid', '==', uid).get();
-  return snapshot.docs.map(d => d.data()).filter(s => s.listId === listId);
+  return snapshot.docs.map(d => ({ ...d.data(), ccEmails: d.data().ccEmails || [], bccEmails: d.data().bccEmails || [] } as FirebaseFirestore.DocumentData)).filter(s => s.listId === listId);
 }
 export async function mutateSequence(db: DB, uid: string, input: any, now = new Date()): Promise<StoredSequence> {
   const listId = requireId(input.listId), itemId = requireId(input.itemId);
@@ -92,7 +109,7 @@ export async function mutateSequence(db: DB, uid: string, input: any, now = new 
     const timestamp = now.toISOString();
     const draft = input.sequence ? validateDraft(input.sequence, old) : old;
     if (!draft) throw new SequenceError(400, 'Prepare the sequence first.');
-    const next: StoredSequence = { id: ref.id, ownerUid: uid, listId, itemId, status: 'draft', nextStepIndex: 0, nextSendAt: '', version: 0, lastError: '', createdAt: timestamp, updatedAt: timestamp, ...old, audience: draft.audience, fromEmail: draft.fromEmail, toEmail: draft.toEmail, steps: draft.steps };
+    const next: StoredSequence = { id: ref.id, ownerUid: uid, listId, itemId, status: 'draft', nextStepIndex: 0, nextSendAt: '', version: 0, lastError: '', createdAt: timestamp, updatedAt: timestamp, ...old, audience: draft.audience, fromEmail: draft.fromEmail, toEmail: draft.toEmail, ccEmails: draft.ccEmails || [], bccEmails: draft.bccEmails || [], steps: draft.steps };
     if (input.action === 'send') {
       if (next.status !== 'draft' || next.nextStepIndex !== 0) throw new SequenceError(409, 'This sequence has already started.');
       requireReady(next); next.status = 'active'; next.nextSendAt = timestamp;
@@ -157,7 +174,7 @@ export async function dispatchSequence(db: DB, id: string, now = new Date(), sen
   const key = `pipelists-sequence:${id}:${step.id}`;
   let result;
   try {
-    result = await send({ toEmail: claimed.toEmail, subject: step.subject, htmlContent: emailHtml(step.body, claimed.fromEmail), sender: { email: claimed.fromEmail, name: claimed.fromEmail === 'tre@fitwithpulse.ai' ? 'Tremaine Grant' : 'Pulse' }, preserveSenderEmail: true, replyTo: { email: claimed.fromEmail }, tags: ['pipelists', 'school-outreach'], headers: { 'X-Mailin-custom': JSON.stringify({ pipeListsOwnerUid: claimed.ownerUid, pipeListsListId: claimed.listId, pipeListsItemIds: [claimed.itemId], pipeListsEmailType: 'school-outreach', pipeListsSequenceId: id, pipeListsSequenceStepId: step.id, pipeListsEmailBatchId: key, pipeListsEmailRecordId: key }) }, idempotencyKey: key, idempotencyMetadata: { feature: 'PipeLists school outreach', sequenceId: id, stepId: step.id }, bypassDailyRecipientLimit: true, failClosedOnSuppressionError: true });
+    result = await send({ toEmail: claimed.toEmail, cc: (claimed.ccEmails || []).map(email => ({ email })), bcc: (claimed.bccEmails || []).map(email => ({ email })), checkAllRecipientSuppression: true, subject: step.subject, htmlContent: emailHtml(step.body, claimed.fromEmail), sender: { email: claimed.fromEmail, name: claimed.fromEmail === 'tre@fitwithpulse.ai' ? 'Tremaine Grant' : 'Pulse' }, preserveSenderEmail: true, replyTo: { email: claimed.fromEmail }, tags: ['pipelists', 'school-outreach'], headers: { 'X-Mailin-custom': JSON.stringify({ pipeListsOwnerUid: claimed.ownerUid, pipeListsListId: claimed.listId, pipeListsItemIds: [claimed.itemId], pipeListsEmailType: 'school-outreach', pipeListsSequenceId: id, pipeListsSequenceStepId: step.id, pipeListsEmailBatchId: key, pipeListsEmailRecordId: key }) }, idempotencyKey: key, idempotencyMetadata: { feature: 'PipeLists school outreach', sequenceId: id, stepId: step.id }, bypassDailyRecipientLimit: true, failClosedOnSuppressionError: true });
   } catch (error) { result = { success: false, error: `Delivery outcome is uncertain: ${(error as Error).message}` }; }
   const sentAt = new Date().toISOString();
   return db.runTransaction(async tx => {
@@ -178,7 +195,7 @@ export async function dispatchSequence(db: DB, id: string, now = new Date(), sen
     next.nextSendAt = next.status === 'active' ? addEasternDays(sentAt, next.steps[next.nextStepIndex].delayDays) : '';
     if (!lead) { next.status = 'error'; next.nextSendAt = ''; next.lastError = 'Email sent, but the lead was removed. Follow-ups stopped.'; }
     if (lead) {
-      const updateList = (list: any) => ({ ...list, items: list.items.map((item: any) => item.id !== current.itemId ? item : { ...item, dueDate: next.nextSendAt ? easternDate(new Date(next.nextSendAt)) : '', emailStatus: next.steps[claimed.nextStepIndex].tracking?.status || 'sent', lastEmailEvent: next.steps[claimed.nextStepIndex].tracking?.status || 'sent', emailOpenCount: next.steps[claimed.nextStepIndex].tracking?.openCount || 0, emailClickCount: next.steps[claimed.nextStepIndex].tracking?.clickCount || 0, lastEmailOpenedAt: next.steps[claimed.nextStepIndex].tracking?.openedAt || '', lastEmailDeliveredAt: next.steps[claimed.nextStepIndex].tracking?.deliveredAt || '', lastEmailClickedAt: next.steps[claimed.nextStepIndex].tracking?.clickedAt || '', lastEmailClickedLink: next.steps[claimed.nextStepIndex].tracking?.lastClickedLink || '', lastEmailIssueAt: next.steps[claimed.nextStepIndex].tracking?.lastIssueAt || '', lastEmailSentAt: sentAt, lastEmailMessageId: result.messageId, lastEmailType: 'school-outreach', updatedAt: sentAt, weeklyLogs: [...(item.weeklyLogs || []), { id: key, type: 'update', summary: `School outreach sent to ${current.toEmail}.`, notes: `From: ${current.fromEmail}\nTo: ${current.toEmail}\nSubject: ${step.subject}\nMessage ID: ${result.messageId}\n\nMessage:\n${step.body}`, createdAt: sentAt, weekOf: easternDate(new Date(sentAt)), systemAction: 'email-sent', relatedItemId: current.itemId }] }) });
+      const updateList = (list: any) => ({ ...list, items: list.items.map((item: any) => item.id !== current.itemId ? item : { ...item, contactEmails: [...new Set([...(Array.isArray(item.contactEmails) ? item.contactEmails : []), current.toEmail, ...(current.ccEmails || [])].map((email: string) => email.trim().toLowerCase()).filter(Boolean))], dueDate: next.nextSendAt ? easternDate(new Date(next.nextSendAt)) : '', emailStatus: next.steps[claimed.nextStepIndex].tracking?.status || 'sent', lastEmailEvent: next.steps[claimed.nextStepIndex].tracking?.status || 'sent', emailOpenCount: next.steps[claimed.nextStepIndex].tracking?.openCount || 0, emailClickCount: next.steps[claimed.nextStepIndex].tracking?.clickCount || 0, lastEmailOpenedAt: next.steps[claimed.nextStepIndex].tracking?.openedAt || '', lastEmailDeliveredAt: next.steps[claimed.nextStepIndex].tracking?.deliveredAt || '', lastEmailClickedAt: next.steps[claimed.nextStepIndex].tracking?.clickedAt || '', lastEmailClickedLink: next.steps[claimed.nextStepIndex].tracking?.lastClickedLink || '', lastEmailIssueAt: next.steps[claimed.nextStepIndex].tracking?.lastIssueAt || '', lastEmailSentAt: sentAt, lastEmailMessageId: result.messageId, lastEmailType: 'school-outreach', updatedAt: sentAt, weeklyLogs: [...(item.weeklyLogs || []), { id: key, type: 'update', summary: `School outreach sent to ${current.toEmail}.`, notes: `From: ${current.fromEmail}\nTo: ${current.toEmail}${current.ccEmails?.length ? `\nCc: ${current.ccEmails.join(', ')}` : ''}\nSubject: ${step.subject}\nMessage ID: ${result.messageId}\n\nMessage:\n${step.body}`, createdAt: sentAt, weekOf: easternDate(new Date(sentAt)), systemAction: 'email-sent', relatedItemId: current.itemId }] }) });
       tx.update(lead.stateRef, { lists: lead.lists.map((l: any) => l.id === current.listId ? updateList(l) : l) });
       if (lead.protectedList) tx.update(lead.protectedRef, { list: updateList(lead.protectedList), updatedAt: sentAt });
     }

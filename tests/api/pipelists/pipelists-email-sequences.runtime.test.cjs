@@ -5,9 +5,9 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const path = require('node:path');
 const root = path.resolve(__dirname, '../../..');
-function load(file, mocks = {}) {
+function load(file, mocks = {}, globals = {}) {
   const module = { exports: {} };
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { module, exports: module.exports, require: name => name in mocks ? mocks[name] : require(name), console, Date, Intl, process: { env: { BREVO_WEBHOOK_SECRET: 'test-secret' } }, AbortSignal });
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { module, exports: module.exports, require: name => name in mocks ? mocks[name] : require(name), console, Date, Intl, process: { env: { BREVO_WEBHOOK_SECRET: 'test-secret', BREVO_API_KEY: 'mock-provider-key' } }, AbortSignal, ...globals });
   return module.exports;
 }
 const lib = load('netlify/functions/lib/pipelistsEmailSequences.ts', { '../utils/emailSequenceHelpers': { sendBrevoTransactionalEmail: () => { throw Error('Never send a real email in tests'); } } });
@@ -247,4 +247,59 @@ test('tracking shows last open, parses event status, and protects newer unrelate
   const savedItem = db.records.get('pipeListProtectedShares/owner-school-list').list.items[0];
   assert.equal(savedItem.lastEmailMessageId, 'new-general-email'); assert.equal(savedItem.emailStatus, 'delivered');
   assert.equal(db.records.get(`${lib.COLLECTION}/${seq.id}`).steps[0].tracking.status, 'clicked');
+});
+test('CC/BCC normalize with To priority, validate, and stay immutable after sending', () => {
+  const input = { ...draft(), ccEmails: [' Copy@example.com ', 'TEST@example.com', 'copy@example.com'], bccEmails: ['hidden@example.com', 'COPY@example.com'] };
+  const normalized = lib.validateDraft(input);
+  assert.deepEqual([...normalized.ccEmails], ['copy@example.com']); assert.deepEqual([...normalized.bccEmails], ['hidden@example.com']);
+  for (const bad of ['bad', 'a,b@example.com', 'a;b@example.com']) {
+    assert.throws(() => lib.validateDraft({ ...draft(), ccEmails: [bad] }), /valid CC/);
+    assert.throws(() => lib.validateDraft({ ...draft(), toEmail: bad }), /valid recipient/);
+  }
+  const legacy = draft(); legacy.steps[0].sentAt = new Date().toISOString();
+  assert.deepEqual([...lib.validateDraft(legacy, legacy).ccEmails], []);
+  assert.throws(() => lib.validateDraft(input, legacy), /cannot change/);
+});
+test('successful send copies the envelope and adds only To plus CC to both contact lists', async () => {
+  const db = setup();
+  db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].items[0].contactEmails = ['existing@example.com', 'COPY@example.com'];
+  db.records.get('pipeListProtectedShares/owner-school-list').list.items[0].contactEmails = ['protected@example.com'];
+  let seq = await lib.mutateSequence(db, 'owner', input('send', 0, { ...draft(), ccEmails: ['Copy@example.com'], bccEmails: ['hidden@example.com'] }));
+  let payload;
+  seq = await lib.dispatchSequence(db, seq.id, new Date(), async args => { payload = args; return { success: true, messageId: 'first' }; });
+  assert.deepEqual(payload.cc.map(c => c.email), ['copy@example.com']); assert.deepEqual(payload.bcc.map(c => c.email), ['hidden@example.com']); assert.equal(payload.checkAllRecipientSuppression, true);
+  for (const item of [db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].items[0], db.records.get('pipeListProtectedShares/owner-school-list').list.items[0]]) {
+    assert.ok(item.contactEmails.includes('test@example.com')); assert.ok(item.contactEmails.includes('copy@example.com')); assert.ok(!item.contactEmails.includes('hidden@example.com'));
+    assert.match(item.weeklyLogs[0].notes, /Cc: copy@example.com/); assert.doesNotMatch(JSON.stringify(item), /hidden@example.com/);
+  }
+});
+test('failed or suppressed sends do not add To/CC contacts', async () => {
+  for (const result of [{ success: false, error: 'provider down' }, { success: true, suppressed: true, skipped: true }]) {
+    const db = setup(); const seq = await lib.mutateSequence(db, 'owner', input('send', 0, { ...draft(), ccEmails: ['copy@example.com'], bccEmails: ['hidden@example.com'] }));
+    await lib.dispatchSequence(db, seq.id, new Date(), async () => result);
+    assert.equal(db.records.get('pipeListProtectedShares/owner-school-list').list.items[0].contactEmails, undefined);
+  }
+});
+test('CC/BCC and ambiguous provider events never count as primary-recipient tracking', async () => {
+  const db = setup(); let seq = await lib.mutateSequence(db, 'owner', input('send', 0, { ...draft(), ccEmails: ['copy@example.com'], bccEmails: ['hidden@example.com'] }));
+  seq = await lib.dispatchSequence(db, seq.id, new Date(), async () => ({ success: true, messageId: 'first' }));
+  const at = new Date().toISOString();
+  for (const email of ['copy@example.com', 'hidden@example.com']) assert.equal(await tracking.trackSequenceEvent(db, trackingEvent(seq, 0, 'opened', at, { email })), false);
+  await tracking.refreshSequenceTracking(db, seq, 'mock-key', async () => ({ ok: true, status: 200, json: async () => ({ events: [{ event: 'opened', date: at, messageId: 'first' }, { event: 'opened', date: at, messageId: 'first', email: 'hidden@example.com' }] }) }));
+  assert.equal(db.records.get(`${lib.COLLECTION}/${seq.id}`).steps[0].tracking.openCount, 0);
+  assert.doesNotMatch(JSON.stringify(db.records.get('pipeListProtectedShares/owner-school-list')), /hidden@example.com/);
+});
+test('opt-in envelope suppression checks copied recipients before provider send', async () => {
+  for (const suppressed of ['copy@example.com', 'hidden@example.com']) {
+    const checked = []; let providerCalls = 0;
+    const helper = load('netlify/functions/utils/emailSequenceHelpers.ts', {
+      './getServiceAccount': { getFirestore: async () => ({}), initAdmin: () => ({}) },
+      './emailSafety': { normalizeEmailAddress: s => s.toLowerCase(), DEFAULT_EMAIL_LOCK_STALE_MS: 1000 },
+      './emailSuppression': { shouldSuppressTransactionalEmail: async ({ toEmail }) => { checked.push(toEmail); return { suppressed: toEmail === suppressed, reason: 'unsubscribed' }; } },
+    }, { fetch: async () => { providerCalls++; throw Error('Provider must not be called'); } });
+    const db = setup(); const seq = await lib.mutateSequence(db, 'owner', input('send', 0, { ...draft(), ccEmails: ['copy@example.com'], bccEmails: ['hidden@example.com'] }));
+    const result = await lib.dispatchSequence(db, seq.id, new Date(), helper.sendBrevoTransactionalEmail);
+    assert.equal(result.status, 'error'); assert.ok(checked.includes(suppressed)); assert.equal(providerCalls, 0);
+    assert.equal(db.records.get('pipeListProtectedShares/owner-school-list').list.items[0].contactEmails, undefined);
+  }
 });

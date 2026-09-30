@@ -154,3 +154,34 @@ test('each sequence email shows tracking, refresh preserves school edits, and fa
   await page.getByRole('tab').nth(1).click();
   assert.equal(await page.getByLabel('Message', { exact: true }).inputValue(), 'Preserve this email 2 draft while email 1 engagement refreshes.');
 });
+
+test('CC and BCC accept multiple addresses, validate before send, and persist across sequence tabs', async t => {
+  const page = await fixture(t);
+  await personalize(page);
+  await page.getByLabel('Recipient', { exact: true }).selectOption('__custom__');
+  await page.getByLabel('Custom email', { exact: true }).fill('new-director@howard.example');
+  await page.getByLabel('CC', { exact: true }).fill('not-an-email');
+  assert.equal(await page.getByRole('button', { name: 'Send email & start sequence' }).isDisabled(), true);
+  await page.getByRole('alert').filter({ hasText: 'valid email address' }).waitFor();
+  await page.getByLabel('CC', { exact: true }).fill('Coach@Howard.example, staff@howard.example; Coach@Howard.example');
+  await page.getByLabel('BCC', { exact: true }).fill('private@example.com, assistant@example.com');
+  await page.getByRole('tab').nth(0).click();
+  assert.equal(await page.getByLabel('BCC', { exact: true }).inputValue(), 'private@example.com, assistant@example.com');
+  await page.getByRole('button', { name: 'Save school sequence' }).click();
+  await page.getByText('School sequence saved.', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('CC', { exact: true }).inputValue(), 'coach@howard.example, staff@howard.example');
+  const saved = await page.evaluate(() => window.__record);
+  assert.equal(saved.toEmail, 'new-director@howard.example');
+  assert.deepEqual(saved.ccEmails, ['coach@howard.example', 'staff@howard.example']);
+  assert.deepEqual(saved.bccEmails, ['private@example.com', 'assistant@example.com']);
+  if (process.env.PIPELISTS_UI_SCREENSHOT_DIR) {
+    await page.screenshot({ path: path.join(process.env.PIPELISTS_UI_SCREENSHOT_DIR, 'copies-desktop.png'), fullPage: true });
+    await page.setViewportSize({ width: 375, height: 900 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await page.screenshot({ path: path.join(process.env.PIPELISTS_UI_SCREENSHOT_DIR, 'copies-mobile.png'), fullPage: true });
+  }
+  await page.getByRole('button', { name: 'Send email & start sequence' }).click();
+  await page.getByText('First email sent. Follow-ups are scheduled.', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('CC', { exact: true }).isDisabled(), true);
+  assert.equal(await page.getByLabel('BCC', { exact: true }).isDisabled(), true);
+});

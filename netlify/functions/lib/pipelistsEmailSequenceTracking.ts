@@ -92,6 +92,7 @@ export async function refreshSequenceTracking(db: FirebaseFirestore.Firestore, s
       if (!eventType || Number.isNaN(date.getTime())) continue;
       // The provider query is scoped to this message; reject explicit mismatches in its response.
       const messageId = String(event.messageId || event['message-id'] || step.messageId);
+      if (!event.email && ((sequence.ccEmails || []).length || (sequence.bccEmails || []).length)) continue;
       const email = String(event.email || sequence.toEmail);
       await trackSequenceEvent(db, { sequenceId: sequence.id, stepId: step.id, ownerUid: sequence.ownerUid, listId: sequence.listId, itemIds: [sequence.itemId], email, messageId, event: eventType, eventAt: date.toISOString(), eventId: event.id, link: event.link, authenticated: true });
     }

@@ -9,12 +9,12 @@ export type SequenceTracking = { status: string; deliveredAt?: string; openedAt?
 export type SequenceStep = { tracking?: SequenceTracking; id: string; delayDays: number; subject: string; body: string; sentAt: string; messageId: string };
 export type EmailSequence = {
   id: string; ownerUid: string; listId: string; itemId: string;
-  audience: SequenceAudience; fromEmail: string; toEmail: string;
+  audience: SequenceAudience; fromEmail: string; toEmail: string; ccEmails?: string[]; bccEmails?: string[];
   steps: SequenceStep[]; status: 'draft' | 'active' | 'paused' | 'completed' | 'error';
   nextStepIndex: number; nextSendAt: string; version: number;
   lastError: string; createdAt: string; updatedAt: string;
 };
-export type SequenceDraft = Pick<EmailSequence, 'audience' | 'fromEmail' | 'toEmail' | 'steps'>;
+export type SequenceDraft = Pick<EmailSequence, 'audience' | 'fromEmail' | 'toEmail' | 'ccEmails' | 'bccEmails' | 'steps'>;
 
 // Supplied outreach wording. Keep school-specific edits in the sequence record.
 const templates: Record<SequenceAudience, SequenceStep[]> = {
@@ -101,7 +101,7 @@ const templates: Record<SequenceAudience, SequenceStep[]> = {
 export function createSequenceDraft(audience: SequenceAudience, school: string, toEmail = ''): SequenceDraft {
   const personalize = (text: string) => text.replaceAll('[University Name]', school || '[University Name]');
   return {
-    audience, fromEmail: SEQUENCE_SENDERS[0], toEmail,
+    audience, fromEmail: SEQUENCE_SENDERS[0], toEmail, ccEmails: [], bccEmails: [],
     steps: templates[audience].map(step => ({ ...step, subject: personalize(step.subject), body: personalize(step.body) })),
   };
 }

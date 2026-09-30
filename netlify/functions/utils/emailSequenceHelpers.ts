@@ -688,6 +688,7 @@ export async function sendBrevoTransactionalEmail(args: {
   dailyRecipientLimit?: number;
   dailyRecipientMetadata?: Record<string, any>;
   failClosedOnSuppressionError?: boolean;
+  checkAllRecipientSuppression?: boolean;
   attachment?: Array<{ content: string; name: string }>;
 }): Promise<SequenceEmailSendResult> {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
@@ -700,34 +701,39 @@ export async function sendBrevoTransactionalEmail(args: {
   }
 
   const dailyRecipientMetadata = args.dailyRecipientMetadata || args.idempotencyMetadata;
-  const suppressionResult = await shouldSuppressTransactionalEmail({
-    db: await getFirestore(),
-    admin: initAdmin(),
-    toEmail: args.toEmail,
-    headers: args.headers,
-    idempotencyMetadata: args.idempotencyMetadata,
-    dailyRecipientMetadata,
-  }).catch((error: any) => {
-    console.warn('[emailSequenceHelpers] Failed to check email suppression:', error);
-    return { suppressed: false, error: error?.message || String(error) };
-  });
-
-  if (args.failClosedOnSuppressionError && suppressionResult?.error) {
-    return { success: false, error: 'Unable to verify email suppression. Sending stopped for review.' };
-  }
-
-  if (suppressionResult?.suppressed) {
-    console.log('[emailSequenceHelpers] Skipping suppressed recipient:', {
-      toEmail: normalizeEmailAddress(args.toEmail),
-      reason: suppressionResult.reason,
-      suppressionId: suppressionResult.suppressionId,
+  const suppressionRecipients = args.checkAllRecipientSuppression
+    ? [...new Set([args.toEmail, ...(args.cc || []).map(recipient => recipient.email), ...(args.bcc || []).map(recipient => recipient.email)].map(normalizeEmailAddress))]
+    : [args.toEmail];
+  for (const recipientEmail of suppressionRecipients) {
+    const suppressionResult = await shouldSuppressTransactionalEmail({
+      db: await getFirestore(),
+      admin: initAdmin(),
+      toEmail: recipientEmail,
+      headers: args.headers,
+      idempotencyMetadata: args.idempotencyMetadata,
+      dailyRecipientMetadata,
+    }).catch((error: any) => {
+      console.warn('[emailSequenceHelpers] Failed to check email suppression:', error);
+      return { suppressed: false, error: error?.message || String(error) };
     });
-    return {
-      success: true,
-      skipped: true,
-      suppressed: true,
-      suppressionReason: suppressionResult.reason,
-    };
+
+    if (args.failClosedOnSuppressionError && suppressionResult?.error) {
+      return { success: false, error: 'Unable to verify email suppression. Sending stopped for review.' };
+    }
+
+    if (suppressionResult?.suppressed) {
+      console.log('[emailSequenceHelpers] Skipping suppressed recipient:', {
+        toEmail: normalizeEmailAddress(args.toEmail),
+        reason: suppressionResult.reason,
+        suppressionId: suppressionResult.suppressionId,
+      });
+      return {
+        success: true,
+        skipped: true,
+        suppressed: true,
+        suppressionReason: suppressionResult.reason,
+      };
+    }
   }
 
   const configuredSenderEmail = args.sender?.email || process.env.BREVO_AUTOMATED_SENDER_EMAIL;

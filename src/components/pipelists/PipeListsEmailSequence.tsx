@@ -18,14 +18,18 @@ const buttonClass = 'inline-flex items-center justify-center gap-2 rounded-full 
 const dateLabel = (value: string) => new Intl.DateTimeFormat('en-US', {
   month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', timeZoneName: 'short',
 }).format(new Date(value));
+const parseCopyEmails = (value: string) => Array.from(new Set(value.split(/[\s,;]+/).map(email => email.trim().toLowerCase()).filter(Boolean)));
+const validRecipient = (email: string) => /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(email) && email.length <= 254;
 const draftFrom = (sequence: EmailSequence): SequenceDraft => ({
-  audience: sequence.audience, fromEmail: sequence.fromEmail, toEmail: sequence.toEmail, steps: sequence.steps,
+  audience: sequence.audience, fromEmail: sequence.fromEmail, toEmail: sequence.toEmail, ccEmails: sequence.ccEmails || [], bccEmails: sequence.bccEmails || [], steps: sequence.steps,
 });
 
 export default function PipeListsEmailSequence({ user, listId, item, onClose }: Props) {
   const [sequence, setSequence] = useState<EmailSequence | null>(null);
   const [draft, setDraft] = useState(() => createSequenceDraft('athletic-directors', item.organization || item.title, item.contactEmails[0] || ''));
   const [baseline, setBaseline] = useState('');
+  const [ccInput, setCcInput] = useState('');
+  const [bccInput, setBccInput] = useState('');
   const [selectedStep, setSelectedStep] = useState(0);
   const [customRecipient, setCustomRecipient] = useState(item.contactEmails.length === 0);
   const [loading, setLoading] = useState(true);
@@ -43,7 +47,9 @@ export default function PipeListsEmailSequence({ user, listId, item, onClose }: 
   const active = sequence?.status === 'active';
   const step = draft.steps[selectedStep];
   const missingFields = unresolvedSequenceFields(draft.steps);
-  const canStart = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(draft.toEmail) && missingFields.length === 0 && draft.steps.every(row => row.subject.trim() && row.body.trim());
+  const copiesValid = [...(draft.ccEmails || []), ...(draft.bccEmails || [])].every(validRecipient);
+  const tooManyRecipients = new Set([draft.toEmail, ...(draft.ccEmails || []), ...(draft.bccEmails || [])]).size > 50;
+  const canStart = validRecipient(draft.toEmail) && copiesValid && !tooManyRecipients && missingFields.length === 0 && draft.steps.every(row => row.subject.trim() && row.body.trim());
 
   const request = useCallback(async (body?: Record<string, unknown>) => {
     const token = await user.getIdToken();
@@ -64,6 +70,8 @@ export default function PipeListsEmailSequence({ user, listId, item, onClose }: 
     const nextDraft = next ? draftFrom(next) : createSequenceDraft('athletic-directors', item.organization || item.title, item.contactEmails[0] || '');
     setSequence(next);
     setDraft(nextDraft);
+    setCcInput((nextDraft.ccEmails || []).join(', '));
+    setBccInput((nextDraft.bccEmails || []).join(', '));
     setBaseline(JSON.stringify(nextDraft));
     setCustomRecipient(!item.contactEmails.includes(nextDraft.toEmail));
     if (selectNext) setSelectedStep(Math.min(next?.nextStepIndex || 0, nextDraft.steps.length - 1));
@@ -197,7 +205,7 @@ export default function PipeListsEmailSequence({ user, listId, item, onClose }: 
         {!sequence && item.lastEmailSentAt && <p className="mt-2">This lead has earlier email activity. This sequence has not started.</p>}
       </div>
       {sequence?.steps.some(row => row.messageId) && <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-stone-500">Each email keeps its own delivery and engagement history.</p>
+        <p className="text-xs text-stone-500">Each email keeps its own delivery and engagement history for the To recipient.</p>
         <button type="button" className={buttonClass} disabled={busy || refreshingTracking} onClick={() => void refreshTracking()}>{refreshingTracking ? 'Checking email activity…' : 'Refresh email tracking'}</button>
       </div>}
       <fieldset disabled={busy} className="min-w-0 space-y-5">
@@ -209,10 +217,28 @@ export default function PipeListsEmailSequence({ user, listId, item, onClose }: 
             setDraft(current => ({ ...current, toEmail: custom ? '' : event.target.value }));
           }}>{item.contactEmails.map(email => <option key={email} value={email}>{email}</option>)}<option value="__custom__">Custom item</option></select></label>
           {customRecipient && <label className="block text-sm font-semibold text-stone-700 sm:col-span-2">Custom email<input aria-label="Custom email" className={`${fieldClass} mt-1.5`} type="email" value={draft.toEmail} disabled={hasStarted} placeholder="name@university.edu" onChange={event => setDraft(current => ({ ...current, toEmail: event.target.value.trim().toLowerCase() }))} /></label>}
+          <label className="block text-sm font-semibold text-stone-700">CC<textarea
+            aria-label="CC" rows={2} inputMode="email" autoCapitalize="none" spellCheck={false}
+            className={`${fieldClass} mt-1.5 min-h-20 resize-y font-normal`} value={ccInput} disabled={hasStarted}
+            placeholder="name@university.edu, colleague@university.edu"
+            onChange={event => { setCcInput(event.target.value); setDraft(current => ({ ...current, ccEmails: parseCopyEmails(event.target.value) })); }}
+          /></label>
+          <label className="block text-sm font-semibold text-stone-700">BCC<textarea
+            aria-label="BCC" rows={2} inputMode="email" autoCapitalize="none" spellCheck={false}
+            className={`${fieldClass} mt-1.5 min-h-20 resize-y font-normal`} value={bccInput} disabled={hasStarted}
+            placeholder="name@example.com"
+            onChange={event => { setBccInput(event.target.value); setDraft(current => ({ ...current, bccEmails: parseCopyEmails(event.target.value) })); }}
+          /></label>
+          <div className="text-xs font-normal leading-5 text-stone-600 sm:col-span-2">
+            <p>Separate addresses with commas. To and CC addresses are added to this lead’s contacts after a successful send.</p>
+            <p>BCC addresses stay out of the lead’s contacts and shared activity logs. These recipients apply to all three emails.</p>
+            {tooManyRecipients && <p role="alert" className="mt-1 text-rose-800">Use up to 50 recipients total across To, CC, and BCC.</p>}
+            {!copiesValid && <p role="alert" className="mt-1 text-rose-800">Enter a valid email address for each CC and BCC recipient.</p>}
+          </div>
           <label className="block text-sm font-semibold text-stone-700 sm:col-span-2">Sequence for<select aria-label="Sequence for" className={`${fieldClass} mt-1.5`} disabled={hasStarted} value={draft.audience} onChange={event => {
             if (dirty && !window.confirm('Replace these email drafts with the selected audience’s sequence?')) return;
             const next = createSequenceDraft(event.target.value as SequenceAudience, item.organization || item.title, draft.toEmail);
-            setDraft({ ...next, fromEmail: draft.fromEmail });
+            setDraft({ ...next, fromEmail: draft.fromEmail, ccEmails: draft.ccEmails || [], bccEmails: draft.bccEmails || [] });
             setSelectedStep(0);
           }}>{Object.entries(SEQUENCE_AUDIENCES).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
         </div>
