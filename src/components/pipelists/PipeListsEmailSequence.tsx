@@ -3,7 +3,7 @@ import type { User } from 'firebase/auth';
 import PipeListsEmailTracking, { trackingStatusLabel } from './PipeListsEmailTracking';
 import { ArrowLeft, Mail, Pause, Play, Save } from 'lucide-react';
 import {
-  createSequenceDraft, SEQUENCE_AUDIENCES, SEQUENCE_SENDERS, sequenceDay, unresolvedSequenceFields,
+  createSequenceDraft, SEQUENCE_AUDIENCES, SEQUENCE_SENDERS, sequenceDay, sequenceReadinessIssues,
   type EmailSequence, type SequenceAudience, type SequenceDraft, type SequenceStep,
 } from '../../utils/pipelistsEmailSequence';
 
@@ -46,10 +46,12 @@ export default function PipeListsEmailSequence({ user, listId, item, onClose }: 
   const completed = sequence?.status === 'completed';
   const active = sequence?.status === 'active';
   const step = draft.steps[selectedStep];
-  const missingFields = unresolvedSequenceFields(draft.steps);
+  const readinessIssues = sequenceReadinessIssues(draft.steps);
+  const subjectRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const copiesValid = [...(draft.ccEmails || []), ...(draft.bccEmails || [])].every(validRecipient);
   const tooManyRecipients = new Set([draft.toEmail, ...(draft.ccEmails || []), ...(draft.bccEmails || [])]).size > 50;
-  const canStart = validRecipient(draft.toEmail) && copiesValid && !tooManyRecipients && missingFields.length === 0 && draft.steps.every(row => row.subject.trim() && row.body.trim());
+  const canStart = validRecipient(draft.toEmail) && copiesValid && !tooManyRecipients && readinessIssues.length === 0;
 
   const request = useCallback(async (body?: Record<string, unknown>) => {
     const token = await user.getIdToken();
@@ -244,7 +246,7 @@ export default function PipeListsEmailSequence({ user, listId, item, onClose }: 
         </div>
         <div>
           <div role="tablist" aria-label="Sequence emails" className="flex flex-wrap gap-2">
-            {draft.steps.map((row, index) => <button type="button" role="tab" id={`sequence-tab-${index}`} aria-controls="sequence-email-panel" aria-selected={selectedStep === index} key={row.id} onClick={() => setSelectedStep(index)} className={`${buttonClass} ${selectedStep === index ? '!border-stone-900 !bg-stone-900 !text-white' : ''}`}>Day {sequenceDay(draft.steps, index)} · Email {index + 1}{row.sentAt ? ` · ${trackingStatusLabel(sequence?.steps[index]?.tracking?.status, row.sentAt)}` : ''}</button>)}
+            {draft.steps.map((row, index) => <button type="button" role="tab" id={`sequence-tab-${index}`} aria-controls="sequence-email-panel" aria-selected={selectedStep === index} key={row.id} onClick={() => setSelectedStep(index)} className={`${buttonClass} ${selectedStep === index ? '!border-stone-900 !bg-stone-900 !text-white' : ''}`}>Day {sequenceDay(draft.steps, index)} · Email {index + 1}{row.sentAt ? ` · ${trackingStatusLabel(sequence?.steps[index]?.tracking?.status, row.sentAt)}` : readinessIssues.some(issue => issue.stepIndex === index) ? ' · Needs edits' : ''}</button>)}
           </div>
           <div id="sequence-email-panel" role="tabpanel" aria-labelledby={`sequence-tab-${selectedStep}`} className="mt-4 space-y-4 rounded-lg border border-stone-200 p-4">
             {(step.sentAt || sequence?.steps[selectedStep]?.tracking) && <PipeListsEmailTracking
@@ -252,15 +254,32 @@ export default function PipeListsEmailSequence({ user, listId, item, onClose }: 
               tracking={{ ...sequence?.steps[selectedStep]?.tracking, sentAt: step.sentAt }}
             />}
             {step.sentAt ? <p className="text-sm text-stone-600">Sent {dateLabel(step.sentAt)}. Sent emails are kept unchanged.</p> : selectedStep > 0 ? <label className="block text-sm font-semibold text-stone-700">Days after the previous email<input aria-label="Days after the previous email" type="number" min={1} max={365} className={`${fieldClass} mt-1.5 max-w-32 block`} value={step.delayDays} onChange={event => updateStep({ delayDays: Number(event.target.value) })} /></label> : <p className="text-sm text-stone-600">Sent when you select “Send email & start sequence”.</p>}
-            <label className="block text-sm font-semibold text-stone-700">Subject<input aria-label="Subject" className={`${fieldClass} mt-1.5`} maxLength={180} value={step.subject} disabled={Boolean(step.sentAt)} onChange={event => updateStep({ subject: event.target.value })} /></label>
-            <label className="block text-sm font-semibold text-stone-700">Message<textarea aria-label="Message" className={`${fieldClass} mt-1.5 min-h-80 resize-y font-normal leading-6`} maxLength={12000} value={step.body} disabled={Boolean(step.sentAt)} onChange={event => updateStep({ body: event.target.value })} /></label>
+            <label className="block text-sm font-semibold text-stone-700">Subject<input ref={subjectRef} aria-label="Subject" className={`${fieldClass} mt-1.5`} maxLength={180} value={step.subject} disabled={Boolean(step.sentAt)} onChange={event => updateStep({ subject: event.target.value })} /></label>
+            <label className="block text-sm font-semibold text-stone-700">Message<textarea ref={bodyRef} aria-label="Message" className={`${fieldClass} mt-1.5 min-h-80 resize-y font-normal leading-6`} maxLength={12000} value={step.body} disabled={Boolean(step.sentAt)} onChange={event => updateStep({ body: event.target.value })} /></label>
             <p className="text-xs leading-5 text-stone-500">Your Tremaine Grant / Pulse Intelligence Labs signature is added automatically. Changes apply only to this school.</p>
           </div>
         </div>
       </fieldset>
       {!completed && <>
         <p className="text-sm leading-6 text-stone-600">Review names, university references, claims, and resource links in all three drafts before starting.</p>
-        {missingFields.length > 0 && <p className="text-sm text-amber-900">Replace these placeholders before automatic sending: {missingFields.join(', ')}.</p>}
+        {readinessIssues.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950" aria-label="Emails that need edits">
+          <p>{readinessIssues.some(issue => issue.stepIndex === selectedStep)
+            ? 'Complete the fields below before starting automatic follow-ups.'
+            : `Email ${selectedStep + 1} has no remaining placeholders or empty fields. The following emails still need edits before automatic follow-ups can start.`}</p>
+          <ul className="mt-2 space-y-1">
+            {readinessIssues.map(issue => <li key={`${issue.stepIndex}-${issue.field}`}>
+              <button type="button" className="rounded px-1 py-1 text-left underline underline-offset-2 hover:bg-amber-100" onClick={() => {
+                setSelectedStep(issue.stepIndex);
+                window.requestAnimationFrame(() => {
+                  const input = issue.field === 'subject' ? subjectRef.current : bodyRef.current;
+                  input?.focus();
+                  const index = input?.value.indexOf(issue.placeholders[0] || '') ?? -1;
+                  if (input && index >= 0 && issue.placeholders[0]) input.setSelectionRange(index, index + issue.placeholders[0].length);
+                });
+              }}>Day {issue.day} · Email {issue.stepIndex + 1} · {issue.field === 'subject' ? 'Subject' : 'Message'}: {issue.empty ? 'Add text' : issue.placeholders.join(', ')}</button>
+            </li>)}
+          </ul>
+        </div>}
         <div className="flex flex-wrap gap-2 border-t border-stone-100 pt-4">
           <button type="button" disabled={busy || (!dirty && Boolean(sequence))} onClick={() => void mutate('save')} className={buttonClass}><Save size={16} />{busy ? 'Working…' : 'Save school sequence'}</button>
           {!hasStarted && sequence?.status !== 'error' && <button type="button" disabled={busy || !canStart || active} onClick={() => void mutate('send')} className={`${buttonClass} !border-stone-900 !bg-stone-900 !text-white`}><Mail size={16} />Send email &amp; start sequence</button>}

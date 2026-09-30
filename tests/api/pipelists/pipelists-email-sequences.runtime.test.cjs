@@ -10,7 +10,8 @@ function load(file, mocks = {}, globals = {}) {
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { module, exports: module.exports, require: name => name in mocks ? mocks[name] : require(name), console, Date, Intl, process: { env: { BREVO_WEBHOOK_SECRET: 'test-secret', BREVO_API_KEY: 'mock-provider-key' } }, AbortSignal, ...globals });
   return module.exports;
 }
-const lib = load('netlify/functions/lib/pipelistsEmailSequences.ts', { '../utils/emailSequenceHelpers': { sendBrevoTransactionalEmail: () => { throw Error('Never send a real email in tests'); } } });
+const sequenceUtils = load('src/utils/pipelistsEmailSequence.ts');
+const lib = load('netlify/functions/lib/pipelistsEmailSequences.ts', { '../../../src/utils/pipelistsEmailSequence': sequenceUtils, '../utils/emailSequenceHelpers': { sendBrevoTransactionalEmail: () => { throw Error('Never send a real email in tests'); } } });
 function database() {
   const records = new Map();
   const ref = path => ({ id: path.split('/').pop(), path, collection: id => collection(`${path}/${id}`), get: async () => snapshot(path), set: async data => records.set(path, { ...records.get(path), ...data }), update: async data => records.set(path, { ...records.get(path), ...data }) });
@@ -302,4 +303,24 @@ test('opt-in envelope suppression checks copied recipients before provider send'
     assert.equal(result.status, 'error'); assert.ok(checked.includes(suppressed)); assert.equal(providerCalls, 0);
     assert.equal(db.records.get('pipeListProtectedShares/owner-school-list').list.items[0].contactEmails, undefined);
   }
+});
+
+
+test('readiness identifies the follow-up field without blaming the completed first email', () => {
+  const sequence = draft();
+  sequence.steps[1].body = 'Hi [Name] at {{School}}';
+  sequence.steps[2].subject = '';
+  const issues = sequenceUtils.sequenceReadinessIssues(sequence.steps);
+  assert.equal(issues.length, 2);
+  assert.equal(issues[0].stepIndex, 1);
+  assert.equal(issues[0].day, 5);
+  assert.equal(issues[0].field, 'body');
+  assert.equal(issues[0].placeholders.join(', '), '[Name], {{School}}');
+  assert.equal(issues[1].day, 12);
+  assert.equal(issues[1].empty, true);
+  assert.throws(() => lib.requireReady(sequence), error => /Email 2 message/.test(error.message) && /Email 3 subject/.test(error.message) && !/Email 1/.test(error.message));
+  sequence.steps[1].body = 'Hi Robert at Morgan State';
+  sequence.steps[2].subject = 'Checking in';
+  assert.equal(sequenceUtils.sequenceReadinessIssues(sequence.steps).length, 0);
+  assert.doesNotThrow(() => lib.requireReady(sequence));
 });

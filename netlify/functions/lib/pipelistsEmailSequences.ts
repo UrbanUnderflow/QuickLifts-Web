@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import type { EmailSequence, SequenceStep } from '../../../src/utils/pipelistsEmailSequence';
+import { sequenceReadinessIssues, type EmailSequence, type SequenceStep } from '../../../src/utils/pipelistsEmailSequence';
 import { sendBrevoTransactionalEmail } from '../utils/emailSequenceHelpers';
 
 export const COLLECTION = 'pipeListEmailSequences';
@@ -61,7 +61,11 @@ export function validateDraft(input: any, existing?: StoredSequence): Pick<Email
   return { audience: input.audience, fromEmail, toEmail, ccEmails, bccEmails, steps };
 }
 export function requireReady(sequence: Pick<EmailSequence, 'steps'>) {
-  if (sequence.steps.some(s => !s.sentAt && (!s.subject.trim() || !s.body.trim() || /\[[^\]\n]+\]|\{\{[^}]+\}\}/.test(`${s.subject}\n${s.body}`)))) throw new SequenceError(400, 'Complete all three emails and replace bracketed placeholders before starting automatic follow-ups.');
+  const issues = sequenceReadinessIssues(sequence.steps);
+  if (issues.length) {
+    const details = issues.map(issue => `Day ${issue.day} / Email ${issue.stepIndex + 1} ${issue.field === 'subject' ? 'subject' : 'message'}: ${issue.empty ? 'add text' : issue.placeholders.join(', ')}`).join('; ');
+    throw new SequenceError(400, `Complete these fields or placeholders before automatic follow-ups: ${details}`);
+  }
 }
 async function readLead(db: DB, tx: FirebaseFirestore.Transaction, uid: string, listId: string, itemId?: string) {
   const stateRef = db.collection('simpbudget-users').doc(uid).collection('pipeLists').doc('state');

@@ -110,7 +110,21 @@ export function sequenceDay(steps: SequenceStep[], index: number): number {
   return 1 + steps.slice(0, index + 1).reduce((total, step) => total + step.delayDays, 0);
 }
 
+export type SequenceReadinessIssue = { stepIndex: number; day: number; field: 'subject' | 'body'; placeholders: string[]; empty: boolean };
+
+export function sequenceReadinessIssues(steps: SequenceStep[]): SequenceReadinessIssue[] {
+  return steps.flatMap((step, stepIndex) => {
+    if (step.sentAt) return [];
+    return (['subject', 'body'] as const).flatMap(field => {
+      const text = step[field];
+      const placeholders = Array.from(new Set(text.match(/\[[^\]\n]+\]|\{\{[^}]+\}\}/g) || []));
+      return !text.trim() || placeholders.length
+        ? [{ stepIndex, day: sequenceDay(steps, stepIndex), field, placeholders, empty: !text.trim() }]
+        : [];
+    });
+  });
+}
+
 export function unresolvedSequenceFields(steps: SequenceStep[]): string[] {
-  return Array.from(new Set(steps.filter(step => !step.sentAt).flatMap(step =>
-    (`${step.subject}\n${step.body}`).match(/\[[^\]\n]+\]/g) || [])));
+  return Array.from(new Set(sequenceReadinessIssues(steps).flatMap(issue => issue.placeholders)));
 }

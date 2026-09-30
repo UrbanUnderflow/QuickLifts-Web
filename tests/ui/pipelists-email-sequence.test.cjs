@@ -76,7 +76,7 @@ test('school editor selects senders and contacts, retains step edits, saves, sta
   assert.equal(await page.getByLabel('Recipient', { exact: true }).inputValue(), 'ad@howard.example');
   assert.match(await page.getByLabel('Message', { exact: true }).inputValue(), /Hi \[Name\]/);
   assert.equal(await page.getByRole('button', { name: 'Send email & start sequence' }).isDisabled(), true);
-  assert.deepEqual(await page.getByRole('tab').allTextContents(), ['Day 1 · Email 1', 'Day 5 · Email 2', 'Day 12 · Email 3']);
+  assert.deepEqual(await page.getByRole('tab').allTextContents(), ['Day 1 · Email 1 · Needs edits', 'Day 5 · Email 2 · Needs edits', 'Day 12 · Email 3 · Needs edits']);
   await page.getByLabel('From', { exact: true }).selectOption('hello@fitwithpulse.ai');
   await page.getByLabel('Recipient', { exact: true }).selectOption('__custom__');
   await page.getByLabel('Custom email', { exact: true }).fill('director@howard.example');
@@ -184,4 +184,26 @@ test('CC and BCC accept multiple addresses, validate before send, and persist ac
   await page.getByText('First email sent. Follow-ups are scheduled.', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('CC', { exact: true }).isDisabled(), true);
   assert.equal(await page.getByLabel('BCC', { exact: true }).isDisabled(), true);
+});
+
+
+test('a finished first email points to placeholders in the exact follow-up and field', async t => {
+  const page = await fixture(t);
+  await page.getByLabel('Sequence for', { exact: true }).selectOption('coaches');
+  await page.getByLabel('Message', { exact: true }).fill('Hi Robert, this first email is fully personalized.');
+  const notice = page.getByLabel('Emails that need edits', { exact: true });
+  await notice.getByText(/Email 1 has no remaining placeholders/).waitFor();
+  assert.equal(await notice.getByRole('button', { name: /Email 1/ }).count(), 0);
+  if (process.env.PIPELISTS_UI_SCREENSHOT_DIR) {
+    await fs.mkdir(process.env.PIPELISTS_UI_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({ path: path.join(process.env.PIPELISTS_UI_SCREENSHOT_DIR, 'placeholder-guidance.png'), fullPage: true });
+  }
+  await notice.getByRole('button', { name: /Day 5 · Email 2 · Message/ }).click();
+  assert.equal(await page.getByRole('tab').nth(1).getAttribute('aria-selected'), 'true');
+  await page.getByLabel('Message', { exact: true }).fill('Follow-up for Robert at Howard University.');
+  assert.equal(await notice.getByRole('button', { name: /Email 2/ }).count(), 0);
+  await notice.getByRole('button', { name: /Day 12 · Email 3 · Message/ }).click();
+  await page.getByLabel('Message', { exact: true }).fill('A resource for Robert: https://example.org/overview');
+  assert.equal(await page.getByLabel('Emails that need edits', { exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Send email & start sequence' }).isEnabled(), true);
 });
