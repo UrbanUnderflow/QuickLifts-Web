@@ -687,6 +687,7 @@ export async function sendBrevoTransactionalEmail(args: {
   bypassDailyRecipientLimit?: boolean;
   dailyRecipientLimit?: number;
   dailyRecipientMetadata?: Record<string, any>;
+  failClosedOnSuppressionError?: boolean;
   attachment?: Array<{ content: string; name: string }>;
 }): Promise<SequenceEmailSendResult> {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
@@ -710,6 +711,10 @@ export async function sendBrevoTransactionalEmail(args: {
     console.warn('[emailSequenceHelpers] Failed to check email suppression:', error);
     return { suppressed: false, error: error?.message || String(error) };
   });
+
+  if (args.failClosedOnSuppressionError && suppressionResult?.error) {
+    return { success: false, error: 'Unable to verify email suppression. Sending stopped for review.' };
+  }
 
   if (suppressionResult?.suppressed) {
     console.log('[emailSequenceHelpers] Skipping suppressed recipient:', {

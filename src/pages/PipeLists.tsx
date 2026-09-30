@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { NextPage } from 'next';
+import PipeListsEmailSequence from '../components/pipelists/PipeListsEmailSequence';
+import PipeListsEmailTracking, { EmailTrackingBadge } from '../components/pipelists/PipeListsEmailTracking';
 import Link from 'next/link';
 import {
   GoogleAuthProvider,
@@ -83,6 +85,7 @@ import { simpBudgetAuth, simpBudgetDb, simpBudgetStorage } from '../api/firebase
 import {
   buildSyncedEmailEventLog,
   emailStatusRank,
+  normalizeSyncedEmailStatus,
   type SyncedEmailEventSummary,
 } from '../utils/pipelistsEmailEventSync';
 import PipeListsRunbook from '../components/pipelists/PipeListsRunbook';
@@ -1169,15 +1172,7 @@ const buildFriendAnalysisNotes = (friend: FriendOfBusinessContact) => {
 };
 
 const normalizeEmailStatus = (value: unknown) => String(value || '').trim().toLowerCase();
-const normalizeContactEmailStatusInput = (value: unknown) => {
-  const status = normalizeEmailStatus(value);
-  if (!status) return 'not_sent';
-  if (status === 'request') return 'sent';
-  if (status === 'unique_opened' || status === 'uniqueopened' || status === 'proxy_open' || status === 'unique_proxy_open' || status === 'uniqueproxyopen') return 'opened';
-  if (status === 'click') return 'clicked';
-  if (status === 'unsubscribe') return 'unsubscribed';
-  return status;
-};
+const normalizeContactEmailStatusInput = normalizeSyncedEmailStatus;
 
 const emailStatusLabel = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEvent'>) => {
   const status = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
@@ -5148,7 +5143,7 @@ const PipelinePage: NextPage = () => {
         return {
           ...list,
           items: list.items.map((item) => {
-            if (item.id !== args.itemId) return item;
+            if (item.id !== args.itemId || item.lastEmailMessageId !== args.messageId) return item;
             const currentStatus = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
             if (emailStatusRank(normalizedStatus) < emailStatusRank(currentStatus)) return item;
 
@@ -5196,12 +5191,13 @@ const PipelinePage: NextPage = () => {
     if (!user || !isOwner || isSharedView) return undefined;
     if (viewMode !== 'logs' && detailModalMode !== 'logs') return undefined;
 
-    const candidates = new Map<string, { listId: string; itemId: string; messageId: string }>();
+    const candidates = new Map<string, { listId: string; itemId: string; messageId: string; schoolSequence: boolean }>();
     const addCandidate = (listId: string, item: PipelineItem) => {
       const messageId = item.lastEmailMessageId.trim();
       const status = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
-      if (!messageId || emailStatusRank(status) >= emailStatusRank('opened')) return;
-      candidates.set(messageId, { listId, itemId: item.id, messageId });
+      const schoolSequence = item.lastEmailType === 'school-outreach';
+      if (!messageId || (!schoolSequence && emailStatusRank(status) >= emailStatusRank('opened'))) return;
+      candidates.set(messageId, { listId, itemId: item.id, messageId, schoolSequence });
     };
 
     if (detailModalMode === 'logs' && selectedDetailItem) {
@@ -5228,16 +5224,18 @@ const PipelinePage: NextPage = () => {
       await Promise.all(
         pending.map(async (candidate) => {
           try {
-            const response = await fetch('/api/pipelists/check-email-events', {
+            const response = await fetch(candidate.schoolSequence ? '/api/pipelists/email-sequence' : '/api/pipelists/check-email-events', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${idToken}`,
               },
-              body: JSON.stringify({ messageId: candidate.messageId }),
+              body: JSON.stringify(candidate.schoolSequence
+                ? { action: 'refresh-tracking', listId: candidate.listId, itemId: candidate.itemId }
+                : { messageId: candidate.messageId }),
             });
             const result = await response.json().catch(() => ({}));
-            if (cancelled || !response.ok || result?.success === false || !result?.summary) return;
+            if (candidate.schoolSequence || cancelled || !response.ok || result?.success === false || !result?.summary) return;
             applySyncedEmailStatus({
               ...candidate,
               summary: result.summary as SyncedEmailEventSummary,
@@ -11574,10 +11572,16 @@ Rules:
                               </>
                             ) : (
                               <>
-                                <div>
+                                <div className="space-y-2">
                                   <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${stage.tone}`}>
                                     {stage.label}
                                   </span>
+                                  {isUniversitySuccessList && (
+                                    <button type="button" onClick={(event) => { event.stopPropagation(); openLogsForItem(item); }} className="block text-left" title={`View email activity for ${item.title}`}>
+                                      <EmailTrackingBadge status={item.emailStatus || item.lastEmailEvent} sentAt={item.lastEmailSentAt} />
+                                      {(item.emailOpenCount > 0 || item.emailClickCount > 0) && <span className="mt-1 block text-xs text-stone-500">{item.emailOpenCount} opens · {item.emailClickCount} clicks</span>}
+                                    </button>
+                                  )}
                                 </div>
 
                                 <p className={`text-sm font-semibold text-stone-800 ${hasItemValue ? '' : 'hidden lg:block'}`}>
@@ -11866,6 +11870,7 @@ Rules:
                                             <span className="truncate">{dueDate}</span>
                                           </span>
                                         )}
+                                        {isUniversitySuccessList && <button type="button" onClick={(event) => { event.stopPropagation(); openLogsForItem(item); }} title={`View email activity for ${item.title}`}><EmailTrackingBadge status={item.emailStatus || item.lastEmailEvent} sentAt={item.lastEmailSentAt} /></button>}
                                         {!isUniversitySuccessList && (
                                           <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 font-semibold text-stone-500">
                                             {item.weeklyLogs.length > 0 ? formatCount(item.weeklyLogs.length, 'log') : 'No logs'}
@@ -13875,6 +13880,7 @@ Rules:
                         {selectedDetailStage.label}
                       </span>
                     )}
+                    {isUniversitySuccessList && <EmailTrackingBadge status={selectedDetailItem.emailStatus || selectedDetailItem.lastEmailEvent} sentAt={selectedDetailItem.lastEmailSentAt} />}
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityStyles[selectedDetailItem.priority]}`}>
                       {easeOfContactLabel(selectedDetailItem.priority)}
                     </span>
@@ -14018,7 +14024,7 @@ Rules:
                     Ask AI
                   </button>
                 )}
-                {isContactListActive && canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
+                {(isContactListActive || (isUniversitySuccessList && isOwner)) && canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
                   <button
                     type="button"
                     onClick={() => openContactEmailComposerForItem(selectedDetailItem)}
@@ -14072,6 +14078,14 @@ Rules:
 
             {selectedDetailIsEditing ? (
               <div className="px-5 py-5">{renderItemEditor()}</div>
+            ) : detailModalMode === 'email' && isUniversitySuccessList && user ? (
+              <PipeListsEmailSequence
+                key={`${activeList.id}-${selectedDetailItem.id}`}
+                user={user}
+                listId={activeList.id}
+                item={selectedDetailItem}
+                onClose={() => setDetailModalMode('details')}
+              />
             ) : detailModalMode === 'email' ? (
               <div className="space-y-5 px-5 py-5">
                 <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
@@ -14661,6 +14675,21 @@ Rules:
                     />
                   </a>
                 )}
+
+                {isUniversitySuccessList && <PipeListsEmailTracking
+                  title="Latest email activity"
+                  tracking={{
+                    status: selectedDetailItem.emailStatus || selectedDetailItem.lastEmailEvent,
+                    sentAt: selectedDetailItem.lastEmailSentAt,
+                    deliveredAt: selectedDetailItem.lastEmailDeliveredAt,
+                    openedAt: selectedDetailItem.lastEmailOpenedAt,
+                    clickedAt: selectedDetailItem.lastEmailClickedAt,
+                    openCount: selectedDetailItem.emailOpenCount,
+                    clickCount: selectedDetailItem.emailClickCount,
+                    lastClickedLink: selectedDetailItem.lastEmailClickedLink,
+                  }}
+                  onViewLogs={() => openLogsForItem(selectedDetailItem)}
+                />}
 
                 {renderDetailGrid('grid gap-3 sm:grid-cols-2', [
                   ...(isContactListActive

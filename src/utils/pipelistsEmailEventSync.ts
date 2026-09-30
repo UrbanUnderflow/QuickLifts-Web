@@ -43,9 +43,11 @@ export type SyncedEmailLog = {
 const normalizeEmailStatus = (value: unknown) => String(value || '').trim().toLowerCase();
 
 export const normalizeSyncedEmailStatus = (value: unknown) => {
-  const status = normalizeEmailStatus(value);
+  const status = normalizeEmailStatus(value).replace(/[\s-]+/g, '_');
   if (!status) return 'not_sent';
   if (status === 'request') return 'sent';
+  if (status === 'soft_bounced') return 'soft_bounce';
+  if (status === 'hard_bounced') return 'hard_bounce';
   if (
     status === 'unique_opened' ||
     status === 'uniqueopened' ||
@@ -119,13 +121,13 @@ export const buildSyncedEmailEventLog = (args: {
 }): SyncedEmailLog => {
   const isGeneralUpdate = args.item.lastEmailType === 'general-update';
   const email = normalizeContactEmails(args.item.contactEmails)[0] || '';
-  const label = isGeneralUpdate ? 'General Update' : 'Investor Update';
+  const label = args.item.lastEmailType === 'school-outreach' ? 'School Outreach' : isGeneralUpdate ? 'General Update' : 'Investor Update';
   const eventLabel = emailEventSummaryLabel(args.status);
   const stableEventKey = args.status === 'clicked' && args.link ? `clicked-${args.link.slice(0, 80)}` : args.status;
 
   return {
     id: ['email-event', args.messageId, stableEventKey].join('-').replace(/[^\w.-]/g, '-').slice(0, 180),
-    type: isGeneralUpdate ? 'update' : 'metrics',
+    type: isGeneralUpdate || args.item.lastEmailType === 'school-outreach' ? 'update' : 'metrics',
     weekOf: args.eventAt.slice(0, 10),
     summary: `${label} ${eventLabel} by ${email || 'recipient'}.`,
     nextStep: '',

@@ -60,3 +60,11 @@ test('email status ranking does not downgrade opened to delivered or sent', () =
   assert.ok(emailStatusRank('opened') > emailStatusRank('delivered'));
   assert.ok(emailStatusRank('delivered') > emailStatusRank('sent'));
 });
+
+
+test('human-readable email issue log statuses normalize to issue identifiers', () => {
+  assert.equal(normalizeSyncedEmailStatus('Soft bounce'), 'soft_bounce');
+  assert.equal(normalizeSyncedEmailStatus('Hard bounced'), 'hard_bounce');
+  assert.equal(normalizeSyncedEmailStatus('Invalid email'), 'invalid_email');
+  assert.equal(normalizeSyncedEmailStatus('Not sent'), 'not_sent');
+});

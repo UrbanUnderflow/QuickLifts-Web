@@ -321,7 +321,7 @@ const applyStatusUpdate = (
 };
 
 const pipeListsEmailTypeLabel = (emailType?: string) =>
-  emailType === 'general-update' ? 'General Update' : 'Investor Update';
+  emailType === 'school-outreach' ? 'School Outreach' : emailType === 'general-update' ? 'General Update' : 'Investor Update';
 
 const pipeListsEmailEventLabel = (eventType: CanonicalBrevoEmailEvent) => {
   switch (eventType) {
@@ -394,7 +394,7 @@ const buildPipeListsEmailEventLog = (args: {
 
   return {
     id: ['email-event', args.messageId || args.email, stableEventKey].join('-').replace(/[^\w.-]/g, '-').slice(0, 180),
-    type: args.emailType === 'general-update' ? 'update' : 'metrics',
+    type: ['general-update', 'school-outreach'].includes(args.emailType || '') ? 'update' : 'metrics',
     weekOf: args.nowIso.slice(0, 10),
     summary: `${typeLabel} ${eventLabel} by ${args.email}.`,
     nextStep: '',
@@ -995,7 +995,11 @@ export const handler: Handler = async (event) => {
         await outreachRef.set(outreachUpdate, { merge: true });
       }
 
-      if (pipeListsOwnerUid && pipeListsListId) {
+      if (pipeListsEmailType === 'school-outreach' && pipeListsOwnerUid && pipeListsListId) {
+        const { trackSequenceEvent } = require('./lib/pipelistsEmailSequenceTracking');
+        const eventAt = getWebhookEventTime(webhookEvent, new Date(NaN));
+        await trackSequenceEvent(await getSimpBudgetFirestore(), { sequenceId: custom.pipeListsSequenceId || '', stepId: custom.pipeListsSequenceStepId || '', ownerUid: pipeListsOwnerUid, listId: pipeListsListId, itemIds: pipeListsItemIds, email, messageId: messageId || '', event: eventType, eventAt: Number.isNaN(eventAt.getTime()) ? '' : eventAt.toISOString(), eventId: webhookEvent.id, link, authenticated: authenticatedWebhook });
+      } else if (pipeListsOwnerUid && pipeListsListId) {
         await updatePipeListsContactEmailStatus({
           ownerUid: pipeListsOwnerUid,
           listId: pipeListsListId,
