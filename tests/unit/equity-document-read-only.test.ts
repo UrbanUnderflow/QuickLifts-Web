@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
 
 const source = readFileSync(new URL('../../src/pages/admin/equity.tsx', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('equity.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -18,7 +20,7 @@ function callback(name: string, bindings: Record<string, unknown>) {
   visit(tree);
   assert.ok(expression, `Missing callback ${name}`);
   const js = ts.transpileModule(`const callback = ${expression.getText(tree)}; callback;`, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React },
   }).outputText;
   return vm.runInNewContext(js, bindings);
 }
@@ -80,4 +82,41 @@ test('company-document regeneration is invoked only by explicit document revisio
   }
   visit(tree);
   assert.deepEqual(callers, ['handleReviseEquityDoc']);
+});
+
+for (const name of ['Valerie Alexander', 'Marques Zak']) {
+  test(`${name} package exposes references and resend without sending on open`, () => {
+    const document = {id: 'agreement', title: `Advisor Agreement - ${name}`, content: 'Approved terms', signingRequestIds: ['current']};
+    const references = [{id: 'eip', title: 'Equity Incentive Plan', url: '/equity-doc/eip'}, {id: 'board', title: `Board Consent - ${name}`, url: '/equity-doc/board'}];
+    const render = callback('renderPartySigningPackage', {
+      React, X: () => null, partyPackage: {name},
+      getLatestRelevantDocuments: (documents: unknown) => documents,
+      getAllocationDocuments: () => [document], requiresExternalSignature: () => true,
+      signingRequests: [{id: 'current', recipientName: name, recipientEmail: 'advisor@example.com', documentContent: document.content, supportingDocuments: references}],
+      getSignaturePacketDocuments: () => references, getMissingSignaturePacketRequirements: () => [],
+      getEquityDocSignatureState: () => ({hasRecordedSignatures: false}), preparingSigningDocId: null,
+      resendExistingSignatureRequest: () => assert.fail('Opening must not send'),
+    });
+    const html = renderToStaticMarkup(render());
+    assert.match(html, /Signing document/);
+    assert.match(html, /Equity Incentive Plan/);
+    assert.match(html, /Board Consent/);
+    assert.match(html, /Resend email/);
+    assert.match(html, /Open signing link/);
+    assert.match(html, /Prepare new request with current references/);
+  });
+}
+
+test('resend confirmation lists the saved references and preserves the existing request', async () => {
+  let confirmation: any;
+  const resend = callback('resendExistingSignatureRequest', {
+    signingRequests: [], emailDeliveryIsUnconfirmed: () => false,
+    setConfirmationError: () => {}, setResendRequestId: () => {},
+    setPendingEmailConfirmation: (value: unknown) => {confirmation = value;},
+    crypto: {randomUUID: () => 'retry'},
+  });
+  await resend({id: 'original', documentName: 'Advisor agreement', recipientName: 'Valerie Alexander', recipientEmail: 'advisor@example.com', supportingDocuments: [{title: 'Original EIP'}, {title: 'Valerie Board Consent'}]});
+  assert.deepEqual(Array.from(confirmation.documents), ['Advisor agreement', 'Original EIP (reference)', 'Valerie Board Consent (reference)']);
+  assert.equal(confirmation.deliveries[0].documentId, 'original');
+  assert.equal(confirmation.deliveries[0].recipientEmail, 'advisor@example.com');
 });

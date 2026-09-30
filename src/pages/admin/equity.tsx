@@ -972,6 +972,7 @@ const EquityAdminPage: React.FC = () => {
   const [convertibleNotes, setConvertibleNotes] = useState<ConvertibleNote[]>([]);
   const [equityDocuments, setEquityDocuments] = useState<EquityDocument[]>([]);
   const [recipientPackageOpen, setRecipientPackageOpen] = useState(false);
+  const [partyPackage, setPartyPackage] = useState<{name: string; stakeholderId?: string; allocationKind?: string} | null>(null);
   const [signingRequests, setSigningRequests] = useState<SigningRequest[]>([]);
   const applyDeliveryResults = useCallback((results: Array<{requestId: string; emailDelivery?: EquityEmailDelivery}>) => {
     const updates = new Map(results.filter(result => result.emailDelivery).map(result => [result.requestId, result.emailDelivery]));
@@ -3390,7 +3391,7 @@ const EquityAdminPage: React.FC = () => {
     }
     setConfirmationError('');
     const packageDocuments = (source as any).packageDocuments;
-    setPendingEmailConfirmation({documents: Array.isArray(packageDocuments) ? packageDocuments.map((document: any) => `${document.title || document.documentName || source.documentName}${document.mode === 'reference' ? ' (reference)' : ''}`) : [source.documentName], deliveries: [{documentId: source.id, documentType: source.documentType, recipientName: source.recipientName, recipientEmail: source.recipientEmail, sendAttemptId: crypto.randomUUID()}], accepted: []});
+    setPendingEmailConfirmation({documents: Array.isArray(packageDocuments) ? packageDocuments.map((document: any) => `${document.title || document.documentName || source.documentName}${document.mode === 'reference' ? ' (reference)' : ''}`) : [source.documentName, ...(source.supportingDocuments || []).map(document => `${document.title} (reference)`)], deliveries: [{documentId: source.id, documentType: source.documentType, recipientName: source.recipientName, recipientEmail: source.recipientEmail, sendAttemptId: crypto.randomUUID()}], accepted: []});
     setResendRequestId(null);
   };
 
@@ -3512,12 +3513,52 @@ const EquityAdminPage: React.FC = () => {
       .filter(document => documentMatchesAllocation(document, allocationKind))
       .filter(document => matchesAllocationParty(document, name, stakeholderId));
 
+  const renderPartySigningPackage = () => {
+    if (!partyPackage) return null;
+    const related = getLatestRelevantDocuments(getAllocationDocuments(partyPackage.name, partyPackage.stakeholderId, partyPackage.allocationKind));
+    const instruments = related.filter(document => requiresExternalSignature(document));
+    const referenceDocuments = related.filter(document => !instruments.includes(document));
+    return <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={`${partyPackage.name} signing package`}>
+      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-950 p-6 space-y-5">
+        <div className="flex justify-between gap-4"><div><h3 className="text-xl font-semibold text-white">{partyPackage.name}</h3><p className="text-sm text-zinc-400">Signing package</p></div><button aria-label="Close signing package" onClick={() => setPartyPackage(null)}><X className="w-5 h-5" /></button></div>
+        {!instruments.length && <p className="text-zinc-400">No signing documents are linked to this party yet.</p>}
+        {!!referenceDocuments.length && <section className="rounded-xl border border-zinc-800 p-4 space-y-2"><h4 className="text-sm font-medium text-zinc-200">Party reference documents</h4>{referenceDocuments.map(document => <a key={document.id} href={`/equity-doc/${encodeURIComponent(document.id)}`} target="_blank" rel="noreferrer" className="block text-sm text-blue-200 underline">{document.title}</a>)}</section>}
+        {instruments.map(document => {
+          const ids = new Set([...(document.signingRequestIds || []), ...(document.signingRequestId ? [document.signingRequestId] : [])]);
+          const current = signingRequests.filter(request => ids.has(request.id) && !request.previewMode && !request.invalidatedAt);
+          const references = getSignaturePacketDocuments(document);
+          const missing = getMissingSignaturePacketRequirements(document);
+          return <section key={document.id} className="rounded-xl border border-zinc-800 p-4 space-y-3">
+            <p className="text-xs uppercase tracking-wide text-zinc-400">Signing document</p>
+            <a href={`/equity-doc/${encodeURIComponent(document.id)}`} target="_blank" rel="noreferrer" className="block text-blue-200">{document.title}</a>
+            <p className="text-sm font-medium text-zinc-200">Reference documents for a new request</p>
+            {references.map(reference => <a key={reference.id} href={reference.url} target="_blank" rel="noreferrer" className="block text-sm text-blue-200 underline">{reference.title}</a>)}
+            {!references.length && <p className="text-sm text-zinc-400">No reference documents linked.</p>}
+            {!!missing.length && <p className="text-sm text-amber-200">Required before a new send: {missing.join(' and ')}.</p>}
+            {current.map(request => {
+              const signed = Boolean(request.status === 'signed' || request.signedAt || request.signatureData);
+              const canResend = !signed && request.documentContent === document.content && !document.needsResendSignature;
+              return <div key={request.id} className="border-t border-zinc-800 pt-3 space-y-2">
+                <p className="text-sm text-white">{request.recipientName} · {request.recipientEmail}</p>
+                <p className="text-xs text-zinc-400">{signed ? 'Signature recorded' : 'Awaiting signature'}. Resending includes the references saved with this request:</p>
+                {(request.supportingDocuments || []).map(reference => <a key={reference.id} href={reference.url} target="_blank" rel="noreferrer" className="block text-xs text-blue-200 underline">{reference.title}</a>)}
+                {!request.supportingDocuments?.length && <p className="text-xs text-amber-200">No references were saved with this request. Prepare a new request to include the current reference documents.</p>}
+                <div className="flex flex-wrap gap-3"><a href={`/sign/${encodeURIComponent(request.packageId || request.id)}`} target="_blank" rel="noreferrer" className="text-sm text-blue-200 underline">Open signing link</a>{canResend && <button className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white" onClick={() => {setPartyPackage(null); void resendExistingSignatureRequest(request);}}>Resend email</button>}</div>
+              </div>;
+            })}
+            {!getEquityDocSignatureState(document).hasRecordedSignatures && <button disabled={Boolean(preparingSigningDocId)} className="rounded-lg border border-blue-500/40 px-3 py-2 text-sm text-blue-200 disabled:opacity-50" onClick={() => {setPartyPackage(null); void openSigningModal(document);}}>{current.length ? 'Prepare new request with current references' : 'Prepare signature request'}</button>}
+          </section>;
+        })}
+      </div>
+    </div>;
+  };
+
   const renderPersonPackage = (name: string, stakeholderId?: string, notes?: string, allocationKind?: string) => {
     const related = getAllocationDocuments(name, stakeholderId, allocationKind);
     return <div className="p-4 sm:p-6 bg-zinc-950/70 space-y-3 text-left">
       <div className="flex items-center justify-between gap-4 pb-3"><div><p className="text-[11px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">Document package</p><h4 className="text-white text-lg font-semibold">{name}</h4></div><span className="text-xs text-zinc-400 rounded-full border border-zinc-800 px-3 py-1">{getLatestRelevantDocuments(related).length} documents</span></div>
       {notes && <details className="text-sm text-zinc-400 pb-2"><summary className="cursor-pointer hover:text-zinc-200">Allocation details</summary><p className="mt-2 max-w-3xl leading-relaxed">{notes}</p></details>}
-      {/auntedna|edna/i.test(name) && <button onClick={() => setRecipientPackageOpen(true)} className="inline-flex gap-2 items-center px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium"><Send className="w-4 h-4" />Open signing package</button>}
+      <button onClick={() => /auntedna|edna/i.test(name) ? setRecipientPackageOpen(true) : setPartyPackage({name, stakeholderId, allocationKind})} className="inline-flex gap-2 items-center px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium"><Send className="w-4 h-4" />Open signing package</button>
       {allocationKind === 'vesting_shares' && !related.some(document => !isEquityReferenceDocument(document) && !/consent|capitalization/i.test(`${document.documentType} ${document.title}`)) && <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-amber-200">No vesting-share equity agreement is linked yet. The documents below are supporting approvals or references.{/auntedna/i.test(name) && <button disabled={creatingVestingDraft} onClick={createAuntEdnaVestingDraft} className="block mt-3 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-zinc-950 disabled:opacity-50">{creatingVestingDraft ? 'Creating draft…' : 'Create vesting-share agreement draft'}</button>}</p>}
       {!related.length && <p className="text-zinc-400">No document package is linked to this allocation yet. Nothing is recorded as sent.</p>}
       {getLatestRelevantDocuments(related).map(document => {
@@ -7412,6 +7453,7 @@ const EquityAdminPage: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      {renderPartySigningPackage()}
       {recipientPackageOpen && <EquityRecipientPackage documents={equityDocuments} requests={signingRequests} deliveryControls={deliveryControls} onClose={() => setRecipientPackageOpen(false)} onSent={() => { void loadData(); }} />}
     </AdminRouteGuard>
   );
