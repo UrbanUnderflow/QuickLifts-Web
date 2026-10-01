@@ -41,7 +41,6 @@ import {
     Dumbbell,
     Radar,
     Link2,
-    Stethoscope,
     ArrowRight,
 } from 'lucide-react';
 
@@ -700,7 +699,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                         <Shield className="w-4 h-4 text-[#E0FE10]" />
                     </div>
                     <div>
-                        <div className="text-sm font-bold text-white">PulseCheck</div>
+                        <div className="text-sm font-bold text-white">Athletic Mind</div>
                         <div className="text-[8px] text-zinc-500 uppercase tracking-widest">Coaching Platform</div>
                     </div>
                 </div>
@@ -1020,7 +1019,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                             )}
                         </AnimatePresence>
 
-                        {/* AuntEdna Clinical Handoff */}
+                        {/* Clinical Handoff */}
                         <AnimatePresence>
                             {showHandoff && (
                                 <motion.div
@@ -1038,14 +1037,12 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                                 Clinical Handoff Available
                                             </h3>
                                             <p className="text-xs text-zinc-500">
-                                                Restricted Clinical Handoff • AuntEdna Integration
+                                                Restricted Clinical Handoff
                                             </p>
                                         </div>
                                     </div>
                                     <p className="text-sm text-zinc-300 leading-relaxed">
-                                        If Nora detects that an athlete&apos;s conversation meets clinical escalation criteria, Pulse packages the athlete-authorized context, including sleep data, HRV trends, and chat sentiment, and initiates a secure handoff to{' '}
-                                        <span className="text-purple-400 font-semibold">AuntEdna</span>,
-                                        the team&apos;s clinical mental health platform.
+                                        If Nora detects that an athlete&apos;s conversation meets clinical escalation criteria, Athletic Mind packages the athlete-authorized context, including sleep data, HRV trends, and chat sentiment, and initiates a secure handoff to the team&apos;s clinical mental health staff within the clinical workspace.
                                     </p>
                                 </motion.div>
                             )}
@@ -1168,18 +1165,19 @@ const AnimatedDataStream: React.FC<{ delay?: number; duration?: number; color?: 
 const OVERVIEW_STAGES = [
     { label: 'Train', icon: Dumbbell, detail: 'Daily mental reps with Nora' },
     { label: 'Detect', icon: Radar, detail: 'Signals surface early' },
+    { label: 'Protect', icon: Shield, detail: 'Privacy and consent' },
     { label: 'Connect', icon: Link2, detail: 'Consent-based handoff' },
-    { label: 'Care', icon: Stethoscope, detail: 'Clinical follow-through' },
 ];
 
 const DemoOverview: React.FC<{ onStart: () => void }> = ({ onStart }) => (
     <div onClick={onStart} className="min-h-full flex flex-col items-center justify-center px-4 sm:px-8 py-12 cursor-pointer">
         <div className="w-full max-w-5xl">
+            <h1 className="mb-12 text-center text-4xl md:text-5xl font-bold tracking-tight text-white">Athletic Mind</h1>
             {/* Stage flow */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-0">
                 {OVERVIEW_STAGES.map((stage, i) => {
                     const Icon = stage.icon;
-                    const isAuntEdna = i >= 2;
+                    const isClinicalStage = i >= 2;
                     return (
                         <motion.div
                             key={stage.label}
@@ -1190,12 +1188,12 @@ const DemoOverview: React.FC<{ onStart: () => void }> = ({ onStart }) => (
                         >
                             <div className="flex-1 flex flex-col items-center text-center gap-2 md:px-3">
                                 <div
-                                    className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${isAuntEdna
+                                    className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${isClinicalStage
                                         ? 'bg-red-500/10 border-red-500/30'
                                         : 'bg-[#E0FE10]/10 border-[#E0FE10]/25'
                                         }`}
                                 >
-                                    <Icon className={`w-6 h-6 ${isAuntEdna ? 'text-red-400' : 'text-[#E0FE10]'}`} />
+                                    <Icon className={`w-6 h-6 ${isClinicalStage ? 'text-red-400' : 'text-[#E0FE10]'}`} />
                                 </div>
                                 <div className="text-2xl md:text-3xl font-bold text-white tracking-tight">{stage.label}</div>
                                 <div className="text-xs text-zinc-500">{stage.detail}</div>
@@ -1215,50 +1213,17 @@ const DemoOverview: React.FC<{ onStart: () => void }> = ({ onStart }) => (
                 })}
             </div>
 
-            {/* Platform split: PulseCheck owns Train/Detect, AuntEdna owns Connect/Care */}
             <motion.div
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1.3, duration: 0.6 }}
-                className="mt-10 grid grid-cols-1 md:grid-cols-4"
+                className="mt-12 flex flex-wrap justify-center gap-3"
             >
-                <div className="md:col-span-2 md:pr-6 flex flex-col items-center">
-                    <div className="w-full h-3 border-x border-b border-[#E0FE10]/30 rounded-b-lg" />
-                    <div className="mt-6 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/15 flex items-center justify-center">
-                            <Brain className="w-5 h-5 text-[#E0FE10]" />
-                        </div>
-                        <span className="text-2xl font-bold text-white">PulseCheck</span>
-                    </div>
-                    <div className="mt-4 flex flex-wrap justify-center gap-2">
-                        {['Athletes', 'Coaches', 'Trainers'].map((audience) => (
-                            <span
-                                key={audience}
-                                className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-[#E0FE10]/10 border border-[#E0FE10]/25 text-[#E0FE10]"
-                            >
-                                {audience}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="relative md:col-span-2 md:pl-6 mt-10 md:mt-0 flex flex-col items-center">
-                    {/* Separator */}
-                    <div className="hidden md:block absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-zinc-700/0 via-zinc-600 to-zinc-700/0" />
-                    <div className="md:hidden absolute -top-5 left-8 right-8 h-px bg-gradient-to-r from-zinc-700/0 via-zinc-600 to-zinc-700/0" />
-                    <div className="w-full h-3 border-x border-b border-red-500/35 rounded-b-lg" />
-                    <div className="mt-6 flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-red-500/15 flex items-center justify-center">
-                            <Shield className="w-5 h-5 text-red-400" />
-                        </div>
-                        <span className="text-2xl font-bold text-white">AuntEdna</span>
-                    </div>
-                    <div className="mt-4 flex flex-wrap justify-center gap-2">
-                        <span className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-red-500/10 border border-red-500/30 text-red-400">
-                            Clinical Staff
-                        </span>
-                    </div>
-                </div>
+                {['Athletes', 'Coaches', 'Trainers', 'Clinicians'].map((audience) => (
+                    <span key={audience} className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-white/5 border border-white/15 text-zinc-300">
+                        {audience}
+                    </span>
+                ))}
             </motion.div>
         </div>
     </div>
@@ -1268,23 +1233,11 @@ const DemoOverview: React.FC<{ onStart: () => void }> = ({ onStart }) => (
 const ATHLETIC_MIND_RING = [
     { label: 'Train', icon: Dumbbell, angle: -90, color: '#E0FE10' },
     { label: 'Detect', icon: Radar, angle: 0, color: '#E0FE10' },
-    { label: 'Connect', icon: Link2, angle: 90, color: '#f87171' },
-    { label: 'Care', icon: Stethoscope, angle: 180, color: '#f87171' },
+    { label: 'Protect', icon: Shield, angle: 90, color: '#f87171' },
+    { label: 'Connect', icon: Link2, angle: 180, color: '#f87171' },
 ];
 
-const AthleticMindMerge: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
-    // 0: platforms apart, 1: platforms fuse, 2: ring wraps the athlete, 3: title + audiences
-    const [phase, setPhase] = useState(0);
-
-    useEffect(() => {
-        const timers = [
-            setTimeout(() => setPhase(1), 500),
-            setTimeout(() => setPhase(2), 1500),
-            setTimeout(() => setPhase(3), 2600),
-        ];
-        return () => timers.forEach(clearTimeout);
-    }, []);
-
+const AthleticMindAthleteOverview: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
     const ringSize = 300;
     const radius = ringSize / 2;
 
@@ -1293,7 +1246,7 @@ const AthleticMindMerge: React.FC<{ onContinue: () => void }> = ({ onContinue })
             {/* Title */}
             <div className="h-16 flex items-center justify-center">
                 <AnimatePresence>
-                    {phase >= 2 && (
+                    {(
                         <motion.h2
                             initial={{ opacity: 0, y: 12, filter: 'blur(8px)' }}
                             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
@@ -1301,55 +1254,15 @@ const AthleticMindMerge: React.FC<{ onContinue: () => void }> = ({ onContinue })
                             className="text-4xl md:text-5xl font-bold tracking-tight text-center bg-clip-text text-transparent"
                             style={{ backgroundImage: 'linear-gradient(90deg, #E0FE10 0%, #ffffff 50%, #f87171 100%)' }}
                         >
-                            The Athletic Mind
+                            Athletic Mind
                         </motion.h2>
                     )}
                 </AnimatePresence>
             </div>
 
-            {/* Stage: platforms merge, then the ring wraps the athlete */}
-            <div className="relative mt-14" style={{ width: ringSize, height: ringSize }}>
-                {/* PulseCheck and AuntEdna slide together and fuse */}
-                {[
-                    { name: 'PulseCheck', icon: Brain, from: -220, tint: 'bg-[#E0FE10]/15', text: 'text-[#E0FE10]' },
-                    { name: 'AuntEdna', icon: Shield, from: 220, tint: 'bg-red-500/15', text: 'text-red-400' },
-                ].map((platform) => {
-                    const Icon = platform.icon;
-                    return (
-                        <motion.div
-                            key={platform.name}
-                            className="absolute left-1/2 top-1/2 flex items-center gap-2 whitespace-nowrap"
-                            initial={{ x: `calc(-50% + ${platform.from}px)`, y: '-50%', opacity: 0 }}
-                            animate={
-                                phase === 0
-                                    ? { x: `calc(-50% + ${platform.from}px)`, y: '-50%', opacity: 1, scale: 1 }
-                                    : { x: '-50%', y: '-50%', opacity: 0, scale: 0.4 }
-                            }
-                            transition={{ duration: phase === 0 ? 0.4 : 0.9, ease: [0.65, 0, 0.35, 1] }}
-                        >
-                            <div className={`w-10 h-10 rounded-xl ${platform.tint} flex items-center justify-center`}>
-                                <Icon className={`w-5 h-5 ${platform.text}`} />
-                            </div>
-                            <span className="text-2xl font-bold text-white">{platform.name}</span>
-                        </motion.div>
-                    );
-                })}
-
-                {/* Fusion flash */}
-                <AnimatePresence>
-                    {phase === 1 && (
-                        <motion.div
-                            key="flash"
-                            className="absolute left-1/2 top-1/2 w-24 h-24 -ml-12 -mt-12 rounded-full pointer-events-none"
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: [0, 1.6, 2.4], opacity: [0, 0.9, 0] }}
-                            transition={{ duration: 1.1, delay: 0.5, ease: 'easeOut' }}
-                            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(224,254,16,0.45) 35%, rgba(248,113,113,0.25) 60%, transparent 75%)' }}
-                        />
-                    )}
-                </AnimatePresence>
-
-                {phase >= 2 && (
+            {/* Stage: the ring wraps the athlete */}
+            <div className="relative mt-6 sm:mt-14 scale-[0.7] sm:scale-100 -mb-10 sm:mb-0" style={{ width: ringSize, height: ringSize }}>
+                {(
                     <>
                         {/* Ring */}
                         <svg className="absolute inset-0 overflow-visible" width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`}>
@@ -1437,7 +1350,7 @@ const AthleticMindMerge: React.FC<{ onContinue: () => void }> = ({ onContinue })
             {/* Tagline + audiences */}
             <div className="mt-14 min-h-[88px] flex flex-col items-center">
                 <AnimatePresence>
-                    {phase >= 3 && (
+                    {(
                         <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -1445,10 +1358,10 @@ const AthleticMindMerge: React.FC<{ onContinue: () => void }> = ({ onContinue })
                             className="flex flex-col items-center"
                         >
                             <p className="text-sm md:text-base text-zinc-400 text-center max-w-md">
-                                One continuous system wrapped around the athlete, from daily training to clinical care.
+                                One continuous system wrapped around the athlete, from daily training to connection with clinical care.
                             </p>
                             <div className="mt-4 flex flex-wrap justify-center gap-2">
-                                {['Athletes', 'Coaches', 'Trainers'].map((audience) => (
+                                {['Athletes', 'Coaches', 'Trainers', 'Clinicians'].map((audience) => (
                                     <span
                                         key={audience}
                                         className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-[#E0FE10]/10 border border-[#E0FE10]/25 text-[#E0FE10]"
@@ -1456,9 +1369,6 @@ const AthleticMindMerge: React.FC<{ onContinue: () => void }> = ({ onContinue })
                                         {audience}
                                     </span>
                                 ))}
-                                <span className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-red-500/10 border border-red-500/30 text-red-400">
-                                    Clinical Staff
-                                </span>
                             </div>
                         </motion.div>
                     )}
@@ -1574,6 +1484,7 @@ const PERSONAS = [
 
 const PersonaLineup: React.FC<{ onContinue: () => void }> = ({ onContinue }) => (
     <div onClick={onContinue} className="min-h-full flex flex-col items-center justify-center px-4 sm:px-8 py-12 cursor-pointer">
+        <h1 className="mb-10 text-center text-2xl md:text-3xl font-bold text-white">Three perspectives. One Athletic Mind experience.</h1>
         <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-0">
             {PERSONAS.map((persona, i) => (
                 <motion.div
@@ -1594,7 +1505,7 @@ const PersonaLineup: React.FC<{ onContinue: () => void }> = ({ onContinue }) => 
     </div>
 );
 
-const PulseCheckToAuntEdnaFlow: React.FC = () => {
+const AthleticMindClinicalFlow: React.FC = () => {
     const streams = [
         { delay: 0, color: '#E0FE10', duration: 2.8 },
         { delay: 0.7, color: '#10b981', duration: 3.1 },
@@ -1605,7 +1516,7 @@ const PulseCheckToAuntEdnaFlow: React.FC = () => {
 
     return (
         <div className="relative w-full flex items-center gap-4" style={{ minHeight: 120 }}>
-            {/* PulseCheck Node */}
+            {/* Athlete Experience Node */}
             <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -1621,8 +1532,8 @@ const PulseCheckToAuntEdnaFlow: React.FC = () => {
                     />
                     <div className="relative w-[100px] h-[100px] rounded-2xl border border-[#E0FE10]/30 bg-zinc-900/80 flex flex-col items-center justify-center gap-1.5 backdrop-blur-xl">
                         <Brain className="w-7 h-7 text-[#E0FE10]" />
-                        <div className="text-[10px] font-bold text-[#E0FE10] uppercase tracking-widest">Pulse</div>
-                        <div className="text-[8px] text-zinc-500 uppercase tracking-wider">Check</div>
+                        <div className="text-[10px] font-bold text-[#E0FE10] uppercase tracking-widest">Athlete</div>
+                        <div className="text-[8px] text-zinc-500 uppercase tracking-wider">Experience</div>
                     </div>
                 </div>
                 <div className="text-[9px] text-zinc-600 uppercase tracking-widest text-center">
@@ -1680,7 +1591,7 @@ const PulseCheckToAuntEdnaFlow: React.FC = () => {
                 ))}
             </div>
 
-            {/* AuntEdna Node */}
+            {/* Clinical Workspace Node */}
             <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -1698,12 +1609,12 @@ const PulseCheckToAuntEdnaFlow: React.FC = () => {
                         style={{ boxShadow: '0 0 20px rgba(239,68,68,0.15)' }}
                     >
                         <Shield className="w-7 h-7 text-red-400" />
-                        <div className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Aunt</div>
-                        <div className="text-[8px] text-red-400/70 uppercase tracking-wider">Edna</div>
+                        <div className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Clinical</div>
+                        <div className="text-[8px] text-red-400/70 uppercase tracking-wider">Workspace</div>
                     </div>
                 </div>
                 <div className="text-[9px] text-zinc-600 uppercase tracking-widest text-center">
-                    Clinical Platform<br/>Restricted Clinical Data
+                    Clinical Workspace<br/>Restricted Clinical Data
                 </div>
             </motion.div>
         </div>
@@ -1743,6 +1654,7 @@ const EscalationExplainer: React.FC<{ onContinue: () => void; escalationStep: nu
                 transition={{ duration: 0.55, delay: 0.1 }}
                 className="relative"
             >
+                <p className="mb-6 text-center text-sm font-semibold tracking-wide text-zinc-300">Train → Detect → Protect → Connect</p>
                 <EscalationDiagram
                     step={escalationStep}
                     onAdvance={onAdvanceEscalation}
@@ -1785,9 +1697,9 @@ const ClinicalHandoffHeader: React.FC = () => {
             <div className="relative">
                 <div>
                     <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-5">
-                        Live Handoff Pipeline
+                        Athletic Mind Handoff Pipeline
                     </div>
-                    <PulseCheckToAuntEdnaFlow />
+                    <AthleticMindClinicalFlow />
                     <div className="mt-5 grid gap-3 md:grid-cols-3 text-center">
                         <div className="rounded-2xl border border-white/6 bg-black/20 px-3 py-3">
                             <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Trigger</div>
@@ -1799,7 +1711,7 @@ const ClinicalHandoffHeader: React.FC = () => {
                         </div>
                         <div className="rounded-2xl border border-white/6 bg-black/20 px-3 py-3">
                             <div className="text-[10px] text-zinc-500 uppercase tracking-widest">Destination</div>
-                            <div className="text-xs text-zinc-200 mt-1">AuntEdna chart seed + immediate response path</div>
+                            <div className="text-xs text-zinc-200 mt-1">Clinical workspace + immediate response path</div>
                         </div>
                     </div>
                 </div>
@@ -1828,7 +1740,7 @@ const ClinicalTransferStage: React.FC<{ onContinue: () => void }> = ({ onContinu
                         Next screen
                     </div>
                     <p className="text-sm text-zinc-300">
-                        The handoff is complete. Continue to the clinician device to see the AuntEdna alert arrive.
+                        The handoff is complete. Continue to the clinician device to see the clinical alert arrive.
                     </p>
                 </div>
                 <motion.button
@@ -1995,7 +1907,7 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                                     </div>
                                                     <span className="text-[10px] text-zinc-500">now</span>
                                                 </div>
-                                                <p className="text-xs font-bold text-white mb-0.5">AuntEdna — Clinical Escalation</p>
+                                                <p className="text-xs font-bold text-white mb-0.5">Athletic Mind — Clinical Escalation</p>
                                                 <p className="text-[11px] text-zinc-300 leading-snug">
                                                     K. Thompson (#52) has been flagged for immediate clinical attention. Tap to review full briefing.
                                                 </p>
@@ -2057,8 +1969,8 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                         <Shield className="w-4 h-4 text-purple-400" />
                                     </div>
                                     <div>
-                                        <div className="text-sm font-bold text-white">AuntEdna</div>
-                                        <div className="text-[9px] text-zinc-600 uppercase tracking-wider">Clinical Platform</div>
+                                        <div className="text-sm font-bold text-white">Athletic Mind</div>
+                                        <div className="text-[9px] text-zinc-600 uppercase tracking-wider">Clinical Workspace</div>
                                     </div>
                                 </div>
                             </div>
@@ -3461,7 +3373,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                 <div className="w-8 h-1 rounded-full bg-zinc-700 mx-auto mb-4" />
                                                                 <div className="flex items-start justify-between">
                                                                     <div>
-                                                                        <div className="text-[10px] uppercase tracking-widest font-bold mb-0.5" style={{ color: active.accent }}>PulseCheck</div>
+                                                                        <div className="text-[10px] uppercase tracking-widest font-bold mb-0.5" style={{ color: active.accent }}>Athletic Mind</div>
                                                                         <div className="text-lg font-black text-white leading-tight">Skill Profile</div>
                                                                         <div className="text-[10px] text-zinc-500 mt-0.5">Tremaine Grant</div>
                                                                     </div>
@@ -4818,10 +4730,10 @@ const PulseCheckDemo: React.FC = () => {
     return (
         <>
             <Head>
-                <title>PulseCheck Demo | USC Track &amp; Field</title>
+                <title>Athletic Mind Demo | USC Track &amp; Field</title>
                 <meta
                     name="description"
-                    content="PulseCheck mental performance and consent-based escalation demo for USC Track & Field."
+                    content="Athletic Mind mental performance and consent-based escalation demo for USC Track & Field."
                 />
             </Head>
 
@@ -4839,7 +4751,7 @@ const PulseCheckDemo: React.FC = () => {
                                 <Brain className="w-4 h-4 text-[#E0FE10]" />
                             </div>
                             <div>
-                                <h1 className="text-sm font-bold text-white">PulseCheck</h1>
+                                <h1 className="text-sm font-bold text-white">Athletic Mind</h1>
                                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
                                     {currentAct === 'act1'
                                         ? 'Athlete Experience'
@@ -4955,7 +4867,7 @@ const PulseCheckDemo: React.FC = () => {
                 {/* Main Content */}
                 <main className="flex-1 relative z-10 overflow-hidden">
                     <AnimatePresence mode="wait">
-                        {/* ── OVERVIEW: Train → Detect → Connect → Care ──── */}
+                        {/* ── OVERVIEW: Train → Detect → Protect → Connect ──── */}
                         {currentAct === 'overview' && (
                             <motion.div
                                 key="overview"
@@ -4968,7 +4880,7 @@ const PulseCheckDemo: React.FC = () => {
                             </motion.div>
                         )}
 
-                        {/* ── MERGE: PulseCheck + AuntEdna become The Athletic Mind ──── */}
+                        {/* ── ATHLETE OVERVIEW: Athletic Mind ──── */}
                         {currentAct === 'merge' && (
                             <motion.div
                                 key="merge"
@@ -4977,7 +4889,7 @@ const PulseCheckDemo: React.FC = () => {
                                 exit={{ opacity: 0, scale: 0.97 }}
                                 className="h-full overflow-y-auto"
                             >
-                                <AthleticMindMerge onContinue={() => setCurrentAct('personas')} />
+                                <AthleticMindAthleteOverview onContinue={() => setCurrentAct('personas')} />
                             </motion.div>
                         )}
 
@@ -5077,7 +4989,7 @@ const PulseCheckDemo: React.FC = () => {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center justify-between mb-0.5">
-                                                    <span className="text-xs font-bold text-white uppercase tracking-wide">PulseCheck</span>
+                                                    <span className="text-xs font-bold text-white uppercase tracking-wide">Athletic Mind</span>
                                                     <span className="text-[10px] text-zinc-500">now</span>
                                                 </div>
                                                 <p className="text-sm text-zinc-200 leading-snug">
