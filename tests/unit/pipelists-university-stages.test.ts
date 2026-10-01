@@ -8,7 +8,7 @@ const normalizer = source.slice(source.indexOf('const normalizeStageId ='), sour
 const api = new Function(ts.transpile(stages + normalizer + '\nreturn { pilotContractStages, contractStages, normalizeStageId, needsUniversityStageMigration };'))();
 
 test('university stages follow the requested sequence and retain a lost/paused destination', () => {
-  assert.deepEqual(api.pilotContractStages.map((s: any) => s.id), ['identified','outreach-queued','engaged','meeting-scheduled','proposal-sent','negotiating','pilot-agreed','contract-signed','pilot-active','pilot-complete','closed-lost-paused']);
+  assert.deepEqual(api.pilotContractStages.map((s: any) => s.id), ['identified','outreach-queued','cold-email-sent','engaged','meeting-scheduled','proposal-sent','negotiating','pilot-agreed','contract-signed','pilot-active','pilot-complete','closed-lost-paused']);
   assert.equal(api.contractStages.some((s: any) => s.id === 'closed-won'), true);
 });
 test('existing university wins migrate to Pilot Active while contract wins stay unchanged', () => {
@@ -26,4 +26,11 @@ test('existing university pipelines receive Meeting Scheduled and retain assigne
     assert.equal(api.normalizeStageId(stage.id, api.pilotContractStages), stage.id);
   }
   assert.equal(api.contractStages.some((stage: any) => stage.id === 'meeting-scheduled'), false);
+});
+
+test('existing university boards receive Cold Email Sent between queued and engaged', () => {
+  const previousStages = api.pilotContractStages.filter((stage: any) => stage.id !== 'cold-email-sent');
+  assert.equal(api.needsUniversityStageMigration([{ templateKey: 'university-pilot', stages: previousStages, items: [{ stage: 'outreach-queued' }] }]), true);
+  assert.equal(api.normalizeStageId('cold-email-sent', api.pilotContractStages), 'cold-email-sent');
+  assert.equal(api.contractStages.some((stage: any) => stage.id === 'cold-email-sent'), false);
 });

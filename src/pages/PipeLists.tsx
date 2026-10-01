@@ -877,8 +877,10 @@ const legacyPilotContractStages: StageConfig[] = [
 const contractStages: StageConfig[] = legacyPilotContractStages.filter((stage) => stage.track === 'run');
 
 const pilotContractStages: StageConfig[] = [
-  ...['identified', 'outreach-queued', 'engaged']
-    .map((id, index) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: [10, 10, 25][index] })),
+  ...['identified', 'outreach-queued']
+    .map((id) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)! })),
+  { id: 'cold-email-sent', label: 'Cold Email Sent', probability: 15, track: 'build', tone: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+  { ...legacyPilotContractStages.find((stage) => stage.id === 'engaged')! },
   { id: 'meeting-scheduled', label: 'Meeting Scheduled', probability: 30, track: 'build', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
   ...['proposal-sent', 'negotiating', 'pilot-agreed']
     .map((id, index) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: [40, 60, 80][index] })),

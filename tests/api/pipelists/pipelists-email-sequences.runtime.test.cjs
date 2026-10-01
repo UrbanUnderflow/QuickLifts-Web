@@ -324,3 +324,30 @@ test('readiness identifies the follow-up field without blaming the completed fir
   assert.equal(sequenceUtils.sequenceReadinessIssues(sequence.steps).length, 0);
   assert.doesNotThrow(() => lib.requireReady(sequence));
 });
+
+test('confirmed school sends move early leads in both stores without regressing later stages', async () => {
+  for (const stage of ['identified', 'outreach-queued', 'cold-email-sent', 'engaged', 'meeting-scheduled', 'contract-signed', 'closed-lost-paused']) {
+    const db = setup();
+    const leads = () => [db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].items[0], db.records.get('pipeListProtectedShares/owner-school-list').list.items[0]];
+    leads().forEach(lead => { lead.stage = stage; });
+    let seq = await lib.mutateSequence(db, 'owner', input('save', 0, draft()));
+    leads().forEach(lead => assert.equal(lead.stage, stage));
+    seq = await lib.mutateSequence(db, 'owner', input('send', seq.version, draft()));
+    seq = await lib.dispatchSequence(db, seq.id, new Date(), async () => ({ success: true, messageId: 'first' }));
+    leads().forEach(lead => assert.equal(lead.stage, ['identified', 'outreach-queued'].includes(stage) ? 'cold-email-sent' : stage));
+    leads().forEach(lead => { lead.stage = 'engaged'; });
+    await lib.dispatchSequence(db, seq.id, new Date(seq.nextSendAt), async () => ({ success: true, messageId: 'follow-up' }));
+    leads().forEach(lead => assert.equal(lead.stage, 'engaged'));
+  }
+});
+test('unconfirmed school sends leave the pipeline stage unchanged', async () => {
+  for (const result of [{ success: false, error: 'failed' }, { success: true, skipped: true, suppressed: true }, { success: true }]) {
+    const db = setup();
+    db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].items[0].stage = 'outreach-queued';
+    db.records.get('pipeListProtectedShares/owner-school-list').list.items[0].stage = 'outreach-queued';
+    const seq = await lib.mutateSequence(db, 'owner', input('send', 0, draft()));
+    await lib.dispatchSequence(db, seq.id, new Date(), async () => result);
+    assert.equal(db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].items[0].stage, 'outreach-queued');
+    assert.equal(db.records.get('pipeListProtectedShares/owner-school-list').list.items[0].stage, 'outreach-queued');
+  }
+});
