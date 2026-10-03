@@ -19,9 +19,9 @@
 .try .intro{color:#d5d9d2}
 .try-progress{list-style:none;padding:0;margin:36px 0 0;display:grid;gap:4px}
 .try-progress li{display:flex;align-items:center;gap:14px;font-size:14px;color:#8d9a95;padding:8px 0;transition:color .3s}
-.try-progress li:before{content:'';width:10px;height:10px;border-radius:50%;border:1.5px solid currentColor;transition:background .3s,border-color .3s}
+.try-progress li:before{content:'';width:16px;height:16px;flex:0 0 16px;box-sizing:border-box;border-radius:48% 52% 46% 54% / 53% 47% 54% 46%;border:1.5px solid currentColor;transition:background .3s,border-color .3s}
 .try-progress li.is-active{color:#fff}
-.try-progress li.is-active:before{background:var(--lime);border-color:var(--lime)}
+.try-progress li.is-active:before{border:0;background-color:#c8ee23;background-image:radial-gradient(ellipse at 30% 22%,#f0ffacaa 0%,transparent 48%),radial-gradient(ellipse at 68% 82%,#47660088 0%,transparent 65%),url('assets/clay-background.png');background-size:100% 100%,100% 100%,70px 70px;background-position:center,center,42% 36%;background-blend-mode:screen,multiply,multiply;box-shadow:inset 1px 1px 2px #f4ffc55c,inset -1px -2px 3px #3a51004d,0 2px 3px #0005}
 .try-progress li.is-done{color:#c3ccc7}
 .try-progress li.is-done:before{background:#c3ccc7;border-color:#c3ccc7}
 .try-stage{background:#f6f4ee;color:var(--ink);border-radius:22px;padding:40px;min-height:540px;box-shadow:0 30px 60px #0005;position:relative}
