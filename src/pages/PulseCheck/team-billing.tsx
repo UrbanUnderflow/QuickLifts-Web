@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Head from 'next/head';
+import { Activity, ArrowRight, CheckCircle2, LockKeyhole, Loader2 } from 'lucide-react';
+import styles from './team-billing.module.css';
 import { useRouter } from 'next/router';
 import { onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, OAuthProvider, signOut, User } from 'firebase/auth';
 import { auth, getFirebaseModeRequestHeaders, isUsingDevFirebase, setPreferredFirebaseMode } from '../../api/firebase/config';
@@ -53,27 +55,69 @@ export default function TeamBillingPage() {
   };
   const active = billing?.status === 'active' || billing?.status === 'trialing';
   const price = billing?.price ? new Intl.NumberFormat('en-US', { style: 'currency', currency: billing.price.currency }).format(billing.price.amountCents / 100) : '';
-  return <><Head><title>{billing?.team?.name || 'Team'} | Payment</title><meta name="robots" content="noindex" /></Head>
-    <main><section aria-busy={busy}>
-      {billing?.team?.logoUrl && <img className="logo" src={billing.team.logoUrl} alt={`${billing.team.name} logo`} />}
-      <p className="eyebrow">{billing?.team?.name || 'Your team'}</p>
-      <h1>{active ? 'You’re ready to train.' : 'Keep training with your team.'}</h1>
-      {!ready && <p>Loading your account…</p>}
-      {ready && !user && <><p>Sign in with the account you use in the app to review your team payment.</p><form onSubmit={event => { event.preventDefault(); void signIn(); }}><label>Email<input type="email" autoComplete="email" required value={email} onChange={event => setEmail(event.target.value)} /></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={event => setPassword(event.target.value)} /></label><button disabled={busy}>Sign in</button></form><button className="secondary" disabled={busy} onClick={() => void signIn('google')}>Continue with Google</button><button className="secondary" disabled={busy} onClick={() => void signIn('apple')}>Continue with Apple</button></>}
-      {user && !billing && !error && <p>Checking your team and payment details…</p>}
-      {billing?.isTeamAthlete && <>
-        {price && <p className="price">{price}<span> / month</span></p>}
-        <p>{active ? 'Your team subscription is active. Return to the app to continue.' : billing.paymentUrl ? 'Review your payment securely to restore your team access. Your team’s monthly price is shown above.' : 'Your team manages your access. Contact your coach for help getting back in.'}</p>
-        {!active && billing.price && billing.paymentUrl && <button disabled={busy} onClick={() => void pay()}>{busy ? 'Opening secure payment…' : 'Review payment'}</button>}
-        {router.query.checkout === 'complete' && !active && <p role="status">Your payment is being confirmed. Refresh your access in a moment.</p>}
-        <button className="secondary" disabled={busy} onClick={() => void refresh()}>Refresh access</button>
-        <a href="pulsecheck://open">Return to the app</a>
-      </>}
-      {billing && !billing.isTeamAthlete && <p>We couldn’t find a team for this account. Sign in with your athlete account or contact your coach.</p>}
-      {error && <><p role="alert">{error}</p>{user && <button className="secondary" disabled={busy} onClick={() => void refresh()}>Try again</button>}</>}
-      <p className="footer">Secure payment through Stripe</p>{user && <button className="secondary" disabled={busy} onClick={() => void signOut(auth)}>Use a different account</button>}
-    </section></main>
-    <style jsx>{`
-      main{min-height:100vh;background:#f5f2eb;display:flex;align-items:center;justify-content:center;padding:32px 20px;color:#192b26;font-family:system-ui,sans-serif}section{width:100%;max-width:480px;background:white;padding:38px;border-radius:24px;border-top:6px solid ${billing?.team?.primaryColor || '#24483F'};box-shadow:0 12px 48px #1527200c}.logo{width:76px;height:76px;object-fit:contain;margin-bottom:20px}.eyebrow{font-weight:700;font-size:14px}h1{font-size:34px;line-height:1.12;margin:16px 0 24px;letter-spacing:-1px}p{line-height:1.6}.price{font-size:36px;font-weight:700;margin-bottom:10px}.price span{font-size:16px;font-weight:400}label{display:block;margin:18px 0;font-size:14px}input{display:block;width:100%;padding:12px;margin-top:8px;border:1px solid #86968e;border-radius:8px}button{display:block;width:100%;padding:14px;border:0;border-radius:10px;background:#24483f;color:white;font-size:16px;font-weight:600;margin:14px 0;cursor:pointer}button:disabled{opacity:.6;cursor:wait}.secondary{background:#eef2ef;color:#192b26}a{display:block;text-align:center;color:#24483f;padding:12px}.footer{font-size:12px;color:#53665e;text-align:center;margin-top:28px}[role=alert]{color:#9b2727}@media(max-width:480px){section{padding:26px}h1{font-size:30px}}
-    `}</style></>;
+  return (
+    <div className={styles.page}>
+      <Head>
+        <title>{billing?.team?.name || 'Team'} | Payment</title>
+        <meta name="robots" content="noindex" />
+        <meta name="theme-color" content="#050506" />
+      </Head>
+      <header className={styles.header}>
+        <a className={styles.brand} href="/PulseCheck" aria-label="PulseCheck home">
+          <span className={styles.brandMark}><Activity size={20} strokeWidth={2.5} /></span>
+          <span>PulseCheck</span>
+        </a>
+        <span className={styles.secureLabel}><LockKeyhole size={13} /> Secure payment</span>
+      </header>
+      <main className={styles.main}>
+        <section className={styles.card} aria-busy={busy} aria-labelledby="payment-title">
+          <div className={styles.identity}>
+            {billing?.team?.logoUrl
+              ? <img className={styles.logo} src={billing.team.logoUrl} alt={`${billing.team.name} logo`} />
+              : <span className={styles.sectionIcon}>{active ? <CheckCircle2 size={22} /> : <LockKeyhole size={22} />}</span>}
+            <p className={styles.eyebrow}>{billing?.team?.name || 'Team membership'}</p>
+          </div>
+          <h1 id="payment-title">{active ? 'You’re ready to train.' : user ? 'Your team. Your training.' : 'Get back to your team.'}</h1>
+          {!ready && <p className={styles.loading} role="status"><Loader2 size={18} className={styles.spinner} /> Loading your account…</p>}
+          {ready && !user && <>
+            <p className={styles.description}>Sign in with your app account to review your team payment.</p>
+            <div className={styles.providers}>
+              <button className={styles.secondary} disabled={busy} onClick={() => void signIn('google')}>
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 48 48">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>Google
+              </button>
+              <button className={styles.secondary} disabled={busy} onClick={() => void signIn('apple')}>
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>Apple
+              </button>
+            </div>
+            <div className={styles.divider}><span>or continue with email</span></div>
+            <form className={styles.form} onSubmit={event => { event.preventDefault(); void signIn(); }}>
+              <label>Email<input type="email" inputMode="email" autoCapitalize="none" autoComplete="email" placeholder="you@example.com" required value={email} onChange={event => setEmail(event.target.value)} /></label>
+              <label>Password<input type="password" autoComplete="current-password" placeholder="Enter your password" required value={password} onChange={event => setPassword(event.target.value)} /></label>
+              <button className={styles.primary} disabled={busy}>{busy ? <><Loader2 size={18} className={styles.spinner} /> Signing in…</> : <>Sign in and continue <ArrowRight size={18} /></>}</button>
+            </form>
+          </>}
+          {user && !billing && !error && <p className={styles.loading} role="status"><Loader2 size={18} className={styles.spinner} /> Checking your team payment…</p>}
+          {billing?.isTeamAthlete && <>
+            <p className={styles.description}>{active ? 'Your team subscription is active. Return to the app to continue.' : billing.paymentUrl ? 'Review your payment to restore your team access.' : 'Your team manages your access. Contact your coach for help getting back in.'}</p>
+            {price && <div className={styles.plan}><span>Team subscription</span><p>{price}<span> / month</span></p><span>{billing.team?.name}</span></div>}
+            <div className={styles.actions}>
+              {!active && billing.price && billing.paymentUrl && <button className={styles.primary} disabled={busy} onClick={() => void pay()}>{busy ? <><Loader2 size={18} className={styles.spinner} /> Opening secure payment…</> : <>Review payment <ArrowRight size={18} /></>}</button>}
+              {router.query.checkout === 'complete' && !active && <p className={styles.notice} role="status">Your payment is being confirmed. Refresh your access in a moment.</p>}
+              <button className={styles.secondary} disabled={busy} onClick={() => void refresh()}>Refresh access</button>
+              <a className={styles.textLink} href="pulsecheck://open">Return to the app <ArrowRight size={16} /></a>
+            </div>
+          </>}
+          {billing && !billing.isTeamAthlete && <p className={styles.description}>We couldn’t find a team for this account. Sign in with your athlete account or contact your coach.</p>}
+          {error && <div className={styles.error}><p role="alert">{error}</p>{user && <button className={styles.secondary} disabled={busy} onClick={() => void refresh()}>Try again</button>}</div>}
+          {user && <button className={styles.accountSwitch} disabled={busy} onClick={() => void signOut(auth)}>Use a different account</button>}
+        </section>
+        <p className={styles.footer}><LockKeyhole size={13} /> Payments secured by Stripe</p>
+      </main>
+    </div>
+  );
 }
