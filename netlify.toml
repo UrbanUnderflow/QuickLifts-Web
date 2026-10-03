@@ -59,6 +59,19 @@
 # Add these as Custom Domains in the Netlify UI (Site settings → Domain
 # management); no toml redirect entries are needed.
 
+# AthleticMind landing page, kept independent of the application shell.
+[[redirects]]
+  from = "/athleticmind"
+  to = "/athleticmind/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/athleticmind/"
+  to = "/athleticmind/index.html"
+  status = 200
+  force = true
+
 # Universal-link association files must bypass Next dynamic routes.
 [[redirects]]
   from = "/.well-known/apple-app-site-association"
