@@ -23,10 +23,12 @@ test('team, owner, revoked status, athlete role and scoped roster cannot be bypa
  assert.equal(visibleAthlete({rosterVisibilityScope:'assigned',allowedAthleteIds:['a']},'b'),false);
  assert.equal(visibleAthlete({rosterVisibilityScope:'none'},'a'),false);
 });
-test('sharing grants require exact team, owner, current disclosure and affirmative per-category choice',()=>{
+test('sharing defaults on while saved opt-outs and invalid grants remain off',()=>{
  const grant={athleteId:'a',teamId:'t',version:TRAINER_SHARING_VERSION,choices:{mood:true}};
  assert.equal(sharingAllows(grant,'a','t','mood'),true);
- for(const g of [undefined,{...grant,teamId:'x'},{...grant,athleteId:'x'},{...grant,version:'old'},{...grant,choices:{mood:false}}]) assert.equal(sharingAllows(g,'a','t','mood'),false);
+ assert.equal(sharingAllows(undefined,'a','t','mood'),true);
+ assert.equal(sharingAllows(undefined,'a','t','unknown'),false);
+ for(const g of [{...grant,teamId:'x'},{...grant,athleteId:'x'},{...grant,version:'old'},{...grant,choices:{mood:false}}]) assert.equal(sharingAllows(g,'a','t','mood'),false);
  assert.equal(sharingAllows(grant,'a','t','journaling'),false);
 });
 test('aggregate suppresses small cohorts and each sparsely populated field independently',()=>{

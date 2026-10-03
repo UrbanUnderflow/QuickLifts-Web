@@ -9,4 +9,11 @@ export type TeamWellbeing = { teamId: string; asOf: string; minimumContributors:
 export const TRAINER_SHARING_VERSION = 'team-trainer-aggregates-v1';
 export const TRAINER_SHARING_FIELDS = ['mood', 'recovery', 'wearables', 'journaling'] as const;
 export type TrainerSharingChoices = Record<typeof TRAINER_SHARING_FIELDS[number], boolean>;
-export const TRAINER_SHARING_TEXT = 'Choose which activity may contribute to aggregate summaries for athletic trainers on this team. Coaches do not receive these summaries. Mood and recovery use your reported check-ins. Wearable summaries use sleep duration and resting heart rate from connected sources. Journaling shares activity counts only, never entry text. Private Nora conversations are never included. Summaries require at least five contributing athletes. You may change these choices at any time; turning a choice off stops future dashboard access. This is separate from health authorization, clinical support, and research consent.';
+export const TRAINER_SHARING_TEXT = 'Sharing is on by default. You can turn off any category below. Shared activity contributes to aggregate summaries for athletic trainers on this team. Coaches do not receive these summaries. Mood and recovery use your reported check-ins. Wearable summaries use sleep duration and resting heart rate from connected sources. Journaling shares activity counts only, never entry text. Private Nora conversations are never included. Summaries require at least five contributing athletes. You may change these choices at any time; turning a choice off stops future dashboard access. This is separate from health authorization, clinical support, and research consent.';
+
+/** Saved preferences override defaults; unknown saved formats never restore sharing. */
+export function trainerSharingChoices(grant: Record<string, any> | undefined, athleteId: string, teamId: string): TrainerSharingChoices {
+  if (grant === undefined) return { mood: true, recovery: true, wearables: true, journaling: true };
+  const valid = grant.athleteId === athleteId && grant.teamId === teamId && grant.version === TRAINER_SHARING_VERSION;
+  return Object.fromEntries(TRAINER_SHARING_FIELDS.map(field => [field, valid && grant.choices?.[field] === true])) as TrainerSharingChoices;
+}

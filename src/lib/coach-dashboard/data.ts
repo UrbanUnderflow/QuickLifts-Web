@@ -2,17 +2,19 @@ import { hasMorningCheckIn, hasEveningCheckIn } from '../../../netlify/functions
 import { scheduledParticipationDates, coverageForDays, loadCurrentLinearSkill, loadWearableParticipation, loadWearableLifecycle, normalizeWearableFamily } from './participationSources';
 import type { firestore } from 'firebase-admin';
 import { activeRecord, DashboardAccessError, loadTeamAccess, validTeamId, visibleAthlete } from './access';
-import { TRAINER_SHARING_VERSION, type CoverageMetric, type TeamParticipation, type TeamWellbeing, type WellbeingCard } from './types';
+import { trainerSharingChoices, TRAINER_SHARING_FIELDS, type CoverageMetric, type TeamParticipation, type TeamWellbeing, type WellbeingCard } from './types';
 const DAY = 86400000;
 export const MIN_CONTRIBUTORS = 5;
 const deviceFamilies = new Set(['oura', 'apple_health', 'healthkit', 'health_kit', 'apple_watch', 'healthconnect', 'google_health', 'polar', 'fitbit', 'whoop', 'garmin']);
 const metric = (completed: number, expected: number | null, reason?: string): CoverageMetric => ({ completed, expected, rate: expected && expected > 0 ? Math.round(completed / expected * 100) : null, status: expected == null ? 'unavailable' : 'available', ...(reason ? { reason } : {}) });
 const boundedText = (v: unknown, fallback: string) => typeof v === 'string' && v.trim() ? v.trim().slice(0, 160) : fallback;
-export function sharingAllows(grant: Record<string, any> | undefined, uid: string, teamId: string, field: string) { return grant?.athleteId === uid && grant.teamId === teamId && grant.version === TRAINER_SHARING_VERSION && grant.choices?.[field] === true; }
+export function sharingAllows(grant: Record<string, any> | undefined, uid: string, teamId: string, field: string) {
+  return TRAINER_SHARING_FIELDS.includes(field as any) && trainerSharingChoices(grant, uid, teamId)[field as keyof ReturnType<typeof trainerSharingChoices>];
+}
 export function aggregateCard(rows: Array<Record<string, number>>, eligible: number, source: string, asOf: string, units: Record<string, string>): WellbeingCard {
   const contributors = rows.length;
   // Do not disclose a small cohort's count or values, including through zero/one deltas.
-  if (contributors < MIN_CONTRIBUTORS) return { status: contributors ? 'insufficient_responses' : 'unavailable', reason: 'At least five athletes must choose to share and contribute data.', contributors: 0, eligible, source, asOf, values: [] };
+  if (contributors < MIN_CONTRIBUTORS) return { status: contributors ? 'insufficient_responses' : 'unavailable', reason: 'Not enough shared data yet. This summary appears when at least five athletes have contributed.', contributors: 0, eligible, source, asOf, values: [] };
   const values = Object.keys(units).flatMap(label => { const samples = rows.map(r => r[label]).filter(Number.isFinite); return samples.length >= MIN_CONTRIBUTORS ? [{ label, value: Math.round(samples.reduce((a,b) => a+b,0) / samples.length * 10)/10, unit: units[label] }] : []; });
   return { status: values.length ? 'available' : 'insufficient_responses', contributors, eligible, source, asOf, values };
 }

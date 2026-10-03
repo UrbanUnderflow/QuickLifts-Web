@@ -59,18 +59,8 @@ if (stage) {
  };
  const skillFor = mood => (mood === 'tough' || mood === 'heavy') ? 'relax' : mood === 'okay' ? 'box' : 'sigh';
  const tone = mood => (mood === 'tough' || mood === 'heavy') ? 'low' : mood === 'okay' ? 'mid' : 'high';
- const NORA = {
-  before: {low: 'Thanks for being honest. Let’s slow things down before you walk in, so practice gets the best of you.', mid: 'Okay is a fine place to start. A steady breath sets the pace for the next two hours.', high: 'Love that energy. Let’s channel it so it lasts the whole session.'},
-  setback: {low: 'That one stings, and that’s allowed. Let’s settle your body first, then we’ll find the next play.', mid: 'You’re carrying it, but you’re steady. A slow reset helps you set it down.', high: 'Good on you for bouncing back. Let’s lock that in with a quick reset.'},
-  next: {low: 'You’re showing up anyway. That counts. Let’s get your breathing low and slow.', mid: 'Steady is a good place to compete from. Let’s sharpen it.', high: 'You’re ready. Let’s turn that into calm focus.'}
- };
- const CUES = {
-  before: ['One play at a time.', 'Win the first minute.', 'Loose and locked in.'],
-  setback: ['Next play.', 'Flush it. Reset.', 'Let it go, then go.'],
-  next: ['Breathe, then attack.', 'See it, then do it.', 'Trust the work.']
- };
- const MOMENT_LABEL = {before: 'before practice', setback: 'after a setback', next: 'ready for the next play'};
- const state = {moment: null, mood: null, skill: null, run: 0};
+ const CUES = ['One play at a time.', 'Next play.', 'Trust the work.'];
+ const state = {recovery: null, mood: null, skill: null, run: 0};
  const $ = sel => stage.querySelector(sel);
  const steps = [...stage.querySelectorAll('[data-step]')];
  const dots = [...document.querySelectorAll('[data-step-dot]')];
@@ -106,24 +96,23 @@ if (stage) {
   });
  });
 
- const setMoment = moment => {
-  state.moment = moment;
-  const btn = $(`[data-moment-choice="${moment}"]`);
-  if (btn) selectRadio(btn.parentElement, btn);
-  continueBtn.disabled = !(state.moment && state.mood);
- };
- stage.querySelectorAll('[data-moment-choice]').forEach(btn => btn.addEventListener('click', () => setMoment(btn.dataset.momentChoice)));
  stage.querySelectorAll('[data-mood]').forEach(btn => btn.addEventListener('click', () => {
   state.mood = btn.dataset.mood;
   selectRadio(btn.parentElement, btn);
-  continueBtn.disabled = !(state.moment && state.mood);
+  $('[data-recovery-panel]').hidden = false;
+  continueBtn.disabled = !state.recovery;
  }));
- document.querySelectorAll('a[data-moment]').forEach(link => link.addEventListener('click', () => { setMoment(link.dataset.moment); showStep(1); }));
+ stage.querySelectorAll('[data-recovery]').forEach(btn => btn.addEventListener('click', () => {
+  state.recovery = btn.dataset.recovery;
+  selectRadio(btn.parentElement, btn);
+  continueBtn.disabled = !state.mood;
+ }));
+ document.querySelectorAll('a[data-moment]').forEach(link => link.addEventListener('click', () => showStep(1)));
 
  continueBtn.addEventListener('click', () => {
   state.skill = SKILLS[skillFor(state.mood)];
   $('[data-skill-name]').textContent = state.skill.name;
-  $('[data-nora-line]').textContent = NORA[state.moment][tone(state.mood)];
+  $('[data-nora-line]').textContent = 'Thanks for checking in. Take a moment to follow the breathing pattern.';
   $('[data-breath-pattern]').textContent = state.skill.pattern;
   resetBreath();
   showStep(2);
@@ -194,7 +183,7 @@ if (stage) {
  toCueBtn.addEventListener('click', () => {
   const grid = $('[data-cues]');
   grid.innerHTML = '';
-  CUES[state.moment].forEach(cue => {
+  CUES.forEach(cue => {
    const b = document.createElement('button');
    b.type = 'button'; b.className = 'cue'; b.textContent = cue;
    b.addEventListener('click', () => chooseCue(cue));
@@ -211,11 +200,14 @@ if (stage) {
   $('[data-cue-title]').textContent = 'Take it with you.';
   $('[data-cue-text]').textContent = cue;
   $('[data-cue-card]').hidden = false;
-  $('[data-cue-summary]').textContent = `Checked in feeling ${MOODS[state.mood].label.toLowerCase()}, ${MOMENT_LABEL[state.moment]}. Practiced ${state.skill.name}.`;
+  $('[data-cue-summary]').textContent = `Checked in feeling ${MOODS[state.mood].label.toLowerCase()}, body feeling ${state.recovery.toLowerCase()}. Practiced ${state.skill.name}.`;
   $('[data-cue-done]').hidden = false;
  }
  $('[data-restart]').addEventListener('click', () => {
   state.mood = null;
+  state.recovery = null;
+  $('[data-recovery-panel]').hidden = true;
+  stage.querySelectorAll('[data-recovery]').forEach((b, i) => { b.setAttribute('aria-checked', 'false'); b.tabIndex = i === 0 ? 0 : -1; });
   stage.querySelectorAll('[data-mood]').forEach(b => b.setAttribute('aria-checked', 'false'));
   continueBtn.disabled = true;
   showStep(1);

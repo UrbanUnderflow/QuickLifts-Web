@@ -78,7 +78,7 @@ export default function TeamTrainerSharing({ user }: { user: User }) {
           const team = teams.find(item => item.teamId === event.target.value);
           setTeamId(event.target.value); setChoices(team?.choices || { ...EMPTY }); setNotice(''); setError('');
         }}>{teams.map(team => <option key={team.teamId} value={team.teamId}>{team.displayName}</option>)}</select>
-        <p className={styles.help}>Each choice is optional and applies only to the selected team. Save your choices to apply changes.</p>
+        <p className={styles.help}>Sharing starts on by default for each team. Turn off any category you do not want to share, then save your choices.</p>
         <fieldset disabled={saving}>
           <legend className={styles.legend}>Include in trainer team summaries</legend>
           {TRAINER_SHARING_FIELDS.map(key => <label className={styles.choice} key={key}>
