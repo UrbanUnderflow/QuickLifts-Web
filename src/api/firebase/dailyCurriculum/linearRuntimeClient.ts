@@ -4,15 +4,16 @@ export interface LinearRuntimeAssignment {
   id: string; versionId: string; skillId: string; skillName: string;
   skillType: 'protocol' | 'simulation'; phase: 'learn' | 'practice' | 'use_it';
   sourceDate: string; timezone: string; windowStart: string; windowEnd: string;
-  completedDayCount: number; requiredDays: 5; phaseCompletedToday: boolean;
+  completedDayCount: number; refresherSuggested?: boolean; requiredDays: 5; phaseCompletedToday: boolean;
   contentSnapshot: SimModule; clientContractVersion: 1;
 }
 export interface LinearRuntimeResponse {
   status: 'legacy' | 'blocked' | 'review_due' | 'assignment' | 'recorded'; reason?: string;
   assignment?: LinearRuntimeAssignment;
 }
+export type LinearPracticeSupport = 'on_my_own' | 'needed_reminder' | 'used_guide';
 export type LinearUseOutcome = 'used' | 'forgot' | 'no_chance';
-export async function requestLinearRuntime(body: { action: 'today' | 'start' | 'complete'; assignmentId?: string; outcome?: LinearUseOutcome }): Promise<LinearRuntimeResponse> {
+export async function requestLinearRuntime(body: { action: 'today' | 'start' | 'complete'; assignmentId?: string; outcome?: LinearUseOutcome; practiceSupport?: LinearPracticeSupport }): Promise<LinearRuntimeResponse> {
   if (!auth.currentUser) throw new Error('Sign in to open your skill plan.');
   const token = await auth.currentUser.getIdToken();
   const response = await fetch('/api/curriculum/runtime', { method: 'POST', headers: {

@@ -14,8 +14,8 @@ export type StaffPermissionOption = {
 };
 
 export const STAFF_PERMISSIONS: StaffPermissionOption[] = [
-  { key: 'admin', label: 'Admin', blurb: 'Full access — invite staff, assign permissions, and manage everything', icon: ShieldCheck },
+  { key: 'admin', label: 'Admin', blurb: 'Manage the team, invite staff, and assign permissions. Trainer summaries require the Athletic Trainer permission.', icon: ShieldCheck },
   { key: 'administrative', label: 'Manager', blurb: 'Update the schedule and train Nora', icon: ClipboardList },
-  { key: 'coaching', label: 'Coaching', blurb: 'Athlete insights, reports, and coaching curriculum', icon: BarChart3 },
-  { key: 'athletic_trainer', label: 'Athletic Trainer', blurb: 'See Tier 3 escalation detail', icon: HeartPulse },
+  { key: 'coaching', label: 'Coaching', blurb: 'Participation, skill training, team messages, and reports', icon: BarChart3 },
+  { key: 'athletic_trainer', label: 'Athletic Trainer', blurb: 'Consented team wellbeing and recovery summaries. Journal activity only, never entry text.', icon: HeartPulse },
 ];

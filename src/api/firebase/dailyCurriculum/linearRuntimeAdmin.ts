@@ -18,7 +18,7 @@ export interface LinearRuntimeAssignment {
   id: string; athleteId: string; versionId: string; skillId: string; skillName: string;
   skillType: 'protocol' | 'simulation'; phase: 'learn' | 'practice' | 'use_it';
   sourceDate: string; timezone: string; windowStart: string; windowEnd: string;
-  completedDayCount: number; requiredDays: 5; phaseCompletedToday: boolean;
+  completedDayCount: number; refresherSuggested?: boolean; requiredDays: 5; phaseCompletedToday: boolean;
   contentSnapshot: Record<string, unknown>; clientContractVersion: 1;
   issuedAt: number; startedAt?: number; completedAt?: number; requiresCheckIn?: boolean;
   linkedLegacyStatus?: 'started' | 'completed';
@@ -34,7 +34,7 @@ const validId = (id: string) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}
 /** Authoritative assignment/ledger transaction. Authentication belongs to the calling handler.
  * Completion is authenticated self-report bound to an issued, started assignment, not sensor proof.
  */
-export async function runLinearRuntime(db: firestore.Firestore, input: { athleteId: string; action: 'today' | 'start' | 'complete'; assignmentId?: string; outcome?: string }, options: { enabled?: boolean; now?: number; dryRun?: boolean } = {}): Promise<LinearRuntimeResponse> {
+export async function runLinearRuntime(db: firestore.Firestore, input: { athleteId: string; action: 'today' | 'start' | 'complete'; assignmentId?: string; outcome?: string; practiceSupport?: string }, options: { enabled?: boolean; now?: number; dryRun?: boolean } = {}): Promise<LinearRuntimeResponse> {
   if (!(options.enabled ?? linearRuntimeEnabled())) return { status: 'legacy' };
   if (!validId(input.athleteId)) throw new Error('Invalid athlete identity');
   if (!['today','start','complete'].includes(input.action)) throw new Error('Invalid action');
@@ -100,15 +100,17 @@ export async function runLinearRuntime(db: firestore.Firestore, input: { athlete
       if (!assignedDoc.exists) return { status: 'blocked', reason: 'This assignment does not belong to this athlete.' };
       const assigned = assignedDoc.data() as LinearRuntimeAssignment;
       if (assigned.athleteId !== input.athleteId) return { status: 'blocked', reason: 'Assignment ownership could not be verified.' };
+      if (input.practiceSupport !== undefined && (input.action !== 'complete' || assigned.phase !== 'practice' || !['on_my_own', 'needed_reminder', 'used_guide'].includes(input.practiceSupport))) return { status: 'blocked', reason: 'Choose a valid practice support response for a practice session.' };
       if (recordedDoc.exists) return { status: 'recorded', qualified: true, duplicate: true };
       if (!checkedIn) return { status: 'blocked', reason: 'Complete today’s check-in before starting or recording your skill practice.' };
-      if (result.kind !== 'assignment' || decision.nextPin || result.versionId !== assigned.versionId || result.skillId !== assigned.skillId || result.phase !== assigned.phase || result.windowStart !== assigned.windowStart || result.phaseCompletedToday) return { status: 'blocked', reason: 'This assignment window has ended. Refresh the current assignment; history is preserved.' };
+      if (result.kind !== 'assignment' || decision.nextPin || result.versionId !== assigned.versionId || result.skillId !== assigned.skillId || result.phase !== assigned.phase || date > assigned.windowEnd || result.phaseCompletedToday) return { status: 'blocked', reason: 'Refresh your current assignment before recording this activity. Your completed days still count.' };
       if (input.action === 'start') { if (!assigned.startedAt) tx.update(assignmentRef, { startedAt: now }); return { status: 'recorded', qualified: false, duplicate: !!assigned.startedAt }; }
       if (!assigned.startedAt || assigned.startedAt > now) return { status: 'blocked', reason: 'Start this assignment before recording completion.' };
       if (assigned.phase === 'use_it' && !['used','forgot','no_chance'].includes(input.outcome || '')) return { status: 'blocked', reason: 'Choose what happened when you tried to use this skill.' };
+      const support = input.practiceSupport === undefined ? {} : { practiceSupport: input.practiceSupport };
       const qualified = assigned.phase !== 'use_it' || input.outcome === 'used';
-      tx.update(assignmentRef, { lastResponseAt: now, lastOutcome: input.outcome || 'completed', ...(qualified ? { completedAt: now } : {}) });
-      if (qualified) tx.create(completionsRef.doc(input.assignmentId!), { id: input.assignmentId, athleteId: input.athleteId, versionId: assigned.versionId, skillId: assigned.skillId, phase: assigned.phase, status: 'completed', completedAt: now, localDate: date, timezone: state.enrollment.timezone, assignmentId: assigned.id, verification: 'authenticated_assignment_response' });
+      tx.update(assignmentRef, { ...support, lastResponseAt: now, lastOutcome: input.outcome || 'completed', ...(qualified ? { completedAt: now } : {}) });
+      if (qualified) tx.create(completionsRef.doc(input.assignmentId!), { ...support, id: input.assignmentId, athleteId: input.athleteId, versionId: assigned.versionId, skillId: assigned.skillId, phase: assigned.phase, status: 'completed', completedAt: now, localDate: date, timezone: state.enrollment.timezone, assignmentId: assigned.id, verification: 'authenticated_assignment_response' });
       if (qualified && link?.status === 'pending' && assigned.versionId === link.versionId && assigned.skillId === link.skillId && assigned.phase === link.phase && assigned.sourceDate === link.sourceDate && assigned.startedAt === link.startedAt) tx.update(stateRef, { legacyHandoff: { ...link, status: 'completed_in_journey', resolvedAt: now, resolvedByAssignmentId: assigned.id } });
       return { status: 'recorded', qualified, duplicate: false };
     }
@@ -129,7 +131,7 @@ export async function runLinearRuntime(db: firestore.Firestore, input: { athlete
     const assignmentRef = stateRef.collection('assignments').doc(id);
     const assignedDoc = await tx.get(assignmentRef);
     const linkedStart = linkedLegacyStatus === 'started' && link?.sourceDate === date && result.phase === 'learn' ? link.startedAt : undefined;
-    const assignment: LinearRuntimeAssignment = { id, athleteId: input.athleteId, versionId: result.versionId, skillId: result.skillId, skillName: result.skillName, skillType: skill.type, phase: result.phase, sourceDate: date, timezone: state.enrollment.timezone, windowStart: result.windowStart, windowEnd: result.windowEnd, completedDayCount: result.verifiedCompletions, requiredDays: 5, phaseCompletedToday: result.phaseCompletedToday, contentSnapshot, clientContractVersion: 1, issuedAt: now, requiresCheckIn: !checkedIn, ...(linkedStart ? { startedAt: linkedStart } : {}), ...(linkedLegacyStatus ? { linkedLegacyStatus } : {}) };
+    const assignment: LinearRuntimeAssignment = { id, athleteId: input.athleteId, versionId: result.versionId, skillId: result.skillId, skillName: result.skillName, skillType: skill.type, phase: result.phase, sourceDate: date, timezone: state.enrollment.timezone, windowStart: result.windowStart, windowEnd: result.windowEnd, completedDayCount: result.verifiedCompletions, refresherSuggested: result.refresherSuggested, requiredDays: 5, phaseCompletedToday: result.phaseCompletedToday, contentSnapshot, clientContractVersion: 1, issuedAt: now, requiresCheckIn: !checkedIn, ...(linkedStart ? { startedAt: linkedStart } : {}), ...(linkedLegacyStatus ? { linkedLegacyStatus } : {}) };
     if (decision.nextPin && !options.dryRun) tx.update(stateRef, { currentSkill: decision.nextPin, completedSkillIds, completedSkillSummaries, revision: state.revision + 1, updatedAt: now });
     if (!assignedDoc.exists && !options.dryRun) tx.create(assignmentRef, assignment);
     return { status: 'assignment', timeline: buildLinearTimeline({ completedSkillIds, completedSkillSummaries, currentAssignment: assignment, pinnedVersion: chosenVersion, latestApplicableVersion: latest }), assignment: { ...assignment, ...(assignedDoc.exists ? { issuedAt: assignedDoc.data()!.issuedAt, startedAt: assignedDoc.data()!.startedAt ?? assignment.startedAt, completedAt: assignedDoc.data()!.completedAt } : {}) } };

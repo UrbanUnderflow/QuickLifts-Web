@@ -1,5 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
+import clay from '../../components/coach/ClayDashboard.module.css';
+import { demoTeamParticipation, demoTeamWellbeing } from '../../components/coach/clayDashboardDemoData';
+import ClayParticipationViews, { ClayParticipationReportSummary } from '../../components/coach/ClayParticipationViews';
+import type { TeamParticipation, TeamWellbeing } from '../../lib/coach-dashboard/types';
 import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -799,6 +803,8 @@ const convertConversationDate = (value: any): Date | undefined => {
 
 type ViewKey =
   | 'home'
+  | 'skills'
+  | 'wellbeing'
   | 'alerts'
   | 'inbox'
   | 'roster'
@@ -812,19 +818,22 @@ type ViewKey =
   | 'settings';
 
 const NAV: { key: ViewKey; label: string; icon: React.ElementType }[] = [
-  { key: 'home', label: 'Readiness Dashboard', icon: Home },
-  { key: 'alerts', label: 'Athlete Alerts', icon: Flame },
-  { key: 'inbox', label: 'Inbox', icon: Inbox },
-  { key: 'roster', label: 'Team Roster', icon: Users },
-  { key: 'reminders', label: 'Reminders', icon: BellRing },
-  { key: 'referrals', label: 'Referral Links', icon: Link2 },
-  { key: 'staff', label: 'Staff', icon: UserCog },
+  { key: 'home', label: 'Overview', icon: Home },
+  { key: 'roster', label: 'Athletes', icon: Users },
+  { key: 'skills', label: 'Skill training', icon: Wind },
+  { key: 'inbox', label: 'Messages', icon: Inbox },
+  { key: 'reports', label: 'Reports', icon: BarChart3 },
+  { key: 'wellbeing', label: 'Wellbeing & recovery', icon: HeartPulse },
   { key: 'nora', label: 'Train Nora', icon: Brain },
   { key: 'schedule', label: 'Schedule', icon: Calendar },
-  { key: 'reports', label: 'Reports', icon: BarChart3 },
+  { key: 'settings', label: 'Team settings', icon: SettingsIcon },
+  { key: 'alerts', label: 'Support requests', icon: Flame },
+  { key: 'reminders', label: 'Reminders', icon: BellRing },
+  { key: 'staff', label: 'Staff & permissions', icon: UserCog },
+  { key: 'referrals', label: 'Referral links', icon: Link2 },
   { key: 'earnings', label: 'Earnings', icon: Wallet },
-  { key: 'settings', label: 'Settings', icon: SettingsIcon },
 ];
+const SECONDARY_NAV = new Set<ViewKey>(['alerts', 'reminders', 'staff', 'referrals', 'earnings']);
 
 const isViewKey = (value: unknown): value is ViewKey =>
   typeof value === 'string' && NAV.some((item) => item.key === value);
@@ -892,6 +901,9 @@ interface CoachDashboardShellProps {
   /** Tier 2 (consent) + Tier 3 (clinical) alerts for the Athlete Alerts tab. */
   alerts?: AthleteAlert[];
   loadingAthletes: boolean;
+  participation?: TeamParticipation | null;
+  participationError?: string | null;
+  onReloadParticipation?: () => void;
   coachName: string;
   coachEmail?: string;
   coachId?: string;
@@ -965,6 +977,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   athletes,
   alerts = [],
   loadingAthletes,
+  participation = null,
+  participationError = null,
+  onReloadParticipation = () => {},
   coachName,
   coachEmail,
   coachId,
@@ -1003,8 +1018,35 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   const referralLinksEnabled =
     isDemo || resolvePulseCheckReferralVisibility(teamContext?.commercialConfig).any;
   // athletic_trainer is the medical peek — Tier 3 escalation detail.
-  const canSeeTier3 = can('athletic_trainer');
+  const canSeeTier3 = isDemo || viewerCapabilities.includes('athletic_trainer');
   const [view, setView] = useState<ViewKey>('home');
+  const [wellbeing, setWellbeing] = useState<TeamWellbeing | null>(null);
+  const [wellbeingError, setWellbeingError] = useState<string | null>(null);
+  const [wellbeingLoading, setWellbeingLoading] = useState(false);
+  const [wellbeingReload, setWellbeingReload] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    setWellbeing(null);
+    setWellbeingError(null);
+    if (view !== 'wellbeing' || !canSeeTier3 || !activeTeamId || isDemo) return;
+    setWellbeingLoading(true);
+    (async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error('Sign in again to view team wellbeing.');
+        const response = await fetch(`/api/coach/team-dashboard?teamId=${encodeURIComponent(activeTeamId)}&view=wellbeing`, {
+          headers: { Authorization: `Bearer ${token}`, ...getFirebaseModeRequestHeaders() },
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error(response.status === 403 ? 'Trainer access is required for this team.' : 'Could not load team wellbeing. Please try again.');
+        const result: TeamWellbeing = await response.json();
+        if (!cancelled) setWellbeing(result);
+      } catch (error) {
+        if (!cancelled) setWellbeingError(error instanceof Error ? error.message : 'Could not load team wellbeing.');
+      } finally { if (!cancelled) setWellbeingLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [view, canSeeTier3, activeTeamId, isDemo, wellbeingReload]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   // Local mirror of the coach's presence/profile so edits show immediately in the
@@ -1067,8 +1109,12 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   const navAllowed = useCallback(
     (key: ViewKey): boolean => {
       switch (key) {
+        case 'wellbeing':
+          return canSeeTier3;
         case 'home':
+        case 'skills':
         case 'roster':
+          return can('coaching') || canSeeTier3;
         case 'reminders':
         case 'inbox':
         case 'reports':
@@ -1092,7 +1138,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
           return true;
       }
     },
-    [can, earningsEnabled, referralLinksEnabled]
+    [can, canSeeTier3, earningsEnabled, referralLinksEnabled]
   );
 
   const permissionsReady = isDemo || !teamContextLoading;
@@ -1146,9 +1192,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
     }
   }, [navItems, permissionsReady, replaceDashboardQuery, routeView, router.isReady]);
 
-  const NavList = ({ onPick }: { onPick?: () => void }) => (
+  const NavList = ({ onPick, secondary = false }: { onPick?: () => void; secondary?: boolean }) => (
     <nav className="flex-1 space-y-0.5">
-      {navItems.map((item) => {
+      {navItems.filter((item) => SECONDARY_NAV.has(item.key) === secondary).map((item) => {
         const active = view === item.key;
         const Icon = item.icon;
         const badgeCount =
@@ -1162,6 +1208,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
             href={coachDashboardUrlForQuery({ view: item.key })}
             key={item.key}
             data-nav={item.key}
+            aria-current={active ? 'page' : undefined}
             onClick={(event) => {
               event.preventDefault();
               selectView(item.key);
@@ -1188,18 +1235,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
 
   const Sidebar = (
     <div className="flex flex-col h-full py-4 px-3">
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 px-2 mb-5">
-        <img
-          src="/pulseCheckIcon.png"
-          alt="PulseCheck"
-          className="w-7 h-7 rounded-lg flex-shrink-0"
-        />
-        <div className="leading-tight">
-          <div className="text-sm font-bold text-white">PulseCheck</div>
-          <div className="text-[8px] text-zinc-500 uppercase tracking-widest">Coaching Platform</div>
-        </div>
-      </div>
+      <a href="/coach/dashboard" className={clay.wordmark}>AthleticMind</a>
 
       {/* Coach identity — tap to edit profile */}
       <button
@@ -1227,6 +1263,10 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
       </button>
 
       <NavList onPick={() => setMobileNavOpen(false)} />
+      <details className={clay.moreNav} open={SECONDARY_NAV.has(view) || undefined}>
+        <summary>Team management</summary>
+        <NavList secondary onPick={() => setMobileNavOpen(false)} />
+      </details>
 
       <div className="mt-auto pt-3 border-t border-zinc-800/60">
         <button
@@ -1249,15 +1289,11 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
 
   return (
       <div
-        className="min-h-screen text-white"
-        style={{
-          background:
-            'linear-gradient(180deg, rgba(17,17,19,0.98) 0%, rgba(10,10,11,1) 100%)',
-        }}
+        className={`${clay.root} clay-dashboard min-h-screen`}
       >
         <div className="flex min-h-screen">
           {/* Desktop sidebar */}
-          <aside className="hidden md:flex w-[240px] flex-shrink-0 border-r border-zinc-800/60 flex-col">
+          <aside className={`${clay.sidebar} hidden md:flex w-[240px] flex-shrink-0 flex-col`}>
             {Sidebar}
           </aside>
 
@@ -1337,7 +1373,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+            <div className={`${clay.content} flex-1 px-4 sm:px-6 py-6`}>
               <AnimatePresence mode="wait">
                 <motion.div
                   key={view}
@@ -1346,19 +1382,21 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                   exit={{ opacity: 0, x: -16 }}
                   transition={{ duration: 0.2 }}
                 >
-                  {view === 'home' && (
-                    <HomeSection
-                      athletes={athletes}
-                      loading={loadingAthletes}
-                      isDemo={isDemo}
-                      coachId={coachId}
-                      teamId={teamContext?.teamId}
-                      organizationId={teamContext?.organizationId}
-                      onSelectAthlete={setSelectedAthleteId}
+                  {permissionsReady && navAllowed(view) && <>
+                  {(['home', 'skills', 'wellbeing'] as ViewKey[]).includes(view) && (
+                    <ClayParticipationViews
+                      view={view === 'home' ? 'overview' : view === 'skills' ? 'skills' : 'wellbeing'}
+                      participation={isDemo ? demoTeamParticipation : participation}
+                      wellbeing={isDemo ? demoTeamWellbeing : wellbeing?.teamId === activeTeamId ? wellbeing : null}
+                      loading={view === 'wellbeing' ? wellbeingLoading : loadingAthletes}
+                      error={view === 'wellbeing' ? wellbeingError : participationError}
+                      onRetry={view === 'wellbeing' ? () => setWellbeingReload(n => n + 1) : onReloadParticipation}
+                      onOpenSkills={() => selectView('skills')}
+                      onOpenAthletes={() => selectView('roster')}
                     />
                   )}
                   {view === 'alerts' && (
-                    <AlertsSection alerts={alerts} loading={loadingAthletes} canSeeTier3={canSeeTier3} />
+                    <SupportRequestsSection teamId={activeTeamId} athletes={athletes} isDemo={isDemo} alerts={alerts} />
                   )}
                   {view === 'inbox' && (
                     <InboxSection
@@ -1372,6 +1410,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                   )}
                   {view === 'roster' && (
                     <div className="space-y-5">
+                      {canManageAthleteInvites && <details className={clay.inviteDisclosure}><summary>Invite athletes & manage invitations</summary>
                       <AthleteInviteSection
                         isDemo={isDemo}
                         coachId={coachId}
@@ -1380,11 +1419,10 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                         teamContextLoading={teamContextLoading}
                         canInvite={canManageAthleteInvites}
                       />
-                      <RosterSection
-                        athletes={athletes}
-                        loading={loadingAthletes}
-                        onSelectAthlete={setSelectedAthleteId}
-                      />
+                      </details>}
+                      <ClayParticipationViews view="athletes" participation={isDemo ? demoTeamParticipation : participation}
+                        loading={loadingAthletes} error={participationError} onRetry={onReloadParticipation}
+                        onOpenSkills={() => selectView('skills')} />
                     </div>
                   )}
                   {view === 'reminders' && (
@@ -1434,11 +1472,13 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                     />
                   )}
                   {view === 'reports' && (
+                    <><header className={clay.pageHeader}><div><h1>Reports</h1><p>Your team’s participation over time.</p></div></header>
+                    {(isDemo || participation) && <ClayParticipationReportSummary data={isDemo ? demoTeamParticipation : participation!}/>}
                     <ReportsSection
                       teamId={teamContext?.teamId}
                       teamName={teamContext?.teamName}
                       isDemo={isDemo}
-                    />
+                    /></>
                   )}
                   {view === 'earnings' && earningsEnabled && (
                     <EarningsSection
@@ -1465,21 +1505,12 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       isDemo={isDemo}
                     />
                   )}
+                  </>}
                 </motion.div>
               </AnimatePresence>
             </div>
           </div>
         </div>
-
-        <AthleteProfileDrawer
-          athlete={selectedAthlete}
-          alerts={alerts}
-          canSeeTier3={canSeeTier3}
-          coachId={coachId || ''}
-          teamId={teamContext?.teamId || ''}
-          organizationId={teamContext?.organizationId || ''}
-          onClose={() => setSelectedAthleteId(null)}
-        />
 
         <CoachProfileEditModal
           isOpen={profileOpen}
@@ -1517,6 +1548,9 @@ const CoachDashboard: React.FC = () => {
   const [trainingMode, setTrainingMode] = useState<boolean | null>(null);
   const mockReady = useDemoDashboardMocks(trainingMode === true);
   const [athletes, setAthletes] = useState<CoachAthlete[]>([]);
+  const [participation, setParticipation] = useState<TeamParticipation | null>(null);
+  const [participationError, setParticipationError] = useState<string | null>(null);
+  const [participationReload, setParticipationReload] = useState(0);
   const [alerts, setAlerts] = useState<AthleteAlert[]>([]);
   const [loadingAthletes, setLoadingAthletes] = useState(true);
   const [earnings, setEarnings] = useState<{
@@ -1548,8 +1582,8 @@ const CoachDashboard: React.FC = () => {
     const membership = selectedTeamAccess?.membership;
     if (!membership) return [];
     const normalized = normalizeStaffCapabilities(membership.staffCapabilities);
-    const resolved = normalized.length ? normalized : capabilitiesFromLegacyRole(membership.role);
-    if (membership.role === 'team-admin' && !resolved.includes('admin')) {
+    const resolved = Array.isArray(membership.staffCapabilities) ? normalized : capabilitiesFromLegacyRole(membership.role);
+    if (!Array.isArray(membership.staffCapabilities) && membership.role === 'team-admin' && !resolved.includes('admin')) {
       return ['admin', ...resolved];
     }
     return resolved;
@@ -1722,109 +1756,34 @@ const CoachDashboard: React.FC = () => {
   }, [currentUser?.id, router.query.teamId, trainingMode]);
 
   useEffect(() => {
-    if (trainingMode !== false) return; // hold real data until training resolves/finishes
+    if (trainingMode !== false) return;
     let cancelled = false;
-    const load = async () => {
-      if (!currentUser?.id || !selectedTeamAccess) {
-        if (!cancelled) {
-          setAthletes([]);
-          setAlerts([]);
-          setLoadingAthletes(false);
-        }
-        return;
-      }
-      setLoadingAthletes(true);
-      setAthletes([]);
-      setAlerts([]);
+    setAthletes([]);
+    setAlerts([]);
+    setParticipation(null);
+    setParticipationError(null);
+    if (!currentUser?.id || !selectedTeamAccess) { setLoadingAthletes(false); return; }
+    setLoadingAthletes(true);
+    (async () => {
       try {
-        const list = (await coachService.getConnectedAthletesForTeam(
-          currentUser.id,
-          selectedTeamAccess.context.teamId
-        )) as CoachAthlete[];
-        // Real-data enrichment: active escalation tier + device wear. Both are
-        // single batch queries; best-effort so a failure never blocks the board.
-        let enriched = list;
-        try {
-          const idToken = await auth.currentUser?.getIdToken();
-          const [coachEscalations, deviceResult, coachEvidenceResponses] = await Promise.all([
-            escalationRecordsService.getActiveForCoach(currentUser.id).catch(() => []),
-            loadAthleteDeviceStatuses(
-              list.map((athlete) => athlete.id),
-              14,
-              {
-                teamId: selectedTeamAccess.context.teamId,
-                organizationId: selectedTeamAccess.context.organizationId,
-              }
-            ).catch(() => null),
-            idToken
-              ? Promise.all(list.map(async (athlete) => ({
-                  athlete,
-                  response: await loadAthleteTeamScorecard(
-                    athlete.id,
-                    selectedTeamAccess.context.teamId,
-                    idToken,
-                  ).catch(() => null),
-                })))
-              : Promise.resolve([]),
-          ]);
-          const selectedAthleteIds = new Set(list.map((athlete) => athlete.id));
-          const escalations = coachEscalations.filter((record) => selectedAthleteIds.has(record.userId));
-          const tierByAthlete = new Map<string, number>();
-          for (const r of escalations) {
-            const prev = tierByAthlete.get(r.userId) ?? 0;
-            if ((r.tier ?? 0) > prev) tierByAthlete.set(r.userId, r.tier ?? 0);
-          }
-          const deviceByAthlete = new Map<string, AthleteDeviceStatus>();
-          for (const s of deviceResult?.statuses || []) {
-            deviceByAthlete.set(s.athleteUserId, s);
-          }
-          for (const { athlete, response } of coachEvidenceResponses) {
-            if (!response?.deviceEvidence) continue;
-            const projectedStatus = deriveAthleteDeviceStatusFromEvidence(
-              response.deviceEvidence,
-              athlete,
-            );
-            deviceByAthlete.set(
-              athlete.id,
-              mergeAthleteDeviceStatusEvidence(
-                projectedStatus,
-                deviceByAthlete.get(athlete.id),
-              ),
-            );
-          }
-          enriched = list.map((a) => ({
-            ...a,
-            activeEscalationTier: tierByAthlete.get(a.id) ?? 0,
-            deviceCoveragePct: deviceByAthlete.get(a.id)?.wearCoveragePct,
-            deviceConnected: deviceByAthlete.has(a.id)
-              ? deviceByAthlete.get(a.id)?.connectionStatus !== 'not_connected'
-              : false,
-            deviceDailyPresence: deviceByAthlete.get(a.id)?.dailyPresence,
-            deviceStatus: deviceByAthlete.get(a.id),
-          }));
-          // Tier 2/3 alerts for the Athlete Alerts tab. The service query already
-          // filters to records where coachId === this coach, so every Tier 2 here
-          // reflects the athlete's explicit consent to notify this coach.
-          const nameByAthlete = new Map(list.map((a) => [a.id, a.displayName]));
-          const coachDisplay = currentUser?.displayName || currentUser?.username || 'you';
-          const builtAlerts = alertsFromEscalationRecords(escalations as any, nameByAthlete, coachDisplay);
-          if (!cancelled) setAlerts(builtAlerts);
-        } catch (enrichErr) {
-          console.warn('[CoachDashboard] athlete enrichment failed (non-blocking)', enrichErr);
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) throw new Error('Sign in again to load the team.');
+        const response = await fetch(`/api/coach/team-dashboard?teamId=${encodeURIComponent(selectedTeamAccess.context.teamId)}&view=participation`, {
+          headers: { Authorization: `Bearer ${token}`, ...getFirebaseModeRequestHeaders() }, cache: 'no-store',
+        });
+        if (!response.ok) throw new Error(response.status === 403 ? 'Your account does not have participation access for this team.' : 'Could not load team participation. Please try again.');
+        const result: TeamParticipation = await response.json();
+        if (!cancelled) {
+          setParticipation(result);
+          // Compatibility props for messaging, schedule and invites use identity only.
+          setAthletes(result.athletes.map(a => ({id:a.id,displayName:a.displayName,profileImageUrl:a.avatarUrl || undefined,email:'',conversationCount:0,totalSessions:0,weeklyGoalProgress:0,sentimentScore:0})));
         }
-        if (!cancelled) setAthletes(enriched);
-      } catch (err) {
-        console.error('[CoachDashboard] failed to load athletes', err);
-        if (!cancelled) setAthletes([]);
-      } finally {
-        if (!cancelled) setLoadingAthletes(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser?.id, selectedTeamAccess, trainingMode]);
+      } catch (error) {
+        if (!cancelled) setParticipationError(error instanceof Error ? error.message : 'Could not load team participation.');
+      } finally { if (!cancelled) setLoadingAthletes(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser?.id, selectedTeamAccess, trainingMode, participationReload]);
 
   // Earnings and Additional Services are available to the coach who receives a
   // team's athlete-subscription kickback. That single provisioning switch owns
@@ -1971,7 +1930,7 @@ const CoachDashboard: React.FC = () => {
   return (
     <CoachProtectedRoute requiresActiveSubscription={false}>
       <Head>
-        <title>Coach Dashboard | PulseCheck</title>
+        <title>Team dashboard | AthleticMind</title>
       </Head>
       {trainingMode === null ? (
         <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">
@@ -2011,6 +1970,9 @@ const CoachDashboard: React.FC = () => {
           athletes={athletes}
           alerts={alerts}
           loadingAthletes={loadingAthletes}
+          participation={participation?.teamId === selectedTeamId ? participation : null}
+          participationError={participationError}
+          onReloadParticipation={() => setParticipationReload(n => n + 1)}
           coachName={coachName}
           coachEmail={currentUser?.email}
           coachId={currentUser?.id}
@@ -2601,6 +2563,31 @@ const Tier3MonitorCard: React.FC<{ alert: AthleteAlert }> = ({ alert }) => {
   );
 };
 
+const SupportRequestsSection: React.FC<{teamId:string;athletes:CoachAthlete[];isDemo:boolean;alerts:AthleteAlert[]}> = ({teamId,athletes,isDemo,alerts}) => {
+  const [requests,setRequests] = useState<Array<{id:string;athleteId:string;createdAt:number|null}>>([]);
+  const [loading,setLoading] = useState(false);
+  const [error,setError] = useState<string|null>(null);
+  const [retry,setRetry] = useState(0);
+  useEffect(() => {
+    let cancelled=false;
+    setRequests([]);setError(null);
+    if(isDemo || !teamId) return;
+    setLoading(true);
+    (async()=>{try {
+      const token=await auth.currentUser?.getIdToken();
+      const response=await fetch(`/api/coach/support-requests?teamId=${encodeURIComponent(teamId)}`,{headers:{Authorization:`Bearer ${token}`, ...getFirebaseModeRequestHeaders()},cache:'no-store'});
+      if(!response.ok) throw new Error('Could not load support requests.');
+      const data=await response.json();if(!cancelled)setRequests(data.requests);
+    }catch(e){if(!cancelled)setError('Could not load support requests.');}finally{if(!cancelled)setLoading(false);}})();
+    return()=>{cancelled=true;};
+  },[teamId,isDemo,retry]);
+  const rows=isDemo?alerts.filter(a=>a.tier===2).map(a=>({id:a.id,athleteId:a.athleteId,createdAt:a.flaggedAt? a.flaggedAt.getTime()/1000:null})):requests;
+  return <section><header className={clay.pageHeader}><div><h1>Support requests</h1><p>Athletes who chose to ask for your support.</p></div></header>
+    {loading?<LoadingBlock label="Loading support requests…"/>:error?<div role="alert">{error} <button onClick={()=>setRetry(n=>n+1)}>Try again</button></div>:<div className={clay.reportCard}>
+    {!rows.length?<p>No active requests for you.</p>:rows.map(r=><article key={r.id} className={clay.reportRow}><div><strong>{athletes.find(a=>a.id===r.athleteId)?.displayName||'Athlete'}</strong><p>Asked you to check in. Reach out privately and offer support.</p><small>{r.createdAt?new Date(r.createdAt*1000).toLocaleDateString():''}</small></div></article>)}</div>}
+  </section>;
+};
+
 const AlertsSection: React.FC<{ alerts: AthleteAlert[]; loading: boolean; canSeeTier3?: boolean }> = ({
   alerts,
   loading,
@@ -2729,6 +2716,8 @@ const InboxSection: React.FC<{
   organizationId,
   isDemo,
 }) => {
+  const [search, setSearch] = useState('');
+  const [inboxError, setInboxError] = useState<string | null>(null);
   const [liveRows, setLiveRows] = useState<any[]>([]);
   const [loadingLiveThreads, setLoadingLiveThreads] = useState(false);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -2776,11 +2765,13 @@ const InboxSection: React.FC<{
     return onSnapshot(
       conversationsQuery,
       (snapshot) => {
+        setInboxError(null);
         setLiveRows(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
         setLoadingLiveThreads(false);
       },
       (error) => {
         console.error('[CoachDashboard] failed to load coach inbox', error);
+        setInboxError('Could not load messages. Refresh the page to try again.');
         setLiveRows([]);
         setLoadingLiveThreads(false);
       }
@@ -2793,85 +2784,24 @@ const InboxSection: React.FC<{
     }
   }, [selectedThread, selectedThreadId]);
 
-  if (loading || loadingLiveThreads) return <LoadingBlock label="Loading your inbox…" />;
-
-  if (!isDemo && selectedThread && coachId) {
-    return (
-      <CoachInboxConversationThread
-        thread={selectedThread}
-        coachId={coachId}
-        onBack={() => setSelectedThreadId(null)}
-      />
-    );
-  }
-
-  if (threads.length === 0) {
-    return (
-      <EmptyBlock
-        icon={Inbox}
-        title="No messages yet"
-        body="When athletes message you from the app, their conversations land here — so you can reply and pick up where Nora left off."
-      />
-    );
-  }
-
-  const unreadCount = threads.filter((t) => t.unread && !readIds.has(t.id)).length;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">Inbox</div>
-        {unreadCount > 0 && (
-          <span className="text-[10px] px-2 py-1 rounded-full bg-[#E0FE10]/15 text-[#E0FE10] border border-[#E0FE10]/25 font-bold">
-            {unreadCount} UNREAD
-          </span>
-        )}
+  const filteredThreads = threads.filter(t => `${t.name} ${t.lastMessage}`.toLowerCase().includes(search.toLowerCase()));
+  return <section>
+    <header className={clay.pageHeader}><div><h1>Messages</h1><p>Conversations with your team.</p></div></header>
+    {inboxError && <p role="alert">{inboxError}</p>}
+    {loading || loadingLiveThreads ? <LoadingBlock label="Loading messages…" /> :
+    <div className={clay.inbox}>
+      <div className={clay.inboxList}>
+        <input aria-label="Search messages" placeholder="Search messages…" value={search} onChange={e => setSearch(e.target.value)} />
+        {filteredThreads.map(t => <button key={t.id} aria-current={t.id === selectedThreadId ? 'true' : undefined} onClick={() => {setSelectedThreadId(t.id);setReadIds(prev => new Set(prev).add(t.id));}}>
+          <strong>{t.name}{t.unread && !readIds.has(t.id) ? ' •' : ''}</strong><small>{t.lastMessage}</small>
+        </button>)}
+        {!filteredThreads.length && <p className={clay.notice}>{search ? 'No matching conversations.' : 'Your athlete messages will appear here.'}</p>}
       </div>
-
-      <div className="space-y-2">
-        {threads.map((t) => {
-          const meta = STATUS_META[t.status];
-          const unread = t.unread && !readIds.has(t.id);
-          const stale = daysSince(t.ts);
-          return (
-            <button
-              key={t.id}
-              onClick={() => {
-                setReadIds((prev) => new Set(prev).add(t.id));
-                if (!isDemo) setSelectedThreadId(t.id);
-              }}
-              className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-colors ${
-                unread
-                  ? 'bg-zinc-800/60 border-[#E0FE10]/20 hover:bg-zinc-800/80'
-                  : 'bg-zinc-800/30 border-zinc-700/30 hover:bg-zinc-800/50'
-              }`}
-            >
-              <div className="relative w-10 h-10 rounded-full bg-zinc-700/40 border border-zinc-600/30 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-zinc-200">{t.initials}</span>
-                <span
-                  className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-zinc-900 ${meta.dot}`}
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm truncate ${unread ? 'font-bold text-white' : 'font-medium text-zinc-200'}`}>
-                    {t.name}
-                  </span>
-                  {unread && <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] flex-shrink-0" />}
-                  <span className="ml-auto text-[10px] text-zinc-500 flex-shrink-0">
-                    {stale === null ? '' : stale === 0 ? 'Today' : `${stale}d`}
-                  </span>
-                </div>
-                <div className={`text-xs mt-0.5 truncate ${unread ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                  {t.lastMessage}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+      {selectedThread && coachId && !isDemo ? <CoachInboxConversationThread key={selectedThread.id} thread={selectedThread} coachId={coachId} onBack={() => setSelectedThreadId(null)} /> :
+        <div className={clay.inboxEmpty}><div><MessageSquare className="mx-auto mb-3 h-7 w-7" /><p>{selectedThread && isDemo ? selectedThread.lastMessage : 'Choose a conversation to read and reply.'}</p>{isDemo && <small>Sample conversations. No messages are sent.</small>}</div></div>}
+    </div>}
+    <p className={clay.notice}>Direct team messages. Private Nora conversations stay private.</p>
+  </section>;
 };
 
 const CoachInboxConversationThread: React.FC<{
@@ -2927,7 +2857,7 @@ const CoachInboxConversationThread: React.FC<{
   };
 
   return (
-    <div className="h-[calc(100vh-9rem)] min-h-[620px] rounded-2xl border border-zinc-800/70 bg-zinc-950/40 overflow-hidden flex flex-col">
+    <div className="h-[600px] min-h-[440px] rounded-2xl border border-zinc-800/70 bg-zinc-950/40 overflow-hidden flex flex-col">
       <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/70 bg-zinc-950/70">
         <button
           type="button"
@@ -2986,7 +2916,7 @@ const CoachInboxConversationThread: React.FC<{
                       <div
                         className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
                           isMine
-                            ? 'bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] text-white'
+                            ? 'bg-[#e8f0df] text-[#22302e]'
                             : 'bg-zinc-800/80 text-zinc-100 border border-zinc-700/60'
                         }`}
                       >
@@ -3017,6 +2947,7 @@ const CoachInboxConversationThread: React.FC<{
                 sendReply();
               }
             }}
+            aria-label={`Message ${thread.name}`}
             placeholder={`Message ${thread.name}...`}
             rows={1}
             disabled={sending}
@@ -3151,8 +3082,9 @@ const capabilitiesFromLegacyRole = (role?: string): StaffPermission[] => {
     case 'coach':
       return ['coaching'];
     case 'performance-staff':
+      return ['coaching'];
     case 'clinician':
-      return ['athletic_trainer'];
+      return [];
     case 'support-staff':
       return ['administrative'];
     // team-admin is the org admin (the founder / full-access seat) — map to the new
@@ -6105,6 +6037,9 @@ const TrainNoraSection: React.FC<{
   athletes?: CoachAthlete[];
 }> = ({ coachId, teamId, coachName, athletes = [] }) => {
   const [entries, setEntries] = useState<NoraVaultEntry[]>([]);
+  const [sourceFilter,setSourceFilter] = useState('all');
+  const [sourceSearch,setSourceSearch] = useState('');
+  const filteredEntries = entries.filter(e => (sourceFilter === 'all' || e.type === sourceFilter || (sourceFilter === 'file' && e.type === 'image')) && `${e.title} ${e.content} ${e.category || ''}`.toLowerCase().includes(sourceSearch.toLowerCase()));
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState<{ name: string; pct: number } | null>(null);
@@ -6184,25 +6119,11 @@ const TrainNoraSection: React.FC<{
   };
 
   return (
-    <div className="space-y-5">
-      {/* Header / explainer */}
-      <div data-nora-explainer className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/8 to-blue-500/5 p-5">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-            <Brain className="w-4 h-4 text-purple-400" />
-          </div>
-          <div>
-            <div className="text-sm font-bold text-white">Train Nora</div>
-            <div className="text-xs text-zinc-500">Your team&apos;s knowledge vault</div>
-          </div>
-        </div>
-        <p className="text-sm text-zinc-300 leading-relaxed">
-          Drop in files, images, links, and notes — schedules, playbooks, policies, meeting times.
-          Anything you add here becomes context Nora can draw on, so an athlete can ask{' '}
-          <span className="text-purple-400 font-medium">&ldquo;what time is the team meeting?&rdquo;</span>{' '}
-          and Nora answers from what you&apos;ve shared.
-        </p>
-      </div>
+    <div className="clay-nora-library space-y-5">
+      <header data-nora-explainer>
+        <h2 className="text-3xl text-[#24332f]" style={{ fontFamily: 'Georgia, serif' }}>Your team’s knowledge</h2>
+        <p className="mt-2 text-sm text-[#626d68]">Share schedules, playbooks and team notes so Nora can answer with your team’s context.</p>
+      </header>
 
       {/* Actions */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -6289,12 +6210,14 @@ const TrainNoraSection: React.FC<{
               <input
                 value={noteTitle}
                 onChange={(e) => setNoteTitle(e.target.value)}
+                aria-label="Note title"
                 placeholder="Title (e.g. Practice schedule)"
                 className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
               />
               <textarea
                 value={noteBody}
                 onChange={(e) => setNoteBody(e.target.value)}
+                aria-label="Note content"
                 placeholder="What should Nora know? e.g. Team meeting is every Monday at 7:00 AM in the film room. Practice starts at 3:30 PM."
                 rows={4}
                 className="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40 resize-y"
@@ -6303,6 +6226,7 @@ const TrainNoraSection: React.FC<{
                 <input
                   value={noteCategory}
                   onChange={(e) => setNoteCategory(e.target.value)}
+                  aria-label="Note category"
                   placeholder="Category (optional)"
                   className="flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#E0FE10]/40"
                 />
@@ -6318,6 +6242,29 @@ const TrainNoraSection: React.FC<{
         )}
       </AnimatePresence>
 
+      {/* Vault contents */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <label className="text-sm">Show <select className="border rounded-lg px-3 py-2 ml-2" aria-label="Filter knowledge sources" value={sourceFilter} onChange={e=>setSourceFilter(e.target.value)}><option value="all">All sources</option><option value="file">Files & images</option><option value="link">Links</option><option value="note">Notes</option></select></label>
+        <input className="border rounded-lg px-3 py-2 ml-auto" aria-label="Search knowledge library" placeholder="Search knowledge library" value={sourceSearch} onChange={e=>setSourceSearch(e.target.value)}/>
+      </div>
+      <div>
+        <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">
+          Knowledge library {entries.length > 0 && <span className="text-zinc-600">({entries.length})</span>}
+        </div>
+        {loading ? (
+          <LoadingBlock label="Loading the vault…" />
+        ) : filteredEntries.length === 0 ? (
+          <div className="text-sm text-zinc-500 rounded-xl border border-zinc-800/60 bg-zinc-800/20 p-6 text-center">
+            {entries.length ? 'No sources match these filters.' : 'Add a note or file to give Nora team context.'}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredEntries.map((e) => (
+              <VaultRow key={e.id} entry={e} onDelete={() => remove(e)} />
+            ))}
+          </div>
+        )}
+      </div>
       {/* Dropzone */}
       <div
         data-nora-dropzone
@@ -6332,13 +6279,18 @@ const TrainNoraSection: React.FC<{
           if (e.dataTransfer.files) handleFiles(e.dataTransfer.files);
         }}
         onClick={() => fileInputRef.current?.click()}
-        className={`rounded-2xl border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInputRef.current?.click(); }
+        }}
+        className={`rounded-2xl border-2 border-dashed p-4 text-center cursor-pointer transition-colors ${
           dragOver
             ? 'border-[#E0FE10]/60 bg-[#E0FE10]/5'
             : 'border-zinc-700/50 hover:border-zinc-600/60 bg-zinc-800/20'
         }`}
       >
-        <UploadCloud className="w-8 h-8 text-zinc-500 mx-auto mb-2" />
+        <UploadCloud className="w-5 h-5 text-zinc-500 mx-auto mb-2" />
         <div className="text-sm text-zinc-300">
           {uploading ? (
             <span>
@@ -6361,28 +6313,11 @@ const TrainNoraSection: React.FC<{
         )}
       </div>
 
-      {/* Vault contents */}
-      <div>
-        <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">
-          Vault Contents {entries.length > 0 && <span className="text-zinc-600">({entries.length})</span>}
-        </div>
-        {loading ? (
-          <LoadingBlock label="Loading the vault…" />
-        ) : entries.length === 0 ? (
-          <div className="text-sm text-zinc-500 rounded-xl border border-zinc-800/60 bg-zinc-800/20 p-6 text-center">
-            Nothing here yet. Add your first note or file to start training Nora.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {entries.map((e) => (
-              <VaultRow key={e.id} entry={e} onDelete={() => remove(e)} />
-            ))}
-          </div>
-        )}
-      </div>
+
     </div>
   );
 };
+
 
 const VaultRow: React.FC<{ entry: NoraVaultEntry; onDelete: () => void }> = ({ entry, onDelete }) => {
   const Icon =
@@ -6438,8 +6373,8 @@ type ChatMessage = {
 };
 
 const CHAT_SUGGESTIONS = [
-  'How is the team doing this week?',
-  'Who should I check on?',
+  'What is on the team schedule?',
+  'Summarize the team handbook.',
   'Remember: team meeting moved to 8 AM Mondays.',
 ];
 
@@ -6457,19 +6392,6 @@ const NoraChatPanel: React.FC<{
   const [chatError, setChatError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const digest = useMemo(
-    () =>
-      athletes.map((a) => ({
-        id: a.id,
-        displayName: a.displayName,
-        status: deriveStatus(a),
-        sentimentScore: a.sentimentScore,
-        conversationCount: a.conversationCount,
-        totalSessions: a.totalSessions,
-        lastActiveDays: daysSince(a.lastActiveDate),
-      })),
-    [athletes]
-  );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -6485,16 +6407,16 @@ const NoraChatPanel: React.FC<{
     setInput('');
     setSending(true);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch('/api/pulsecheck/functions/coach-nora-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...getFirebaseModeRequestHeaders() },
         body: JSON.stringify({
           coachId,
           teamId,
           coachName,
           message: trimmed,
           history,
-          athletes: digest,
         }),
       });
       if (!res.ok) throw new Error(`Nora is unavailable right now (${res.status}).`);
@@ -6522,7 +6444,7 @@ const NoraChatPanel: React.FC<{
           <div className="leading-tight">
             <div className="text-sm font-bold text-white">Chat with Nora</div>
             <div className="text-[10px] text-zinc-500">
-              Train her live, or ask about your athletes
+              Team knowledge and schedules
             </div>
           </div>
         </div>
@@ -6540,8 +6462,7 @@ const NoraChatPanel: React.FC<{
         {messages.length === 0 && (
           <div className="space-y-3">
             <p className="text-sm text-zinc-400 leading-relaxed">
-              Tell me something to remember — like a schedule change or a team policy — and I&apos;ll
-              add it to the vault. Or ask how your athletes are doing; I talk with them every day.
+              Share a schedule change or team policy to add to the library. Ask Nora a question about the team information you have shared.
             </p>
             <div className="flex flex-wrap gap-2">
               {CHAT_SUGGESTIONS.map((s) => (
@@ -6731,10 +6652,7 @@ const ReportRow: React.FC<{
 );
 
 const ReportsArchiveHeader: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
-  <div>
-    <div className="text-lg font-bold text-white">Reports</div>
-    <p className="text-sm text-zinc-400 mt-1 max-w-2xl leading-relaxed">{children}</p>
-  </div>
+  <header className={clay.pageHeader}><div><h2 className="text-2xl font-serif">Delivered reports</h2><p>{children || "Your team’s participation over time."}</p></div></header>
 );
 
 // --- Demo archive -----------------------------------------------------------
@@ -7751,10 +7669,13 @@ const ReportsSection: React.FC<{
   const router = useRouter();
   const [reports, setReports] = useState<CoachReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setReports([]);
+    setError(null);
     if (isDemo || !teamId) {
       setLoading(false);
       return;
@@ -7765,7 +7686,7 @@ const ReportsSection: React.FC<{
         if (!cancelled) setReports(rs);
       })
       .catch(() => {
-        if (!cancelled) setReports([]);
+        if (!cancelled) { setReports([]); setError('Could not load reports. Please try again.'); }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -7773,12 +7694,14 @@ const ReportsSection: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [isDemo, teamId, teamName]);
+  }, [isDemo, teamId, teamName, retry]);
 
   // Demo dashboards have no live archive — synthesize a delivery history instead.
   if (isDemo) return <DemoReportsArchive />;
 
   if (loading) return <LoadingBlock label="Loading reports…" />;
+
+  if (error) return <div role="alert">{error} <button onClick={() => setRetry(n => n+1)}>Try again</button></div>;
 
   if (reports.length === 0) {
     return (
@@ -7793,10 +7716,10 @@ const ReportsSection: React.FC<{
   return (
     <div className="space-y-5">
       <ReportsArchiveHeader>
-        Every Sports Intelligence report delivered to your team, newest first. Open any report to see the full read.
+        Your team’s delivered reports, newest first.
       </ReportsArchiveHeader>
 
-      <div className="grid gap-3">
+      <div className={clay.reportCard}><h2 className="mb-5">Report archive</h2><div className="grid gap-3">
         {reports.map((report, index) => (
           <ReportRow
             key={`${report.teamId}-${report.reportId}`}
@@ -7806,7 +7729,7 @@ const ReportsSection: React.FC<{
                 query: teamId ? { teamId } : undefined,
               })
             }
-            accent="#E0FE10"
+            accent="#246863"
             title={report.weekLabel || report.title || 'Sports Intelligence Report'}
             isLatest={index === 0}
             meta={(
@@ -7823,7 +7746,7 @@ const ReportsSection: React.FC<{
             )}
           />
         ))}
-      </div>
+      </div></div>
     </div>
   );
 };

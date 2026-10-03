@@ -32,16 +32,22 @@ const { measuredFieldNames } = require('./lib/health-context-measurements') as {
 
 type FirestoreRecord = { id: string; data: Record<string, any> };
 
-const verifyAuth = async (authHeader?: string): Promise<{ uid: string } | null> => {
+const verifyAuth = async (authHeader?: string): Promise<{ uid: string; email?: string } | null> => {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice('Bearer '.length).trim();
   if (!token) return null;
   try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    return { uid: decoded.uid };
+    const decoded = await admin.auth().verifyIdToken(token, true);
+    return { uid: decoded.uid, email: decoded.email };
   } catch {
     return null;
   }
+};
+
+const canReadIndividualScorecard = async (db: admin.firestore.Firestore, identity: { uid: string; email?: string }, athleteId: string): Promise<boolean> => {
+  if (identity.uid === athleteId) return true;
+  if (!identity.email || identity.email.includes('/')) return false;
+  return (await db.collection('admin').doc(identity.email).get()).exists;
 };
 
 const cleanString = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
@@ -643,11 +649,13 @@ export const handler: Handler = async (event) => {
   const requestedAthleteId = cleanString(body.athleteUserId) || auth.uid;
   const requestedTeamId = cleanString(body.teamId);
   let staffAccess: { organizationId: string } | null = null;
-  if (requestedAthleteId !== auth.uid) {
+  // Individual recovery and wellbeing are athlete-owned. Staff receive the
+  // purpose-limited participation/trainer aggregates from team-dashboard.
+  if (!(await canReadIndividualScorecard(db, auth, requestedAthleteId))) {
+    return { statusCode: 403, headers: RESPONSE_HEADERS, body: JSON.stringify({ error: 'individual_scorecard_owner_required' }) };
+  }
+  if (requestedAthleteId !== auth.uid && requestedTeamId) {
     staffAccess = await verifyStaffAthleteAccess(db, auth.uid, requestedAthleteId, requestedTeamId);
-    if (!staffAccess) {
-      return { statusCode: 403, headers: RESPONSE_HEADERS, body: JSON.stringify({ error: 'scoped_staff_access_required' }) };
-    }
   }
   const timezone = cleanString(body.timezone) || 'America/New_York';
   const throughDateKey = cleanString(body.throughDateKey) || dateKeyInTimeZone(new Date(), timezone);
@@ -822,6 +830,7 @@ export const handler: Handler = async (event) => {
 };
 
 export const __internal = {
+  canReadIndividualScorecard,
   buildScoringDays,
   athleteSafeScorecard,
   buildCoachContext,

@@ -1,4 +1,4 @@
-/** Five distinct local completion days in a fixed 14-calendar-day phase window. */
+/** Five distinct local completion days, preserved across planning windows and gaps. */
 export interface PhaseProgressionInput {
   phaseStartedOn: string;
   asOf: string;
@@ -11,7 +11,9 @@ export interface PhaseProgression {
   uniqueCompletionDays: string[];
   count: number;
   completedOn: string | null;
+  /** Retained for older clients. Earned progress never restarts. */
   restartCount: number;
+  refresherSuggested: boolean;
 }
 const DAY = 86_400_000;
 function dayNumber(value: string): number {
@@ -34,8 +36,7 @@ export function evaluatePhaseProgression(input: PhaseProgressionInput): PhasePro
     const part = (name: string) => parts.find(p => p.type === name)!.value;
     return dayNumber(`${part('year')}-${part('month')}-${part('day')}`);
   };
-  let restartCount = Math.max(0, Math.floor((asOf - start) / 14));
-  const windows = new Map<number, Set<number>>();
+  const completionDays = new Set<number>();
   // A duplicate event id represents one event. Earliest valid timestamp wins regardless of input order.
   const eventDays = new Map<string, number>();
   for (const event of input.completions) {
@@ -46,17 +47,17 @@ export function evaluatePhaseProgression(input: PhaseProgressionInput): PhasePro
   }
   for (const day of eventDays.values()) {
     if (day < start || day > asOf) continue;
-    const windowIndex = Math.floor((day - start) / 14);
-    const days = windows.get(windowIndex) || new Set<number>();
-    days.add(day); windows.set(windowIndex, days);
+    completionDays.add(day);
   }
-  let completedOn: string | null = null;
-  for (const index of [...windows.keys()].sort((a, b) => a - b)) {
-    const days = [...windows.get(index)!].sort((a, b) => a - b);
-    if (days.length >= 5) { completedOn = dateFor(days[4]); restartCount = index; break; }
-  }
-  const uniqueCompletionDays = [...(windows.get(restartCount) || [])].sort((a, b) => a - b).slice(0, completedOn ? 5 : Infinity).map(dateFor);
-  const currentStart = start + restartCount * 14;
-  return { currentWindowStart: dateFor(currentStart), currentWindowEnd: dateFor(currentStart + 13),
-    uniqueCompletionDays, count: uniqueCompletionDays.length, completedOn, restartCount };
+  const days = [...completionDays].sort((a, b) => a - b);
+  const completedOn = days.length >= 5 ? dateFor(days[4]) : null;
+  const uniqueCompletionDays = days.slice(0, 5).map(dateFor);
+  // Legacy window fields are planning dates only. Keep the original start so stored
+  // assignment ids and old clients cannot mistake a gap for a fresh phase.
+  const planningDay = completedOn ? dayNumber(completedOn) : asOf;
+  const planningWindow = Math.max(0, Math.floor((planningDay - start) / 14));
+  const lastPracticeDay = days.length ? days[days.length - 1] : start;
+  return { currentWindowStart: dateFor(start), currentWindowEnd: dateFor(start + planningWindow * 14 + 13),
+    uniqueCompletionDays, count: uniqueCompletionDays.length, completedOn, restartCount: 0,
+    refresherSuggested: !completedOn && asOf - lastPracticeDay >= 14 };
 }

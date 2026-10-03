@@ -23,10 +23,11 @@ export const createLinearRuntimeHandler = (deps: { enabled?: () => boolean; auth
     identity = await (deps.authorize || authorizeLinearAthlete)(req);
     if (!identity.uid) throw new Error('Missing identity');
   } catch { return res.status(401).json({ error: 'Your sign-in could not be verified.' }); }
-  const { action, assignmentId, outcome } = req.body || {};
+  const { action, assignmentId, outcome, practiceSupport } = req.body || {};
   if (!['today','start','complete'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
+  if (practiceSupport !== undefined && (action !== 'complete' || !['on_my_own', 'needed_reminder', 'used_guide'].includes(practiceSupport))) return res.status(400).json({ error: 'Invalid practice support response' });
   try {
-    return res.status(200).json(await (deps.run || runLinearRuntime)(identity.db, { athleteId: identity.uid, action, assignmentId, outcome }, { enabled: true }));
+    return res.status(200).json(await (deps.run || runLinearRuntime)(identity.db, { athleteId: identity.uid, action, assignmentId, outcome, practiceSupport }, { enabled: true }));
   } catch { return res.status(503).json({ status: 'blocked', reason: 'The assignment could not be verified. Your progress has not been reset.' }); }
 };
 export default createLinearRuntimeHandler();

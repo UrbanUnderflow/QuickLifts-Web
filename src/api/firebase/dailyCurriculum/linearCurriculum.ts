@@ -22,7 +22,9 @@ export const LINEAR_PHASE_PROPOSAL = {
   pacingBasis: 'five_days_in_fourteen',
   requiredDistinctDays: 5,
   windowDays: 14,
-  restartScope: 'current_phase',
+  restartScope: 'none',
+  progressPolicy: 'cumulative_distinct_days',
+  refresherAfterInactiveDays: 14,
   historyPolicy: 'preserve',
   athleteCutover: 'not_enabled',
 } as const;

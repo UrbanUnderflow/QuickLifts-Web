@@ -869,13 +869,9 @@ test('Nora removes an athlete outside the coach team before loading alerts or pr
     const escalationQuery = database.queries.find(
       (query) => query.collectionName === 'escalation-records'
     );
-    assert.deepEqual(escalationQuery.constraints, [{
-      field: 'userId',
-      operator: 'in',
-      value: ['inside-athlete'],
-    }]);
+    assert.equal(escalationQuery, undefined, 'Train Nora must not read clinical escalation context');
     const prompt = openAi.requests[0].messages[0].content;
-    assert.equal(prompt.includes('Inside Athlete'), true);
+    assert.equal(prompt.includes('Inside Athlete'), false);
     assert.equal(prompt.includes('Outside Athlete'), false);
     assert.equal(prompt.includes('Wrong Org Athlete'), false);
   } finally {
@@ -1014,13 +1010,9 @@ test('Nora assigned scope includes only assigned athletes who remain active on t
     const escalationQuery = database.queries.find(
       (query) => query.collectionName === 'escalation-records'
     );
-    assert.deepEqual(escalationQuery.constraints, [{
-      field: 'userId',
-      operator: 'in',
-      value: ['assigned-athlete'],
-    }]);
+    assert.equal(escalationQuery, undefined, 'Train Nora must not read clinical escalation context');
     const prompt = openAi.requests[0].messages[0].content;
-    assert.equal(prompt.includes('Assigned Athlete'), true);
+    assert.equal(prompt.includes('Assigned Athlete'), false);
     assert.equal(prompt.includes('Unassigned Athlete'), false);
     assert.equal(prompt.includes('Former Athlete'), false);
   } finally {
@@ -1077,13 +1069,9 @@ test('Nora legacy scope requires a valid coach profile and includes only active 
     const escalationQuery = database.queries.find(
       (query) => query.collectionName === 'escalation-records'
     );
-    assert.deepEqual(escalationQuery.constraints, [{
-      field: 'userId',
-      operator: 'in',
-      value: ['legacy-active-athlete'],
-    }]);
+    assert.equal(escalationQuery, undefined, 'Train Nora must not read clinical escalation context');
     const prompt = openAi.requests[0].messages[0].content;
-    assert.equal(prompt.includes('Legacy Active Athlete'), true);
+    assert.equal(prompt.includes('Legacy Active Athlete'), false);
     assert.equal(prompt.includes('Legacy Disconnected Athlete'), false);
   } finally {
     openAi.restore();

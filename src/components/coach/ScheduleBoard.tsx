@@ -1,3 +1,4 @@
+import styles from './ClaySchedule.module.css';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -241,6 +242,7 @@ const ScheduleBoard: React.FC<{
   const [uploading, setUploading] = useState<{ name: string; pct: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importPanelRef = useRef<HTMLDetailsElement>(null);
   const allowedAthleteIds = useMemo(() => new Set(athleteIds.filter(Boolean)), [athleteIds]);
 
   const refresh = useCallback(async () => {
@@ -518,49 +520,13 @@ const ScheduleBoard: React.FC<{
   const busy = phase === 'fetching' || phase === 'writing';
 
   return (
-    <div className="space-y-5">
-      {/* Header / explainer */}
-      <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/8 to-teal-500/5 p-5">
-        <div className="flex items-center gap-2 mb-2">
-          <NoraOrb size={32} />
-          <div>
-            <div className="text-sm font-bold text-white">Schedule</div>
-            <div className="text-xs text-zinc-500">Practices, meetings, lifts & competitions</div>
-          </div>
+    <div className={`${styles.schedule} space-y-5`}>
+      <header className={styles.heading}>
+        <div>
+          <h2>Team schedule</h2>
+          <p>Practices, meetings, lifts and competitions in one place.</p>
         </div>
-        <p className="text-sm text-zinc-300 leading-relaxed">
-          Paste a link to a published schedule — like your athletics site&apos;s competition page — and Nora
-          reads it and <span className="text-purple-300 font-medium">writes every event onto your calendar</span>.
-          Add events by hand, or drop a schedule file in. Everything here is context Nora can use to answer{' '}
-          <span className="text-teal-300 font-medium">&ldquo;when&apos;s our next meet?&rdquo;</span>
-        </p>
-      </div>
-
-      {/* Link import bar */}
-      <div data-schedule-url className="rounded-2xl border border-zinc-700/40 bg-zinc-800/30 p-3">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-xl px-3 py-2 focus-within:border-purple-500/40">
-            <Link2 className="w-4 h-4 text-zinc-500 flex-shrink-0" />
-            <input
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') runImport(urlInput);
-              }}
-              disabled={busy}
-              placeholder="Paste a schedule link (e.g. seminoles.com/sports/mens-track-and-field/schedule/2026)"
-              className="flex-1 bg-transparent text-sm text-white placeholder-zinc-600 focus:outline-none disabled:opacity-50"
-            />
-          </div>
-          <button
-            onClick={() => runImport(urlInput)}
-            disabled={busy || !urlInput.trim() || !coachId}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-teal-500 text-white text-sm font-semibold hover:brightness-110 disabled:opacity-40 transition flex-shrink-0"
-          >
-            <Sparkles className="w-4 h-4" /> Import with Nora
-          </button>
-        </div>
-      </div>
+      </header>
 
       {/* Secondary actions */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -572,6 +538,18 @@ const ScheduleBoard: React.FC<{
           className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#E0FE10] text-black text-sm font-semibold hover:brightness-95"
         >
           <Plus className="w-4 h-4" /> Add event
+        </button>
+        <button
+          onClick={() => {
+            if (importPanelRef.current) {
+              importPanelRef.current.open = true;
+              importPanelRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              importPanelRef.current.querySelector('input')?.focus({ preventScroll: true });
+            }
+          }}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-zinc-200 text-sm"
+        >
+          <Link2 className="w-4 h-4" /> Import schedule
         </button>
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -596,6 +574,216 @@ const ScheduleBoard: React.FC<{
           }}
         />
       </div>
+
+      {/* Month calendar */}
+      <div className="rounded-2xl border border-zinc-700/40 bg-zinc-900/35 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2 text-white font-semibold">
+              <CalendarDays className="w-4 h-4 text-[#E0FE10]" />
+              Calendar
+            </div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Bookings appear automatically. Add practices, meetings, and team events here.
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}
+              className="p-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:text-white"
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <div className="min-w-[130px] text-center text-sm font-semibold text-zinc-200">
+              {formatMonthLabel(visibleMonth)}
+            </div>
+            <button
+              onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}
+              className="p-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:text-white"
+              aria-label="Next month"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+            <div key={day} className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1.5">
+          {calendarDays.map((day) => {
+            const dayEvents = eventsByDate.get(day.key) || [];
+            const inMonth = day.date.getMonth() === visibleMonth.getMonth();
+            const isToday = day.key === todayStr();
+            const isSelected = day.key === selectedDate;
+            return (
+              <button
+                key={day.key}
+                onClick={() => setSelectedDate(day.key)}
+                aria-pressed={isSelected}
+                aria-label={`${formatHeading(day.key)}, ${dayEvents.length} events`}
+                className={`min-h-[58px] sm:min-h-[92px] min-w-0 rounded-xl border p-1 sm:p-2 text-left transition ${
+                  isSelected
+                    ? 'border-[#E0FE10]/70 bg-[#E0FE10]/10'
+                    : isToday
+                    ? 'border-teal-400/45 bg-teal-500/10'
+                    : 'border-zinc-800/70 bg-zinc-950/45 hover:border-zinc-700/70'
+                } ${inMonth ? 'opacity-100' : 'opacity-45'}`}
+              >
+                <div className={`text-xs font-semibold mb-1.5 ${isToday ? 'text-teal-200' : 'text-zinc-400'}`}>
+                  {day.date.getDate()}
+                </div>
+                <div className="space-y-1">
+                  {dayEvents.slice(0, 3).map((event) => (
+                    <CalendarChip key={event.id} event={event} />
+                  ))}
+                  {dayEvents.length > 3 && (
+                    <div className="text-[10px] text-zinc-500">+{dayEvents.length - 3} more</div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 rounded-xl border border-zinc-800/70 bg-black/20 p-3">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              {formatHeading(selectedDate)}
+            </div>
+            <button
+              onClick={() => {
+                setDraft((d) => ({ ...d, date: selectedDate }));
+                setEditingEventId(null);
+                setComposerOpen(true);
+              }}
+              className="text-xs font-semibold text-[#E0FE10] hover:text-white"
+            >
+              Add item this day
+            </button>
+          </div>
+          {selectedItems.length === 0 ? (
+            <div className="text-sm text-zinc-500 py-3">Nothing booked or scheduled for this day.</div>
+          ) : (
+            <div className="space-y-2">
+              {selectedItems.map((event) => (
+                <EventRow
+                  key={`selected-${event.id}`}
+                  event={event}
+                  past={event.date < todayStr()}
+                  onEdit={() => editEvent(event)}
+                  onDelete={() => removeEvent(event)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <details ref={importPanelRef} className={styles.imports}>
+        <summary><UploadCloud size={17} /> Import a schedule or connect a calendar</summary>
+        <div className="space-y-4 mt-4">
+      {/* Link import bar */}
+      <div data-schedule-url className="rounded-2xl border border-zinc-700/40 bg-zinc-800/30 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0 flex items-center gap-2 flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-xl px-3 py-2 focus-within:border-purple-500/40">
+            <Link2 className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+            <input
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') runImport(urlInput);
+              }}
+              disabled={busy}
+              aria-label="Published schedule link"
+              placeholder="Paste a published schedule link"
+              className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder-zinc-600 focus:outline-none disabled:opacity-50"
+            />
+          </div>
+          <button
+            onClick={() => runImport(urlInput)}
+            disabled={busy || !urlInput.trim() || !coachId}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-teal-500 text-white text-sm font-semibold hover:brightness-110 disabled:opacity-40 transition flex-shrink-0"
+          >
+            <Sparkles className="w-4 h-4" /> Import with Nora
+          </button>
+        </div>
+      </div>
+
+      {/* Drop zone */}
+      <div
+        data-schedule-dropzone
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        onClick={() => fileInputRef.current?.click()}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInputRef.current?.click(); }
+        }}
+        className={`rounded-2xl border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
+          dragOver ? 'border-purple-400/60 bg-purple-500/5' : 'border-zinc-700/50 hover:border-zinc-600/60 bg-zinc-800/20'
+        }`}
+      >
+        <UploadCloud className="w-7 h-7 text-zinc-500 mx-auto mb-1.5" />
+        <div className="text-sm text-zinc-300">
+          {uploading ? (
+            <span>
+              Uploading <span className="text-[#E0FE10]">{uploading.name}</span> — {uploading.pct}%
+            </span>
+          ) : (
+            <>
+              Drop a <span className="text-purple-300">schedule link</span> or a file here, or{' '}
+              <span className="text-[#E0FE10]">browse</span>
+            </>
+          )}
+        </div>
+        <div className="text-[11px] text-zinc-600 mt-1">Links get parsed by Nora · files up to 25MB</div>
+      </div>
+
+      {/* Third-party scheduling integrations — wired up by the Pulse team during pilot setup */}
+      <div
+        data-schedule-integrations
+        className="rounded-2xl border border-teal-500/20 bg-gradient-to-br from-teal-500/[0.06] to-purple-500/[0.04] p-5"
+      >
+        <div className="flex items-start gap-2.5 mb-3">
+          <div className="w-8 h-8 rounded-lg bg-teal-500/15 flex items-center justify-center flex-shrink-0">
+            <Plug className="w-4 h-4 text-teal-300" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-white">Connect your scheduling software</div>
+            <div className="text-xs text-zinc-500">
+              Our team can help connect your scheduling tools during pilot setup.
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {SCHEDULE_INTEGRATIONS.map((name) => (
+            <span
+              key={name}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700/50 bg-zinc-900/50 px-3 py-1.5 text-xs font-medium text-zinc-300"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-teal-400/70" />
+              {name}
+            </span>
+          ))}
+        </div>
+        <div className="mt-3 text-[11px] leading-relaxed text-zinc-500">
+          Connection availability is confirmed during setup for your institution and team.
+        </div>
+      </div>
+
+        </div>
+      </details>
 
       {error && (
         <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/25 rounded-lg px-3 py-2">
@@ -718,69 +906,6 @@ const ScheduleBoard: React.FC<{
         )}
       </AnimatePresence>
 
-      {/* Drop zone */}
-      <div
-        data-schedule-dropzone
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={`rounded-2xl border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
-          dragOver ? 'border-purple-400/60 bg-purple-500/5' : 'border-zinc-700/50 hover:border-zinc-600/60 bg-zinc-800/20'
-        }`}
-      >
-        <UploadCloud className="w-7 h-7 text-zinc-500 mx-auto mb-1.5" />
-        <div className="text-sm text-zinc-300">
-          {uploading ? (
-            <span>
-              Uploading <span className="text-[#E0FE10]">{uploading.name}</span> — {uploading.pct}%
-            </span>
-          ) : (
-            <>
-              Drop a <span className="text-purple-300">schedule link</span> or a file here, or{' '}
-              <span className="text-[#E0FE10]">browse</span>
-            </>
-          )}
-        </div>
-        <div className="text-[11px] text-zinc-600 mt-1">Links get parsed by Nora · files up to 25MB</div>
-      </div>
-
-      {/* Third-party scheduling integrations — wired up by the Pulse team during pilot setup */}
-      <div
-        data-schedule-integrations
-        className="rounded-2xl border border-teal-500/20 bg-gradient-to-br from-teal-500/[0.06] to-purple-500/[0.04] p-5"
-      >
-        <div className="flex items-start gap-2.5 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-teal-500/15 flex items-center justify-center flex-shrink-0">
-            <Plug className="w-4 h-4 text-teal-300" />
-          </div>
-          <div>
-            <div className="text-sm font-semibold text-white">Connect your scheduling software</div>
-            <div className="text-xs text-zinc-500">
-              Already run your schedule through another tool? Nora can sync straight from it.
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {SCHEDULE_INTEGRATIONS.map((name) => (
-            <span
-              key={name}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700/50 bg-zinc-900/50 px-3 py-1.5 text-xs font-medium text-zinc-300"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-teal-400/70" />
-              {name}
-            </span>
-          ))}
-        </div>
-        <div className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-          Our team makes these connections during pilot setup — tailoring PulseCheck to your institution,
-          your team, and your athletes.
-        </div>
-      </div>
-
       {/* Source documents */}
       {docs.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -791,7 +916,7 @@ const ScheduleBoard: React.FC<{
             >
               <FileText className="w-3.5 h-3.5 text-purple-400" />
               <span className="truncate max-w-[180px]">{d.title}</span>
-              <button onClick={() => removeDoc(d)} className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400">
+              <button onClick={() => removeDoc(d)} aria-label={`Remove ${d.title}`} className="opacity-100 text-zinc-500 hover:text-red-400">
                 <X className="w-3 h-3" />
               </button>
             </div>
@@ -837,114 +962,6 @@ const ScheduleBoard: React.FC<{
         )}
       </AnimatePresence>
 
-      {/* Month calendar */}
-      <div className="rounded-2xl border border-zinc-700/40 bg-zinc-900/35 p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div>
-            <div className="flex items-center gap-2 text-white font-semibold">
-              <CalendarDays className="w-4 h-4 text-[#E0FE10]" />
-              Calendar
-            </div>
-            <div className="text-xs text-zinc-500 mt-0.5">
-              Bookings appear automatically. Add practices, meetings, and team events here.
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setVisibleMonth(addMonths(visibleMonth, -1))}
-              className="p-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:text-white"
-              aria-label="Previous month"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="min-w-[130px] text-center text-sm font-semibold text-zinc-200">
-              {formatMonthLabel(visibleMonth)}
-            </div>
-            <button
-              onClick={() => setVisibleMonth(addMonths(visibleMonth, 1))}
-              className="p-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:text-white"
-              aria-label="Next month"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-7 gap-1.5 mb-1.5">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-            <div key={day} className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
-              {day}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1.5">
-          {calendarDays.map((day) => {
-            const dayEvents = eventsByDate.get(day.key) || [];
-            const inMonth = day.date.getMonth() === visibleMonth.getMonth();
-            const isToday = day.key === todayStr();
-            const isSelected = day.key === selectedDate;
-            return (
-              <button
-                key={day.key}
-                onClick={() => setSelectedDate(day.key)}
-                className={`min-h-[92px] rounded-xl border p-2 text-left transition ${
-                  isSelected
-                    ? 'border-[#E0FE10]/70 bg-[#E0FE10]/10'
-                    : isToday
-                    ? 'border-teal-400/45 bg-teal-500/10'
-                    : 'border-zinc-800/70 bg-zinc-950/45 hover:border-zinc-700/70'
-                } ${inMonth ? 'opacity-100' : 'opacity-45'}`}
-              >
-                <div className={`text-xs font-semibold mb-1.5 ${isToday ? 'text-teal-200' : 'text-zinc-400'}`}>
-                  {day.date.getDate()}
-                </div>
-                <div className="space-y-1">
-                  {dayEvents.slice(0, 3).map((event) => (
-                    <CalendarChip key={event.id} event={event} />
-                  ))}
-                  {dayEvents.length > 3 && (
-                    <div className="text-[10px] text-zinc-500">+{dayEvents.length - 3} more</div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="mt-4 rounded-xl border border-zinc-800/70 bg-black/20 p-3">
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              {formatHeading(selectedDate)}
-            </div>
-            <button
-              onClick={() => {
-                setDraft((d) => ({ ...d, date: selectedDate }));
-                setEditingEventId(null);
-                setComposerOpen(true);
-              }}
-              className="text-xs font-semibold text-[#E0FE10] hover:text-white"
-            >
-              Add item this day
-            </button>
-          </div>
-          {selectedItems.length === 0 ? (
-            <div className="text-sm text-zinc-500 py-3">Nothing booked or scheduled for this day.</div>
-          ) : (
-            <div className="space-y-2">
-              {selectedItems.map((event) => (
-                <EventRow
-                  key={`selected-${event.id}`}
-                  event={event}
-                  past={event.date < todayStr()}
-                  onEdit={() => editEvent(event)}
-                  onDelete={() => removeEvent(event)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* Schedule list */}
       <div>
         <div className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">
@@ -957,7 +974,7 @@ const ScheduleBoard: React.FC<{
           </div>
         ) : calendarEvents.length === 0 ? (
           <div className="text-sm text-zinc-500 rounded-xl border border-zinc-800/60 bg-zinc-800/20 p-8 text-center">
-            Nothing scheduled yet. Paste a schedule link above and watch Nora fill it in, or add an event by hand.
+            Nothing scheduled yet. Add an event or open Import a schedule to get started.
           </div>
         ) : (
           <div className="space-y-5">
@@ -1058,7 +1075,7 @@ const EventRow: React.FC<{ event: CalendarEvent; past: boolean; onEdit?: () => v
       {!event.live && !isBooking && (
         <button
           onClick={onEdit}
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-zinc-500 hover:text-[#E0FE10] hover:bg-[#E0FE10]/10 flex-shrink-0"
+          className="opacity-100 transition-opacity p-1.5 rounded-lg text-zinc-500 hover:text-[#E0FE10] hover:bg-[#E0FE10]/10 flex-shrink-0"
           aria-label="Edit event"
         >
           <Pencil className="w-4 h-4" />
@@ -1067,7 +1084,7 @@ const EventRow: React.FC<{ event: CalendarEvent; past: boolean; onEdit?: () => v
       {!event.live && !isBooking && (
         <button
           onClick={onDelete}
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 flex-shrink-0"
+          className="opacity-100 transition-opacity p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 flex-shrink-0"
           aria-label="Delete event"
         >
           <Trash2 className="w-4 h-4" />

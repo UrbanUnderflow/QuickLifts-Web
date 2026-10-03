@@ -37,7 +37,7 @@ const call = async (s: ReturnType<typeof setup>, action: 'today'|'start'|'comple
 async function issued(s: ReturnType<typeof setup>,day:number) { const r = await call(s,'today',day); assert.equal(r.status,'assignment'); return (r as {assignment:LinearRuntimeAssignment}).assignment; }
 test('disabled runtime performs no reads or writes and unknown athlete remains legacy',async()=>{ assert.deepEqual(await runLinearRuntime({} as any,{athleteId:'a',action:'today'},{enabled:false}),{status:'legacy'}); const s=store(); assert.deepEqual(await runLinearRuntime(s.db,{athleteId:'a',action:'today'},{enabled:true}),{status:'legacy'}); });
 test('durable issued/start/completion chain owns athlete, phase, date; duplicates create one ledger record',async()=>{ const s=setup();const a=await issued(s,1); assert.equal(a.versionId,'v1'); assert.equal((await call(s,'complete',1,{assignmentId:a.id})).status,'blocked'); await call(s,'start',1,{assignmentId:a.id}); const both=await Promise.all([call(s,'complete',1,{assignmentId:a.id}),call(s,'complete',1,{assignmentId:a.id})]); assert.deepEqual(both.map(x=>(x as any).duplicate),[false,true]); assert.equal([...s.data.keys()].filter(k=>k.includes('/completions/')).length,1); const other=await runLinearRuntime(s.db,{athleteId:'attacker',action:'complete',assignmentId:a.id},{enabled:true,now:time(1)}); assert.equal(other.status,'blocked'); assert.equal((await issued(s,1)).completedDayCount,1); });
-test('expired windows reject old assignments and preserve old ledger',async()=>{const s=setup();const a=await issued(s,1);await call(s,'start',1,{assignmentId:a.id});await call(s,'complete',1,{assignmentId:a.id});const pending=await issued(s,2);await call(s,'start',2,{assignmentId:pending.id});assert.equal((await call(s,'complete',15,{assignmentId:pending.id})).status,'blocked');const current=await issued(s,15);assert.equal(current.windowStart,'2026-09-15');assert.equal(current.completedDayCount,0);assert.equal([...s.data.keys()].filter(k=>k.includes('/completions/')).length,1);});
+test('stale assignments require refresh while earned days remain counted',async()=>{const s=setup();const a=await issued(s,1);await call(s,'start',1,{assignmentId:a.id});await call(s,'complete',1,{assignmentId:a.id});const pending=await issued(s,2);await call(s,'start',2,{assignmentId:pending.id});assert.equal((await call(s,'complete',15,{assignmentId:pending.id})).status,'blocked');const current=await issued(s,15);assert.equal(current.windowStart,'2026-09-01');assert.equal(current.completedDayCount,1);assert.equal([...s.data.keys()].filter(k=>k.includes('/completions/')).length,1);});
 test('whole skill remains pinned through release; atomic boundary records completion and next pin idempotently',async()=>{const s=setup();for(let d=1;d<=15;d++){const a=await issued(s,d);assert.equal(a.versionId,'v1');await call(s,'start',d,{assignmentId:a.id});await call(s,'complete',d,{assignmentId:a.id,outcome:'used'});}const responses=await Promise.all([issued(s,16),issued(s,16)]);assert.equal(responses[0].id,responses[1].id);assert.equal(responses[0].versionId,'v2');assert.equal(responses[0].skillId,second);const state=s.data.get(`${ROOT}/states/items/a`);assert.equal(state.revision,2);assert.deepEqual(state.completedSkillIds,[first]);assert.equal([...s.data.keys()].filter(k=>k.includes('/completions/')).length,15);});
 test('failed transaction leaves pin/history/assignment state unchanged; preview writes nothing',async()=>{const s=setup();const before=JSON.stringify([...s.data]);await runLinearRuntime(s.db,{athleteId:'a',action:'today'},{enabled:true,now:time(1),dryRun:true});assert.equal(JSON.stringify([...s.data]),before);s.fail();await assert.rejects(()=>issued(s,1),/injected/);assert.equal(JSON.stringify([...s.data]),before);});
 const response=()=>{const r:any={code:0,body:null,setHeader(){},status(n:number){r.code=n;return r;},json(body:any){r.body=body;return r;}};return r;};
@@ -127,4 +127,36 @@ test('invalid linked data cannot fabricate a started session or qualifying credi
 test('linked completion requires a check-in and failed bridge transactions preserve all data',async()=>{
  const s=linkedSetup();Object.assign(s.data.get('pulsecheck-daily-assignments/old-started'),{status:'completed',completedAt:time(1)});s.data.delete('pulsecheck-morning-checkins/a_2026-09-01');assert.equal((await issued(s,1)).completedDayCount,0);
  s.data.set('pulsecheck-morning-checkins/a_2026-09-01',{athleteUserId:'a',dayKey:'2026-09-01',level:'okay'});const before=JSON.stringify([...s.data]);s.fail();await assert.rejects(()=>issued(s,1),/injected/);assert.equal(JSON.stringify([...s.data]),before);
+});
+
+
+test('optional practice support is saved without changing credit and retries retain original evidence', async () => {
+ for (const support of [undefined, 'on_my_own', 'needed_reminder', 'used_guide']) {
+  const s=setup();
+  for(let day=1;day<=5;day++){const a=await issued(s,day);await call(s,'start',day,{assignmentId:a.id});await call(s,'complete',day,{assignmentId:a.id});}
+  const a=await issued(s,6);assert.equal(a.phase,'practice');await call(s,'start',6,{assignmentId:a.id});
+  const result=await call(s,'complete',6,{assignmentId:a.id,practiceSupport:support});assert.equal((result as any).qualified,true);
+  const key=`${ROOT}/states/items/a/completions/${a.id}`;
+  assert.equal(s.data.get(key).practiceSupport,support);assert.equal((await issued(s,6)).completedDayCount,1);
+  await call(s,'complete',6,{assignmentId:a.id,practiceSupport:'used_guide'});
+  assert.equal(s.data.get(key).practiceSupport,support);
+ }
+});
+test('invalid or out-of-phase practice support cannot write evidence', async () => {
+ const s=setup();const a=await issued(s,1);await call(s,'start',1,{assignmentId:a.id});
+ for(const support of ['on_my_own','mastered',true]) assert.equal((await call(s,'complete',1,{assignmentId:a.id,practiceSupport:support})).status,'blocked');
+ assert.equal([...s.data.keys()].filter(k=>k.includes('/completions/')).length,0);
+});
+test('API validates and forwards optional support with authenticated identity', async () => {
+ let captured:any;
+ const handler=createLinearRuntimeHandler({enabled:()=>true,authorize:async()=>({uid:'a',db:{} as any}),run:async(_db,input)=>{captured=input;return {status:'recorded',qualified:true,duplicate:false};}});
+ const request=(practiceSupport:any)=>({method:'POST',headers:{authorization:'Bearer test'},body:{action:'complete',assignmentId:'test',athleteId:'other',practiceSupport}} as any);
+ let r=response();await handler(request('needed_reminder'),r);assert.equal(r.code,200);assert.equal(captured.practiceSupport,'needed_reminder');assert.equal(captured.athleteId,'a');
+ r=response();await handler(request('mastered'),r);assert.equal(r.code,400);
+});
+test('returning after a gap suggests a refresher without losing credit', async () => {
+ const s=setup();const a=await issued(s,1);await call(s,'start',1,{assignmentId:a.id});await call(s,'complete',1,{assignmentId:a.id});
+ const returning=await issued(s,15);assert.equal(returning.completedDayCount,1);assert.equal(returning.refresherSuggested,true);
+ await call(s,'start',15,{assignmentId:returning.id});await call(s,'complete',15,{assignmentId:returning.id});
+ assert.equal((await issued(s,15)).completedDayCount,2);assert.equal((await issued(s,15)).refresherSuggested,false);
 });

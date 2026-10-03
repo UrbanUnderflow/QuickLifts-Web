@@ -8,19 +8,19 @@ test('day one and day fourteen count inclusively; missed days do not break progr
   assert.equal(row.completedOn, '2026-09-14'); assert.equal(row.count, 5);
   assert.equal(row.currentWindowStart, '2026-09-01'); assert.equal(row.currentWindowEnd, '2026-09-14'); assert.equal(row.restartCount, 0);
 });
-test('day fifteen starts a fresh fixed window without rolling old days forward', () => {
+test('day fifteen retains earned days and can complete the phase', () => {
   const row = evaluate('2026-09-15', ['2026-09-01', '2026-09-04', '2026-09-08', '2026-09-14', '2026-09-15']);
-  assert.equal(row.completedOn, null); assert.equal(row.count, 1); assert.equal(row.restartCount, 1);
-  assert.equal(row.currentWindowStart, '2026-09-15'); assert.equal(row.currentWindowEnd, '2026-09-28');
+  assert.equal(row.completedOn, '2026-09-15'); assert.equal(row.count, 5); assert.equal(row.restartCount, 0);
+  assert.equal(row.currentWindowStart, '2026-09-01'); assert.equal(row.currentWindowEnd, '2026-09-28');
 });
 test('a qualifying fifth day remains permanently completed months later', () => {
   const row = evaluate('2026-12-01', ['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04', '2026-09-05']);
   assert.equal(row.completedOn, '2026-09-05'); assert.equal(row.count, 5); assert.equal(row.restartCount, 0);
   assert.equal(row.currentWindowEnd, '2026-09-14');
 });
-test('later qualifying windows work and earliest qualifying window wins', () => {
+test('the earliest fifth distinct day wins across planning intervals', () => {
   const row = evaluate('2026-10-14', ['2026-09-01', '2026-09-15', '2026-09-18', '2026-09-20', '2026-09-24', '2026-09-28', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05']);
-  assert.equal(row.completedOn, '2026-09-28');
+  assert.equal(row.completedOn, '2026-09-24');
 });
 test('duplicate event ids and replays on one local day count once, order independently', () => {
   const completions = [...events(['2026-09-01', '2026-09-01', '2026-09-02']), { id: 'event-0', completedAt: Date.parse('2026-09-03T12:00:00Z') }];
@@ -58,4 +58,16 @@ test('completion freezes at five despite later practice; calendar addition cross
 test('an old event id replayed with a new timestamp cannot gain phase credit', () => {
   const result = evaluatePhaseProgression({ phaseStartedOn: '2026-09-15', asOf: '2026-09-16', timezone: 'UTC', completions: [{ id: 'old', completedAt: Date.parse('2026-09-01T12:00:00Z') }, { id: 'old', completedAt: Date.parse('2026-09-16T12:00:00Z') }] });
   assert.equal(result.count, 0);
+});
+
+test('long gaps preserve credit and suggest a refresher only until practice resumes', () => {
+  const days = ['2026-09-01', '2026-09-04', '2026-09-08', '2026-09-14'];
+  assert.equal(evaluate('2026-09-27', days).refresherSuggested, false);
+  const paused = evaluate('2026-12-01', days);
+  assert.equal(paused.count, 4); assert.equal(paused.restartCount, 0);
+  assert.equal(paused.currentWindowStart, '2026-09-01'); assert.equal(paused.refresherSuggested, true);
+  assert.equal(evaluate('2026-09-28', days).refresherSuggested, true);
+  const resumed = evaluate('2026-12-01', [...days, '2026-12-01']);
+  assert.equal(resumed.completedOn, '2026-12-01'); assert.equal(resumed.refresherSuggested, false);
+  assert.equal(evaluate('2026-09-15').refresherSuggested, true);
 });

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { NextPage } from 'next';
+import PipeListsSaveStatus, { saveFailureDetails, type SaveFailure } from '../components/pipelists/PipeListsSaveStatus';
+import { runPipeListSaveWithRetry } from '../utils/pipelistsAutosave';
 import PipeListsEmailSequence from '../components/pipelists/PipeListsEmailSequence';
 import PipeListsEmailTracking, { EmailTrackingBadge } from '../components/pipelists/PipeListsEmailTracking';
 import Link from 'next/link';
@@ -889,9 +891,21 @@ const pilotContractStages: StageConfig[] = [
     .map((id) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: id === 'closed-lost-paused' ? 0 : 100 })),
 ];
 
+// Keep stages saved by newer clients instead of rewriting their items into Identified.
+const reconcileUniversityStages = (savedStages: StageConfig[] = [], canonicalStages = pilotContractStages): StageConfig[] => {
+  const merged = [...canonicalStages];
+  savedStages.forEach((stage, index) => {
+    if (!stage.id || stage.id === 'closed-won' || stage.id === 'won' || merged.some((entry) => entry.id === stage.id)) return;
+    const nextKnown = savedStages.slice(index + 1).find((entry) => merged.some((known) => known.id === entry.id));
+    const insertAt = nextKnown ? merged.findIndex((entry) => entry.id === nextKnown.id) : merged.length;
+    merged.splice(insertAt, 0, stage);
+  });
+  return merged;
+};
+
 const needsUniversityStageMigration = (lists: Partial<PipeList>[]) => lists.some((list) =>
   list.templateKey === 'university-pilot' && (
-    list.stages?.map((stage) => stage.id).join(',') !== pilotContractStages.map((stage) => stage.id).join(',') ||
+    list.stages?.map((stage) => stage.id).join(',') !== reconcileUniversityStages(list.stages).map((stage) => stage.id).join(',') ||
     list.items?.some((item) => item.stage === 'closed-won' || item.stage === 'won')
   ),
 );
@@ -2355,7 +2369,7 @@ const isLostStage = (list: PipeList, stageId: string) => getStage(list, stageId)
 const isIdentifiedStage = (stage: StageConfig) =>
   normalizeOpportunityKey(stage.id) === 'identified' || normalizeOpportunityKey(stage.label) === 'identified';
 
-const normalizeStageId = (stage: string, listStages: StageConfig[]) => {
+const normalizeStageId = (stage: string, listStages: StageConfig[], preserveUnknown = false) => {
   if ((stage === 'closed-won' || stage === 'won') && listStages.some((stageConfig) => stageConfig.id === 'contract-signed')) return 'pilot-active';
   if (listStages.some((stageConfig) => stageConfig.id === stage)) return stage;
   const legacyMap: Record<string, string> = {
@@ -2367,7 +2381,7 @@ const normalizeStageId = (stage: string, listStages: StageConfig[]) => {
     won: listStages.find((stageConfig) => stageConfig.outcome === 'won')?.id || listStages.find((stageConfig) => stageConfig.id === 'sent-update')?.id || listStages[0]?.id || 'won',
     parked: listStages.find((stageConfig) => stageConfig.outcome === 'lost')?.id || listStages.find((stageConfig) => stageConfig.id === 'paused')?.id || listStages[0]?.id || 'parked',
   };
-  return legacyMap[stage] || listStages[0]?.id || stage;
+  return legacyMap[stage] || (preserveUnknown && stage ? stage : listStages[0]?.id || stage);
 };
 
 const normalizeActivityLog = (log: Partial<ActivityLog>): ActivityLog => {
@@ -2432,7 +2446,7 @@ const normalizeAttachment = (attachment: Partial<LeadAttachment>): LeadAttachmen
 
 const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): PipelineItem => {
   const now = new Date().toISOString();
-  const stage = normalizeStageId(item.stage || listStages[0]?.id || 'sourced', listStages);
+  const stage = normalizeStageId(item.stage || listStages[0]?.id || 'sourced', listStages, true);
   const title = item.title || 'Untitled opportunity';
   const organization = item.organization || '';
   return {
@@ -2516,7 +2530,9 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
   const template = templateCatalog[templateKey];
   const savedStages = Array.isArray(list.stages) && list.stages.length > 0 ? list.stages : template.stages;
   const stages =
-    templateKey === 'investor-metrics' || templateKey === 'contacts' || templateKey === 'university-pilot'
+    templateKey === 'university-pilot'
+      ? reconcileUniversityStages(savedStages)
+      : templateKey === 'investor-metrics' || templateKey === 'contacts'
       ? template.stages
       : templateKey === 'vc'
       ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
@@ -2744,6 +2760,7 @@ const persistCollaborativePipeList = async ({
   protectedDetails,
   baseList,
   publicSharePatch,
+  isCurrent = () => true,
 }: {
   shareId: string;
   ownerUid: string;
@@ -2753,6 +2770,7 @@ const persistCollaborativePipeList = async ({
   protectedDetails?: boolean;
   baseList?: PipeList;
   publicSharePatch?: Partial<PipeListShare>;
+  isCurrent?: () => boolean;
 }) => {
   const isProtected = protectedDetails === true || pipeListRequiresAccountAccess(list);
   const canonicalRef = doc(
@@ -2764,8 +2782,10 @@ const persistCollaborativePipeList = async ({
   const localSnapshot = collaboratorSafePipeListSnapshot(normalizeList(list, 0));
   let mergedList = localSnapshot;
 
-  await runTransaction(simpBudgetDb, async (transaction) => {
+  await runPipeListSaveWithRetry(() => runTransaction(simpBudgetDb, async (transaction) => {
+    if (!isCurrent()) return;
     const snapshot = await transaction.get(canonicalRef);
+    if (!isCurrent()) return;
     if (!snapshot.exists() && !isProtected) throw new Error('This shared PipeList is no longer available.');
 
     if (snapshot.exists()) {
@@ -2813,7 +2833,7 @@ const persistCollaborativePipeList = async ({
         { merge: true },
       );
     }
-  });
+  }), isCurrent);
 
   return mergedList;
 };
@@ -3396,6 +3416,7 @@ const PipelinePage: NextPage = () => {
   const personalSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [pendingPersonalSaves, setPendingPersonalSaves] = useState(0);
   const [personalSaveError, setPersonalSaveError] = useState(false);
+  const personalSaveFailureRef = useRef<SaveFailure | null>(null);
   const [personalSyncConflict, setPersonalSyncConflict] = useState(false);
   const [universityStageMigrationPending, setUniversityStageMigrationPending] = useState(false);
   const directShareBaselineRef = useRef('');
@@ -4361,33 +4382,19 @@ const PipelinePage: NextPage = () => {
 
     let cancelled = false;
 
+    const isCurrentSave = () => !cancelled && simpBudgetAuth.currentUser?.uid === user.uid;
     const saveLists = async () => {
+      if (!isCurrentSave()) return;
       const listsToPersist = purgeExpiredDeletedItems(lists.filter((list) => !sharedListIds.has(list.id)).map(normalizeList));
       const baseLists = personalSnapshotBaselineRef.current;
       if (!universityStageMigrationPending && pipeListSnapshotsEqual(listsToPersist, baseLists)) return;
-      // DEBUG-SAVE-LOOP
-      {
-        const findDiff = (a: unknown, b: unknown, path: string): string | null => {
-          if (pipeListSnapshotsEqual(a, b)) return null;
-          if (a && b && typeof a === 'object' && typeof b === 'object') {
-            const keys = Array.from(new Set([...Object.keys(a as object), ...Object.keys(b as object)]));
-            for (const key of keys) {
-              const found = findDiff((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key], `${path}.${key}`);
-              if (found) return found;
-            }
-          }
-          return `${path}: ${JSON.stringify(b)?.slice(0, 200)} -> ${JSON.stringify(a)?.slice(0, 200)}`;
-        };
-        console.warn('[PipeLists save-loop debug] personal save', { migration: universityStageMigrationPending, diff: findDiff(listsToPersist, baseLists, 'lists') });
-      }
-      setPendingPersonalSaves((count) => count + 1);
       const previousSave = personalSaveQueueRef.current;
       let releaseSave: () => void = () => {};
       personalSaveQueueRef.current = new Promise<void>((resolve) => { releaseSave = resolve; });
 
       try {
         await previousSave;
-        personalListsRef.current = listsToPersist;
+        if (!isCurrentSave()) return;
         const stateRef = doc(
           simpBudgetDb,
           SIMPBUDGET_USERS_COLLECTION,
@@ -4395,8 +4402,10 @@ const PipelinePage: NextPage = () => {
           PIPELISTS_SUBCOLLECTION,
           PIPELISTS_STATE_DOCUMENT_ID,
         );
-        await runTransaction(simpBudgetDb, async (transaction) => {
+        await runPipeListSaveWithRetry(() => runTransaction(simpBudgetDb, async (transaction) => {
+          if (!isCurrentSave()) return;
           const snapshot = await transaction.get(stateRef);
+          if (!isCurrentSave()) return;
           const storedLists = snapshot.data()?.lists;
           const remoteLists = Array.isArray(storedLists)
             ? purgeExpiredDeletedItems(storedLists.map(normalizeList))
@@ -4408,19 +4417,22 @@ const PipelinePage: NextPage = () => {
             lists: mergedLists,
             updatedAt: serverTimestamp(),
           }), { merge: true });
-        });
+        }), isCurrentSave);
+        if (!isCurrentSave()) return;
 
         if (isOwner && typeof window !== 'undefined') {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(listsToPersist));
         }
 
         if (!cancelled) {
+          personalSaveFailureRef.current = null;
           setPersonalSaveError(false);
           setAppMessage(null);
         }
       } catch (error) {
         console.error('Unable to save PipeLists:', error);
-        if (simpBudgetAuth.currentUser?.uid === user.uid) {
+        if (isCurrentSave()) {
+          personalSaveFailureRef.current = saveFailureDetails(error);
           setPersonalSaveError(true);
           setAppMessage({
             type: 'error',
@@ -4428,15 +4440,21 @@ const PipelinePage: NextPage = () => {
           });
         }
       } finally {
-        setPendingPersonalSaves((count) => Math.max(0, count - 1));
         releaseSave();
       }
     };
 
-    saveLists();
+    let saveStarted = false;
+    setPendingPersonalSaves((count) => count + 1);
+    const saveTimer = setTimeout(() => {
+      saveStarted = true;
+      void saveLists().finally(() => setPendingPersonalSaves((count) => Math.max(0, count - 1)));
+    }, 300);
 
     return () => {
       cancelled = true;
+      clearTimeout(saveTimer);
+      if (!saveStarted) setPendingPersonalSaves((count) => Math.max(0, count - 1));
     };
   }, [dataReady, isOwner, isSharedView, lists, personalStateReady, sharedListIds, universityStageMigrationPending, user]);
 
@@ -4446,6 +4464,7 @@ const PipelinePage: NextPage = () => {
     let cancelled = false;
 
     const saveSharedList = async () => {
+      if (cancelled) return;
       try {
         const nextList = purgeExpiredDeletedItems(lists)[0];
         if (!nextList) return;
@@ -4469,9 +4488,11 @@ const PipelinePage: NextPage = () => {
           ownerEmail: shareDoc.ownerEmail,
           list: nextSnapshot,
           actor,
+          isCurrent: () => !cancelled,
           protectedDetails: shareDoc.protectedDetails,
           baseList,
         });
+        if (cancelled) return;
         directShareBaselineRef.current = JSON.stringify(mergedList);
         if (shareDoc.protectedDetails) protectedShareBaselinesRef.current[shareId] = mergedList;
 
@@ -4493,10 +4514,11 @@ const PipelinePage: NextPage = () => {
       }
     };
 
-    saveSharedList();
+    const saveTimer = setTimeout(() => { void saveSharedList(); }, 300);
 
     return () => {
       cancelled = true;
+      clearTimeout(saveTimer);
     };
   }, [canEditShared, dataReady, lists, profile, shareDoc?.id, shareId, user]);
 
@@ -4514,6 +4536,7 @@ const PipelinePage: NextPage = () => {
     let cancelled = false;
 
     const saveAccessibleSharedLists = async () => {
+      if (cancelled) return;
       setSavingToCloud(true);
 
       try {
@@ -4533,14 +4556,17 @@ const PipelinePage: NextPage = () => {
               ownerEmail: share.ownerEmail,
               list: nextList,
               actor,
+              isCurrent: () => !cancelled,
               protectedDetails: share.protectedDetails,
               baseList: protectedShareBaselinesRef.current[share.id] || share.list,
             });
+            if (cancelled) return null;
             if (share.protectedDetails) protectedShareBaselinesRef.current[share.id] = mergedList;
             return { shareId: share.id, list: mergedList, protectedDetails: share.protectedDetails };
           }),
         );
 
+        if (cancelled) return;
         setProtectedShareLists((current) => {
           const next = { ...current };
           savedShares.forEach((saved) => {
@@ -4565,10 +4591,11 @@ const PipelinePage: NextPage = () => {
       }
     };
 
-    saveAccessibleSharedLists();
+    const saveTimer = setTimeout(() => { void saveAccessibleSharedLists(); }, 300);
 
     return () => {
       cancelled = true;
+      clearTimeout(saveTimer);
     };
   }, [accessibleShareDocs, dataReady, isOwner, isSharedView, lists, normalizedUserEmail, profile, user]);
 
@@ -4708,6 +4735,7 @@ const PipelinePage: NextPage = () => {
     let cancelled = false;
 
     const syncSharedListSnapshot = async () => {
+      if (cancelled) return;
       try {
         const actor: PipeListShareActor = {
           uid: user.uid,
@@ -4721,6 +4749,7 @@ const PipelinePage: NextPage = () => {
           ownerEmail: shareDoc.ownerEmail || user.email || TREMAINE_OWNER_EMAIL,
           list: activeList,
           actor,
+          isCurrent: () => !cancelled,
           protectedDetails: shareDoc.protectedDetails,
           baseList: protectedShareBaselinesRef.current[shareDoc.id],
         });
@@ -4744,10 +4773,11 @@ const PipelinePage: NextPage = () => {
       }
     };
 
-    syncSharedListSnapshot();
+    const saveTimer = setTimeout(() => { void syncSharedListSnapshot(); }, 300);
 
     return () => {
       cancelled = true;
+      clearTimeout(saveTimer);
     };
   }, [activeList, dataReady, isOwner, isSharedView, ownerShareId, profile, shareDoc?.id, universityStageMigrationPending, user]);
 
@@ -10351,12 +10381,12 @@ Rules:
               </Link>
 
               <div className="flex items-center gap-2">
-                <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-500 shadow-sm md:flex">
+                <PipeListsSaveStatus failure={personalSaveError ? personalSaveFailureRef.current : personalSyncConflict ? { message: 'Another PipeLists session replaced newer saved edits. Your newer edits remain open here.', code: 'pipelists/save-conflict' } : null}>
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   <span>Ready</span>
                   <span className="text-stone-300">·</span>
                   <span>{user.email}</span>
-                </div>
+                </PipeListsSaveStatus>
                 <button
                   type="button"
                   onClick={handleSignOut}

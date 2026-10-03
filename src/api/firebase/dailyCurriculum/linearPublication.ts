@@ -2,6 +2,8 @@ import { selectLinearSkillTransition, type LinearSkillPin } from './linearSkillT
 import { evaluatePhaseProgression, addLocalCalendarDays } from './phaseProgression';
 import { LinearCurriculumEntry, validateLinearOrder } from './linearCurriculum';
 
+// Keep the persisted policy identifier readable for existing published versions.
+// Its runtime uses cumulative distinct days; fourteen days is a planning interval.
 export type LinearProgressionBasis = 'five_days_in_fourteen' | 'calendar_days' | 'completed_sessions';
 export type LinearPhase = 'learn' | 'practice' | 'use_it';
 export interface LinearPublicationDraft {
@@ -9,7 +11,7 @@ export interface LinearPublicationDraft {
   rationales: Record<string, string>;
   audience: { mode: 'explicit_athlete_ids'; confirmed: boolean } | null;
   progressionBasis: LinearProgressionBasis | null;
-  /** Required distinct completion days per phase; each phase uses a 14-day window. */
+  /** Required distinct completion days per phase; earned days are preserved across gaps. */
   protocolDays: [number, number, number];
   simulationDays: { practice: number; useIt: number } | null;
   phaseProposal?: unknown;
@@ -47,12 +49,12 @@ export type LinearPreviewResult =
   | { kind: 'blocked'; reason: string }
   | { kind: 'review_due'; reason: string }
   | { kind: 'skill_complete'; skillId: string; nextStartedOn: string }
-  | { kind: 'assignment'; versionId: string; skillId: string; skillName: string; ordinal: number; phase: LinearPhase; progressionBasis: LinearProgressionBasis; phasePosition: number; phaseLength: number; verifiedCompletions: number; journalWithinUse: true; windowStart: string; windowEnd: string; restartCount: number; phaseCompletedToday: boolean };
+  | { kind: 'assignment'; versionId: string; skillId: string; skillName: string; ordinal: number; phase: LinearPhase; progressionBasis: LinearProgressionBasis; phasePosition: number; phaseLength: number; verifiedCompletions: number; journalWithinUse: true; windowStart: string; windowEnd: string; restartCount: number; refresherSuggested: boolean; phaseCompletedToday: boolean };
 
 export const validateLinearPublication = (draft: LinearPublicationDraft, active: LinearCurriculumEntry[]) => {
   const errors = validateLinearOrder(draft.orderedIds, active);
   if (draft.audience?.mode !== 'explicit_athlete_ids' || draft.audience.confirmed !== true) errors.push('Confirm the explicit opt-in athlete audience before publishing.');
-  if (draft.progressionBasis !== 'five_days_in_fourteen') errors.push('Review the selected policy: five distinct completion days within fourteen days for each phase.');
+  if (draft.progressionBasis !== 'five_days_in_fourteen') errors.push('Review the selected policy: five distinct completion days for each phase, with earned progress preserved.');
   if (!Array.isArray(draft.protocolDays) || draft.protocolDays.length !== 3 || draft.protocolDays.some(value => value !== 5)) errors.push('Protocol Learn, Practice and Use lengths must remain 5 / 5 / 5 for this prototype.');
   if (active.some(skill => skill.type === 'simulation') && (!draft.simulationDays || draft.simulationDays.practice !== 5 || draft.simulationDays.useIt !== 5)) errors.push('Confirm five completion days per simulation phase; simulation phase settings remain unapproved until reviewed.');
   if (!draft.rationales || Object.entries(draft.rationales).some(([id, note]) => !draft.orderedIds.includes(id) || typeof note !== 'string' || note.length > 4000)) errors.push('Rationales must belong to ordered skills and be at most 4,000 characters.');
@@ -106,7 +108,7 @@ export const previewLinearAssignment = (input: { featureEnabled?: boolean; athle
       catch { return { kind: 'blocked', reason: 'Valid local dates and a pinned IANA timezone are required.' }; }
       if (progress.completedOn && progress.completedOn < input.asOf) { phaseStartedOn = addLocalCalendarDays(progress.completedOn, 1); continue; }
       if (!version.runtimeReadySkillIds.includes(skill.id)) return { kind: 'blocked', reason: `${skill.name} needs runtime review before it can be assigned. ${skill.readiness}` };
-      return { kind: 'assignment', versionId: version.id, skillId: skill.id, skillName: skill.name, ordinal: index + 1, phase, progressionBasis: basis, phasePosition: Math.min(progress.count + 1, 5), phaseLength: 5, verifiedCompletions: progress.count, journalWithinUse: true, windowStart: progress.currentWindowStart, windowEnd: progress.currentWindowEnd, restartCount: progress.restartCount, phaseCompletedToday: progress.uniqueCompletionDays.includes(input.asOf) };
+      return { kind: 'assignment', versionId: version.id, skillId: skill.id, skillName: skill.name, ordinal: index + 1, phase, progressionBasis: basis, phasePosition: Math.min(progress.count + 1, 5), phaseLength: 5, verifiedCompletions: progress.count, journalWithinUse: true, windowStart: progress.currentWindowStart, windowEnd: progress.currentWindowEnd, restartCount: progress.restartCount, refresherSuggested: progress.refresherSuggested, phaseCompletedToday: progress.uniqueCompletionDays.includes(input.asOf) };
     }
     if (input.currentSkill) return { kind: 'skill_complete', skillId: skill.id, nextStartedOn: phaseStartedOn };
   }

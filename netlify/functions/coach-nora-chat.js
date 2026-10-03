@@ -121,21 +121,20 @@ function resolveStaffCapabilities(data, role) {
 
   const rawCapabilities = data.staffCapabilities;
   if (!Array.isArray(rawCapabilities)) {
-    return role === 'team-admin' ? new Set(['admin']) : new Set();
+    return new Set();
   }
   if (rawCapabilities.length === 0) {
-    return fallback;
+    return new Set();
   }
 
   const capabilities = new Set();
   for (const value of rawCapabilities) {
     const capability = normalizeString(value);
     if (!KNOWN_STAFF_CAPABILITIES.has(capability)) {
-      return role === 'team-admin' ? new Set(['admin']) : new Set();
+      return new Set();
     }
     capabilities.add(capability);
   }
-  if (role === 'team-admin') capabilities.add('admin');
   return capabilities;
 }
 
@@ -421,16 +420,16 @@ function buildSystemPrompt({ coachName, vaultLines, athleteLines, escalationLine
     ``,
     `You help the coach in two ways:`,
     `1) TRAINING — The coach can teach you facts about the team (schedules, policies, playbook details, logistics). When the coach clearly wants you to retain something — e.g. "remember this", "make a note", "train on this", or they simply state a durable team fact — capture it as a note so athletes can ask you about it later.`,
-    `2) INSIGHT — The coach can ask how the team is doing, who to check on, or about trends. Answer from the ATHLETE SNAPSHOT and ALERTS below. You speak with athletes regularly, so surface what's pertinent. Never invent specifics you don't have; if you lack the detail, say what you'd watch and suggest the coach check in directly. Never expose private clinical detail — keep it to coaching-relevant signal.`,
+    `2) TEAM CONTEXT — Answer questions from the knowledge vault. Athlete wellbeing, private conversations, clinical alerts, and journal entries are not available in this tool. Do not infer or claim access to them. For participation questions, direct staff to the dashboard.`,
     ``,
     `=== KNOWLEDGE VAULT (what you already know) ===`,
     vaultLines.length ? vaultLines.join('\n') : '(empty — nothing trained yet)',
     ``,
     `=== ATHLETE SNAPSHOT (live, from real check-ins) ===`,
-    athleteLines.length ? athleteLines.join('\n') : '(no connected athletes yet)',
+    athleteLines.length ? athleteLines.join('\n') : '(athlete data is not provided to this tool)',
     ``,
     `=== ALERTS ===`,
-    escalationLines.length ? escalationLines.join('\n') : '(no active alerts)',
+    escalationLines.length ? escalationLines.join('\n') : '(clinical alerts are not provided to this tool)',
     ``,
     `Respond with STRICT JSON only, no markdown, in this exact shape:`,
     `{`,
@@ -566,14 +565,10 @@ exports.handler = async (event) => {
         body: JSON.stringify({ error: 'This account does not have active coach access to Nora.' }),
       };
     }
-    const scopedAthletes = scopeAthletes(athletes, access.allowedAthleteIds);
-    const [vaultLines, escalationLines] = await Promise.all([
-      loadVaultContext(db, coachId, teamId, access.allowLegacyVaultBridge),
-      loadEscalationContext(db, scopedAthletes),
-    ]);
-    const athleteLines = buildAthleteDigest(scopedAthletes);
-
-    const systemPrompt = buildSystemPrompt({ coachName, vaultLines, athleteLines, escalationLines });
+    // Train Nora is a team knowledge tool. Never load private escalations or
+    // trust a browser-supplied athlete mood/chat digest as authorized context.
+    const vaultLines = await loadVaultContext(db, coachId, teamId, access.allowLegacyVaultBridge);
+    const systemPrompt = buildSystemPrompt({ coachName, vaultLines, athleteLines: [], escalationLines: [] });
     const result = await callOpenAi({ systemPrompt, history, message });
 
     const reply =

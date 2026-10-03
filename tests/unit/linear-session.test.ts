@@ -9,7 +9,8 @@ function fixture() {
   let queue = Promise.resolve();
   let fail = false;
   class Ref {
-    constructor(public path: string) {}
+    constructor(public path: string, public maximum?: number) {}
+    limit(maximum: number) { return new Ref(this.path, maximum); }
     doc(id: string) { return new Ref(`${this.path}/${id}`); }
     collection(id: string) { return new Ref(`${this.path}/${id}`); }
   }
@@ -22,6 +23,11 @@ function fixture() {
         const result = await fn({
           get: async (ref: Ref) => {
             assert.equal(writes.length, 0, 'transaction reads precede writes');
+            if (ref.maximum !== undefined) {
+              const docs = [...data].filter(([path]) => path.startsWith(`${ref.path}/`) && path.slice(ref.path.length + 1).split('/').length === 1)
+                .slice(0, ref.maximum).map(([path, value]) => ({ id: path.split('/').pop()!, ref: new Ref(path), data: () => clone(value) }));
+              return { docs, size: docs.length };
+            }
             return { exists: data.has(ref.path), data: () => clone(data.get(ref.path)) };
           },
           create: (ref: Ref, value: any) => writes.push(() => { assert(!data.has(ref.path)); data.set(ref.path, clone(value)); }),
@@ -74,10 +80,12 @@ test('same retry is idempotent; stale concurrent writing cannot overwrite saved 
   assert.equal([...f.data.keys()].filter(key => key.includes('/revisions/')).length, 2);
 });
 
-test('new windows isolate plans while old plans remain available', async () => {
+test('changed phase boundaries reuse saved plans without writing during reads', async () => {
   const f = fixture(); await f.request('POST', draft());
   f.data.set(`${root}/assignments/restart`, { ...f.data.get(`${root}/assignments/day1`), windowStart: '2026-09-15' });
-  assert.equal((await f.request('GET', {}, { assignmentId: 'restart' })).body.session.plan, '');
+  const before = JSON.stringify([...f.data]);
+  assert.equal((await f.request('GET', {}, { assignmentId: 'restart' })).body.session.plan, 'Before my next serve');
+  assert.equal(JSON.stringify([...f.data]), before);
   assert.equal((await f.request('GET', {}, { assignmentId: 'day1' })).body.session.plan, 'Before my next serve');
 });
 
@@ -122,4 +130,28 @@ test('native journal revision protects edits from stale overwrite and keeps retr
   assert.equal(conflict.body.text, 'My private note');
   assert.equal((await save('Reviewed edit', 1)).body.revision, 2);
   assert.equal(f.data.get(`${root}/journals/day1`).text, 'Reviewed edit');
+});
+
+test('newest matching historical plan is reused and revision conflicts span old windows', async () => {
+  const f = fixture();
+  const record = { athleteId: 'athlete', versionId: 'pinned-v1', skillId: 'brake-point', phase: 'use_it',
+    windowStart: '2026-09-15', plan: 'Latest plan', returned: false, observation: '', revision: 1, updatedAt: 900 };
+  f.data.set(`${root}/phaseSessions/older`, { ...record, windowStart: '2026-09-01', plan: 'Older plan', updatedAt: 800 });
+  f.data.set(`${root}/phaseSessions/latest`, record);
+  for (const [id, overrides] of Object.entries({ otherAthlete: { athleteId: 'other' }, otherVersion: { versionId: 'v2' }, otherSkill: { skillId: 'other' }, otherPhase: { phase: 'practice' } })) {
+    f.data.set(`${root}/phaseSessions/${id}`, { ...record, ...overrides, updatedAt: 999 });
+  }
+  const before = JSON.stringify([...f.data]);
+  const loaded = await f.request('GET', {}, { assignmentId: 'day1' });
+  assert.equal(loaded.body.session.plan, 'Latest plan'); assert.equal(loaded.body.session.revision, 2);
+  assert.equal(JSON.stringify([...f.data]), before);
+  assert.equal((await f.request('POST', draft({ expectedRevision: 1, plan: 'Stale old window' }))).code, 409);
+  const saved = await f.request('POST', draft({ expectedRevision: 2, plan: 'Updated latest plan' }));
+  assert.equal(saved.body.session.revision, 3);
+  assert.equal(f.data.get(`${root}/phaseSessions/older`).plan, 'Older plan');
+  assert.equal(f.data.get(`${root}/phaseSessions/latest`).plan, 'Updated latest plan');
+  assert.equal(f.data.get(`${root}/phaseSessions/latest`).revision, 2);
+  assert.equal(f.data.get(`${root}/phaseSessions/latest`).windowStart, '2026-09-15');
+  assert.equal(f.data.get(`${root}/phaseSessions/latest/revisions/2`).plan, 'Updated latest plan');
+  assert.equal((await f.request('POST', draft({ expectedRevision: 2, plan: 'Concurrent stale change' }))).code, 409);
 });

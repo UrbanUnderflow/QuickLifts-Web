@@ -34,10 +34,10 @@ test('five nonconsecutive days qualify on day14; next phase starts day15', () =>
   const day15 = preview('2026-09-15', history); assert.equal(day15.kind, 'assignment');
   if (day15.kind === 'assignment') { assert.equal(day15.phase, 'practice'); assert.equal(day15.windowStart, '2026-09-15'); assert.equal(day15.verifiedCompletions, 0); }
 });
-test('day15 restarts only unfinished phase; old history and replays cannot count in new window', () => {
+test('day15 preserves earned days while duplicate history cannot add credit', () => {
   const history = ['01','03','07','14'].map(d => completion(`2026-09-${d}`)); const before = JSON.stringify(history);
   const result = preview('2026-09-15', [...history, ...history, completion('2026-09-15')]);
-  assert.equal(result.kind, 'assignment'); if (result.kind === 'assignment') { assert.equal(result.phase, 'learn'); assert.equal(result.restartCount, 1); assert.equal(result.verifiedCompletions, 1); }
+  assert.equal(result.kind, 'assignment'); if (result.kind === 'assignment') { assert.equal(result.phase, 'learn'); assert.equal(result.restartCount, 0); assert.equal(result.verifiedCompletions, 5); }
   assert.equal(JSON.stringify(history), before);
 });
 test('same-day duplicates, other versions and future evidence never accelerate phases', () => {
@@ -46,11 +46,11 @@ test('same-day duplicates, other versions and future evidence never accelerate p
   assert.equal(result.kind, 'assignment'); if (result.kind === 'assignment') assert.equal(result.verifiedCompletions, 1);
   assert.equal(preview('2026-09-02', [{ ...one, completedAt: undefined }]).kind, 'blocked');
 });
-test('completed prior phases remain complete after an unsuccessful later window', () => {
+test('completed prior phases and partial current credit survive a long gap', () => {
   const history = ['01','02','03','04','05'].map(d => completion(`2026-09-${d}`));
   history.push(completion('2026-09-06','practice'));
   const result = preview('2026-09-20', history); assert.equal(result.kind, 'assignment');
-  if (result.kind === 'assignment') { assert.equal(result.phase, 'practice'); assert.equal(result.restartCount, 1); assert.equal(result.windowStart, '2026-09-20'); assert.equal(result.verifiedCompletions, 0); }
+  if (result.kind === 'assignment') { assert.equal(result.phase, 'practice'); assert.equal(result.restartCount, 0); assert.equal(result.windowStart, '2026-09-06'); assert.equal(result.verifiedCompletions, 1); assert.equal(result.refresherSuggested, true); }
 });
 test('phase entry filters previewed future-phase evidence and simulation readiness remains a gate', () => {
   const history = ['01','02','03','04','05'].map(d => completion(`2026-09-${d}`));
@@ -76,4 +76,21 @@ test('releases cannot replace a mid-skill phase, window, or content; transition 
   const pinnedRetry = previewPinnedSkillAssignment({ ...boundary, currentSkill: next.nextPin!, pinnedVersion: latest, latestApplicableVersion: null, completedSkillIds: [active[0].id] });
   assert.equal(pinnedRetry.result.kind, 'assignment'); assert.equal(pinnedRetry.nextPin, undefined);
   const missing = previewPinnedSkillAssignment({ ...input, pinnedVersion: null }); assert.equal(missing.result.kind, 'blocked');
+});
+
+test('restoring early learning credit preserves verified practice history after the old boundary', () => {
+  // Under the former reset policy Learn finished September 19. The preserved
+  // days now finish Learn September 15; previously earned Practice still counts.
+  const history = ['01','03','07','14','15','16','17','18','19'].map(d => completion(`2026-09-${d}`));
+  history.push(...['20','21','22','23'].map(d => completion(`2026-09-${d}`, 'practice')));
+  const result = preview('2026-10-10', history);
+  assert.equal(result.kind, 'assignment');
+  if (result.kind === 'assignment') {
+    assert.equal(result.phase, 'practice'); assert.equal(result.verifiedCompletions, 4);
+    assert.equal(result.windowStart, '2026-09-16'); assert.equal(result.refresherSuggested, true);
+  }
+  history.push(completion('2026-10-10', 'practice'));
+  const next = preview('2026-10-11', history);
+  assert.equal(next.kind, 'assignment');
+  if (next.kind === 'assignment') { assert.equal(next.phase, 'use_it'); assert.equal(next.verifiedCompletions, 0); }
 });

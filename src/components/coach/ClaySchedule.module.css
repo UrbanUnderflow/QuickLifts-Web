@@ -1,0 +1,46 @@
+.schedule {
+  color: #24332f;
+  color-scheme: light;
+}
+.heading h2 {
+  margin: 0;
+  font: 400 30px/1.15 Georgia, serif;
+  letter-spacing: -.025em;
+}
+.heading p { margin: 8px 0 0; font-size: 14px; color: #626d68; }
+.imports { background: #fff; border: 1px solid #e1e5e0; border-radius: 18px; padding: 18px 20px; }
+.imports summary { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.imports summary::after { content: '+'; margin-left: auto; font-size: 20px; font-weight: 400; }
+.imports[open] summary::after { content: '−'; }
+.schedule :global([class*="text-white"]),
+.schedule :global([class*="text-zinc-"]),
+.schedule :global([class*="text-purple-"]),
+.schedule :global([class*="text-teal-"]),
+.schedule :global([class*="text-[#E0FE10]"]) { color: #344b45; }
+.schedule :global([class*="text-zinc-5"]),
+.schedule :global([class*="text-zinc-6"]) { color: #65716b; }
+.schedule :global([class*="text-red-"]) { color: #a93434; }
+.schedule :global([class*="bg-zinc-"]),
+.schedule :global([class*="bg-black/20"]) { background-color: #f6f7f3; }
+.schedule :global([class*="bg-gradient-to-"]) { background-image: none; background-color: #e7efea; }
+.schedule :global([class*="border-zinc-"]) { border-color: #dfe5df; }
+.schedule :global([class*="rounded-2xl"][class*="bg-zinc-"]) { background: #fff; box-shadow: 0 4px 16px #20372b05; }
+.schedule :global(button), .schedule :global(input), .schedule :global(select), .schedule :global(textarea) { min-width: 0; }
+.schedule :global(button) { touch-action: manipulation; }
+.schedule :global(button:focus-visible), .schedule :global(summary:focus-visible),
+.schedule :global([role="button"]:focus-visible), .schedule :global(input:focus-visible),
+.schedule :global(textarea:focus-visible), .schedule :global(select:focus-visible) {
+  outline: 2px solid #326d61;
+  outline-offset: 3px;
+}
+.schedule :global(input), .schedule :global(select), .schedule :global(textarea) { color: #24332f; }
+.schedule :global(input::placeholder), .schedule :global(textarea::placeholder) { color: #68746e; }
+.schedule :global(button[aria-pressed="true"]) { background: #f0f6ce; border-color: #7e951e; }
+.schedule :global(button:hover:not(:disabled)) { filter: brightness(.98); }
+.schedule :global([role="dialog"]) { background: #fff; color: #24332f; max-height: calc(100dvh - 64px); overflow-y: auto; }
+@media (max-width: 640px) {
+  .heading h2 { font-size: 26px; }
+  .imports { padding: 14px; }
+  .schedule :global([class*="grid-cols-7"]) { gap: 3px; }
+  .schedule :global([class*="grid-cols-7"] button > div + div) { font-size: 9px; }
+}

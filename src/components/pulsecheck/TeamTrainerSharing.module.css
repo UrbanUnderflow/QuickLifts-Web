@@ -1,0 +1,20 @@
+.panel { max-width: 760px; margin: 0 auto; padding: 32px; background: #fff; border: 1px solid #e0e6df; border-radius: 24px; color: #23362e; box-shadow: 0 8px 30px #293d2c07; }
+.panel h1 { font: 400 36px/1.1 Georgia,serif; margin: 12px 0 20px; }
+.eyebrow { text-transform: uppercase; letter-spacing: .15em; font-size: 11px; font-weight: 700; }
+.explanation { font-size: 14px; line-height: 1.75; color: #56665e; margin-bottom: 28px; }
+.teamLabel, .legend { display: block; font-size: 13px; font-weight: 600; margin: 0 0 10px; }
+.panel select { width: 100%; padding: 12px; border: 1px solid #ccd7cc; border-radius: 10px; background: #fafbf8; color: #23362e; }
+.panel fieldset { margin: 24px 0 0; border: none; padding: 0; }
+.choice { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 20px 0; border-top: 1px solid #e6eae4; cursor: pointer; }
+.choice strong { font-size: 15px; }
+.detail { display: block; font-size: 13px; color: #58665e; line-height: 1.5; margin-top: 6px; }
+.choice input { width: 24px; height: 24px; flex-shrink: 0; accent-color: #355f50; cursor: pointer; }
+.help { font-size: 12px; color: #606c64; line-height: 1.5; margin: 10px 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.panel button { border: 1px solid #d4ded2; border-radius: 11px; padding: 12px 18px; color: #23362e; font-weight: 600; font-size: 14px; background: #f7f9f4; }
+.panel .save { background: #d7f126; border-color: #d7f126; }
+.panel button:disabled { opacity: .5; cursor: default; }
+.panel button:focus-visible, .panel input:focus-visible, .panel select:focus-visible { outline: 2px solid #355f50; outline-offset: 4px; }
+.error { background: #fff0ed; border-radius: 10px; padding: 14px; color: #8c3230; margin-bottom: 18px; }
+.error button { margin-left: 10px; }
+@media(max-width: 600px) { .panel { padding: 22px 18px; } .panel h1 { font-size: 30px; } }

@@ -874,6 +874,10 @@ const PulseCheckProfileView: React.FC = () => {
                 <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">Support</p>
                 <div className="mt-3 space-y-3">
                   <SettingsRow
+                    title="Team trainer sharing"
+                    onClick={() => void router.push('/PulseCheck/team-sharing')}
+                  />
+                  <SettingsRow
                     title="Privacy Policy"
                     onClick={() => void router.push('/privacyPolicy')}
                   />

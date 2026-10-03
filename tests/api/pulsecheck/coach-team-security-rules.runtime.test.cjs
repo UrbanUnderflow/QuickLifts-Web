@@ -106,7 +106,7 @@ test('readiness, device, sentiment, escalation, and user policies are explicit a
   );
   assert.match(
     rules,
-    /match \/dailySentimentAnalysis\/\{sentimentId\}[\s\S]*pcCanAccessCareTeamAthlete[\s\S]*allow create, update, delete: if isAdminUser\(\)/
+    /match \/dailySentimentAnalysis\/\{sentimentId\}[\s\S]*resource\.data\.userId == request\.auth\.uid[\s\S]*allow create, update, delete: if isAdminUser\(\)/
   );
   assert.match(
     rules,
@@ -118,7 +118,7 @@ test('readiness, device, sentiment, escalation, and user policies are explicit a
   );
   assert.match(
     rules,
-    /match \/health-context-snapshots\/\{snapshotId\}[\s\S]*pcCanAccessCareTeamAthlete[\s\S]*snapshotId\.matches\('\^' \+ request\.auth\.uid \+ '_\.\*\$'\)/
+    /match \/health-context-snapshots\/\{snapshotId\}[\s\S]*resource\.data\.athleteUserId == request\.auth\.uid[\s\S]*snapshotId\.matches\('\^' \+ request\.auth\.uid \+ '_\.\*\$'\)/
   );
   assert.match(
     rules,

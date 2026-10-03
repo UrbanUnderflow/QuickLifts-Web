@@ -364,3 +364,13 @@ test('coach device evidence accepts canonical Health Connect source records', ()
   assert.equal((measured?.payload as any).heartRateVariability, 57);
   assert.equal((measured?.payload as any).fieldSourceLabels.heartRateVariability, 'Health Connect');
 });
+
+test('individual scorecard rejects cross-athlete staff access even with team roles, preserves owner and platform admin', async () => {
+  const requested:string[]=[];
+  const db:any={collection:(name:string)=>({doc:(id:string)=>({get:async()=>{requested.push(`${name}/${id}`);return {exists:id==='platform@example.test'};}})})};
+  assert.equal(await __internal.canReadIndividualScorecard(db,{uid:'athlete'},'athlete'),true);
+  assert.equal(await __internal.canReadIndividualScorecard(db,{uid:'coach',email:'coach@example.test'},'athlete'),false);
+  assert.equal(await __internal.canReadIndividualScorecard(db,{uid:'trainer'},'athlete'),false);
+  assert.equal(await __internal.canReadIndividualScorecard(db,{uid:'admin',email:'platform@example.test'},'athlete'),true);
+  assert.ok(requested.every(path=>path.startsWith('admin/')));
+});

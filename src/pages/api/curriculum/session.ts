@@ -13,7 +13,7 @@ export interface LinearPhaseSession {
 const emptySession = (): LinearPhaseSession => ({ plan: '', returned: false, observation: '', revision: 0, updatedAt: null });
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 
-/** Private phase-window work, separate from qualifying completion and private journal entries.
+/** Private skill-phase work, separate from qualifying completion and private journal entries.
  * Assignment-derived identity protects a plan across daily assignment renewal and curriculum reorder.
  * Revision checks prevent another device or stale retry from silently overwriting newer writing.
  */
@@ -54,12 +54,34 @@ export const createLinearSessionHandler = (deps: {
       const sessionId = createHash('sha256').update(JSON.stringify([
         assignment.versionId, assignment.skillId, assignment.phase, assignment.windowStart,
       ])).digest('hex');
-      const ref = stateRef.collection('phaseSessions').doc(sessionId);
-      const existing = await tx.get(ref);
-      const session: LinearPhaseSession = existing.exists ? {
-        plan: existing.data()!.plan, returned: existing.data()!.returned,
-        observation: existing.data()!.observation, revision: existing.data()!.revision,
-        updatedAt: existing.data()!.updatedAt,
+      const sessions = stateRef.collection('phaseSessions');
+      // Old clients keyed plans by restart window. Reuse the newest plan without
+      // copying, merging or deleting private writing when that boundary changes.
+      const history = await tx.get(sessions.limit(1001));
+      if (history.size > 1000) throw new Error('Phase session history requires review');
+      const candidates = history.docs.filter(doc => {
+        const value = doc.data();
+        return value.athleteId === identity.uid && value.versionId === assignment.versionId &&
+          value.skillId === assignment.skillId && value.phase === assignment.phase;
+      });
+      if (candidates.some(doc => {
+        const value = doc.data();
+        return !Number.isSafeInteger(value.revision) || value.revision < 1 ||
+          !Number.isFinite(value.updatedAt) || typeof value.plan !== 'string' ||
+          typeof value.observation !== 'string' || typeof value.returned !== 'boolean';
+      })) throw new Error('Phase session history requires review');
+      candidates.sort((a, b) => b.data().updatedAt - a.data().updatedAt || a.id.localeCompare(b.id));
+      const existing = candidates[0];
+      const ref = existing?.ref || sessions.doc(sessionId);
+      // A revision token spanning old windows detects a concurrent edit even if
+      // two different historical plans have the same individual revision number.
+      const revision = candidates.reduce((total, doc) => total + doc.data().revision, 0);
+      if (!Number.isSafeInteger(revision + 1)) throw new Error('Phase session revision requires review');
+      const storedRevision = existing?.data().revision || 0;
+      const session: LinearPhaseSession = existing ? {
+        plan: existing.data().plan, returned: existing.data().returned,
+        observation: existing.data().observation, revision,
+        updatedAt: existing.data().updatedAt,
       } : emptySession();
       if (req.method === 'GET') return { kind: 'loaded' as const, session };
       const next = { plan: plan.trim(), returned, observation: observation.trim() };
@@ -69,9 +91,9 @@ export const createLinearSessionHandler = (deps: {
       }
       if (session.revision !== expectedRevision) return { kind: 'conflict' as const, session };
       const updated: LinearPhaseSession = { ...next, revision: session.revision + 1, updatedAt: (deps.now || Date.now)() };
-      const record = { ...updated, athleteId: identity.uid, assignmentId, versionId: assignment.versionId,
-        skillId: assignment.skillId, phase: assignment.phase, windowStart: assignment.windowStart };
-      tx.create(ref.collection('revisions').doc(String(updated.revision)), record);
+      const record = { ...updated, revision: storedRevision + 1, athleteId: identity.uid, assignmentId, versionId: assignment.versionId,
+        skillId: assignment.skillId, phase: assignment.phase, windowStart: existing?.data().windowStart || assignment.windowStart };
+      tx.create(ref.collection('revisions').doc(String(storedRevision + 1)), record);
       tx.set(ref, record);
       return { kind: 'saved' as const, session: updated };
     });

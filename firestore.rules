@@ -189,6 +189,7 @@ service cloud.firestore {
         'curriculum-notes',
         'pulsecheck-linear-curriculum',
         'pulsecheck-evidence-journals',
+        'pulsecheck-trainer-sharing',
         'pulsecheck-activity-records',
         'dailySentimentAnalysis',
         'document-notes',
@@ -203,6 +204,7 @@ service cloud.firestore {
         'junior-progress',
         'mental-training-education-progress',
         'mental-curriculum-assignments',
+        'mental-check-ins',
         'mental-exercises',
         'mental-recommendations',
         'programming-access',
@@ -394,17 +396,13 @@ service cloud.firestore {
     }
     function pcUserMembershipHasCapability(teamId, userId, capability) {
       let membership = get(pcUserMembershipPath(teamId, userId)).data;
-      return membership.role == 'team-admin'
+      return (!('staffCapabilities' in membership) && membership.role == 'team-admin')
         || (
           membership.staffCapabilities is list
           && capability in membership.staffCapabilities
         )
         || (
-          (!('staffCapabilities' in membership)
-            || (
-              membership.staffCapabilities is list
-              && membership.staffCapabilities.size() == 0
-            ))
+          !('staffCapabilities' in membership)
           && (
             (capability == 'coaching' && membership.role == 'coach')
             || (capability == 'administrative' && membership.role == 'support-staff')
@@ -433,17 +431,13 @@ service cloud.firestore {
     }
     function pcMembershipHasCapability(teamId, capability) {
       let membership = get(pcMembershipPath(teamId)).data;
-      return membership.role == 'team-admin'
+      return (!('staffCapabilities' in membership) && membership.role == 'team-admin')
         || (
           membership.staffCapabilities is list
           && capability in membership.staffCapabilities
         )
         || (
-          (!('staffCapabilities' in membership)
-            || (
-              membership.staffCapabilities is list
-              && membership.staffCapabilities.size() == 0
-            ))
+          !('staffCapabilities' in membership)
           && (
             (capability == 'coaching' && membership.role == 'coach')
             || (capability == 'administrative' && membership.role == 'support-staff')
@@ -509,8 +503,8 @@ service cloud.firestore {
         && membership.role != 'athlete'
         && pcUserHasActiveAthleteMembership(teamId, athleteId)
         && (
-          pcMembershipHasCapability(teamId, 'admin')
-          || pcMembershipHasCapability(teamId, 'athletic_trainer')
+          membership.staffCapabilities is list
+          && 'athletic_trainer' in membership.staffCapabilities
         )
         && (
           !('rosterVisibilityScope' in membership)
@@ -651,7 +645,7 @@ service cloud.firestore {
     function pcCanManageTeam(teamId) {
       return pcHasActiveTeamMembership(teamId)
         && (
-          get(pcMembershipPath(teamId)).data.role == 'team-admin'
+          (!('staffCapabilities' in get(pcMembershipPath(teamId)).data) && get(pcMembershipPath(teamId)).data.role == 'team-admin')
           || (
             get(pcMembershipPath(teamId)).data.staffCapabilities is list
             && 'admin' in get(pcMembershipPath(teamId)).data.staffCapabilities
@@ -742,7 +736,7 @@ service cloud.firestore {
           || coachMembership.revokedAt == null
         )
         && (
-          coachMembership.role == 'team-admin'
+          (!('staffCapabilities' in coachMembership) && coachMembership.role == 'team-admin')
           || (
             coachMembership.staffCapabilities is list
             && (
@@ -753,10 +747,6 @@ service cloud.firestore {
           || (
             (
               !('staffCapabilities' in coachMembership)
-              || (
-                coachMembership.staffCapabilities is list
-                && coachMembership.staffCapabilities.size() == 0
-              )
             )
             && coachMembership.role == 'coach'
           )
@@ -1883,27 +1873,20 @@ service cloud.firestore {
     // Daily check-ins are server-authored personal records. Athletes may add
     // their own bounded Energy Recalibration result. Scoped staff reads require
     // an exact active team and organization carried by the server record.
+    // Personal check-in history must not fall through the signed-in wildcard.
+    match /mental-check-ins/{athleteId}/{document=**} {
+      allow read, write: if isAdminUser() || (isSignedIn() && request.auth.uid == athleteId);
+    }
+
+    match /pulsecheck-trainer-sharing/{grantId} {
+      allow read, write: if false;
+    }
+
     match /pulsecheck-morning-checkins/{checkInId} {
+      // Raw personal records stay with the athlete. Staff dashboard access is
+      // projected by the authenticated team-dashboard API, never this document.
       allow read: if isAdminUser()
-        || (
-          isSignedIn()
-          && (
-            resource.data.athleteUserId == request.auth.uid
-            || (
-              resource.data.athleteUserId is string
-              && resource.data.teamId is string
-              && resource.data.organizationId is string
-              && pcDataMatchesTeamOrganization(
-                resource.data,
-                resource.data.teamId
-              )
-              && pcCanAccessCareTeamAthlete(
-                resource.data.teamId,
-                resource.data.athleteUserId
-              )
-            )
-          )
-        );
+        || (isSignedIn() && resource.data.athleteUserId == request.auth.uid);
       // Trusted check-in services create the canonical row. The athlete's
       // merge write below may enrich only a row that already exists.
       allow create: if isAdminUser();
@@ -1939,26 +1922,10 @@ service cloud.firestore {
     // Derived sentiment is backend-owned. Existing unscoped records remain
     // visible to their athlete; team staff only receive exact scoped records.
     match /dailySentimentAnalysis/{sentimentId} {
+      // Raw personal records stay with the athlete. Staff dashboard access is
+      // projected by the authenticated team-dashboard API, never this document.
       allow read: if isAdminUser()
-        || (
-          isSignedIn()
-          && (
-            resource.data.userId == request.auth.uid
-            || (
-              resource.data.userId is string
-              && resource.data.teamId is string
-              && resource.data.organizationId is string
-              && pcDataMatchesTeamOrganization(
-                resource.data,
-                resource.data.teamId
-              )
-              && pcCanAccessCareTeamAthlete(
-                resource.data.teamId,
-                resource.data.userId
-              )
-            )
-          )
-        );
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create, update, delete: if isAdminUser();
     }
 
@@ -1966,26 +1933,10 @@ service cloud.firestore {
     // provenance cannot change after creation. A team-scoped server projection
     // may also be read by active authorized care/coaching staff.
     match /health-context-source-records/{recordId} {
+      // Raw personal records stay with the athlete. Staff dashboard access is
+      // projected by the authenticated team-dashboard API, never this document.
       allow read: if isAdminUser()
-        || (
-          isSignedIn()
-          && (
-            resource.data.athleteUserId == request.auth.uid
-            || (
-              resource.data.athleteUserId is string
-              && resource.data.teamId is string
-              && resource.data.organizationId is string
-              && pcDataMatchesTeamOrganization(
-                resource.data,
-                resource.data.teamId
-              )
-              && pcCanAccessCareTeamAthlete(
-                resource.data.teamId,
-                resource.data.athleteUserId
-              )
-            )
-          )
-        );
+        || (isSignedIn() && resource.data.athleteUserId == request.auth.uid);
       allow create: if isAdminUser()
         || (
           isSignedIn()
@@ -2091,20 +2042,10 @@ service cloud.firestore {
     // their own deterministic rows; staff access requires server-attached
     // team and organization scope.
     match /health-context-snapshots/{snapshotId} {
+      // Raw personal records stay with the athlete. Staff dashboard access is
+      // projected by the authenticated team-dashboard API, never this document.
       allow read: if isAdminUser()
-        || (
-          isSignedIn()
-          && (
-            resource.data.athleteUserId == request.auth.uid
-            || (
-              resource.data.athleteUserId is string
-              && resource.data.teamId is string
-              && resource.data.organizationId is string
-              && pcDataMatchesTeamOrganization(resource.data, resource.data.teamId)
-              && pcCanAccessCareTeamAthlete(resource.data.teamId, resource.data.athleteUserId)
-            )
-          )
-        );
+        || (isSignedIn() && resource.data.athleteUserId == request.auth.uid);
       allow create: if isAdminUser()
         || (
           isSignedIn()
