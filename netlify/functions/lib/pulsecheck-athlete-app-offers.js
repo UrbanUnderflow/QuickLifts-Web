@@ -497,6 +497,17 @@ const reconcileAthleteAppSubscription = async ({
     const entitlementData = entitlementSnapshot.exists ? entitlementSnapshot.data() || {} : {};
     const subscriptionData = subscriptionSnapshot.exists ? subscriptionSnapshot.data() || {} : {};
     const userData = userSnapshot.exists ? userSnapshot.data() || {} : {};
+    // Recovery creates a new Stripe subscription. Late events from its predecessor
+    // must not replace the team's current entitlement or its native subscription plan.
+    const existingSubscriptionId = normalizeString(entitlementData.stripeSubscriptionId);
+    const incomingCreated = Math.max(0, Math.floor(Number(subscription.created) || 0));
+    const existingCreated = Math.max(0, Math.floor(Number(entitlementData.stripeSubscriptionCreatedAtEpochSeconds) || 0));
+    if (existingSubscriptionId && existingSubscriptionId !== subscriptionId) {
+      if (existingCreated && (!incomingCreated || incomingCreated <= existingCreated)) return;
+      // Legacy records predate creation timestamps. Only a paid/active replacement
+      // can take over; cancellation/failure/refund events cannot displace it.
+      if (!existingCreated && !providerActive) return;
+    }
     const existingAccessBlock = (
       entitlementData.financialAccessBlock
       && typeof entitlementData.financialAccessBlock === 'object'
@@ -587,6 +598,7 @@ const reconcileAthleteAppSubscription = async ({
       status: active ? 'active' : effectiveStatus,
       active,
       stripeSubscriptionId: subscriptionId,
+      stripeSubscriptionCreatedAtEpochSeconds: incomingCreated || existingCreated || 0,
       stripeCustomerId: customerId || null,
       stripePriceId: priceId,
       currentPeriodEndEpochSeconds: active ? currentPeriodEnd : nowSec,
