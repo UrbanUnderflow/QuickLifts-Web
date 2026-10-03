@@ -183,7 +183,7 @@ const PulseCheckTestimonialsPage: React.FC = () => {
 
       <header className="pct-nav">
         <a href="/PulseCheck" className="pct-brand" aria-label="PulseCheck home">
-          <img src="/pulsecheck-youth/pulsecheck-wordmark.png" alt="PulseCheck" />
+          <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" />
         </a>
         <a href="#submit" className="pct-nav-action">
           Submit a testimonial <ArrowRight size={16} />
@@ -424,7 +424,7 @@ const PulseCheckTestimonialsPage: React.FC = () => {
           border-bottom: 1px solid rgba(255,255,255,.35);
         }
         .pct-brand { width: clamp(172px, 16vw, 242px); }
-        .pct-brand img { width: 100%; filter: brightness(0) invert(1); }
+        .pct-brand img { width: 100%; height: auto; }
         .pct-nav-action {
           display: inline-flex;
           align-items: center;

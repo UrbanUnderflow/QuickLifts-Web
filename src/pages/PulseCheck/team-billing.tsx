@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Head from 'next/head';
-import { Activity, ArrowRight, CheckCircle2, LockKeyhole, Loader2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2, LockKeyhole, Loader2 } from 'lucide-react';
 import styles from './team-billing.module.css';
 import { useRouter } from 'next/router';
 import { onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, OAuthProvider, signOut, User } from 'firebase/auth';
@@ -64,8 +64,7 @@ export default function TeamBillingPage() {
       </Head>
       <header className={styles.header}>
         <a className={styles.brand} href="/PulseCheck" aria-label="PulseCheck home">
-          <span className={styles.brandMark}><Activity size={20} strokeWidth={2.5} /></span>
-          <span>PulseCheck</span>
+          <img className={styles.wordmark} src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={2400} height={379} />
         </a>
         <span className={styles.secureLabel}><LockKeyhole size={13} /> Secure payment</span>
       </header>

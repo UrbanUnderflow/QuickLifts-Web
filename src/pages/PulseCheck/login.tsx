@@ -573,13 +573,8 @@ const PulseCheckLoginPage: NextPage = () => {
             >
               <div className="max-w-3xl">
                 <div className="mb-8 flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#E0FE10]/25 bg-[#E0FE10]/10 shadow-[0_18px_50px_rgba(224,254,16,0.12)]">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#E0FE10" strokeWidth="2.5" width="24" height="24">
-                      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                    </svg>
-                  </div>
                   <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#E0FE10]">PulseCheck</p>
+                    <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
                     <p className="mt-1 text-sm text-zinc-500">Admin and team workspace</p>
                   </div>
                 </div>
@@ -615,12 +610,7 @@ const PulseCheckLoginPage: NextPage = () => {
               >
                 <div className="mb-5 text-center lg:hidden">
                   <div className="mb-3 flex items-center justify-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E0FE10]/25 bg-[#E0FE10]/10">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="#E0FE10" strokeWidth="2.5" width="18" height="18">
-                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                      </svg>
-                    </div>
-                    <h1 className="text-2xl font-bold tracking-normal text-white">PulseCheck</h1>
+                    <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
                   </div>
                   <p className="text-sm text-zinc-500">Secure access for your team workspace</p>
                 </div>

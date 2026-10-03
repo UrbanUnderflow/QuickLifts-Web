@@ -213,7 +213,7 @@ const PulseCheckChat: React.FC = () => {
     <div className="min-h-screen bg-black text-white">
       <div className="max-w-3xl mx-auto h-screen flex flex-col">
         <header className="p-4 border-b border-zinc-800 flex items-center justify-between">
-          <h1 className="text-lg font-semibold">PulseCheck</h1>
+          <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
           <button
             onClick={() => setIsNoteModalOpen(true)}
             className="text-sm px-3 py-1.5 rounded-lg bg-[#E0FE10] text-black hover:bg-[#d0ee00]"

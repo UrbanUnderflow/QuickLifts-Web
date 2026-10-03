@@ -227,8 +227,7 @@ export default function PulseCheckMemberSetupPage() {
         {/* Brand + header */}
         <div className="mb-6 flex flex-col gap-5">
           <div className="flex items-center gap-3">
-            <img src="/pulsecheck-logo.svg" alt="PulseCheck" width={36} height={36} className="rounded-[10px]" />
-            <span className="text-base font-bold tracking-tight" style={{ fontFamily: 'Switzer, sans-serif' }}>PulseCheck</span>
+            <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
           </div>
           <div>
             <p className="text-sm font-medium tracking-tight" style={{ color: PC.purpleSoft }}>Welcome to {team?.displayName || 'your team'}</p>

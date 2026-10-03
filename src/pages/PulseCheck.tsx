@@ -1963,7 +1963,7 @@ const PulseCheckPage: NextPage = () => {
                                         <div className="relative">
                                             <div className="absolute -inset-2 bg-[#E0FE10]/10 rounded-lg blur-lg" />
                                             <div className="relative">
-                                                <h1 className="text-xl font-bold text-white tracking-tight">PulseCheck</h1>
+                                                <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
                                                 <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">
                                                     {activeSection === 'nora' ? 'Nora' : activeSection === 'profile' ? 'Profile' : 'Today'}
                                                 </p>
@@ -1979,7 +1979,7 @@ const PulseCheckPage: NextPage = () => {
                                             className="group inline-flex items-center gap-1.5"
                                         >
                                             <div className="text-left">
-                                                <span className="block text-xl font-bold text-white">PulseCheck</span>
+                                                <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
                                                 <span className="block text-[10px] uppercase tracking-[0.22em] text-zinc-500">
                                                     {activeSection === 'nora' ? 'Nora' : activeSection === 'profile' ? 'Profile' : 'Today'}
                                                 </span>

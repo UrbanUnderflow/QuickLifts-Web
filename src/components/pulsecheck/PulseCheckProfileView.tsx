@@ -752,7 +752,7 @@ const PulseCheckProfileView: React.FC = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">PulseCheck</p>
+                <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
                 <h2 className="mt-1 text-2xl font-bold text-white">Settings</h2>
               </div>
               <button

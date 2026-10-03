@@ -290,9 +290,9 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               )}
               {/* Use the same PulseCheck branding for Coach pages (no coach-specific sidebar branding) */}
               <img 
-                src={usePulseCheckNav ? '/pulsecheck-logo.svg' : '/pulse-logo-white.svg'} 
+                src={usePulseCheckNav ? '/pulsecheck-wordmark-green.png' : '/pulse-logo-white.svg'}
                 alt={usePulseCheckNav ? 'PulseCheck' : 'Pulse'} 
-                className="relative h-8 w-auto" 
+                className={usePulseCheckNav ? "relative h-auto w-full max-w-[180px]" : "relative h-8 w-auto"}
               />
             </motion.div>
           </div>
