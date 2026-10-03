@@ -1,3 +1,4 @@
+import TeamInsightReport from '../../components/coach/TeamInsightReport';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import clay from '../../components/coach/ClayDashboard.module.css';
@@ -1086,9 +1087,10 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   );
 
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
+  useEffect(() => { setSelectedAthleteId(null); }, [activeTeamId]);
   const selectedAthlete = useMemo(
-    () => athletes.find((a) => a.id === selectedAthleteId) ?? null,
-    [athletes, selectedAthleteId]
+    () => athletes.find((a) => a.id === selectedAthleteId) ?? (isDemo ? (() => { const a = demoTeamParticipation.athletes.find(a => a.id === selectedAthleteId); return a ? { id: a.id, displayName: a.displayName, email: '', conversationCount: 0, totalSessions: 0, weeklyGoalProgress: 0, sentimentScore: 0 } : null; })() : null),
+    [athletes, selectedAthleteId, isDemo]
   );
   const [routeView, setRouteView] = useState<ViewKey | null | undefined>(undefined);
   useEffect(() => {
@@ -1399,6 +1401,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       onRetry={view === 'wellbeing' ? () => setWellbeingReload(n => n + 1) : onReloadParticipation}
                       onOpenSkills={() => selectView('skills')}
                       onOpenAthletes={() => selectView('roster')}
+                      onSelectAthlete={setSelectedAthleteId}
                     />
                   )}
                   {view === 'alerts' && (
@@ -1428,7 +1431,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       </details>}
                       <ClayParticipationViews view="athletes" participation={isDemo ? demoTeamParticipation : participation}
                         loading={loadingAthletes} error={participationError} onRetry={onReloadParticipation}
-                        onOpenSkills={() => selectView('skills')} />
+                        onOpenSkills={() => selectView('skills')} onSelectAthlete={setSelectedAthleteId} />
                     </div>
                   )}
                   {view === 'reminders' && (
@@ -1479,13 +1482,14 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                     />
                   )}
                   {view === 'reports' && (
-                    <><header className={clay.pageHeader}><div><h1>Reports</h1><p>Your team’s participation over time.</p></div></header>
-                    {(isDemo || participation) && <ClayParticipationReportSummary data={isDemo ? demoTeamParticipation : participation!}/>}
+                    <><header className={clay.pageHeader}><div><h1>Reports</h1><p>What changed, what it may mean, and what to do next.</p></div></header>
+                    <TeamInsightReport key={`${activeTeamId}-${canSeeTier3}`} teamId={activeTeamId} isDemo={isDemo} canViewTrainer={canSeeTier3} />
+                    <details className={clay.reportCard}><summary>Previously delivered reports</summary>
                     <ReportsSection
                       teamId={teamContext?.teamId}
                       teamName={teamContext?.teamName}
                       isDemo={isDemo}
-                    /></>
+                    /></details></>
                   )}
                   {view === 'earnings' && earningsEnabled && (
                     <EarningsSection
@@ -1518,6 +1522,12 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
             </div>
           </div>
         </div>
+
+        {selectedAthlete && teamContext && <AthleteProfileDrawer
+          athlete={selectedAthlete} alerts={alerts} canSeeTier3={canSeeTier3}
+          coachId={coachId || ''} teamId={teamContext.teamId} organizationId={teamContext.organizationId}
+          onClose={() => setSelectedAthleteId(null)}
+        />}
 
         <CoachProfileEditModal
           isOpen={profileOpen}
@@ -6684,7 +6694,7 @@ const ReportRow: React.FC<{
 );
 
 const ReportsArchiveHeader: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
-  <header className={clay.pageHeader}><div><h2 className="text-2xl font-serif">Delivered reports</h2><p>{children || "Your team’s participation over time."}</p></div></header>
+  <header className={clay.pageHeader}><div><h2 className="text-2xl font-serif">Delivered reports</h2><p>{children || "What changed, what it may mean, and what to do next."}</p></div></header>
 );
 
 // --- Demo archive -----------------------------------------------------------
