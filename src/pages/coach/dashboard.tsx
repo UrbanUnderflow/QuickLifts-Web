@@ -1482,14 +1482,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                     />
                   )}
                   {view === 'reports' && (
-                    <><header className={clay.pageHeader}><div><h1>Reports</h1><p>What changed, what it may mean, and what to do next.</p></div></header>
+                    <>
                     <TeamInsightReport key={`${activeTeamId}-${canSeeTier3}`} teamId={activeTeamId} isDemo={isDemo} canViewTrainer={canSeeTier3} />
-                    <details className={clay.reportCard}><summary>Previously delivered reports</summary>
-                    <ReportsSection
-                      teamId={teamContext?.teamId}
-                      teamName={teamContext?.teamName}
-                      isDemo={isDemo}
-                    /></details></>
+                    </>
                   )}
                   {view === 'earnings' && earningsEnabled && (
                     <EarningsSection

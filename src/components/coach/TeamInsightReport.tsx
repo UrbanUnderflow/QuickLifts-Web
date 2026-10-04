@@ -22,10 +22,11 @@ export default function TeamInsightReport({teamId,isDemo=false,canViewTrainer}:{
  const requestKey=`${teamId}:${activeRole}:${isDemo}`;
  const currentKey=useRef(requestKey);currentKey.current=requestKey;
  const report=result?.key===requestKey?result.report:null;
+ const historyItems=isDemo?[{from:demoTeamParticipation.from,to:demoTeamParticipation.to,mode:'ai' as const}]:history?.key===requestKey?history.items:[];
  useEffect(()=>{serial.current++;controller.current?.abort();setPending(false);setError(null);setResult(null);},[requestKey]);
  useEffect(()=>()=>{serial.current++;controller.current?.abort();},[]);
  useEffect(()=>{
-  const abort=new AbortController();const key=requestKey;setHistory(null);setHistoryError(null);
+  const abort=new AbortController();const key=requestKey;setHistory(previous=>previous?.key===key?previous:null);setHistoryError(null);
   if(isDemo||!teamId)return ()=>abort.abort();
   async function loadHistory(){
    try {
@@ -66,10 +67,18 @@ export default function TeamInsightReport({teamId,isDemo=false,canViewTrainer}:{
   }catch(e){if(attempt===serial.current&&currentKey.current===key&&!abort.signal.aborted)setError(e instanceof Error?e.message:'The report could not be generated.');}
   finally{if(attempt===serial.current&&currentKey.current===key&&!abort.signal.aborted)setPending(false);}
  }
- return <section className={s.root} aria-label="Weekly team insights"><header className={s.header}><div><p className={s.eyebrow}>{isDemo?'Sample report':'Weekly report'}</p><h1>{activeRole==='coach'?'Participation into progress.':'A clearer view of team wellbeing.'}</h1><p className={s.subtitle}>{activeRole==='coach'?'What changed, what your team is learning, and what to reinforce next.':'Reported mood, recovery, wearable trends, and journaling activity in context.'}</p></div>{canViewTrainer&&<div className={s.switch} aria-label="Report audience"><button type="button" aria-pressed={activeRole==='coach'} onClick={()=>setRole('coach')}>Coach report</button><button type="button" aria-pressed={activeRole==='trainer'} onClick={()=>setRole('trainer')}>Trainer report</button></div>}</header>
+ return <section className={s.root} aria-label="Weekly team insights"><header className={s.header}><div><p className={s.eyebrow}>{isDemo?'Sample report':'Weekly report'}</p><h1>{activeRole==='coach'?'Coach reports':'Trainer reports'}</h1><p className={s.subtitle}>{activeRole==='coach'?'What changed, what your team is learning, and what to reinforce next.':'Reported mood, recovery, wearable trends, and journaling activity in context.'}</p></div>{canViewTrainer&&<div className={s.switch} aria-label="Report audience"><button type="button" aria-pressed={activeRole==='coach'} onClick={()=>setRole('coach')}>Coach report</button><button type="button" aria-pressed={activeRole==='trainer'} onClick={()=>setRole('trainer')}>Trainer report</button></div>}</header>
  <div className={s.toolbar}><p>{report?`${date(report.from)} – ${date(report.to)}`:'The latest completed Monday–Sunday week, compared with the week before.'}</p><button type="button" className={s.primary} disabled={pending||!teamId} onClick={()=>generate()}>{pending?<RefreshCw className={s.spin} size={17}/>:<FileText size={17}/>} {pending?'Preparing insights…':isDemo?'Preview sample report':'Generate latest weekly report'}</button></div>
  {error&&<p role="alert" className={s.error}>{error}</p>}
- {!report&&!pending&&<div className={s.empty}><FileText size={30} aria-hidden="true"/><h2>Make your next step clear.</h2><p>{activeRole==='coach'?'Bring participation and skill training together in a weekly takeaway with practical next steps.':'Bring shared team summaries together with practical next steps and the evidence behind them.'}</p></div>}
+ <section className={s.history} aria-label="Weekly report history">
+ <div className={s.historyHeading}><div><h2>Weekly report history</h2><p>Choose a week to explore its takeaway, next steps, and supporting evidence.</p></div>{history?.key===requestKey&&<span className={s.count}>{history.items.length} reports</span>}</div>
+ {historyError?<p role="status" className={s.historyMessage}>{historyError}</p>:!isDemo&&history?.key!==requestKey?<p role="status" className={s.historyMessage}>Loading saved reports…</p>:historyItems.length?<div className={s.historyList}>{[...historyItems].sort((a,b)=>b.to.localeCompare(a.to)).map((item,index)=><button className={s.historyCard} type="button" key={item.to} disabled={pending} aria-pressed={report?.to===item.to} onClick={()=>generate(item.to)}>
+ <span className={s.cardTop}><span className={s.eyebrow}>{activeRole==='coach'?'Coach report':'Trainer report'}</span>{index===0&&<span className={s.latest}>Latest week</span>}</span>
+ <strong className={s.cardDate}>{date(item.from)} – {date(item.to)}</strong>
+ <span className={s.cardYear}>{item.to.slice(0,4)} · {isDemo?'Sample weekly summary':'Weekly summary'}</span>
+ <span className={s.cardBottom}><span>{item.mode==='ai'?'Insights & next steps':'Supporting evidence'}</span><span className={s.openAction}>{report?.to===item.to?'Viewing report':'Open report'}<ArrowRight size={17} aria-hidden="true"/></span></span>
+ </button>)}</div>:<p className={s.historyMessage}>No weekly reports yet. Generate your first report above.</p>}
+ </section>
  {pending&&<p className={s.loading} role="status">Preparing your team report…</p>}
  {report&&<div aria-busy={pending} className={s.report}><section className={s.takeaway}><p className={s.eyebrow}>{isDemo?'Sample weekly takeaway':report.mode==='ai'?'Weekly takeaway':'Weekly evidence'}</p><h2>{report.takeaway}</h2>{!isDemo&&report.mode==='ai'&&<p className={s.note}>AI-assisted interpretation. Review the supporting evidence when planning next steps.</p>}</section>
  <div className={s.insights}>{report.insights.map((insight,i)=><article className={s.insight} key={`${i}-${insight.title}`}><span className={s.number}>{String(i+1).padStart(2,'0')}</span><div><h2>{insight.title}</h2><p>{insight.meaning}</p><div className={s.action}><ArrowRight size={18} aria-hidden="true"/><p>{insight.action}</p></div><div className={s.links}>{insight.evidenceIds.map(id=>{const fact=report.facts.find(f=>f.id===id);return fact?<a href={`#report-fact-${id}`} key={id}>{fact.label}</a>:null;})}</div></div></article>)}</div>
@@ -77,6 +86,6 @@ export default function TeamInsightReport({teamId,isDemo=false,canViewTrainer}:{
  <section className={s.evidence}><h2>The supporting evidence</h2><div className={s.factGrid}>{report.facts.map(f=><Evidence key={f.id} fact={f}/>)}</div></section>
  {report.limitations.length>0&&<details className={s.limitations}><summary>How to read this report</summary><ul>{report.limitations.map((text,i)=><li key={i}>{text}</li>)}</ul></details>}
  </div>}
- {!isDemo&&<details className={s.history}><summary>Weekly report history</summary>{historyError?<p role="status">{historyError}</p>:history?.key!==requestKey?<p>Loading saved reports…</p>:history.items.length?<div className={s.historyList}>{history.items.map(item=><button type="button" key={item.to} disabled={pending} aria-pressed={report?.to===item.to} onClick={()=>generate(item.to)}><span>{date(item.from)} – {date(item.to)}</span><span>Open report <ArrowRight size={15} aria-hidden="true"/></span></button>)}</div>:<p>Your generated weekly reports will appear here.</p>}</details>}
+
  </section>;
 }
