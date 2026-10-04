@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Head from 'next/head';
+import PaymentHistory from '../../components/pulsecheck/billing/PaymentHistory';
 import { ArrowRight, CheckCircle2, LockKeyhole, Loader2 } from 'lucide-react';
 import styles from './team-billing.module.css';
 import { useRouter } from 'next/router';
@@ -115,6 +116,7 @@ export default function TeamBillingPage() {
           {error && <div className={styles.error}><p role="alert">{error}</p>{user && <button className={styles.secondary} disabled={busy} onClick={() => void refresh()}>Try again</button>}</div>}
           {user && <button className={styles.accountSwitch} disabled={busy} onClick={() => void signOut(auth)}>Use a different account</button>}
         </section>
+        {user && billing?.isTeamAthlete && billing.team && <PaymentHistory key={`${user.uid}:${billing.team.id}`} teamId={billing.team.id} request={request} />}
         <p className={styles.footer}><LockKeyhole size={13} /> Payments secured by Stripe</p>
       </main>
     </div>
