@@ -14,7 +14,7 @@ function fixture(data = [], subscriptions = {}, hasMore = false) {
   }});
   const calls = [];
   return { database: db, userId: 'athlete', teamId: 'team', stripeMode: 'live', firebaseMode: 'prod', cursorSecret: 'test-secret', calls,
-    stripe: { subscriptions: { retrieve: async id => subscriptions[id] || sub() }, invoices: { list: async args => { calls.push(args); return {data,has_more:hasMore}; } } } };
+    stripe: { subscriptions: { search: async () => ({data:Object.values(subscriptions),has_more:false}), retrieve: async id => subscriptions[id] || sub() }, invoices: { list: async args => { calls.push(args); return {data,has_more:hasMore}; } } } };
 }
 test('returns canceled/restarted subscription history and both Stripe link types', async () => {
   const args = fixture([invoice('in_old', 'sub_old'), invoice('in_new')], { sub_old: {...sub(),status:'canceled'} });
@@ -87,4 +87,31 @@ test('endpoint authenticates before Stripe access and ignores client-supplied id
     if (oldKey === undefined) delete process.env.STRIPE_TEST_SECRET_KEY; else process.env.STRIPE_TEST_SECRET_KEY=oldKey;
     delete require.cache[endpoint];
   }
+});
+test('restart on a new customer preserves globally ordered history across pagination', async () => {
+  const args = fixture([], {sub_old:sub({},'cus_old')});
+  const all = Array.from({length:30},(_,i) => invoice(`in_${String(30-i).padStart(2,'0')}`, i%2 ? 'sub_old':'sub_current', {created:300-i,customer:i%2?'cus_old':'cus_ours'}));
+  args.stripe.invoices.list = async ({customer,starting_after,limit}) => {
+    const stream=all.filter(x=>x.customer===customer);
+    const offset=starting_after ? stream.findIndex(x=>x.id===starting_after)+1 : 0;
+    return {data:stream.slice(offset,offset+limit),has_more:stream.length>offset+limit};
+  };
+  const first=await loadTeamInvoices(args);
+  assert.deepEqual(first.invoices.map(x=>x.id),all.slice(0,20).map(x=>x.id));
+  assert.ok(first.nextCursor);
+  const second=await loadTeamInvoices({...args,cursor:first.nextCursor});
+  assert.deepEqual(second.invoices.map(x=>x.id),all.slice(20).map(x=>x.id));
+  assert.equal(second.nextCursor,null);
+});
+test('same-second invoices retain Stripe stream order at page boundaries', async () => {
+  const args = fixture();
+  const all=Array.from({length:25},(_,i)=>invoice(`in_${String(i).padStart(2,'0')}`, 'sub_current', {created:100}));
+  args.stripe.invoices.list=async({starting_after,limit})=>{
+    const offset=starting_after?all.findIndex(x=>x.id===starting_after)+1:0;
+    return {data:all.slice(offset,offset+limit),has_more:all.length>offset+limit};
+  };
+  const first=await loadTeamInvoices(args);
+  const second=await loadTeamInvoices({...args,cursor:first.nextCursor});
+  assert.deepEqual([...first.invoices,...second.invoices].map(x=>x.id),all.map(x=>x.id));
+  assert.equal(second.nextCursor,null);
 });
