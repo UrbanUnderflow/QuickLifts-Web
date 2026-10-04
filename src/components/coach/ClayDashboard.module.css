@@ -49,3 +49,23 @@
 .inviteDisclosure {background:#fff;border:1px solid #e1e5df;border-radius:14px;padding:14px 18px;}
 .inviteDisclosure summary {cursor:pointer;font-size:14px;font-weight:600;color:#23473d;}
 .inviteDisclosure[open] summary {margin-bottom:18px;}
+
+/* Reminders use native light surfaces rather than dark-theme utility fallbacks. */
+.reminderCard{padding:26px;background:#fff;border:1px solid #e0e5df;border-radius:22px;box-shadow:0 5px 18px #22302e08;min-width:0}
+.reminderSlot{padding:18px;background:#f4f6f1;border:1px solid #e3e8df;border-radius:16px}
+.reminders .reminderPrimary{display:flex;width:100%;align-items:center;justify-content:center;gap:8px;margin-top:20px;padding:13px 18px;border:0;border-radius:12px;background:#d1f21a;color:#22302e;font-size:14px;font-weight:600;box-shadow:0 3px 8px #23332a12;min-height:46px}
+.reminders .reminderPrimary:hover{background:#c8e91a}
+.reminders .reminderPrimary:disabled{background:#e8ece4;color:#677164;box-shadow:none;cursor:not-allowed}
+.reminders input:not([type=checkbox]),.reminders select,.reminders textarea{min-height:44px;border-radius:11px;border:1px solid #dce3da;padding:11px 13px;font-size:14px;line-height:1.45;box-shadow:inset 0 1px 2px #22302e04}
+.reminders textarea{resize:vertical;min-height:110px}
+.reminders input:disabled{background:#eef0eb;color:#7c857d;opacity:1}
+.reminders .reminderSwitch{appearance:none;position:relative;width:36px;height:22px;flex-shrink:0;border-radius:20px;border:1px solid #b7c1b4;background:#d9dfd5;cursor:pointer;transition:background .15s}
+.reminders .reminderSwitch:after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #22302e30;transition:transform .15s}
+.reminders .reminderSwitch:checked{background:#386c60;border-color:#386c60}
+.reminders .reminderSwitch:checked:after{transform:translateX(14px)}
+.reminders :global([class*="text-cyan-"]){color:#286b62}
+.reminders :global([class*="bg-cyan-"]){background:#edf3ec}
+.reminders :global([class*="border-cyan-"]){border-color:#dce5d9}
+.reminders :global([class*="bg-black/20"]){background:#f6f7f3}
+.reminders :global([class*="border-dashed"]){background:#f8f9f6;border-style:solid;color:#65716c}
+@media(max-width:640px){.reminderCard{padding:20px}.reminderSlot{padding:14px}.reminders .pageHeader h1{font-size:29px}}

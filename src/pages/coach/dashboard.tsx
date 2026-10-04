@@ -1,3 +1,4 @@
+import TeamInsightReport from '../../components/coach/TeamInsightReport';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import clay from '../../components/coach/ClayDashboard.module.css';
@@ -927,6 +928,7 @@ interface CoachDashboardShellProps {
   /** The signed-in coach's own staff capabilities — gates which tabs/details are
    *  shown. Live callers resolve these from the selected team membership. */
   viewerCapabilities?: StaffPermission[];
+  onPermissionsChanged?: (membershipId: string) => Promise<void>;
   /** Team access is resolved once by the page so every dashboard surface uses
    *  the same selected team as roster/readiness and capability gating. */
   teamContexts?: CoachDashboardTeamContext[];
@@ -995,6 +997,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   additionalServicesTeamId = '',
   additionalServicesOrganizationId = '',
   viewerCapabilities = [],
+  onPermissionsChanged,
   teamContexts,
   selectedTeamId,
   teamContextLoading = false,
@@ -1084,14 +1087,22 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   );
 
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
+  useEffect(() => { setSelectedAthleteId(null); }, [activeTeamId]);
   const selectedAthlete = useMemo(
-    () => athletes.find((a) => a.id === selectedAthleteId) ?? null,
-    [athletes, selectedAthleteId]
+    () => athletes.find((a) => a.id === selectedAthleteId) ?? (isDemo ? (() => { const a = demoTeamParticipation.athletes.find(a => a.id === selectedAthleteId); return a ? { id: a.id, displayName: a.displayName, email: '', conversationCount: 0, totalSessions: 0, weeklyGoalProgress: 0, sentimentScore: 0 } : null; })() : null),
+    [athletes, selectedAthleteId, isDemo]
   );
-  const routeView = useMemo<ViewKey | null>(() => {
-    const rawView = Array.isArray(router.query.view) ? router.query.view[0] : router.query.view;
-    return isViewKey(rawView) ? rawView : null;
-  }, [router.query.view]);
+  const [routeView, setRouteView] = useState<ViewKey | null | undefined>(undefined);
+  useEffect(() => {
+    if (!router.isReady) return;
+    const syncView = () => {
+      const rawView = new URLSearchParams(window.location.search).get('view');
+      setRouteView(isViewKey(rawView) ? rawView : null);
+    };
+    syncView();
+    window.addEventListener('popstate', syncView);
+    return () => window.removeEventListener('popstate', syncView);
+  }, [router.isReady, router.query.view]);
 
   const alertCount = alerts.length;
   const inboxUnread = useMemo(
@@ -1152,14 +1163,11 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
 
   const replaceDashboardQuery = useCallback(
     (updates: Record<string, string | string[] | undefined>) => {
-      const nextUrl = coachDashboardUrlForQuery(updates);
-      if (!router.isReady) {
-        replaceCoachDashboardUrlQuery(updates);
-        return;
-      }
-      void router.replace(nextUrl, undefined, { shallow: true, scroll: false });
+      replaceCoachDashboardUrlQuery(updates);
+      const rawView = updates.view;
+      if (typeof rawView === 'string' && isViewKey(rawView)) setRouteView(rawView);
     },
-    [router]
+    []
   );
 
   const selectView = useCallback(
@@ -1175,7 +1183,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   // Keep dashboard tabs deep-linkable while refusing unknown or unauthorized
   // views. Capability changes always replace the URL with the first safe tab.
   useEffect(() => {
-    if (!router.isReady || navItems.length === 0) return;
+    if (!router.isReady || routeView === undefined || navItems.length === 0) return;
     if (!permissionsReady) {
       if (routeView) {
         setView((current) => (current === routeView ? current : routeView));
@@ -1192,7 +1200,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
     }
   }, [navItems, permissionsReady, replaceDashboardQuery, routeView, router.isReady]);
 
-  const NavList = ({ onPick, secondary = false }: { onPick?: () => void; secondary?: boolean }) => (
+  const renderNavList = ({ onPick, secondary = false }: { onPick?: () => void; secondary?: boolean }) => (
     <nav className="flex-1 space-y-0.5">
       {navItems.filter((item) => SECONDARY_NAV.has(item.key) === secondary).map((item) => {
         const active = view === item.key;
@@ -1262,10 +1270,10 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
         <ChevronRight className="w-3.5 h-3.5 text-zinc-600 flex-shrink-0" />
       </button>
 
-      <NavList onPick={() => setMobileNavOpen(false)} />
+      {renderNavList({ onPick: () => setMobileNavOpen(false) })}
       <details className={clay.moreNav} open={SECONDARY_NAV.has(view) || undefined}>
         <summary>Team management</summary>
-        <NavList secondary onPick={() => setMobileNavOpen(false)} />
+        {renderNavList({ secondary: true, onPick: () => setMobileNavOpen(false) })}
       </details>
 
       <div className="mt-auto pt-3 border-t border-zinc-800/60">
@@ -1393,6 +1401,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       onRetry={view === 'wellbeing' ? () => setWellbeingReload(n => n + 1) : onReloadParticipation}
                       onOpenSkills={() => selectView('skills')}
                       onOpenAthletes={() => selectView('roster')}
+                      onSelectAthlete={setSelectedAthleteId}
                     />
                   )}
                   {view === 'alerts' && (
@@ -1422,7 +1431,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       </details>}
                       <ClayParticipationViews view="athletes" participation={isDemo ? demoTeamParticipation : participation}
                         loading={loadingAthletes} error={participationError} onRetry={onReloadParticipation}
-                        onOpenSkills={() => selectView('skills')} />
+                        onOpenSkills={() => selectView('skills')} onSelectAthlete={setSelectedAthleteId} />
                     </div>
                   )}
                   {view === 'reminders' && (
@@ -1452,6 +1461,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                       coachEmail={coachEmail}
                       teamContext={teamContext}
                       canInvite={can('admin')}
+                      onPermissionsChanged={onPermissionsChanged}
                     />
                   )}
                   {view === 'nora' && (
@@ -1472,13 +1482,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                     />
                   )}
                   {view === 'reports' && (
-                    <><header className={clay.pageHeader}><div><h1>Reports</h1><p>Your team’s participation over time.</p></div></header>
-                    {(isDemo || participation) && <ClayParticipationReportSummary data={isDemo ? demoTeamParticipation : participation!}/>}
-                    <ReportsSection
-                      teamId={teamContext?.teamId}
-                      teamName={teamContext?.teamName}
-                      isDemo={isDemo}
-                    /></>
+                    <>
+                    <TeamInsightReport key={`${activeTeamId}-${canSeeTier3}`} teamId={activeTeamId} isDemo={isDemo} canViewTrainer={canSeeTier3} />
+                    </>
                   )}
                   {view === 'earnings' && earningsEnabled && (
                     <EarningsSection
@@ -1511,6 +1517,12 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
             </div>
           </div>
         </div>
+
+        {selectedAthlete && teamContext && <AthleteProfileDrawer
+          athlete={selectedAthlete} alerts={alerts} canSeeTier3={canSeeTier3}
+          coachId={coachId || ''} teamId={teamContext.teamId} organizationId={teamContext.organizationId}
+          onClose={() => setSelectedAthleteId(null)}
+        />}
 
         <CoachProfileEditModal
           isOpen={profileOpen}
@@ -1588,6 +1600,27 @@ const CoachDashboard: React.FC = () => {
     }
     return resolved;
   }, [selectedTeamAccess]);
+
+  const refreshViewerPermissions = useCallback(async (membershipId: string) => {
+    if (!currentUser?.id || !teamAccesses.some(access => access.membership.id === membershipId)) return;
+    try {
+      const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
+      setTeamAccesses(previous => previous.flatMap(access => {
+        if (access.membership.id !== membershipId) return [access];
+        const membership = memberships.find(member =>
+          member.id === membershipId && member.userId === currentUser.id &&
+          member.teamId === access.context.teamId &&
+          member.organizationId === access.context.organizationId &&
+          isActivePulseCheckTeamMembership(member) && DASHBOARD_STAFF_ROLES.has(member.role)
+        );
+        return membership ? [{ ...access, membership }] : [];
+      }));
+    } catch (error) {
+      // Do not retain potentially revoked access when the refresh fails.
+      setTeamAccesses(previous => previous.filter(access => access.membership.id !== membershipId));
+      throw error;
+    }
+  }, [currentUser?.id, teamAccesses]);
 
   // Decide whether to run the guided training: forced via ?training=1 / ?tour=1,
   // or automatically on a coach's first visit (no stored completion).
@@ -1987,6 +2020,7 @@ const CoachDashboard: React.FC = () => {
           additionalServicesTeamId={additionalServices.teamId}
           additionalServicesOrganizationId={additionalServices.organizationId}
           viewerCapabilities={viewerCapabilities}
+          onPermissionsChanged={refreshViewerPermissions}
           teamContexts={teamAccesses.map((access) => access.context)}
           selectedTeamId={selectedTeamId}
           teamContextLoading={teamAccessLoading}
@@ -3142,6 +3176,7 @@ const StaffSection: React.FC<{
   // Inviting/assigning staff is admin-only. Non-admins can view the roster but
   // never see the invite controls.
   canInvite?: boolean;
+  onPermissionsChanged?: (membershipId: string) => Promise<void>;
 }> = ({
   isDemo,
   coachName,
@@ -3149,6 +3184,7 @@ const StaffSection: React.FC<{
   coachEmail,
   teamContext,
   canInvite = true,
+  onPermissionsChanged,
 }) => {
   const [staff, setStaff] = useState<StaffRow[]>(isDemo ? DEMO_STAFF : []);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -3369,9 +3405,10 @@ const StaffSection: React.FC<{
         staffCapabilities: editPerms,
         rosterVisibilityScope: derived.rosterVisibilityScope,
       });
+      await onPermissionsChanged?.(editing.id);
+      await loadStaff();
       setToast(`Updated ${editing.name}'s permissions.`);
       setEditing(null);
-      await loadStaff();
     } catch (err) {
       console.error('[CoachDashboard] failed to update staff permissions', err);
       setToast('Could not update permissions. Try again.');
@@ -6652,7 +6689,7 @@ const ReportRow: React.FC<{
 );
 
 const ReportsArchiveHeader: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
-  <header className={clay.pageHeader}><div><h2 className="text-2xl font-serif">Delivered reports</h2><p>{children || "Your team’s participation over time."}</p></div></header>
+  <header className={clay.pageHeader}><div><h2 className="text-2xl font-serif">Delivered reports</h2><p>{children || "What changed, what it may mean, and what to do next."}</p></div></header>
 );
 
 // --- Demo archive -----------------------------------------------------------
@@ -7260,7 +7297,8 @@ const RemindersSection: React.FC<{
   }
 
   return (
-    <div className="space-y-5">
+    <div className={`${clay.reminders} space-y-6`}>
+      <div className={clay.pageHeader}><div><h1>Make room for the routine.</h1><p>Set check-in times and schedule a reminder for your team.</p></div></div>
       {error && (
         <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
@@ -7286,8 +7324,8 @@ const RemindersSection: React.FC<{
         </div>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="rounded-2xl border border-[#E0FE10]/20 bg-zinc-900/55 p-5">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className={clay.reminderCard}>
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#E0FE10]/12">
               <BellRing className="h-5 w-5 text-[#E0FE10]" />
@@ -7331,15 +7369,17 @@ const RemindersSection: React.FC<{
               </label>
               {(Object.entries(moodDraft.slots) as Array<[MoodCheckInSlot, { enabled: boolean; time: string }]>).map(
                 ([slot, config]) => (
-                  <div key={slot} className="rounded-xl border border-zinc-700/40 bg-black/20 p-3">
+                  <div key={slot} className={clay.reminderSlot}>
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <div>
                         <div className="text-sm font-semibold text-white">{moodCheckInSlotLabel(slot)}</div>
-                        <div className="text-xs text-zinc-500">Daily mood check-in</div>
+                        <div className="text-xs text-zinc-500">{config.enabled ? 'Scheduled every day' : 'Paused'}</div>
                       </div>
                       <label className="flex items-center gap-2 text-xs font-medium text-zinc-300">
                         <input
                           type="checkbox"
+                          role="switch"
+                          aria-label={`${moodCheckInSlotLabel(slot)} check-in`}
                           checked={config.enabled}
                           onChange={(event) =>
                             setMoodDraft((current) => ({
@@ -7350,9 +7390,9 @@ const RemindersSection: React.FC<{
                               },
                             }))
                           }
-                          className="h-4 w-4 accent-[#E0FE10]"
+                          className={clay.reminderSwitch}
                         />
-                        On
+                        {config.enabled ? 'On' : 'Off'}
                       </label>
                     </div>
                     <input
@@ -7376,7 +7416,7 @@ const RemindersSection: React.FC<{
               <button
                 onClick={() => void saveCheckInReminder(false)}
                 disabled={saving}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#E0FE10] px-4 py-2.5 text-sm font-semibold text-black hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40"
+                className={clay.reminderPrimary}
               >
                 <Check className="h-4 w-4" />
                 {saving ? 'Saving...' : 'Save mood check-ins'}
@@ -7385,7 +7425,7 @@ const RemindersSection: React.FC<{
           )}
         </div>
 
-        <div className="rounded-2xl border border-cyan-400/20 bg-zinc-900/55 p-5">
+        <div className={clay.reminderCard}>
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/12">
               <MessageSquare className="h-5 w-5 text-cyan-200" />
@@ -7413,12 +7453,12 @@ const RemindersSection: React.FC<{
                 <option value="athlete" disabled={activeAthletes.length === 0}>One athlete</option>
               </select>
             </label>
+            {draft.scope === 'athlete' && (
             <label className="block text-xs font-medium text-zinc-400">
               Athlete
               <select
                 value={draft.athleteId}
                 onChange={(event) => setDraft((current) => ({ ...current, athleteId: event.target.value }))}
-                disabled={draft.scope === 'team'}
                 className="mt-1 w-full rounded-lg border border-zinc-700/40 bg-zinc-900/80 px-3 py-2 text-sm text-white focus:border-cyan-300/40 focus:outline-none disabled:opacity-45"
               >
                 <option value="">Choose athlete</option>
@@ -7429,6 +7469,7 @@ const RemindersSection: React.FC<{
                 ))}
               </select>
             </label>
+            )}
             <label className="block text-xs font-medium text-zinc-400 sm:col-span-2">
               Title
               <input
@@ -7484,7 +7525,7 @@ const RemindersSection: React.FC<{
                 type="checkbox"
                 checked={draft.active}
                 onChange={(event) => setDraft((current) => ({ ...current, active: event.target.checked }))}
-                className="h-4 w-4 accent-[#E0FE10]"
+                className={clay.reminderSwitch}
               />
               Active
             </label>
@@ -7492,7 +7533,7 @@ const RemindersSection: React.FC<{
           <button
             onClick={() => void saveCustomReminder()}
             disabled={saving}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-4 py-2.5 text-sm font-semibold text-cyan-100 hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+            className={clay.reminderPrimary}
           >
             <Plus className="h-4 w-4" />
             {saving ? 'Saving...' : draft.scope === 'team' ? 'Add team reminder' : 'Add athlete reminder'}
@@ -7501,7 +7542,7 @@ const RemindersSection: React.FC<{
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-2xl border border-zinc-700/40 bg-zinc-900/45 p-5">
+        <div className={clay.reminderCard}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-white">Daily mood check-ins</div>
@@ -7548,7 +7589,7 @@ const RemindersSection: React.FC<{
           )}
         </div>
 
-        <div className="rounded-2xl border border-zinc-700/40 bg-zinc-900/45 p-5">
+        <div className={clay.reminderCard}>
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-white">Custom reminders</div>

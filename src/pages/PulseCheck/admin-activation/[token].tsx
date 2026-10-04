@@ -498,8 +498,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
         <div className="mx-auto w-full max-w-[520px]">
           {/* Brand lockup */}
           <div className="mb-7 flex items-center justify-center gap-3">
-            <img src="/pulsecheck-logo.svg" alt="PulseCheck" width={36} height={36} className="rounded-[10px]" />
-            <span className="text-base font-bold tracking-tight" style={displayFont}>PulseCheck</span>
+            <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
           </div>
 
           {/* Slim progress indicator */}

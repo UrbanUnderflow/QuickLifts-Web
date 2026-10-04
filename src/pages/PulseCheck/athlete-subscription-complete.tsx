@@ -231,8 +231,7 @@ const AthleteSubscriptionCompletePage = ({
         <div className="pointer-events-none absolute -left-40 -top-48 h-[560px] w-[560px] rounded-full bg-violet-600/20 blur-3xl" />
         <div className="relative mx-auto max-w-4xl">
           <div className="mb-7 flex items-center gap-3">
-            <img src="/pulsecheck-logo.svg" alt="PulseCheck" width={38} height={38} className="rounded-xl" />
-            <span className="text-lg font-bold">PulseCheck</span>
+            <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
           </div>
 
           <section className="rounded-[32px] border border-white/10 bg-[#0B0B1C]/95 p-6 shadow-2xl sm:p-9">

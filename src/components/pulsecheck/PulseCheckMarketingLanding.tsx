@@ -157,8 +157,10 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
       {/* ── NAV ── */}
       <nav className={`pc2-nav ${navScrolled ? 'pc2-nav--scrolled' : ''}`}>
         <a href="#top" className="pc2-logo">
-          <img src="/pulsecheck-logo.svg" alt="PulseCheck" className="pc2-logo-img" />
-          PulseCheck
+          <span className="pc2-wordmark">
+            <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} />
+            <img src="/pulsecheck-wordmark-dark.png" alt="" aria-hidden="true" width={180} height={29} />
+          </span>
         </a>
         <div className="pc2-nav-links">
           <a href="#nora">Nora AI</a>
@@ -691,8 +693,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         <div className="pc2-footer-inner">
           <div>
             <div className="pc2-logo" style={{ marginBottom: 12 }}>
-              <div className="pc2-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg></div>
-              PulseCheck
+              <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
             </div>
             <p style={{ fontSize: 14, color: '#5a5d65', maxWidth: 260, lineHeight: 1.6 }}>The mental performance OS for elite athletic programs.</p>
           </div>
@@ -867,6 +868,10 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           );
           transition: color 0.4s;
         }
+        .pc2-wordmark { display: grid; width: 180px; max-width: 100%; }
+        .pc2-wordmark img { grid-area: 1 / 1; width: 100%; height: auto; transition: opacity 0.4s; }
+        .pc2-wordmark img:first-child { opacity: calc(1 - var(--pc2-nav-dark, 0)); }
+        .pc2-wordmark img:last-child { opacity: var(--pc2-nav-dark, 0); }
         .pc2-logo-icon {
           width: 32px; height: 32px; background: rgba(224,254,16,0.15);
           border-radius: 8px; display: flex; align-items: center; justify-content: center;

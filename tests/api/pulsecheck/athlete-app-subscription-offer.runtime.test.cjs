@@ -169,6 +169,7 @@ function webhookStripeFactory() {
           async listLineItems() { return { data: [] }; },
         },
       },
+      invoices: { async retrieve(id) { return Stripe.invoicesById.get(id); } },
       subscriptions: {
         async retrieve(id) {
           const subscription = Stripe.subscriptionsById.get(id);
@@ -179,6 +180,7 @@ function webhookStripeFactory() {
     };
   }
   Stripe.subscriptionsById = new Map();
+  Stripe.invoicesById = new Map();
   return Stripe;
 }
 
@@ -282,7 +284,7 @@ function loadStripeWebhook({ prodFirebase, devFirebase, Stripe }) {
       getFirebaseAdminApp(request) {
         const mode = request?.headers?.['x-pulsecheck-firebase-mode'];
         const firebase = mode === 'dev' ? devFirebase : prodFirebase;
-        return { firestore: () => firebase.db };
+        return { firestore: () => firebase.db, messaging: () => ({ send: async () => { throw new Error('Unexpected live push'); } }) };
       },
     },
     './google-secret-manager-utils': {
@@ -1623,4 +1625,115 @@ test('admin payout completion revalidates refunded offer earnings inside the tra
     firebase.getDocument('pulsecheck-coach-payout-states/coach_1__team_1').paidCents,
     406
   );
+});
+
+
+test('failed-invoice webhook suppresses dev delivery and ignores failure replay after payment', async () => {
+  const prodFirebase = createFirestoreAdminMock({ collections: {} });
+  const devFirebase = createFirestoreAdminMock({ collections: {
+    users: [{ id: 'athlete', data: { email: 'athlete@example.com' } }],
+    subscriptions: [{ id: 'athlete', data: { plans: [] } }],
+    'pulsecheck-athlete-app-entitlements': [],
+    'pulsecheck-teams': [{ id: 'team', data: { displayName: 'Test Team' } }],
+  } });
+  const Stripe = webhookStripeFactory();
+  Stripe.subscriptionsById.set('sub_failed', {
+    id: 'sub_failed', livemode: true, status: 'canceled', customer: 'cus_test',
+    current_period_end: Math.floor(Date.now() / 1000),
+    metadata: {
+      payment_type: 'pulsecheck_athlete_app_subscription', pulsecheckFirebaseMode: 'dev',
+      userId: 'athlete', pulsecheckTeamId: 'team', pulsecheckOrganizationId: 'org',
+    },
+    items: { data: [{ price: { id: 'price_test' } }] },
+  });
+  const invoice = { id: 'in_failed', subscription: 'sub_failed', status: 'open', livemode: true, amount_remaining: 4000 };
+  Stripe.invoicesById.set(invoice.id, invoice);
+  const webhook = loadStripeWebhook({ prodFirebase, devFirebase, Stripe });
+  const event = { httpMethod: 'POST', headers: { 'stripe-signature': 'sig' }, body: JSON.stringify({ type: 'invoice.payment_failed', data: { object: invoice } }) };
+  const result = await webhook.handler(event);
+  assert.equal(result.statusCode, 200);
+  assert.equal(devFirebase.getDocument('subscriptions/athlete').status, 'canceled');
+  assert.equal(devFirebase.getDocument('pulsecheck-team-payment-notifications/in_failed_email').status, 'suppressed');
+  assert.equal(prodFirebase.getDocument('pulsecheck-team-payment-notifications/in_failed_email'), undefined);
+
+  Stripe.invoicesById.set(invoice.id, { ...invoice, status: 'paid', paid: true, amount_remaining: 0 });
+  Stripe.subscriptionsById.get('sub_failed').status = 'active';
+  const replay = await webhook.handler(event);
+  assert.equal(replay.statusCode, 200);
+  // No stale-event reconciliation or additional notification attempts after settlement.
+  assert.equal(devFirebase.getDocument('pulsecheck-team-payment-notifications/in_failed_email').attempts, 1);
+});
+
+test('team recovery replaces a canceled completed checkout lock and reuses the new open session', async () => {
+  const collections = baseCollections();
+  collections['pulsecheck-team-memberships'].push({ id: 'team_1_mock-user', data: { userId: 'mock-user', teamId: 'team_1', organizationId: 'org_1', role: 'athlete', status: 'active' } });
+  Object.assign(collections['pulsecheck-teams'][0].data.commercialConfig, {
+    athleteAppSubscriptionEnabled: true, athleteAppSubscriptionMonthlyPriceCents: 4000,
+    athleteAppSubscriptionCurrency: 'usd', athleteAppSubscriptionOfferVersion: 1,
+  });
+  collections['pulsecheck-athlete-app-offers'] = [{ id: 'team_1', data: {
+    teamId: 'team_1', organizationId: 'org_1', enabled: true, status: 'active', monthlyPriceCents: 4000,
+    currency: 'usd', interval: 'month', version: 1, stripeByMode: { live: { active: true, priceId: 'price_team_40' } },
+  } }];
+  collections['pulsecheck-athlete-app-entitlements'] = [{ id: 'team_1_mock-user', data: { stripeSubscriptionId: 'sub_old', status: 'canceled' } }];
+  collections['pulsecheck-athlete-app-checkout-locks'] = [{ id: 'team_1_mock-user', data: {
+    status: 'complete', stripeSessionId: 'cs_old', userId: 'mock-user', teamId: 'team_1', inviteToken: 'redeemed_invite', offerVersion: 1, attempt: 1,
+  } }];
+  const firebase = createFirestoreAdminMock({ collections });
+  const sessions = new Map([['cs_old', { id: 'cs_old', status: 'complete', subscription: 'sub_old', client_reference_id: 'mock-user', metadata: { pulsecheckTeamId: 'team_1' } }]]);
+  const created = [];
+  let currentStatus = 'canceled';
+  function Stripe() { return {
+    subscriptions: { retrieve: async () => ({ id: 'sub_old', status: currentStatus, livemode: true, metadata: { userId: 'mock-user', pulsecheckTeamId: 'team_1' }, latest_invoice: { status: 'open', hosted_invoice_url: 'https://invoice.stripe.com/i/team_balance' } }) },
+    checkout: { sessions: {
+      retrieve: async (id) => sessions.get(id),
+      create: async (params, options) => {
+        created.push({ params, options });
+        const session = { id: 'cs_recovery', status: 'open', url: 'https://checkout.stripe.com/c/pay/recovery', client_reference_id: params.client_reference_id, metadata: params.metadata };
+        sessions.set(session.id, session);
+        return session;
+      },
+    } },
+  }; }
+  await withPatchedEnv(env, async () => {
+    const fn = loadCheckout(firebase, Stripe);
+    const request = post({ source: 'pulsecheck-coach-athlete-offer', teamBilling: true, teamId: 'team_1', priceId: 'price_attacker' });
+    const first = await fn.handler(request);
+    assert.equal(first.statusCode, 200);
+    assert.equal(created.length, 1);
+    assert.equal(created[0].params.line_items[0].price, 'price_team_40');
+    assert.match(created[0].options.idempotencyKey, /:2$/);
+    assert.equal(created[0].params.metadata.pulsecheckInviteToken, '');
+    assert.match(created[0].params.success_url, /PulseCheck\/team-billing\?teamId=team_1/);
+    const second = await fn.handler(request);
+    assert.equal(second.statusCode, 200);
+    assert.equal(JSON.parse(second.body).reused, true);
+    assert.equal(created.length, 1);
+
+    // A failed renewal must resolve to its existing hosted invoice, never create another subscription.
+    currentStatus = 'past_due';
+    const outstanding = await fn.handler(request);
+    assert.equal(outstanding.statusCode, 200);
+    assert.equal(JSON.parse(outstanding.body).url, 'https://invoice.stripe.com/i/team_balance');
+    assert.equal(created.length, 1);
+  });
+});
+
+test('late events for a replaced Stripe subscription preserve the current paid entitlement', async () => {
+  const firebase = createFirestoreAdminMock({ collections: { users: [{ id: 'athlete', data: {} }], subscriptions: [{ id: 'athlete', data: { plans: [] } }] } });
+  delete require.cache[LIB_PATH];
+  const lib = withModuleMocks({ './pulsecheck-coach-services': coachServicesMock(firebase) }, () => require(LIB_PATH));
+  const base = {
+    customer: 'cus_test', current_period_end: Math.floor(Date.now() / 1000) + 86400,
+    metadata: { payment_type: 'pulsecheck_athlete_app_subscription', userId: 'athlete', pulsecheckTeamId: 'team', pulsecheckOrganizationId: 'org' },
+    items: { data: [{ price: { id: 'price_team' } }] },
+  };
+  await lib.reconcileAthleteAppSubscription({ database: firebase.db, admin: firebase.admin, subscription: { ...base, id: 'sub_new', status: 'active', created: 200 }, source: 'invoice.paid' });
+  for (const status of ['canceled', 'past_due', 'active']) {
+    await lib.reconcileAthleteAppSubscription({ database: firebase.db, admin: firebase.admin, subscription: { ...base, id: 'sub_old', status, created: 100 }, source: 'late_event' });
+    assert.equal(firebase.getDocument('pulsecheck-athlete-app-entitlements/team_athlete').stripeSubscriptionId, 'sub_new');
+    assert.equal(firebase.getDocument('pulsecheck-athlete-app-entitlements/team_athlete').active, true);
+    assert.equal(firebase.getDocument('subscriptions/athlete').stripeSubscriptionId, 'sub_new');
+    assert.equal(firebase.getDocument('users/athlete').subscriptionType, 'Monthly Subscriber');
+  }
 });

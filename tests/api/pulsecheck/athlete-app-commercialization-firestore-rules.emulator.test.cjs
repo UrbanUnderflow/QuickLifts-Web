@@ -30,6 +30,7 @@ const adminEmail = 'platform-admin@fitwithpulse.test';
 
 const protectedDocuments = [
   ['pulsecheck-athlete-app-offers', teamId],
+  ['pulsecheck-team-payment-notifications', 'invoice-1_email'],
   ['pulsecheck-athlete-app-entitlements', `${teamId}_${athleteId}`],
   ['pulsecheck-athlete-app-revenue-events', 'invoice-1'],
   ['pulsecheck-athlete-app-checkouts', 'checkout-session-1'],

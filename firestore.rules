@@ -153,7 +153,9 @@ service cloud.firestore {
     }
 
     function isExplicitlyRuledCollection(collectionName) {
-      return collectionName in ['groupMeetBookingSettings', 'groupMeetBookings', 'groupMeetBookingLimits'] || collectionName == 'pulsecheck-restricted-questionnaire-submissions' || collectionName.matches('nora-red-team-.*') || collectionName in [
+      // Staff reports are accessible only through role-checked server APIs.
+
+      return collectionName == 'coach-team-insight-reports' || collectionName in ['groupMeetBookingSettings', 'groupMeetBookings', 'groupMeetBookingLimits'] || collectionName == 'pulsecheck-restricted-questionnaire-submissions' || collectionName.matches('nora-red-team-.*') || collectionName in [
         'admin-settings',
         'conversations',
         'conversationSummaries',
@@ -177,6 +179,7 @@ service cloud.firestore {
         'pulsecheck-athlete-app-checkouts',
         'pulsecheck-athlete-app-commercialization',
         'pulsecheck-athlete-app-entitlements',
+        'pulsecheck-team-payment-notifications',
         'pulsecheck-athlete-app-invite-checkout-locks',
         'pulsecheck-athlete-app-offers',
         'pulsecheck-athlete-app-revenue-events',
@@ -3033,6 +3036,11 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    // Billing notification delivery claims are trusted server state.
+    match /pulsecheck-team-payment-notifications/{notificationId} {
+      allow read, create, update, delete: if false;
+    }
+
     match /pulsecheck-athlete-app-entitlements/{entitlementId} {
       allow read, create, update, delete: if false;
     }
@@ -3452,6 +3460,7 @@ service cloud.firestore {
     match /groupMeetBookingSettings/{document=**} { allow read, write: if false; }
     match /groupMeetBookings/{document=**} { allow read, write: if false; }
     match /groupMeetBookingLimits/{document=**} { allow read, write: if false; }
+    match /coach-team-insight-reports/{document=**} { allow read, write: if false; }
 
     match /{collectionName}/{document=**} {
       allow read: if isSignedIn()

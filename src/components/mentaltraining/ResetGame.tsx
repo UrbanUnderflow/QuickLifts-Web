@@ -304,8 +304,8 @@ export const ResetGame: React.FC<ResetGameProps> = ({
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 overflow-hidden bg-[#09090c] text-white">
       <header className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-5 py-5">
-        <button aria-label="Close" onClick={onClose} className="grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/5"><X className="h-5 w-5" /></button>
-        <button aria-label={soundEnabled ? 'Mute' : 'Unmute'} onClick={() => setSoundEnabled((value) => !value)} className="grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/5">
+        <button data-reset-icon-button aria-label="Close" onClick={onClose} className="grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/5"><X className="h-5 w-5" /></button>
+        <button data-reset-icon-button aria-label={soundEnabled ? 'Mute' : 'Unmute'} onClick={() => setSoundEnabled((value) => !value)} className="grid h-11 w-11 place-items-center rounded-full border border-white/10 bg-white/5">
           {soundEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
         </button>
       </header>
@@ -329,7 +329,7 @@ export const ResetGame: React.FC<ResetGameProps> = ({
           )}
 
           {(stage === 'ready' || stage === 'hold' || stage === 'interruption' || stage === 'reset' || stage === 'response' || stage === 'feedback') && currentRound && (
-            <motion.section key={`${roundIndex}-${stage}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-2xl">
+            <motion.section key="active-trials" initial={false} className="w-full max-w-2xl">
               <div className="mb-7 flex justify-between text-sm text-white/45">
                 <span>{currentRound.isPractice ? `Practice ${roundIndex + 1} of 2` : `Trial ${roundIndex - 1} of ${scoredTrialCount}`}</span>
                 <span>{currentRound.isPractice ? 'Practice' : 'Scored'}</span>
@@ -355,8 +355,8 @@ export const ResetGame: React.FC<ResetGameProps> = ({
                 {stage === 'feedback' && <p className="text-xl text-white/70">{feedback}</p>}
               </div>
               <div className="mt-5 grid grid-cols-2 gap-4">
-                <button aria-label="Respond left" onClick={() => handleDirection('left')} disabled={stage !== 'response'} className="grid h-24 place-items-center border border-white/12 bg-white/[0.05] disabled:opacity-30"><ArrowLeft className="h-9 w-9" /></button>
-                <button aria-label="Respond right" onClick={() => handleDirection('right')} disabled={stage !== 'response'} className="grid h-24 place-items-center border border-white/12 bg-white/[0.05] disabled:opacity-30"><ArrowRight className="h-9 w-9" /></button>
+                <button data-reset-icon-button aria-label="Respond left" onClick={() => handleDirection('left')} disabled={stage !== 'response'} className="grid h-24 place-items-center border border-white/12 bg-white/[0.05] disabled:opacity-30"><ArrowLeft className="h-9 w-9" /></button>
+                <button data-reset-icon-button aria-label="Respond right" onClick={() => handleDirection('right')} disabled={stage !== 'response'} className="grid h-24 place-items-center border border-white/12 bg-white/[0.05] disabled:opacity-30"><ArrowRight className="h-9 w-9" /></button>
               </div>
             </motion.section>
           )}

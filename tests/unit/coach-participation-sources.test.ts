@@ -9,7 +9,7 @@ test('daily schedule begins at activation or team join, whichever is later',()=>
 });
 test('skill label follows pinned version even when latest issued skill belongs to prior pin',async()=>{
  const query:any={collection(){return this},doc(){return this},orderBy(){return this},limit(){return this},select(){return this},get:async()=>({docs:[{data:()=>({skillId:'old',versionId:'v1',skillName:'Stale skill',phase:'use_it'})}]})};
- const db:any={collection:()=>({doc:(section:string)=>section==='versions'?{collection:()=>({doc:()=>({get:async()=>({data:()=>({skills:[{id:'new',name:'New skill'}]})})})})}:query})};
+ const db:any={collection:()=>({doc:(section:string)=>section==='versions'?{collection:()=>({doc:()=>({collection:()=>({doc:()=>({get:async()=>({data:()=>undefined})})}),get:async()=>({data:()=>({skills:[{id:'new',name:'New skill'}]})})})})}:query})};
  assert.deepEqual(await loadCurrentLinearSkill(db,'a',{athleteId:'a',optedIn:true,currentSkill:{skillId:'new',versionId:'v2'}}),{id:'new',name:'New skill',phase:null});
 });
 test('absent wearable evidence remains unavailable and explicit disconnect remains distinct',async()=>{

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs>
+ <radialGradient id="body" cx="30%" cy="24%" r="85%"><stop stop-color="#dfed86"/><stop offset=".48" stop-color="#c5db59"/><stop offset=".82" stop-color="#acc33e"/><stop offset="1" stop-color="#8da330"/></radialGradient>
+ <filter id="worked" x="-10%" y="-10%" width="120%" height="120%">
+  <feTurbulence type="fractalNoise" baseFrequency=".065 .09" numOctaves="3" seed="18" result="grain"/>
+  <feDiffuseLighting in="grain" surfaceScale="1.2" diffuseConstant="1" lighting-color="#fff" result="relief"><feDistantLight azimuth="225" elevation="48"/></feDiffuseLighting>
+  <feComposite in="relief" in2="SourceGraphic" operator="in" result="clipped"/>
+  <feComposite in="SourceGraphic" in2="clipped" operator="arithmetic" k1=".5" k2=".5" k3="0" k4="0"/>
+ </filter>
+ <clipPath id="shape"><path d="M65 5C96 4 119 25 121 56C125 90 103 120 70 122C35 126 8 105 6 74C2 42 22 9 54 6Z"/></clipPath>
+ <filter id="soft"><feGaussianBlur stdDeviation=".65"/></filter>
+</defs>
+<g clip-path="url(#shape)">
+ <path fill="url(#body)" filter="url(#worked)" d="M0 0H128V128H0Z"/>
+ <!-- Shallow, uneven pressed planes: larger than the supporting grain. -->
+ <g fill="none" stroke-linecap="round" filter="url(#soft)">
+  <path d="M16 38Q29 20 48 22M25 17Q40 9 55 12M79 17Q94 20 102 31" stroke="#edf4b0" stroke-width="3" opacity=".43"/>
+  <path d="M17 41Q28 29 41 29M88 29Q102 34 105 44M12 72Q15 91 27 97M71 108Q91 110 103 95" stroke="#788d2d" stroke-width="2.5" opacity=".25"/>
+  <path d="M18 44Q30 32 41 32M86 32Q99 36 103 46M14 70Q18 88 29 94M70 105Q88 107 100 93" stroke="#ecf39e" stroke-width="2" opacity=".38"/>
+  <path d="M30 105Q45 115 60 111M108 55Q112 72 106 81M34 47Q40 40 49 40M69 77Q80 71 90 73" stroke="#879d32" stroke-width="2" opacity=".18"/>
+  <path d="M31 102Q46 111 59 108M105 54Q108 69 103 78M34 45Q40 38 48 38" stroke="#e6eea0" stroke-width="2.5" opacity=".3"/>
+ </g>
+</g>
+</svg>

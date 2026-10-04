@@ -750,7 +750,7 @@ const WearablesSetupPage: React.FC = () => {
 
       <header className={styles.header}>
         <Link href="/PulseCheck" className={styles.brandLink} aria-label="PulseCheck home">
-          <img src="/pulsecheck-youth/pulsecheck-wordmark.png" alt="PulseCheck" className={styles.wordmark} />
+          <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" className={styles.wordmark} />
         </Link>
         <div className={styles.headerActions}>
           <span className={styles.accountLabel}>Account setup</span>

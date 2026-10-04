@@ -147,11 +147,8 @@ export default function PulseCheckAthleteGuide() {
         <header className="relative z-10 border-b border-white/10 bg-[#090a0d]/85 backdrop-blur-xl">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-8">
             <Link href="/PulseCheck" className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#8b5cf6] to-[#5b3ac7] shadow-lg shadow-purple-950/40">
-                <Brain className="h-5 w-5" />
-              </span>
               <span>
-                <span className="block text-sm font-bold">PulseCheck</span>
+                <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
                 <span className="block text-[10px] uppercase tracking-[0.2em] text-zinc-500">
                   Athlete guide
                 </span>

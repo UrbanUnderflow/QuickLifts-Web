@@ -1486,11 +1486,8 @@ const PulseCheckAthleteDemo: React.FC = () => {
                 {currentAct !== 'intro' && (
                     <header className="relative z-20 flex items-center justify-between px-6 py-4 backdrop-blur-xl bg-zinc-900/30 border-b border-white/5">
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/15 flex items-center justify-center">
-                                <Brain className="w-4 h-4 text-[#E0FE10]" />
-                            </div>
                             <div>
-                                <h1 className="text-sm font-bold text-white">PulseCheck</h1>
+                                <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
                                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{ACT_LABEL[currentAct]}</p>
                             </div>
                         </div>

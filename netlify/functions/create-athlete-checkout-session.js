@@ -6,6 +6,7 @@
  */
 
 const Stripe = require('stripe');
+const { loadMemberCheckout } = require('./lib/pulsecheck-team-billing');
 const { admin, db, headers } = require('./config/firebase');
 const {
   resolveServerStripeMode,
@@ -224,6 +225,7 @@ const reserveCoachOfferCheckout = async ({
   offerVersion,
   redemptionMode,
   stripeClient,
+  recovery = false,
 }) => {
   const lockId = coachOfferCheckoutLockId(teamId, userId);
   const lockRef = database.collection('pulsecheck-athlete-app-checkout-locks').doc(lockId);
@@ -334,6 +336,22 @@ const reserveCoachOfferCheckout = async ({
           ? 'This single-use athlete invite already has a checkout in progress.'
           : 'An existing checkout must be completed or expire before starting another one.'
       );
+    }
+    if (session?.status === 'complete' && recovery && label === 'user') {
+      const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
+      if (!subscriptionId || normalizeString(session.client_reference_id) !== userId
+        || normalizeString(session.metadata?.pulsecheckTeamId) !== teamId) throw checkoutPendingError();
+      const previous = await stripeClient.subscriptions.retrieve(subscriptionId);
+      if (previous.metadata?.userId !== userId || previous.metadata?.pulsecheckTeamId !== teamId
+        || !['canceled', 'incomplete_expired'].includes(previous.status)) throw checkoutPendingError('Your existing subscription is still being confirmed.');
+      await database.runTransaction(async (transaction) => {
+        const latest = await transaction.get(ref);
+        const lock = latest.data() || {};
+        if (lock.stripeSessionId !== session.id || lock.status === 'creating') throw checkoutPendingError();
+        transaction.set(ref, { status: 'stale', leaseExpiresAtEpochSeconds: 0,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      });
+      return { current, session: null };
     }
     if (session?.status === 'complete') {
       throw checkoutPendingError(
@@ -922,7 +940,8 @@ const handler = async (event) => {
         databaseError.statusCode = 503;
         throw databaseError;
       }
-      const checkout = await loadCoachPricedInviteCheckout({
+      const isBillingRecovery = body.teamBilling === true;
+      const checkout = await (isBillingRecovery ? loadMemberCheckout : loadCoachPricedInviteCheckout)({
         database,
         userId,
         authenticatedEmail: checkoutAuthEmail,
@@ -930,7 +949,10 @@ const handler = async (event) => {
         inviteToken,
         requestedTeamId: teamId,
         stripeMode: serverStripe.mode,
+        stripe: serverStripe.stripe,
+        firebaseMode: coachOfferDevFirebase ? 'dev' : 'prod',
       });
+      if (checkout.recoveryUrl) return { statusCode: 200, headers, body: JSON.stringify({ url: checkout.recoveryUrl, checkoutUrl: checkout.recoveryUrl }) };
       const baseUrl = normalizeString(process.env.SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
       const offerId = normalizeString(checkout.offer.offerId || checkout.offer.id || checkout.teamId);
       const offerVersion = Math.max(0, Number(checkout.offer.version) || 0);
@@ -942,6 +964,7 @@ const handler = async (event) => {
         offerVersion,
         redemptionMode: checkout.invite?.redemptionMode,
         stripeClient: serverStripe.stripe,
+        recovery: isBillingRecovery,
       });
       if (reservation.session) {
         return {
@@ -976,8 +999,8 @@ const handler = async (event) => {
         checkoutAuthVerified: 'true',
       };
       const devFirebaseSuffix = coachOfferDevFirebase ? '&devFirebase=1' : '';
-      const successUrl = `${baseUrl}/PulseCheck/athlete-subscription-complete?session_id={CHECKOUT_SESSION_ID}&invite=${encodeURIComponent(checkout.inviteToken)}${devFirebaseSuffix}`;
-      const cancelUrl = `${baseUrl}/PulseCheck/athlete-offer/${encodeURIComponent(checkout.inviteToken)}?checkout=cancelled${devFirebaseSuffix}`;
+      const successUrl = isBillingRecovery ? `${baseUrl}/PulseCheck/team-billing?teamId=${encodeURIComponent(checkout.teamId)}&checkout=complete${devFirebaseSuffix}` : `${baseUrl}/PulseCheck/athlete-subscription-complete?session_id={CHECKOUT_SESSION_ID}&invite=${encodeURIComponent(checkout.inviteToken)}${devFirebaseSuffix}`;
+      const cancelUrl = isBillingRecovery ? `${baseUrl}/PulseCheck/team-billing?teamId=${encodeURIComponent(checkout.teamId)}&checkout=cancelled${devFirebaseSuffix}` : `${baseUrl}/PulseCheck/athlete-offer/${encodeURIComponent(checkout.inviteToken)}?checkout=cancelled${devFirebaseSuffix}`;
       let session;
       try {
         session = await serverStripe.stripe.checkout.sessions.create({

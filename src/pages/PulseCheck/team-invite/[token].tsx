@@ -1465,8 +1465,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
       <main className="relative mx-auto w-full max-w-6xl px-4 py-8 md:px-6 md:py-10">
         <div className="mb-6 flex items-center gap-3">
-          <img src="/pulsecheck-logo.svg" alt="PulseCheck" width={36} height={36} className="rounded-[10px]" />
-          <span className="text-base font-bold tracking-tight" style={{ fontFamily: 'Switzer, sans-serif' }}>PulseCheck</span>
+          <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
         </div>
         {isStaffInvite ? (
           renderStaffWizard()

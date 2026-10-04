@@ -353,9 +353,8 @@ const CoachLogin: NextPage = () => {
       <main className="relative z-10 mx-auto grid min-h-screen w-full max-w-6xl items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,500px)] lg:gap-16">
         <section className="hidden flex-col justify-center lg:flex">
           <div className="flex items-center gap-3">
-            <img src="/pulseCheckIcon.png" alt="PulseCheck" className="h-11 w-11 rounded-2xl" />
             <div>
-              <div className="text-sm font-semibold text-white">PulseCheck</div>
+              <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
               <div className="text-xs text-zinc-400">Coach dashboard and team workspace</div>
             </div>
           </div>

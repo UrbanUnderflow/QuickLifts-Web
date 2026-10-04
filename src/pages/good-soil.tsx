@@ -13,7 +13,7 @@ export default function GoodSoilPage() {
         <link rel="canonical" href={url} />
       </Head>
       <main className="good-soil">
-        <a className="brand" href="https://pulsecheckmind.ai">PulseCheck</a>
+        <a className="brand" href="https://pulsecheckmind.ai"><img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} /></a>
         <section aria-labelledby="welcome">
           <p className="eyebrow">GOOD SOIL</p>
           <h1 id="welcome">The conversation<br />starts here.</h1>

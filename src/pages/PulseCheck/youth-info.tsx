@@ -1000,7 +1000,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           className="yi-brand"
           aria-label={isPerformers ? 'PulseCheck for high-pressure performers' : isPro ? 'PulseCheck Pro information' : 'PulseCheck Youth home'}
         >
-          <img src="/pulsecheck-youth/pulsecheck-wordmark.png" alt="PulseCheck" />
+          <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" />
         </Link>
         <span className="yi-nav-label">
           {isPerformers ? 'WORK / SCHOOL / SPORT / LIFE' : isPro ? 'PRO / MENTAL PERFORMANCE' : 'YOUTH / MENTAL PERFORMANCE'}
@@ -1542,7 +1542,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
       </section>
 
       <footer className="yi-footer">
-        <img src="/pulsecheck-youth/pulsecheck-wordmark.png" alt="PulseCheck" />
+        <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" />
         <div>
           <Link href="/PulseCheck/privacy">Privacy</Link>
           <Link href="/PulseCheck/terms">Terms</Link>
@@ -1648,7 +1648,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           border-bottom: 1px solid rgba(255,255,255,.35);
         }
         .yi-brand { width: clamp(172px, 16vw, 242px); }
-        .yi-brand img { width: 100%; filter: brightness(0) invert(1); }
+        .yi-brand img { width: 100%; height: auto; }
         .yi-nav-label, .yi-nav-link {
           font: 600 11px/1 'DM Sans', sans-serif;
           letter-spacing: .15em;
@@ -2691,7 +2691,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         .yi-button--dark:hover { color: var(--yi-ink) !important; background: transparent; }
 
         .yi-footer { min-height: 110px; display: flex; justify-content: space-between; align-items: center; gap: 34px; padding: 34px clamp(34px, 7vw, 110px); color: #fff; background: var(--yi-ink); }
-        .yi-footer > img { width: 190px; filter: brightness(0) invert(1); }
+        .yi-footer > img { width: 190px; height: auto; }
         .yi-footer > div { display: flex; align-items: center; gap: 21px; color: #aaa7a2; font-size: 10px; }
         .yi-footer a { text-decoration: none; }
 

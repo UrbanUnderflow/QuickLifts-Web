@@ -302,9 +302,7 @@ function Reveal({
 function BrandMark() {
   return (
     <Link href="/PulseCheck/youth" className="pcy-brand" aria-label="PulseCheck Youth home">
-      <img src="/pulseCheckIcon.png" alt="" className="pcy-brand-icon" />
-      <span>
-        <strong>PulseCheck</strong>
+      <span><img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
         <small>Youth</small>
       </span>
     </Link>

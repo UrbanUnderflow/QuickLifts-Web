@@ -43,6 +43,8 @@ const {
   recordPaidAthleteAppInvoice,
 } = require('./lib/pulsecheck-athlete-app-offers');
 
+const { sendTeamPaymentFailureNotifications } = require('./lib/pulsecheck-team-payment-notifications');
+
 // Subscription type mappings
 const SubscriptionType = {
   unsubscribed: "Unsubscribed",
@@ -951,13 +953,28 @@ async function handleAthleteAppInvoicePaymentFailed(invoice) {
   const stripeClient = stripeClientForLivemode(invoice?.livemode);
   const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
   if (!isAthleteAppSubscription(subscription)) return false;
-  const { database } = athleteAppDatabase(subscription.metadata || {});
+  // Stripe may retry an old event after the invoice has already been paid.
+  const currentInvoice = await stripeClient.invoices.retrieve(invoice.id);
+  if (currentInvoice.paid || ['paid', 'void'].includes(currentInvoice.status) || Number(currentInvoice.amount_remaining) === 0) return true;
+  const { database, firebaseMode } = athleteAppDatabase(subscription.metadata || {});
   await reconcileAthleteAppSubscription({
     database,
     admin,
     subscription,
     source: 'invoice.payment_failed',
-    forcedStatus: 'past_due',
+    // Use current Stripe state, so delayed failures cannot revive canceled access
+    // or overwrite an active subscription whose newer invoice has been paid.
+  });
+  const currentEntitlement = await database.collection('pulsecheck-athlete-app-entitlements')
+    .doc(`${subscription.metadata.pulsecheckTeamId}_${subscription.metadata.userId}`).get();
+  if (currentEntitlement.exists && currentEntitlement.data().stripeSubscriptionId !== subscription.id) return true;
+  const app = getFirebaseAdminApp({ headers: { 'x-pulsecheck-firebase-mode': firebaseMode } });
+  await sendTeamPaymentFailureNotifications({
+    database,
+    messaging: app.messaging(),
+    invoice: currentInvoice,
+    subscription,
+    firebaseMode,
   });
   return true;
 }

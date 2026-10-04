@@ -33,7 +33,10 @@ export async function loadCurrentLinearSkill(db:firestore.Firestore,athleteId:st
  const definition=(version.data()?.skills||[]).find((skill:any)=>skill.id===pin.skillId);
  const assignment=latest.docs.map(d=>d.data()).find(d=>d.skillId===pin.skillId&&d.versionId===pin.versionId);
  const name=definition?.name||assignment?.skillName;
- return name?{id:pin.skillId,name:String(name).slice(0,160),phase:assignment?.phase||null}:null;
+ if(!name)return null;
+ const content=version.data()?.contentSnapshots?.[pin.skillId] || (await db.collection('pulsecheck-linear-curriculum').doc('versions').collection('items').doc(pin.versionId).collection('content').doc(pin.skillId).get()).data()?.contentSnapshot;
+ const today=new Date().toISOString().slice(0,10);
+ return {id:pin.skillId,name:String(name).slice(0,160),phase:assignment?.phase||null,...(content&&definition?{preview:{id:`preview-${pin.versionId}-${pin.skillId}`,versionId:pin.versionId,skillId:pin.skillId,skillName:String(name),skillType:definition.type,phase:definition.type==='simulation'?'practice':'learn',sourceDate:today,timezone:'UTC',windowStart:today,windowEnd:today,completedDayCount:0,requiredDays:5,phaseCompletedToday:false,contentSnapshot:content,clientContractVersion:1} as import('../../api/firebase/dailyCurriculum/linearRuntimeClient').LinearRuntimeAssignment}:{})};
 }
 export const normalizeWearableFamily=(value:unknown):string=>{
  const family=String(value||'').toLowerCase().replace(/-/g,'_');
@@ -60,19 +63,20 @@ export function snapshotFromAllowedSources(snapshot:Record<string,any>,allowed:S
  return {domains,freshness:snapshot.freshness,provenance:snapshot.provenance,sourceFamily:snapshot.sourceFamily};
 }
 /** Reads presence and lifecycle only into the public DTO. Health measurements never leave this adapter. */
-export async function loadWearableParticipation(db:firestore.Firestore,athleteId:string,teamId:string,organizationId:string,dates:string[]):Promise<{metric:CoverageMetric;days:Set<string>}> {
+export async function loadWearableParticipation(db:firestore.Firestore,athleteId:string,teamId:string,organizationId:string,dates:string[]):Promise<{metric:CoverageMetric;days:Set<string>;periods:Record<string,{daytime:boolean;overnight:boolean}>}> {
  const [snapshots,lifecycle]=await Promise.all([
  dates.length?db.getAll(...dates.map(d=>db.collection('health-context-snapshots').doc(`${athleteId}_daily_${d}`))):Promise.resolve([]),
  loadWearableLifecycle(db,athleteId,teamId,organizationId)
  ]);
  const days=new Set<string>();
- if(!lifecycle.allowed.size)return {days,metric:{completed:0,expected:null,rate:null,status:lifecycle.blocked.size?'not_connected':'unavailable',reason:lifecycle.blocked.size?'No currently connected wearable source.':'Current wearable connection has not been verified.'}};
- snapshots.forEach((snapshot,i)=>{const data=snapshot.data();if(data&&sourceScope(data,athleteId,teamId,organizationId)){const coverage=resolveWearableCoverageFromSnapshot(snapshotFromAllowedSources(data,lifecycle.allowed));if(coverage.hasDaytime||coverage.hasOvernight)days.add(dates[i]);}});
+ const periods:Record<string,{daytime:boolean;overnight:boolean}>={};
+ if(!lifecycle.allowed.size)return {days,periods,metric:{completed:0,expected:null,rate:null,status:lifecycle.blocked.size?'not_connected':'unavailable',reason:lifecycle.blocked.size?'No currently connected wearable source.':'Current wearable connection has not been verified.'}};
+ snapshots.forEach((snapshot,i)=>{const data=snapshot.data();if(data&&sourceScope(data,athleteId,teamId,organizationId)){const coverage=resolveWearableCoverageFromSnapshot(snapshotFromAllowedSources(data,lifecycle.allowed));periods[dates[i]]={daytime:coverage.hasDaytime,overnight:coverage.hasOvernight};if(coverage.hasDaytime||coverage.hasOvernight)days.add(dates[i]);}});
  const connectionDates=lifecycle.current.map(d=>participationTimestamp(d.connectedAt)).filter((v):v is number=>v!==null);
  const start=connectionDates.length?new Date(Math.min(...connectionDates)).toISOString().slice(0,10):null;
  const expected=dates.filter(date=>!start||date>=start);
  const metric=coverageForDays(days,expected);
  if(!days.size){metric.status='sync_pending';metric.reason='A wearable is connected. Measured data has not arrived for this window.';}
  else metric.reason='Measured days from currently connected wearable sources.';
- return {metric,days};
+ return {metric,days,periods};
 }
