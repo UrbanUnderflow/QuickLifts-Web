@@ -617,11 +617,8 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
 
       <div style={{ position: 'relative', zIndex: 1, maxWidth: 620, margin: '0 auto', padding: '48px 20px 40px', display: 'grid', gap: 22 }} className={stageAccent}>
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(224,254,16,0.1)', border: '1px solid rgba(224,254,16,0.25)', flexShrink: 0 }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="#E0FE10" strokeWidth={2.5} width={17} height={17}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
-          </div>
           <div>
-            <p className="cau-eyebrow" style={{ color: '#E0FE10' }}>PulseCheck</p>
+            <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, height: 'auto' }} />
             <p className="cau-muted" style={{ fontSize: 12.5 }}>CAU baseline questionnaire</p>
           </div>
         </motion.div>
