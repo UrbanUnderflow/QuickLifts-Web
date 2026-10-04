@@ -55,6 +55,8 @@ export default function TeamBillingPage() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Please try again.'); setBusy(false); }
   };
   const active = billing?.status === 'active' || billing?.status === 'trialing';
+  const canceled = billing?.status === 'canceled' || billing?.status === 'incomplete_expired';
+  const paymentLabel = canceled ? 'Restart membership' : billing?.status === 'not_subscribed' ? 'Start membership' : billing?.status === 'incomplete' ? 'Complete payment' : 'Update payment';
   const price = billing?.price ? new Intl.NumberFormat('en-US', { style: 'currency', currency: billing.price.currency }).format(billing.price.amountCents / 100) : '';
   return (
     <div className={styles.page}>
@@ -77,7 +79,7 @@ export default function TeamBillingPage() {
               : <span className={styles.sectionIcon}>{active ? <CheckCircle2 size={22} /> : <LockKeyhole size={22} />}</span>}
             <p className={styles.eyebrow}>{billing?.team?.name || 'Team membership'}</p>
           </div>
-          <h1 id="payment-title">{active ? 'You’re ready to train.' : user ? 'Your team. Your training.' : 'Get back to your team.'}</h1>
+          <h1 id="payment-title">{active ? 'You’re ready to train.' : canceled ? 'Your membership was canceled.' : user ? 'Your team. Your training.' : 'Get back to your team.'}</h1>
           {!ready && <p className={styles.loading} role="status"><Loader2 size={18} className={styles.spinner} /> Loading your account…</p>}
           {ready && !user && <>
             <p className={styles.description}>Sign in with your app account to review your team payment.</p>
@@ -103,10 +105,10 @@ export default function TeamBillingPage() {
           </>}
           {user && !billing && !error && <p className={styles.loading} role="status"><Loader2 size={18} className={styles.spinner} /> Checking your team payment…</p>}
           {billing?.isTeamAthlete && <>
-            <p className={styles.description}>{active ? 'Your team subscription is active. Return to the app to continue.' : billing.paymentUrl ? 'Review your payment to restore your team access.' : 'Your team manages your access. Contact your coach for help getting back in.'}</p>
+            <p className={styles.description}>{active ? 'Your team subscription is active. Return to the app to continue.' : billing.paymentUrl ? canceled ? 'Your team access has ended. Restart your membership through secure Stripe checkout to get back to training.' : 'Update your payment through Stripe to restore your team access.' : 'Your team manages your access. Contact your coach for help getting back in.'}</p>
             {price && <div className={styles.plan}><span>Team subscription</span><p>{price}<span> / month</span></p><span>{billing.team?.name}</span></div>}
             <div className={styles.actions}>
-              {!active && billing.price && billing.paymentUrl && <button className={styles.primary} disabled={busy} onClick={() => void pay()}>{busy ? <><Loader2 size={18} className={styles.spinner} /> Opening secure payment…</> : <>Review payment <ArrowRight size={18} /></>}</button>}
+              {!active && billing.price && billing.paymentUrl && <button className={styles.primary} disabled={busy} onClick={() => void pay()}>{busy ? <><Loader2 size={18} className={styles.spinner} /> Opening secure payment…</> : <>{paymentLabel} <ArrowRight size={18} /></>}</button>}
               {router.query.checkout === 'complete' && !active && <p className={styles.notice} role="status">Your payment is being confirmed. Refresh your access in a moment.</p>}
               <button className={styles.secondary} disabled={busy} onClick={() => void refresh()}>Refresh access</button>
               <a className={styles.textLink} href="pulsecheck://open">Return to the app <ArrowRight size={16} /></a>

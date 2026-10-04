@@ -15,13 +15,14 @@ async function loadTeamInvoices({ database, userId, teamId, stripe, stripeMode, 
     const record = (await database.collection('subscriptions').doc(userId).get()).data() || {};
     if (record.pulseCheckTeamId === context.team.id) subscriptionId = record.stripeSubscriptionId;
   }
-  if (!subscriptionId) return { invoices: [], nextCursor: null };
+  if (!subscriptionId) return { invoices: [], nextCursor: null, ...(cursor == null ? { memberships: [] } : {}) };
   const matches = sub => sub?.metadata?.userId === userId && sub.metadata.pulsecheckTeamId === context.team.id
     && (sub.metadata.pulsecheckFirebaseMode || 'prod') === firebaseMode
     && sub.livemode === (stripeMode === 'live');
   const anchor = await stripe.subscriptions.retrieve(subscriptionId);
   if (!matches(anchor) || !idOf(anchor.customer)) throw fail('Your subscription could not be verified.');
   const customers = [idOf(anchor.customer)];
+  const membershipSubscriptions = new Map([[subscriptionId, anchor]]);
   // Checkout can create a new customer on restart. Discover earlier subscriptions by
   // server-owned metadata, then verify their identity/environment again before use.
   const escapeSearch = value => String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -32,7 +33,10 @@ async function loadTeamInvoices({ database, userId, teamId, stripe, stripeMode, 
     const found = await stripe.subscriptions.search({ query, limit: 100, ...(searchPage ? {page:searchPage} : {}) });
     for (const sub of found.data) {
       const customerId = idOf(sub.customer);
-      if (matches(sub) && customerId && !customers.includes(customerId)) customers.push(customerId);
+      if (matches(sub) && customerId) {
+        if (!customers.includes(customerId)) customers.push(customerId);
+        if (typeof sub.id === 'string' && !membershipSubscriptions.has(sub.id)) membershipSubscriptions.set(sub.id, sub);
+      }
     }
     searchPage = found.has_more ? found.next_page : null;
     if (found.has_more && (!searchPage || ++searched >= 10)) throw fail('Your payment history is temporarily unavailable.', 503);
@@ -82,6 +86,15 @@ async function loadTeamInvoices({ database, userId, teamId, stripe, stripeMode, 
   }
   const hasMore = pages.some(({customer}) => !positions[customer]?.done);
   const encoded = hasMore && Buffer.from(JSON.stringify(positions)).toString('base64url');
-  return { invoices, nextCursor: encoded ? `${encoded}.${signature(encoded)}` : null };
+  const timestamp = value => Number.isSafeInteger(value) && value > 0 ? value : null;
+  const memberships = Array.from(membershipSubscriptions, ([id, sub]) => ({
+    id, status: typeof sub.status === 'string' ? sub.status : null,
+    startedAt: timestamp(sub.start_date), endedAt: timestamp(sub.ended_at),
+    canceledAt: timestamp(sub.canceled_at),
+    cancellationReason: typeof sub.cancellation_details?.reason === 'string' ? sub.cancellation_details.reason : null,
+  })).sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+  return { invoices, nextCursor: encoded ? `${encoded}.${signature(encoded)}` : null,
+    ...(cursor == null ? { memberships } : {}) };
+
 }
 module.exports = { loadTeamInvoices };
