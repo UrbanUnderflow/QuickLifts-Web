@@ -5,7 +5,7 @@ import ts from 'typescript';
 const source = fs.readFileSync(new URL('../../src/pages/PipeLists.tsx', import.meta.url), 'utf8');
 const stages = source.slice(source.indexOf('const legacyPilotContractStages:'), source.indexOf('const vcStages:'));
 const normalizer = source.slice(source.indexOf('const normalizeStageId ='), source.indexOf('const normalizeActivityLog ='));
-const api = new Function(ts.transpile(stages + normalizer + '\nreturn { pilotContractStages, contractStages, normalizeStageId, needsUniversityStageMigration, reconcileUniversityStages };'))();
+const api = new Function(ts.transpile(stages + normalizer + '\nreturn { pilotContractStages, contractStages, normalizeStageId, needsUniversityStageMigration, reconcileUniversityStages, isSportsMedicineList, reconcileSportsMedicineStages, sportsMedicineLegacyStages };'))();
 
 test('university stages follow the requested sequence and retain a lost/paused destination', () => {
   assert.deepEqual(api.pilotContractStages.map((s: any) => s.id), ['identified','outreach-queued','cold-email-sent','engaged','meeting-scheduled','proposal-sent','negotiating','pilot-agreed','contract-signed','pilot-active','pilot-complete','closed-lost-paused']);
@@ -62,4 +62,23 @@ test('unknown persisted item stages are not silently reassigned when their confi
   assert.equal(api.normalizeStageId('', api.pilotContractStages, true), 'identified');
   assert.equal(api.normalizeStageId('in-review', api.pilotContractStages), 'engaged');
   assert.equal(api.normalizeStageId('won', api.pilotContractStages), 'pilot-active');
+});
+
+
+test('sports medicine and performance partner lists use university stages and migrate generic assignments', () => {
+  for (const name of ['Sports Medicine', 'Sports Medicine Clinics', 'Sports Performance Clinics']) {
+    const list = { templateKey: 'partner', name, stages: [{ id: 'sourced' }, { id: 'contacted' }, { id: 'in-review' }, { id: 'negotiating' }, { id: 'won' }, { id: 'parked' }], items: [{ stage: 'contacted' }] };
+    assert.equal(api.isSportsMedicineList(list), true);
+    assert.equal(api.needsUniversityStageMigration([list]), true);
+    const stages = api.reconcileSportsMedicineStages(list.stages);
+    assert.deepEqual(stages, api.pilotContractStages);
+    const items = list.items.map(item => ({ stage: api.normalizeStageId(api.sportsMedicineLegacyStages[item.stage] || item.stage, stages) }));
+    assert.equal(items[0].stage, 'engaged');
+    assert.equal(api.needsUniversityStageMigration([{ ...list, stages, items }]), false);
+  }
+  assert.equal(api.isSportsMedicineList({ templateKey: 'partner', name: 'Strategic Partners' }), false);
+  assert.equal(api.isSportsMedicineList({ templateKey: 'contacts', name: 'Sports Medicine Contacts' }), false);
+  assert.equal(api.sportsMedicineLegacyStages.sourced, 'identified');
+  assert.equal(api.sportsMedicineLegacyStages.parked, 'closed-lost-paused');
+  assert.equal(api.sportsMedicineLegacyStages.won, 'pilot-active');
 });

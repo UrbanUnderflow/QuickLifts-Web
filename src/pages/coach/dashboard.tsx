@@ -1,6 +1,7 @@
 import TeamInsightReport from '../../components/coach/TeamInsightReport';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
+import { resolveProductConfig, type ProductBrand } from '../../lib/pulsecheck/productConfig';
 import clay from '../../components/coach/ClayDashboard.module.css';
 import { demoTeamParticipation, demoTeamWellbeing } from '../../components/coach/clayDashboardDemoData';
 import ClayParticipationViews, { ClayParticipationReportSummary } from '../../components/coach/ClayParticipationViews';
@@ -946,6 +947,7 @@ type CoachDashboardTeamContext = {
   organizationId: string;
   teamId: string;
   organizationName: string;
+  productBrand: ProductBrand;
   teamName: string;
   legacyCoachId?: string;
   commercialConfig: PulseCheckTeamCommercialConfig;
@@ -961,6 +963,7 @@ const DEMO_COACH_TEAM_CONTEXT: CoachDashboardTeamContext = {
   organizationId: 'demo-organization',
   teamId: 'demo-team',
   organizationName: 'Demo Organization',
+  productBrand: 'athleticmind',
   teamName: 'Demo Team',
   commercialConfig: {
     ...getDefaultPulseCheckTeamCommercialConfig(),
@@ -1017,6 +1020,8 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   const activeTeamId = isDemo ? DEMO_COACH_TEAM_CONTEXT.teamId : selectedTeamId || '';
   const teamContext =
     resolvedTeamContexts.find((context) => context.teamId === activeTeamId) || null;
+
+  const dashboardProduct = resolveProductConfig(teamContext);
 
   const referralLinksEnabled =
     isDemo || resolvePulseCheckReferralVisibility(teamContext?.commercialConfig).any;
@@ -1243,7 +1248,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
 
   const Sidebar = (
     <div className="flex flex-col h-full py-4 px-3">
-      <a href="/coach/dashboard" className={clay.wordmark}>AthleticMind</a>
+      <a href="/coach/dashboard" className={clay.wordmark}>{dashboardProduct.displayName}</a>
 
       {/* Coach identity — tap to edit profile */}
       <button
@@ -1299,6 +1304,9 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
       <div
         className={`${clay.root} clay-dashboard min-h-screen`}
       >
+        <Head>
+          <title>{`Team dashboard | ${dashboardProduct.displayName}`}</title>
+        </Head>
         <div className="flex min-h-screen">
           {/* Desktop sidebar */}
           <aside className={`${clay.sidebar} hidden md:flex w-[240px] flex-shrink-0 flex-col`}>
@@ -1725,6 +1733,7 @@ const CoachDashboard: React.FC = () => {
                 organizationId: membership.organizationId,
                 teamId: membership.teamId,
                 organizationName: organization.displayName || 'your organization',
+                productBrand: resolveProductConfig(organization).brand,
                 teamName: team.displayName || 'your team',
                 legacyCoachId: team.legacyCoachId,
                 commercialConfig: team.commercialConfig,
@@ -1963,7 +1972,7 @@ const CoachDashboard: React.FC = () => {
   return (
     <CoachProtectedRoute requiresActiveSubscription={false}>
       <Head>
-        <title>Team dashboard | AthleticMind</title>
+        <title>{`Team dashboard | ${resolveProductConfig(selectedTeamAccess?.context).displayName}`}</title>
       </Head>
       {trainingMode === null ? (
         <div className="min-h-screen flex items-center justify-center bg-[#0a0a0f]">

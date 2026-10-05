@@ -1,3 +1,4 @@
+const { resolveProgramProductConfig, resolveIncidentSupportRoute } = require('./lib/program-product-config');
 const { clinicalAuthorizationAllowsTransfer } = require('./lib/clinical-authorization');
 /**
  * PulseCheck Escalation Handler Function
@@ -560,6 +561,7 @@ async function buildEscalationSupportOptions({
     preferredPilotId: escalationData?.pilotId || null,
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
+    escalationData,
   }, runtimeDb);
   const clinicalRouteLocked = escalationRequiresLockedClinicalRoute(escalationData);
   const teamId = normalizeString(escalationData?.teamId || resolvedSupportContext?.teamId);
@@ -927,6 +929,8 @@ function buildEscalationRecordPayload({
   };
 
   return {
+    ...(existingRecord?.supportRoute ? { supportRoute: existingRecord.supportRoute } : {}),
+    ...(existingRecord?.productBrand ? { productBrand: existingRecord.productBrand } : {}),
     userId,
     conversationId,
     tier: model.tier,
@@ -1017,6 +1021,7 @@ async function resolveEscalationSupportContext({
   preferredPilotId = null,
   preferredTeamMembershipId = null,
   preferredTeamId = null,
+  escalationData = null,
 }, runtimeDb = db) {
   let pilotContext = null;
   try {
@@ -1035,7 +1040,7 @@ async function resolveEscalationSupportContext({
   const teamId = normalizeString(preferredTeamId) || normalizeString(pilotContext?.teamId);
   if (!teamId) {
     return {
-      route: 'clinician',
+      route: resolveIncidentSupportRoute(escalationData, { escalationModel: 'aunt-edna' }),
       teamId: '',
       team: null,
       pilotContext,
@@ -1050,8 +1055,11 @@ async function resolveEscalationSupportContext({
     team = null;
   }
 
+  const product = await resolveProgramProductConfig(runtimeDb, { team, teamId, organizationId: pilotContext?.organizationId });
+
   return {
-    route: normalizeTeamEscalationRoute(team?.defaultEscalationRoute),
+    route: resolveIncidentSupportRoute(escalationData, product, normalizeTeamEscalationRoute(team?.defaultEscalationRoute)),
+    product,
     teamId,
     team,
     pilotContext,
@@ -1532,7 +1540,17 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
     preferredPilotId: escalationData?.pilotId || null,
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
+    escalationData: createdNewRecord ? null : escalationData,
   }, runtimeDb);
+  if (!escalationData.supportRoute) {
+    // Snapshot at creation, before any consent or external handoff.
+    escalationData.supportRoute = supportContext.route;
+    escalationData.productBrand = supportContext.product?.brand || 'athleticmind';
+    await runtimeDb.collection('escalation-records').doc(escalationId).set({
+      supportRoute: escalationData.supportRoute,
+      productBrand: escalationData.productBrand,
+    }, { merge: true });
+  }
   const supportOptionsPayload = activeTier === EscalationTier.ElevatedRisk
     ? await buildEscalationSupportOptions({
         athleteId: userId,
@@ -1689,6 +1707,7 @@ async function handleSupportOptions(body, runtimeDb = db) {
     preferredPilotId: escalationData?.pilotId || null,
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
+    escalationData,
   }, runtimeDb);
   const payload = await buildEscalationSupportOptions({
     athleteId: normalizedUserId,
@@ -1739,10 +1758,11 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
         preferredPilotId: current?.pilotId || null,
         preferredTeamMembershipId: current?.teamMembershipId || null,
         preferredTeamId: current?.teamId || null,
+        escalationData: current,
       }, runtimeDb);
       selectedSupportOptionsPayload = await buildEscalationSupportOptions({
         athleteId: userId,
-        escalationData: current,
+            escalationData: current,
         supportContext,
       }, runtimeDb);
       selectedSupportOption = chooseSupportOption(selectedSupportOptionsPayload, requestedSupportOptionId);
@@ -1920,6 +1940,7 @@ async function handleConsent(body, runtimeDb = db, triggerHandoff = triggerEleva
         preferredPilotId: data?.pilotId || null,
         preferredTeamMembershipId: data?.teamMembershipId || null,
         preferredTeamId: data?.teamId || null,
+        escalationData: data,
       }, runtimeDb);
       handoffResult = await triggerHandoff(
         userId,
@@ -2086,6 +2107,7 @@ async function handleClinicalHandoff(body) {
     preferredPilotId: escalationData?.pilotId || null,
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
+    escalationData,
   });
 
   // Build handoff payload
@@ -3181,6 +3203,7 @@ async function performClinicalHandoff(
     preferredPilotId: escalationData?.pilotId || null,
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
+    escalationData,
   }, runtimeDb);
   const selectedSupportOption = supportContext?.selectedSupportOption
     || supportSelectionFromRecord(escalationData)
@@ -3475,6 +3498,7 @@ async function triggerCriticalHandoff(userId, conversationId, escalationId, esca
     preferredPilotId: escalationData?.pilotId || null,
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
+    escalationData,
   }, runtimeDb);
 
   const result = resolvedSupportContext.route === 'hotline'
@@ -3503,6 +3527,7 @@ async function triggerElevatedHandoff(userId, conversationId, escalationId, esca
     preferredPilotId: escalationData?.pilotId || null,
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
+    escalationData,
   }, runtimeDb);
   const selectedStaffUserId = selectedStaffUserIdFromSupportContext(escalationData, resolvedSupportContext);
 
@@ -3612,6 +3637,7 @@ async function createEscalationFromTrustedRuntime(body, runtimeDb, runtimeOption
 }
 
 exports.runtimeHelpers = {
+  resolveEscalationSupportContext,
   notifyCoach,
   authorizeEscalationAction,
   buildEscalationSupportOptions,

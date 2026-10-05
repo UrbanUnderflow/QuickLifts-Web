@@ -3,7 +3,9 @@ import { ArrowUpRight, Download, Loader2 } from 'lucide-react';
 import styles from '../../../pages/PulseCheck/team-billing.module.css';
 
 type Invoice = { id: string; number: string | null; created: number; currency: string; amountPaid: number; amountDue: number; total: number; status: string; hostedInvoiceUrl: string | null; invoicePdf: string | null };
-type History = { invoices: Invoice[]; nextCursor: string | null };
+type Membership = { id: string; status: string; startedAt: number | null; endedAt: number | null; canceledAt: number | null; cancellationReason: string | null };
+type History = { invoices: Invoice[]; nextCursor: string | null; memberships?: Membership[] };
+const dateLabel = (date: number) => new Date(date * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 const statusLabels: Record<string, string> = { paid: 'Paid', open: 'Payment due', void: 'Voided', uncollectible: 'Uncollectible', draft: 'Draft' };
 const stripeLink = (value: string | null, pdf = false) => {
   try { const url = new URL(value || ''); return url.protocol === 'https:' && (pdf ? ['pay.stripe.com', 'invoice.stripe.com'] : ['invoice.stripe.com']).includes(url.hostname) ? url.href : undefined; } catch { return undefined; }
@@ -24,14 +26,22 @@ export default function PaymentHistory({ teamId, request }: { teamId: string; re
     inFlight.current = true; setLoading(true); setError('');
     try {
       const result = await request('get-pulsecheck-athlete-invoices', { teamId, ...(cursor ? { cursor } : {}) });
-      if (alive.current) setHistory(previous => ({ invoices: cursor ? [...previous.invoices, ...result.invoices.filter(item => !previous.invoices.some(old => old.id === item.id))] : result.invoices, nextCursor: result.nextCursor }));
+      if (alive.current) setHistory(previous => ({ invoices: cursor ? [...previous.invoices, ...result.invoices.filter(item => !previous.invoices.some(old => old.id === item.id))] : result.invoices, nextCursor: result.nextCursor, memberships: result.memberships ?? previous.memberships }));
     } catch { if (alive.current) setError('Your payment history could not be loaded. Please try again.'); }
     finally { inFlight.current = false; if (alive.current) setLoading(false); }
   }, [request, teamId]);
   useEffect(() => { alive.current = true; void load(); return () => { alive.current = false; }; }, [load]);
   return <section className={`${styles.card} ${styles.history}`} aria-labelledby="history-title" aria-busy={loading}>
-    <h2 id="history-title">Payment history</h2>
-    <p className={styles.description}>Invoices for your team membership.</p>
+    <h2 id="history-title">Membership history</h2>
+    <p className={styles.description}>Your membership dates and invoices.</p>
+    {!!history.memberships?.length && <ul className={styles.membershipList}>{history.memberships.map(membership => <li key={membership.id}>
+      <strong>{membership.status === 'canceled' ? 'Membership canceled' : membership.status === 'active' || membership.status === 'trialing' ? 'Current membership' : 'Membership'}</strong>
+      <p>{membership.startedAt ? `Started ${dateLabel(membership.startedAt)}` : 'Start date unavailable'}{membership.endedAt ? ` · Ended ${dateLabel(membership.endedAt)}` : ''}</p>
+      {membership.status === 'canceled' && !membership.endedAt && membership.canceledAt && <p>Cancellation recorded {dateLabel(membership.canceledAt)}</p>}
+      {membership.cancellationReason === 'payment_failed' && <p className={styles.cancellationNote}>Canceled after payment could not be collected.</p>}
+      {membership.status !== 'canceled' && membership.canceledAt && <p>Cancellation requested {dateLabel(membership.canceledAt)}</p>}
+    </li>)}</ul>}
+    <h3 className={styles.invoiceHeading}>Invoices</h3>
     {history.invoices.length > 0 && <ul className={styles.invoiceList}>{history.invoices.map(invoice => {
       const view = stripeLink(invoice.hostedInvoiceUrl);
       const pdf = stripeLink(invoice.invoicePdf, true);

@@ -201,6 +201,7 @@ function createClinicalRuntimeDb(initialRecord = {}) {
         };
       }
 
+      if (name === 'pulsecheck-organizations') return { doc: () => ({ get: async () => ({ exists: true, data: () => state.organization || {} }) }) };
       if (name === 'pulsecheck-teams') {
         return {
           doc(id) {
@@ -1443,4 +1444,17 @@ test('journal escalations are refused when the entry does not belong to the athl
     }, db),
     (error) => error.statusCode === 403,
   );
+});
+
+test('program brand controls new routes while existing cases retain their route', async () => {
+  const { db, state } = createClinicalRuntimeDb();
+  state.team = { id: 'team-1', organizationId: 'organization-1', defaultEscalationRoute: 'clinician' };
+  state.organization = { productBrand: 'pulsecheck', appBranding: { pulsecheck: 'athleticmind' } };
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  const context = { athleteId: 'athlete-1', preferredTeamId: 'team-1' };
+  assert.equal((await runtimeHelpers.resolveEscalationSupportContext(context, db)).route, 'hotline');
+  assert.equal((await runtimeHelpers.resolveEscalationSupportContext({ ...context, escalationData: { supportRoute: 'clinician' } }, db)).route, 'clinician');
+  state.organization = { productBrand: 'athleticmind' };
+  assert.equal((await runtimeHelpers.resolveEscalationSupportContext(context, db)).route, 'clinician');
+  assert.equal((await runtimeHelpers.resolveEscalationSupportContext({ ...context, escalationData: { supportRoute: 'hotline' } }, db)).route, 'hotline');
 });

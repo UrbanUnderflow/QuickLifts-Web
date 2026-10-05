@@ -14,7 +14,7 @@ function fixture(data = [], subscriptions = {}, hasMore = false) {
   }});
   const calls = [];
   return { database: db, userId: 'athlete', teamId: 'team', stripeMode: 'live', firebaseMode: 'prod', cursorSecret: 'test-secret', calls,
-    stripe: { subscriptions: { search: async () => ({data:Object.values(subscriptions),has_more:false}), retrieve: async id => subscriptions[id] || sub() }, invoices: { list: async args => { calls.push(args); return {data,has_more:hasMore}; } } } };
+    stripe: { subscriptions: { search: async () => ({data:Object.entries(subscriptions).map(([id,record])=>({id,...record})),has_more:false}), retrieve: async id => subscriptions[id] || sub() }, invoices: { list: async args => { calls.push(args); return {data,has_more:hasMore}; } } } };
 }
 test('returns canceled/restarted subscription history and both Stripe link types', async () => {
   const args = fixture([invoice('in_old', 'sub_old'), invoice('in_new')], { sub_old: {...sub(),status:'canceled'} });
@@ -114,4 +114,26 @@ test('same-second invoices retain Stripe stream order at page boundaries', async
   const second=await loadTeamInvoices({...args,cursor:first.nextCursor});
   assert.deepEqual([...first.invoices,...second.invoices].map(x=>x.id),all.map(x=>x.id));
   assert.equal(second.nextCursor,null);
+});
+test('membership history includes ended and restarted periods without treating scheduled cancellation as an end', async () => {
+  const args = fixture([invoice('in_123')], {
+    sub_current: {...sub(),status:'active',start_date:300,canceled_at:400,ended_at:null,cancel_at_period_end:true},
+    sub_old: {...sub({},'cus_old'),status:'canceled',start_date:100,canceled_at:180,ended_at:200,cancellation_details:{reason:'payment_failed'}},
+    sub_foreign: {...sub({userId:'other'}),status:'canceled',start_date:500,ended_at:600}
+  },true);
+  const first = await loadTeamInvoices(args);
+  assert.deepEqual(first.memberships,[
+    {id:'sub_current',status:'active',startedAt:300,endedAt:null,canceledAt:400,cancellationReason:null},
+    {id:'sub_old',status:'canceled',startedAt:100,endedAt:200,canceledAt:180,cancellationReason:'payment_failed'}
+  ]);
+  assert.ok(first.nextCursor);
+  const second=await loadTeamInvoices({...args,cursor:first.nextCursor});
+  assert.equal(Object.hasOwn(second,'memberships'),false);
+});
+test('membership history preserves unknown dates and uses fresh anchor over stale search result', async () => {
+  const args=fixture();
+  args.stripe.subscriptions.retrieve=async()=>({...sub(),status:'canceled',ended_at:900});
+  args.stripe.subscriptions.search=async()=>({data:[{id:'sub_current',...sub(),status:'active',start_date:100}],has_more:false});
+  const result=await loadTeamInvoices(args);
+  assert.deepEqual(result.memberships,[{id:'sub_current',status:'canceled',startedAt:null,endedAt:900,canceledAt:null,cancellationReason:null}]);
 });

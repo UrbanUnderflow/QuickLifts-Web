@@ -1,3 +1,4 @@
+import ProgramProductConfiguration, { ProductConfigurationFields } from '../../components/admin/ProgramProductConfiguration';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Head from 'next/head';
@@ -91,6 +92,8 @@ import {
 } from '../../utils/pulsecheckCommercialization';
 
 const defaultOrganizationForm: CreatePulseCheckOrganizationInput = {
+  productBrand: 'athleticmind',
+  appBranding: { pulsecheck: 'pulsecheck', athleticmind: 'athleticmind' },
   displayName: '',
   legalName: '',
   organizationType: 'athletic-department',
@@ -1190,6 +1193,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     setMessage(null);
+    const loadSection = async <T,>(name: string, request: Promise<T>): Promise<T> => {
+      try { return await request; }
+      catch (error) { throw new Error(`Unable to load ${name}: ${error instanceof Error ? error.message : 'Request failed.'}`); }
+    };
     try {
       const [
         organizationResults,
@@ -1200,13 +1207,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
         inviteLinkResults,
         sportConfigurationResults,
       ] = await Promise.all([
-        pulseCheckProvisioningService.listOrganizations(),
-        pulseCheckProvisioningService.listTeams(),
-        pulseCheckProvisioningService.listPilots(),
-        pulseCheckProvisioningService.listPilotCohorts(),
-        pulseCheckProvisioningService.listClinicianProfiles(),
-          pulseCheckProvisioningService.listInviteLinks(),
-          fetchPulseCheckSportConfiguration(),
+        loadSection('organizations', pulseCheckProvisioningService.listOrganizations()),
+        loadSection('teams', pulseCheckProvisioningService.listTeams()),
+        loadSection('pilots', pulseCheckProvisioningService.listPilots()),
+        loadSection('cohorts', pulseCheckProvisioningService.listPilotCohorts()),
+        loadSection('clinician profiles', pulseCheckProvisioningService.listClinicianProfiles()),
+          loadSection('invite links', pulseCheckProvisioningService.listInviteLinks()),
+          loadSection('sport configuration', fetchPulseCheckSportConfiguration()),
         ]);
       const showTestHarnessData = shouldShowPulseCheckTestHarnessData();
       const visibleOrganizationResults = showTestHarnessData
@@ -1297,7 +1304,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
       }));
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to load provisioning data:', error);
-      setMessage({ type: 'error', text: 'Failed to load PulseCheck provisioning data.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to load PulseCheck provisioning data.' });
     } finally {
       setLoading(false);
     }
@@ -3956,6 +3963,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                             <div className="pcp-org-name">{organization.displayName}</div>
                             <div className="pcp-org-meta">
                               {[
+                                organization.productBrand === 'pulsecheck' ? 'PulseCheck' : 'AthleticMind',
                                 formatEnumLabel(organization.organizationType),
                                 `${formatEnumLabel(organization.defaultStudyPosture).toLowerCase()} posture`,
                                 `clinician: ${formatEnumLabel(organization.defaultClinicianBridgeMode).toLowerCase()}`,
@@ -4005,6 +4013,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
                         {organizationExpanded ? (
                           <div className="pcp-org-overview">
+                            <ProgramProductConfiguration configuration={organization} onSave={async (configuration) => {
+                              await pulseCheckProvisioningService.updateOrganizationProductConfiguration(organization.id, configuration);
+                              await loadData();
+                            }} />
                             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14, fontSize: 13, color: 'rgba(255,255,255,0.78)' }}>
                               <input
                                 type="checkbox"
@@ -5744,11 +5756,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         />
                       </label>
                     </div>
+                    <ProductConfigurationFields value={orgForm} onChange={configuration => setOrgForm(current => ({ ...current, ...configuration }))} />
                     <div className="pcp-fg pcp-c1">
                       <label className="pcp-fld">
-                        <span className="pcp-flbl">Clinician Routing Requirement</span>
+                        <span className="pcp-flbl">AuntEdna routing requirement</span>
                         <select
                           className="pcp-finp pcp-select"
+                          disabled={orgForm.productBrand === 'pulsecheck'}
                           value={orgForm.defaultClinicianBridgeMode}
                           onChange={(event) => handleOrgFieldChange('defaultClinicianBridgeMode', event.target.value as PulseCheckClinicianBridgeMode)}
                         >

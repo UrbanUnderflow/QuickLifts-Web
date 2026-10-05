@@ -1,3 +1,4 @@
+import { normalizeProductBrand, validateProductBrand, normalizeAppBranding } from '../../../lib/pulsecheck/productConfig';
 import { consentCategory, consentDecisionComplete, researchEligible, staffConsentDocuments, type ConsentDecisions } from './consentPolicy';
 import { addDoc, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders, isUsingDevFirebase } from '../config';
@@ -902,6 +903,8 @@ const normalizeTeamImplementationMetadata = (
 
 const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrganization => ({
   id,
+  productBrand: normalizeProductBrand(data.productBrand),
+  appBranding: data.appBranding || {},
   displayName: data.displayName || '',
   legalName: data.legalName || '',
   organizationType: data.organizationType || '',
@@ -3080,6 +3083,8 @@ export const pulseCheckProvisioningService = {
 
   async createOrganization(input: CreatePulseCheckOrganizationInput): Promise<string> {
     const payload = {
+      productBrand: validateProductBrand(input.productBrand === undefined ? 'athleticmind' : input.productBrand),
+      appBranding: normalizeAppBranding(input.appBranding),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
       organizationType: normalizeString(input.organizationType),
@@ -3117,6 +3122,8 @@ export const pulseCheckProvisioningService = {
       throw new Error('Organization id is required.');
     }
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedId), {
+      ...(input.productBrand !== undefined ? { productBrand: validateProductBrand(input.productBrand === undefined ? 'athleticmind' : input.productBrand) } : {}),
+      ...(input.appBranding !== undefined ? { appBranding: normalizeAppBranding(input.appBranding) } : {}),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
       organizationType: normalizeString(input.organizationType),
@@ -3843,6 +3850,16 @@ export const pulseCheckProvisioningService = {
   async updateOrganizationInvitePreviewImage(organizationId: string, invitePreviewImageUrl: string): Promise<void> {
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizeString(organizationId)), {
       invitePreviewImageUrl: normalizeString(invitePreviewImageUrl),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async updateOrganizationProductConfiguration(organizationId: string, input: Pick<CreatePulseCheckOrganizationInput, 'productBrand' | 'appBranding'>): Promise<void> {
+    if (!normalizeString(organizationId)) throw new Error('Organization id is required.');
+    await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, organizationId), {
+      productBrand: validateProductBrand(input.productBrand === undefined ? 'athleticmind' : input.productBrand),
+      appBranding: normalizeAppBranding(input.appBranding),
+      productConfigurationUpdatedBy: auth.currentUser?.uid || '',
       updatedAt: serverTimestamp(),
     });
   },

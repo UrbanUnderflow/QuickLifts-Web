@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { JSDOM } from 'jsdom';
+import { getLeadSourceCandidates } from '../../../utils/pipelistsLeadSources';
 
 const OPENAI_MODEL = process.env.OPENAI_EXTRACT_MODEL || 'gpt-4o-mini';
 const OPENAI_RESEARCH_MODEL = process.env.OPENAI_EXTRACT_SEARCH_MODEL || 'gpt-4o';
@@ -358,6 +359,7 @@ Rules:
 
     let parsed: unknown = null;
     let fallbackSourceUrl = '';
+    let sourceCandidates: string[] = [];
 
     if (parsedUrl) {
       const page = await readPage(parsedUrl.toString());
@@ -423,6 +425,7 @@ Rules:
           temperature: 0.1,
           max_output_tokens: 1700,
           tools: [{ type: 'web_search' }],
+          tool_choice: 'required',
           text: {
             format: {
               type: 'json_schema',
@@ -436,7 +439,7 @@ Rules:
               role: 'system',
               content: `${systemPrompt}
 
-When the user provides only a name, person, organization, fund, school, program, or short phrase, use web search to identify the most likely lead and fill only fields that current sources support. If the result is ambiguous, choose the best match and list ambiguity in missingFields.`,
+When the user provides only a name, person, organization, fund, school, program, or short phrase, use web search to identify the most likely lead and fill only fields that current sources support. If the result is ambiguous, choose the best match and list ambiguity in missingFields. Set sourceUrl to an exact URL found by web search, never a guessed path. Cite direct pages supporting the identified lead; prefer official profiles and include another supporting source when available.`,
             },
             {
               role: 'user',
@@ -462,6 +465,7 @@ When the user provides only a name, person, organization, fund, school, program,
       }
 
       parsed = parseJsonSafe(getResponseText(bridgeData) || '{}');
+      sourceCandidates = getLeadSourceCandidates(bridgeData);
     }
 
     if (!parsed || typeof parsed !== 'object') {
@@ -470,6 +474,7 @@ When the user provides only a name, person, organization, fund, school, program,
 
     return res.status(200).json({
       success: true,
+      sourceCandidates,
       item: normalizeExtractedItem(parsed as Record<string, unknown>, stageOptions, fallbackSourceUrl),
     });
   } catch (error) {

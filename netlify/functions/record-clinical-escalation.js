@@ -1,3 +1,4 @@
+const { resolveProgramProductConfig } = require('./lib/program-product-config');
 // =============================================================================
 // Record Clinical Escalation — server-side Tier 3 routing fan-out.
 //
@@ -364,10 +365,12 @@ exports.handler = async (event) => {
       });
     }
 
-    const clinician = await resolveDesignatedClinician(db, teamId);
+    const product = await resolveProgramProductConfig(db, { teamId });
+    const hotlineOnly = product.escalationModel === '988';
+    const clinician = hotlineOnly ? null : await resolveDesignatedClinician(db, teamId);
     const team = await resolveTeamMeta(db, teamId);
 
-    if (!clinician) {
+    if (!clinician && !hotlineOnly) {
       return json(409, {
         error:
           'Team has no active clinician membership with email on file. Tier 3 escalation routing requires a designated clinician staff member.',
@@ -414,17 +417,19 @@ exports.handler = async (event) => {
     const escalationDoc = {
       athleteUserId,
       teamId,
-      organizationId: normalizeString(body.organizationId) || null,
+      organizationId: product.organizationId,
+      productBrand: product.brand,
+      supportRoute: hotlineOnly ? 'hotline' : 'clinician',
       pilotId: normalizeString(body.pilotId) || null,
       tier,
       signalSource,
       evidence,
       detectedAt,
       recordedAt: admin.firestore.FieldValue.serverTimestamp(),
-      deliveryStatus: 'pending',
+      deliveryStatus: hotlineOnly ? 'not_applicable' : 'pending',
       dedupeKey,
       triggeredBySource,
-      pagedClinicianMembershipId: clinician.membershipId,
+      pagedClinicianMembershipId: clinician?.membershipId || null,
       consentSnapshot: consentSnapshot || null,
     };
     const escalationRef = await db.collection(CLINICAL_ESCALATIONS_COLLECTION).add(escalationDoc);
@@ -444,6 +449,18 @@ exports.handler = async (event) => {
         // Non-blocking for paging; the failed safety write remains visible in
         // logs and must be reconciled before relying on the in-app wall.
       }
+    }
+
+    if (hotlineOnly) {
+      return json(200, {
+        recorded: true,
+        record: { id: escalationId, ...escalationDoc },
+        supportRoute: 'hotline',
+        hotlineResource: { name: '988 Suicide & Crisis Lifeline', phone: '988', url: 'https://988lifeline.org' },
+        crisisWallActivated,
+        crisisWallError,
+        providerConfirmed: false,
+      });
     }
 
     // 3. Email the clinician

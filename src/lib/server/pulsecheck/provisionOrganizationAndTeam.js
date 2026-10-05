@@ -1,3 +1,4 @@
+const { validateProductBrand, normalizeAppBranding } = require('../../pulsecheck/productConfig');
 const admin = require('firebase-admin');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
@@ -190,6 +191,8 @@ function buildProvisioningPayload(input) {
   );
 
   const organizationPayload = {
+    productBrand: validateProductBrand(input.organization.productBrand === undefined ? 'athleticmind' : input.organization.productBrand),
+    appBranding: normalizeAppBranding(input.organization.appBranding),
     displayName: normalizeString(input.organization.displayName),
     legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
     organizationType: normalizeString(input.organization.organizationType) || 'other',
@@ -395,6 +398,8 @@ async function upsertPulseCheckOrganization({ adminApp, input }) {
   }
 
   const organizationPayload = {
+    productBrand: validateProductBrand(input.organization.productBrand === undefined ? 'athleticmind' : input.organization.productBrand),
+    appBranding: normalizeAppBranding(input.organization.appBranding),
     displayName: normalizeString(input.organization.displayName),
     legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
     organizationType: normalizeString(input.organization.organizationType) || 'other',
@@ -429,6 +434,12 @@ async function upsertPulseCheckOrganization({ adminApp, input }) {
 
     const organizationWrite = {
       ...organizationPayload,
+      productBrand: input.organization.productBrand === undefined
+        ? (organizationData?.productBrand || organizationPayload.productBrand)
+        : organizationPayload.productBrand,
+      appBranding: input.organization.appBranding === undefined
+        ? (organizationData?.appBranding || organizationPayload.appBranding)
+        : organizationPayload.appBranding,
       implementationMetadata: {
         ...organizationPayload.implementationMetadata,
         provisionedAt: organizationData?.implementationMetadata?.provisionedAt || now,
@@ -494,6 +505,12 @@ async function provisionPulseCheckOrganizationAndTeam({ adminApp, input }) {
 
     const organizationWrite = {
       ...organizationPayload,
+      productBrand: input.organization.productBrand === undefined
+        ? (organizationData?.productBrand || organizationPayload.productBrand)
+        : organizationPayload.productBrand,
+      appBranding: input.organization.appBranding === undefined
+        ? (organizationData?.appBranding || organizationPayload.appBranding)
+        : organizationPayload.appBranding,
       implementationMetadata: {
         ...organizationPayload.implementationMetadata,
         provisionedAt: organizationData?.implementationMetadata?.provisionedAt || now,

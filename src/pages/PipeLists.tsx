@@ -903,8 +903,26 @@ const reconcileUniversityStages = (savedStages: StageConfig[] = [], canonicalSta
   return merged;
 };
 
+const isSportsMedicineList = (list: Partial<PipeList>) =>
+  list.templateKey === 'partner' && /\bsports?[\s-]+(?:medicine|performance)\b/i.test(list.name || '');
+
+const sportsMedicineLegacyStages: Record<string, string> = {
+  sourced: 'identified',
+  contacted: 'engaged',
+  'in-review': 'engaged',
+  won: 'pilot-active',
+  'closed-won': 'pilot-active',
+  parked: 'closed-lost-paused',
+};
+
+const reconcileSportsMedicineStages = (stages: StageConfig[] = []) =>
+  reconcileUniversityStages(stages.filter((stage) => !sportsMedicineLegacyStages[stage.id]));
+
 const needsUniversityStageMigration = (lists: Partial<PipeList>[]) => lists.some((list) =>
-  list.templateKey === 'university-pilot' && (
+  isSportsMedicineList(list) ? (
+    list.stages?.map((stage) => stage.id).join(',') !== reconcileSportsMedicineStages(list.stages).map((stage) => stage.id).join(',') ||
+    list.items?.some((item) => Boolean(sportsMedicineLegacyStages[item.stage]))
+  ) : list.templateKey === 'university-pilot' && (
     list.stages?.map((stage) => stage.id).join(',') !== reconcileUniversityStages(list.stages).map((stage) => stage.id).join(',') ||
     list.items?.some((item) => item.stage === 'closed-won' || item.stage === 'won')
   ),
@@ -2192,7 +2210,7 @@ const createList = (
     }),
     accent: template.accent || accentClasses[index % accentClasses.length],
     templateKey,
-    stages: template.stages,
+    stages: isSportsMedicineList({ templateKey, name }) ? pilotContractStages : template.stages,
     items,
     createdAt: new Date().toISOString(),
   };
@@ -2529,8 +2547,11 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
   const templateKey = (list.templateKey && templateCatalog[list.templateKey] ? list.templateKey : 'partner') as TemplateKey;
   const template = templateCatalog[templateKey];
   const savedStages = Array.isArray(list.stages) && list.stages.length > 0 ? list.stages : template.stages;
+  const sportsMedicine = isSportsMedicineList({ ...list, templateKey });
   const stages =
-    templateKey === 'university-pilot'
+    sportsMedicine
+      ? reconcileSportsMedicineStages(savedStages)
+      : templateKey === 'university-pilot'
       ? reconcileUniversityStages(savedStages)
       : templateKey === 'investor-metrics' || templateKey === 'contacts'
       ? template.stages
@@ -2583,7 +2604,9 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
     accent: list.accent || template.accent || accentClasses[index % accentClasses.length],
     templateKey,
     stages,
-    items: Array.isArray(list.items) ? list.items.map((item) => normalizeItem(item, stages)) : [],
+    items: Array.isArray(list.items) ? list.items.map((item) => normalizeItem(
+      sportsMedicine ? { ...item, stage: sportsMedicineLegacyStages[item.stage] || item.stage } : item, stages,
+    )) : [],
     createdAt: list.createdAt || new Date().toISOString(),
   };
   return normalizedList;
@@ -7575,16 +7598,20 @@ Rules:
         activeList.stages,
       );
       const extractedSourceUrl = extracted.sourceUrl?.trim() || normalizeLeadInputUrl(cleanInput)?.toString() || '';
-      if (!extractedSourceUrl) {
+      const sourceCandidates = Array.from(new Set([
+        extractedSourceUrl,
+        ...(Array.isArray(payload.sourceCandidates) ? payload.sourceCandidates : []),
+      ].filter((url): url is string => typeof url === 'string')
+        .map((url) => normalizeLeadInputUrl(url)?.toString() || '').filter(Boolean))).slice(0, 6);
+      if (sourceCandidates.length === 0) {
         throw new Error('The lead did not include a source link that can be verified. Add the official page and try again.');
       }
-      const sourceVerification = await verifySourceUrls([extractedSourceUrl], idToken);
-      const normalizedExtractedSourceUrl = normalizeLeadInputUrl(extractedSourceUrl)?.toString() || extractedSourceUrl;
-      const sourceCheck = sourceVerification.get(normalizedExtractedSourceUrl);
-      if (!sourceCheck?.valid) {
+      const sourceVerification = await verifySourceUrls(sourceCandidates, idToken);
+      const sourceCheck = sourceCandidates.map((url) => sourceVerification.get(url)).find((result) => result?.valid);
+      if (!sourceCheck) {
         throw new Error('The source link could not be verified. Check that the page is current and try again.');
       }
-      const verifiedSourceUrl = normalizeLeadInputUrl(sourceCheck.finalUrl || extractedSourceUrl)?.toString() || extractedSourceUrl;
+      const verifiedSourceUrl = normalizeLeadInputUrl(sourceCheck.finalUrl || sourceCheck.url)?.toString() || sourceCheck.url;
       const nextItemBase = createItem(
         {
           ...defaultDraft(stage),
