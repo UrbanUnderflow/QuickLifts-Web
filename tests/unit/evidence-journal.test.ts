@@ -115,3 +115,16 @@ test('workout entries take an optional whole-number effort and food entries can 
   assert.throws(() => parseEvidence({ entryId: id, type: 'evidence', moment: 'x', photoStoragePath: 'pulsecheck-journal-photos/owner/a.jpg' }), /food/);
   assert.throws(() => parseEvidence({ entryId: id, type: 'food', moment: 'x', photoStoragePath: '../other/a.jpg' }), /food/);
 });
+
+test('injury entries preserve recovery reflections through save and retry', async () => {
+  const { db, records } = database();
+  const input = parseEvidence({ entryId: id, type: 'injury', moment: 'Frustrated today.', action: 'Rested and followed my rehab plan.' });
+  const saved = await saveEvidence(db, 'owner', input, 100);
+  assert.equal(saved.entry.type, 'injury');
+  assert.equal(saved.entry.action, input.action);
+  assert.equal((await saveEvidence(db, 'owner', input, 200)).created, false);
+  assert.equal(records.size, 1);
+  assert.equal(parseEvidence({ entryId: secondId, type: 'injury', moment: 'Hopeful.' }).action, null);
+  assert.throws(() => parseEvidence({ entryId: id, type: 'injury', moment: ' ' }));
+  assert.throws(() => parseEvidence({ entryId: id, type: 'injury', moment: 'a'.repeat(4001) }));
+});

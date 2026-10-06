@@ -5,12 +5,12 @@ export const validEvidenceId = (value: unknown): value is string => typeof value
 export class EvidenceError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
-export const JOURNAL_TYPES = ['evidence', 'gratitude', 'freewrite', 'workout', 'food'] as const;
+export const JOURNAL_TYPES = ['evidence', 'gratitude', 'freewrite', 'workout', 'food', 'injury'] as const;
 export type JournalType = typeof JOURNAL_TYPES[number];
 export const isJournalType = (value: unknown): value is JournalType => typeof value === 'string' && (JOURNAL_TYPES as readonly string[]).includes(value);
 // Entries saved before journal types existed carry no type and are evidence.
 export const journalTypeOf = (record: { type?: unknown }): JournalType => isJournalType(record?.type) ? record.type : 'evidence';
-const MOMENT_LIMITS: Record<JournalType, number> = { evidence: 4000, gratitude: 4000, freewrite: 8000, workout: 4000, food: 4000 };
+const MOMENT_LIMITS: Record<JournalType, number> = { evidence: 4000, gratitude: 4000, freewrite: 8000, workout: 4000, food: 4000, injury: 4000 };
 // Food photos live in Storage under the athlete's own folder; the entry keeps only the path.
 const photoPathFor = (value: unknown) => typeof value === 'string' && /^pulsecheck-journal-photos\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9_.-]{1,128}$/.test(value) ? value : null;
 export function parseEvidence(body: any) {

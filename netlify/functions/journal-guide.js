@@ -19,11 +19,12 @@ const { runtimeHelpers: chatRuntime } = require('./pulsecheck-chat');
 const { escalateJournalClassification, classifierMessage, _private: screenPrivate } = require('./journal-safety-screen');
 const { resolvePulseCheckYouthTrack, allowsDirectNoraChat } = require('./utils/pulsecheck-youth-track');
 
-const TYPES = ['evidence', 'gratitude', 'freewrite'];
-const MOMENT_LIMITS = { evidence: 4000, gratitude: 4000, freewrite: 8000 };
+const TYPES = ['evidence', 'gratitude', 'freewrite', 'injury'];
+const MOMENT_LIMITS = { evidence: 4000, gratitude: 4000, freewrite: 8000, injury: 4000 };
 const MAX_QUESTION_WORDS = 20;
 
 const GUIDE_FOCUS = {
+  injury: 'Ask about their own feelings about injury recovery or support they chose today. Rest counts. Never suggest rehab, exercise, treatment, recovery timelines, or return-to-play decisions.',
   evidence: 'Help them name what they did and what helped, so the entry works as proof they can handle a hard moment.',
   gratitude: 'Help them land on one concrete detail, person, or moment that made it matter.',
   freewrite: 'Follow their lead. Ask an open question about what they wrote. Do not steer them toward a lesson.',

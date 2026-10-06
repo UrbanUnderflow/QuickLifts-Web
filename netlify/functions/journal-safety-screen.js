@@ -34,8 +34,8 @@ const entryRef = (db, userId, entryId) => db.collection(JOURNAL_COLLECTION).doc(
 const screeningRef = (db, userId, entryId) => db.collection(JOURNAL_COLLECTION).doc(userId).collection('screenings').doc(entryId);
 const validEntryId = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
-const TYPE_LABELS = { evidence: 'an evidence entry', gratitude: 'a gratitude entry', freewrite: 'a free write', workout: 'a workout entry', food: 'a food entry' };
-const SECOND_FIELD_LABELS = { evidence: 'What I did', gratitude: 'Why it mattered', workout: 'How it felt', food: 'Around it' };
+const TYPE_LABELS = { evidence: 'an evidence entry', gratitude: 'a gratitude entry', freewrite: 'a free write', workout: 'a workout entry', food: 'a food entry', injury: 'an injury recovery entry' };
+const SECOND_FIELD_LABELS = { evidence: 'What I did', gratitude: 'Why it mattered', workout: 'How it felt', food: 'Around it', injury: 'What supported my recovery' };
 
 /** The text the classifier sees. The note calibrates for sport language, since journals have no conversation to clarify. */
 function classifierMessage(entry) {

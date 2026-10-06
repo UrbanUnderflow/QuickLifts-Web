@@ -31,11 +31,12 @@ test('sharing defaults on while saved opt-outs and invalid grants remain off',()
  for(const g of [{...grant,teamId:'x'},{...grant,athleteId:'x'},{...grant,version:'old'},{...grant,choices:{mood:false}}]) assert.equal(sharingAllows(g,'a','t','mood'),false);
  assert.equal(sharingAllows(grant,'a','t','journaling'),false);
 });
-test('aggregate suppresses small cohorts and each sparsely populated field independently',()=>{
+test('aggregate shows available shared reports including single contributors',()=>{
  const small=aggregateCard([{Mood:1},{Mood:5}],10,'check-ins','now',{Mood:'/5'});
- assert.equal(small.contributors,0);assert.deepEqual(small.values,[]);
+ assert.equal(small.contributors,2);assert.deepEqual(small.values,[{label:'Mood',value:3,unit:'/5'}]);
+ assert.equal(aggregateCard([],10,'check-ins','now',{Mood:'/5'}).status,'unavailable');
  const full=aggregateCard([{Mood:1,Energy:1},{Mood:2},{Mood:3},{Mood:4},{Mood:5}],10,'check-ins','now',{Mood:'/5',Energy:'/5'});
- assert.deepEqual(full.values,[{label:'Mood',value:3,unit:'/5'}]);
+ assert.deepEqual(full.values,[{label:'Mood',value:3,unit:'/5'},{label:'Energy',value:1,unit:'/5'}]);
 });
 test('HTTP rejects unauthenticated calls before loading data',async()=>{
  let loaded=false;let status=0;const res:any={setHeader(){},status(n:number){status=n;return this;},json(){return this;}};
