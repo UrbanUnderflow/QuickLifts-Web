@@ -59,6 +59,19 @@
 # Add these as Custom Domains in the Netlify UI (Site settings → Domain
 # management); no toml redirect entries are needed.
 
+# Local PDF utility, independent of authentication and analytics.
+[[redirects]]
+  from = "/compress-pdf"
+  to = "/compress-pdf/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/compress-pdf/"
+  to = "/compress-pdf/index.html"
+  status = 200
+  force = true
+
 # AthleticMind landing page, kept independent of the application shell.
 [[redirects]]
   from = "/athleticmind"
@@ -69,6 +82,19 @@
 [[redirects]]
   from = "/athleticmind/"
   to = "/athleticmind/index.html"
+  status = 200
+  force = true
+
+# Sample pilot proof package for the team, kept independent of the application shell.
+[[redirects]]
+  from = "/proof-package-example"
+  to = "/proof-package-example/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/proof-package-example/"
+  to = "/proof-package-example/index.html"
   status = 200
   force = true
 

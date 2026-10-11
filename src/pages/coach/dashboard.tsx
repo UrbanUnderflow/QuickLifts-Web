@@ -24,6 +24,8 @@ import {
 } from 'firebase/firestore';
 import {
   Home,
+  Moon,
+  Sun,
   Flame,
   Users,
   Brain,
@@ -1009,6 +1011,17 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   onTeamLeaderboardChanged,
 }) => {
   const router = useRouter();
+  const [dashboardTheme, setDashboardTheme] = useState<'light' | 'dark'>('light');
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem('pulsecheck-dashboard-theme') === 'dark') setDashboardTheme('dark');
+    } catch { /* Keep the default when browser storage is unavailable. */ }
+  }, []);
+  const toggleDashboardTheme = () => {
+    const next = dashboardTheme === 'dark' ? 'light' : 'dark';
+    setDashboardTheme(next);
+    try { window.localStorage.setItem('pulsecheck-dashboard-theme', next); } catch { /* The toggle still works without storage. */ }
+  };
   // Demo always shows everything; live gates off the coach's own capabilities.
   // 'admin' is the superuser grant, so it satisfies every capability check.
   const can = useCallback(
@@ -1303,6 +1316,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
   return (
       <div
         className={`${clay.root} clay-dashboard min-h-screen`}
+        data-dashboard-theme={dashboardTheme}
       >
         <Head>
           <title>{`Team dashboard | ${dashboardProduct.displayName}`}</title>
@@ -1384,6 +1398,12 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                     </select>
                   </label>
                 )}
+                <button type="button" className={clay.themeToggle} onClick={toggleDashboardTheme}
+                  aria-label={dashboardTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                  title={dashboardTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+                  {dashboardTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                  <span className="hidden sm:inline">{dashboardTheme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+                </button>
                 <div className="hidden text-[10px] text-zinc-500 sm:block">{todayLabel()}</div>
               </div>
             </div>

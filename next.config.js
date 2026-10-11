@@ -15,9 +15,12 @@ const nextConfig = {
   reactStrictMode: true,
   async rewrites() {
     return {
-      beforeFiles: process.env.NODE_ENV === 'development'
-        ? [{ source: '/api/pipelists/runbook', destination: 'https://fitwithpulse.ai/api/pipelists/runbook' }]
-        : [],
+      beforeFiles: [
+        { source: '/compress-pdf', destination: '/compress-pdf/index.html' },
+        ...(process.env.NODE_ENV === 'development'
+          ? [{ source: '/api/pipelists/runbook', destination: 'https://fitwithpulse.ai/api/pipelists/runbook' }]
+          : []),
+      ],
     };
   },
   images: {

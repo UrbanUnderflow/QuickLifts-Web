@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<style>html{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>PulseCheck Pilot Proof Package</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Mono:wght@500&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#F4F5F0; --surface:#FFFFFF; --ink:#121619; --ink-2:#3E454C; --muted:#646B73;
+  --rule:#D8DBD2; --lime:#C8FF00; --lime-ink:#3F5200; --lime-soft:#EEFBC2;
+  --met:#2E6B00; --met-bg:#E3F4D2; --warn:#8A5A00; --warn-bg:#FCEFD2;
+  --chart-line:#121619; --chart-area:rgba(200,255,0,.55); --grid:#E3E5DD; --base:#A3A9AF;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0E1113; --surface:#161B1E; --ink:#F4F5F0; --ink-2:#C9CDC4; --muted:#9AA1A8;
+    --rule:#2A3035; --lime-ink:#C8FF00; --lime-soft:#1F2A05;
+    --met:#B5F06A; --met-bg:#1C2A10; --warn:#F2C46B; --warn-bg:#2E2410;
+    --chart-line:#C8FF00; --chart-area:rgba(200,255,0,.16); --grid:#22282C; --base:#6B737A;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0E1113; --surface:#161B1E; --ink:#F4F5F0; --ink-2:#C9CDC4; --muted:#9AA1A8;
+  --rule:#2A3035; --lime-ink:#C8FF00; --lime-soft:#1F2A05;
+  --met:#B5F06A; --met-bg:#1C2A10; --warn:#F2C46B; --warn-bg:#2E2410;
+  --chart-line:#C8FF00; --chart-area:rgba(200,255,0,.16); --grid:#22282C; --base:#6B737A;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:1040px;margin:0 auto}
+.sample{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--ink);color:var(--bg);font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:9px 20px;margin-inline:-20px;text-align:center}
+.sample b{color:var(--lime)}
+:root[data-theme="dark"] .sample b{color:#121619}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .sample b{color:#121619}}
+.label{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1,h2,h3{font-family:var(--display);text-transform:uppercase;line-height:.95;margin:0;text-wrap:balance}
+h2{font-size:clamp(34px,5vw,52px);letter-spacing:.005em}
+h3{font-size:24px}
+p{margin:0;max-width:65ch}
+section{padding-block:56px;border-top:1px solid var(--rule);display:grid;gap:28px}
+.lede{color:var(--ink-2);font-size:17px}
+
+/* Hero */
+.hero{padding-block:48px 56px;display:grid;gap:28px}
+.hero-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:baseline}
+.brand{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.02em;text-transform:uppercase}
+.brand span{color:var(--muted);font-weight:600}
+.hero h1{font-size:clamp(56px,10vw,120px);font-weight:800;letter-spacing:-.005em}
+.hero h1 .hl{background:var(--lime);color:#121619;padding:0 .12em;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:20px;padding-top:24px;border-top:3px solid var(--ink)}
+.meta div{display:grid;gap:2px}
+.meta strong{font-family:var(--display);font-size:30px;font-weight:700;line-height:1}
+
+/* Box score */
+.boxscore{overflow-x:auto;background:var(--surface);border:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-variant-numeric:tabular-nums}
+th{font-family:var(--mono);font-weight:500;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;padding:14px 16px;border-bottom:2px solid var(--ink)}
+td{padding:14px 16px;border-bottom:1px solid var(--rule);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num{font-family:var(--display);font-size:26px;font-weight:700;line-height:1;white-space:nowrap}
+td.tgt{color:var(--muted);white-space:nowrap}
+td small{display:block;color:var(--muted);font-size:13px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;padding:5px 9px;border-radius:999px;white-space:nowrap}
+.pill.met{background:var(--met-bg);color:var(--met)}
+.pill.below{background:var(--warn-bg);color:var(--warn)}
+.tally{display:flex;flex-wrap:wrap;gap:10px 28px;align-items:baseline}
+.tally strong{font-family:var(--display);font-size:64px;line-height:.9;font-weight:800}
+
+/* Charts */
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:28px}
+.panel{background:var(--surface);border:1px solid var(--rule);padding:22px;display:grid;gap:14px;align-content:start;position:relative}
+.panel p.note{font-size:14px;color:var(--muted)}
+svg text{font-family:var(--mono);font-size:11px;fill:var(--muted)}
+svg .val{font-family:var(--display);font-size:15px;font-weight:700;fill:var(--ink)}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;padding:7px 10px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-115%);opacity:0;transition:opacity .12s}
+.tip.on{opacity:1}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+
+/* Care pathway */
+.path{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:2px;background:var(--rule);border:1px solid var(--rule)}
+.step{background:var(--surface);padding:20px;display:grid;gap:6px;align-content:start}
+.step strong{font-family:var(--display);font-size:44px;font-weight:800;line-height:.95}
+.step .label{color:var(--lime-ink)}
+.callout{background:var(--lime);color:#121619;padding:24px;display:grid;gap:6px}
+.callout strong{font-family:var(--display);font-size:clamp(30px,4vw,40px);text-transform:uppercase;line-height:1}
+
+/* Compliance */
+.reqs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:20px}
+.req{border-top:3px solid var(--ink);padding-top:14px;display:grid;gap:6px}
+.req h3{font-size:22px}
+.req p{font-size:14.5px;color:var(--ink-2)}
+.check{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--met)}
+
+/* Quotes */
+.quotes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+blockquote{margin:0;background:var(--surface);border:1px solid var(--rule);padding:24px;display:grid;gap:14px;align-content:space-between}
+blockquote p{font-size:19px;line-height:1.4;font-weight:500}
+blockquote footer{font-size:13.5px;color:var(--muted)}
+
+/* Next */
+.timeline{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px}
+.tl{display:grid;gap:4px;padding-top:14px;border-top:3px solid var(--rule)}
+.tl.now{border-color:var(--lime)}
+.tl strong{font-family:var(--display);font-size:26px;text-transform:uppercase;line-height:1}
+.tl p{font-size:14.5px;color:var(--ink-2)}
+.ask{background:var(--ink);color:var(--bg);padding:32px;display:grid;gap:12px}
+.ask h2{color:var(--bg)}
+.ask p{color:var(--bg);opacity:.85}
+.ask .hl{color:#121619;background:var(--lime);padding:0 .1em}
+.fine{font-size:13.5px;color:var(--muted);display:grid;gap:8px}
+.fine p{max-width:none}
+.table-toggle{justify-self:start;font:inherit;font-size:13px;color:var(--ink);background:transparent;border:1px solid var(--rule);padding:6px 12px;border-radius:999px;cursor:pointer}
+.table-toggle:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.mini{font-size:13.5px;min-width:0}
+.mini td,.mini th{padding:6px 10px}
+@media (prefers-reduced-motion: reduce){.tip{transition:none}}
+</style>
+</head>
+<body>
+
+<div class="sample">Sample proof package · <b>illustrative data</b> · not real pilot results</div>
+<div class="wrap">
+
+<header class="hero">
+  <div class="hero-top">
+    <div class="brand">PulseCheck <span>× AuntEDNA.ai</span></div>
+    <div class="label">Pilot results · Prepared for the Athletic Director · April 2027</div>
+  </div>
+  <div class="label">Sample State University Athletics</div>
+  <h1>12 weeks. 48 athletes. <span class="hl">8 of 9 targets met.</span></h1>
+  <p class="lede">In January, your staff and our team agreed on what success would look like before the pilot started. This report shows how Women's Volleyball and Men's Track &amp; Field did against those targets, what we learned, and what a department rollout would look like for 2027–28.</p>
+  <div class="meta">
+    <div><span class="label">Teams</span><strong>2</strong></div>
+    <div><span class="label">Athletes enrolled</span><strong>44 of 48</strong></div>
+    <div><span class="label">Pilot window</span><strong>Jan 12 – Apr 4</strong></div>
+    <div><span class="label">Clinical partner</span><strong>AuntEDNA.ai</strong></div>
+  </div>
+</header>
+
+<section aria-labelledby="box">
+  <div style="display:grid;gap:10px">
+    <span class="label">01 · The box score</span>
+    <h2 id="box">Targets we agreed on in January</h2>
+  </div>
+  <div class="tally">
+    <strong>8 / 9</strong>
+    <p class="lede">targets met or beaten. The one we missed is a coach-side habit, and the fix is already in place.</p>
+  </div>
+  <div class="boxscore">
+    <table>
+      <thead><tr><th>Measure</th><th>Target</th><th>Result</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Athletes who opted in<small>Consent signed and app set up</small></td><td class="tgt">80%</td><td class="num">92%</td><td><span class="pill met">✓ Met</span></td></tr>
+        <tr><td>Athletes active 4+ days a week<small>Average across all 12 weeks</small></td><td class="tgt">70%</td><td class="num">82%</td><td><span class="pill met">✓ Met</span></td></tr>
+        <tr><td>Daily mental training completed<small>Share of assigned sessions finished</small></td><td class="tgt">60%</td><td class="num">74%</td><td><span class="pill met">✓ Met</span></td></tr>
+        <tr><td>Mental health screenings completed<small>Two screening cycles, February and March</small></td><td class="tgt">90%</td><td class="num">95%</td><td><span class="pill met">✓ Met</span></td></tr>
+        <tr><td>Flagged athletes reached by a clinician within 24 hours<small>Every follow-up flag from Nora or a screening</small></td><td class="tgt">100%</td><td class="num">6 of 6</td><td><span class="pill met">✓ Met</span></td></tr>
+        <tr><td>Average gain on the mental skills check<small>Baseline to week 12, 100-point scale</small></td><td class="tgt">+5 pts</td><td class="num">+13 pts</td><td><span class="pill met">✓ Met</span></td></tr>
+        <tr><td>Coach rating of the program<small>Head and assistant coaches, 1–10</small></td><td class="tgt">8.0</td><td class="num">9.1</td><td><span class="pill met">✓ Met</span></td></tr>
+        <tr><td>Athletes who want to keep using it<small>End-of-pilot survey, 41 responses</small></td><td class="tgt">75%</td><td class="num">86%</td><td><span class="pill met">✓ Met</span></td></tr>
+        <tr><td>Coaches checking the team view 3+ times a week<small>Fix: a Monday morning summary text, live since March 28</small></td><td class="tgt">3.0</td><td class="num">2.4</td><td><span class="pill below">▲ Below</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="use">
+  <div style="display:grid;gap:10px">
+    <span class="label">02 · Did athletes actually use it?</span>
+    <h2 id="use">They kept showing up, all season</h2>
+    <p class="lede">Most wellness apps lose half their users within a month. Weekly activity stayed above the 70% target in every week, including spring break and conference travel.</p>
+  </div>
+  <div class="split">
+    <div class="panel" id="usePanel">
+      <span class="label">Athletes active 4+ days that week</span>
+      <svg id="useChart" viewBox="0 0 520 260" role="img" aria-label="Weekly share of athletes active four or more days, weeks 1 to 12, ranging from 71 to 89 percent, above the 70 percent target every week."></svg>
+      <div class="tip" id="useTip"></div>
+      <p class="note">Week 9 dip: spring break. Activity bounced back the following week without staff reminders.</p>
+      <button class="table-toggle" type="button" id="useToggle" aria-expanded="false">Show as table</button>
+      <div id="useTable" hidden style="overflow-x:auto"></div>
+    </div>
+    <div class="panel" id="skillPanel">
+      <span class="label">Mental skills check · baseline vs. week 12</span>
+      <svg id="skillChart" viewBox="0 0 520 260" role="img" aria-label="Average mental skills scores rose from baseline to week 12: emotional regulation 58 to 71, focus 62 to 74, composure 55 to 70, decision-making 60 to 69."></svg>
+      <div class="tip" id="skillTip"></div>
+      <div class="legend"><span><i style="background:var(--base)"></i>Baseline (January)</span><span><i style="background:var(--chart-line)"></i>Week 12 (April)</span></div>
+      <p class="note">Team averages from the athlete self-check, 0–100. Athletes see their own progress as a story and next steps, never as a score.</p>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="care">
+  <div style="display:grid;gap:10px">
+    <span class="label">03 · Safety and care</span>
+    <h2 id="care">We found the athletes who weren't going to ask</h2>
+    <p class="lede">Six athletes were flagged for follow-up through Nora check-ins or the season screenings. Each one was connected to a licensed clinician through AuntEDNA.ai, the same day in most cases.</p>
+  </div>
+  <div class="path">
+    <div class="step"><span class="label">Screened</span><strong>95%</strong><p>of enrolled athletes, two cycles</p></div>
+    <div class="step"><span class="label">Flagged</span><strong>6</strong><p>athletes for clinician follow-up</p></div>
+    <div class="step"><span class="label">Reached</span><strong>6 of 6</strong><p>contacted by a clinician</p></div>
+    <div class="step"><span class="label">Time to contact</span><strong>5 hrs</strong><p>median, flag to first conversation</p></div>
+  </div>
+  <div class="callout">
+    <strong>4 of the 6 had never used campus counseling.</strong>
+    <p>They were struggling, and nobody would have known until something went wrong. This is the gap that self-referral tools can't close.</p>
+  </div>
+</section>
+
+<section aria-labelledby="ncaa">
+  <div style="display:grid;gap:10px">
+    <span class="label">04 · NCAA reporting</span>
+    <h2 id="ncaa">Your November report, already documented</h2>
+    <p class="lede">Every NCAA member school reports on four mental health practices each November. The pilot produced records for all four, ready to export.</p>
+  </div>
+  <div class="reqs">
+    <div class="req"><span class="check">✓ Documented</span><h3>Healthy environment</h3><p>Daily mental training built into team routines, with completion records by team.</p></div>
+    <div class="req"><span class="check">✓ Documented</span><h3>Screening for distress</h3><p>Two full screening cycles with dates, completion rates and follow-up records.</p></div>
+    <div class="req"><span class="check">✓ Documented</span><h3>Action plans</h3><p>A written care pathway from flag to clinician, with time-stamped handoffs.</p></div>
+    <div class="req"><span class="check">✓ Documented</span><h3>Licensed providers</h3><p>Access to licensed clinicians through AuntEDNA.ai, connected to campus care.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="voices">
+  <div style="display:grid;gap:10px">
+    <span class="label">05 · In their words</span>
+    <h2 id="voices">What your staff and athletes said</h2>
+  </div>
+  <div class="quotes">
+    <blockquote><p>“I found out two of my players were struggling weeks before I would have noticed on my own.”</p><footer>Head coach, Women's Volleyball · sample quote</footer></blockquote>
+    <blockquote><p>“It fits into what we already do. They check in like they check hydration.”</p><footer>Head athletic trainer · sample quote</footer></blockquote>
+    <blockquote><p>“After a bad meet, Nora asked how I was doing, and I actually answered.”</p><footer>Junior, Men's Track &amp; Field · sample quote</footer></blockquote>
+  </div>
+</section>
+
+<section aria-labelledby="next">
+  <div style="display:grid;gap:10px">
+    <span class="label">06 · What's next</span>
+    <h2 id="next">From two teams to the whole department</h2>
+    <p class="lede">The pilot covered 48 of about 460 athletes. A department rollout puts every team on the same daily routine and the same care pathway before the next November report.</p>
+  </div>
+  <div class="timeline">
+    <div class="tl now"><span class="label">April</span><strong>Results review</strong><p>Walk through this report with athletics, sports medicine and counseling.</p></div>
+    <div class="tl"><span class="label">May</span><strong>Proposal</strong><p>Department plan sized to your 18 teams and staff structure.</p></div>
+    <div class="tl"><span class="label">July</span><strong>Budget</strong><p>Include the rollout in the 2027–28 athletics budget.</p></div>
+    <div class="tl"><span class="label">August</span><strong>Onboarding</strong><p>Every team set up before the first fall practice.</p></div>
+  </div>
+  <div class="ask">
+    <span class="label" style="color:var(--bg);opacity:.7">The decision</span>
+    <h2>Bring <span class="hl">all 18 teams</span> into PulseCheck for 2027–28.</h2>
+    <p>Same targets, same box score, reported to you every season.</p>
+  </div>
+</section>
+
+<section class="fine" aria-label="Method and privacy">
+  <span class="label">Method and privacy</span>
+  <p>Sample package: the school, numbers and quotes on this page are illustrative and show the format of a PulseCheck pilot report. Real reports use the measures agreed with each school before the pilot begins.</p>
+  <p>All figures are team-level aggregates. Individual athlete data stays with the athlete, their care team and staff they have consented to share with. Screening and clinical details are never shown in department reports. Mental skills scores come from a short athlete self-check at baseline and week 12.</p>
+</section>
+
+</div>
+
+<script>
+(function(){
+  const NS='http://www.w3.org/2000/svg';
+  const el=(t,a,p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
+  const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+  // Weekly activity line
+  const use=[71,79,83,85,84,80,86,88,74,85,87,89];
+  function drawUse(){
+    const svg=document.getElementById('useChart');svg.innerHTML='';
+    const W=520,H=260,L=38,R=16,T=16,B=34,y0=50,y1=100;
+    const x=i=>L+i*(W-L-R)/(use.length-1), y=v=>T+(y1-v)*(H-T-B)/(y1-y0);
+    [50,60,70,80,90,100].forEach(v=>{el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),stroke:css('--grid'),'stroke-width':1},svg);el('text',{x:L-8,y:y(v)+4,'text-anchor':'end'},svg).textContent=v+'%'});
+    // target line
+    el('line',{x1:L,x2:W-R,y1:y(70),y2:y(70),stroke:css('--muted'),'stroke-width':1.5,'stroke-dasharray':'5 4'},svg);
+    el('text',{x:W-R,y:y(70)+15,'text-anchor':'end'},svg).textContent='Target 70%';
+    const pts=use.map((v,i)=>[x(i),y(v)]);
+    el('path',{d:'M'+pts.map(p=>p.join(',')).join('L')+`L${x(use.length-1)},${y(y0)}L${x(0)},${y(y0)}Z`,fill:css('--chart-area'),stroke:'none'},svg);
+    el('path',{d:'M'+pts.map(p=>p.join(',')).join('L'),fill:'none',stroke:css('--chart-line'),'stroke-width':2,'stroke-linejoin':'round'},svg);
+    use.forEach((v,i)=>{ if(i%2===0||i===use.length-1) el('text',{x:x(i),y:H-12,'text-anchor':'middle'},svg).textContent='W'+(i+1)});
+    const last=pts[pts.length-1];
+    el('circle',{cx:last[0],cy:last[1],r:5,fill:css('--chart-line'),stroke:css('--surface'),'stroke-width':2},svg);
+    el('text',{x:last[0]-8,y:last[1]-10,'text-anchor':'end',class:'val'},svg).textContent='89%';
+    const dot=el('circle',{r:5,fill:css('--chart-line'),stroke:css('--surface'),'stroke-width':2,opacity:0},svg);
+    const hair=el('line',{y1:T,y2:H-B,stroke:css('--muted'),'stroke-width':1,opacity:0},svg);
+    const hit=el('rect',{x:L,y:T,width:W-L-R,height:H-T-B,fill:'transparent'},svg);
+    const tip=document.getElementById('useTip'),panel=document.getElementById('usePanel');
+    const show=(cx)=>{const i=Math.max(0,Math.min(use.length-1,Math.round((cx-L)/((W-L-R)/(use.length-1)))));
+      dot.setAttribute('cx',x(i));dot.setAttribute('cy',y(use[i]));dot.setAttribute('opacity',1);
+      hair.setAttribute('x1',x(i));hair.setAttribute('x2',x(i));hair.setAttribute('opacity',.5);
+      const r=svg.getBoundingClientRect(),pr=panel.getBoundingClientRect(),s=r.width/W;
+      tip.textContent=`Week ${i+1}: ${use[i]}% active`+(i===8?' · spring break':'');
+      tip.style.left=(r.left-pr.left+x(i)*s)+'px';tip.style.top=(r.top-pr.top+y(use[i])*s)+'px';tip.classList.add('on')};
+    hit.addEventListener('pointermove',e=>{const r=svg.getBoundingClientRect();show((e.clientX-r.left)*W/r.width)});
+    hit.addEventListener('pointerleave',()=>{tip.classList.remove('on');dot.setAttribute('opacity',0);hair.setAttribute('opacity',0)});
+  }
+  const t=document.getElementById('useTable');
+  t.innerHTML='<table class="mini"><thead><tr><th>Week</th>'+use.map((_,i)=>'<th>'+(i+1)+'</th>').join('')+'</tr></thead><tbody><tr><td>Active 4+ days</td>'+use.map(v=>'<td>'+v+'%</td>').join('')+'</tr></tbody></table>';
+  const tg=document.getElementById('useToggle');
+  tg.addEventListener('click',()=>{t.hidden=!t.hidden;tg.setAttribute('aria-expanded',String(!t.hidden));tg.textContent=t.hidden?'Show as table':'Hide table'});
+
+  // Skills dumbbell
+  const skills=[['Emotional regulation',58,71],['Focus',62,74],['Composure',55,70],['Decision-making',60,69]];
+  function drawSkills(){
+    const svg=document.getElementById('skillChart');svg.innerHTML='';
+    const W=520,H=260,L=150,R=40,T=18,B=34,x0=40,x1=90;
+    const x=v=>L+(v-x0)*(W-L-R)/(x1-x0), row=(H-T-B)/skills.length;
+    [40,50,60,70,80,90].forEach(v=>{el('line',{x1:x(v),x2:x(v),y1:T,y2:H-B,stroke:css('--grid'),'stroke-width':1},svg);el('text',{x:x(v),y:H-12,'text-anchor':'middle'},svg).textContent=v});
+    const tip=document.getElementById('skillTip'),panel=document.getElementById('skillPanel');
+    skills.forEach(([n,a,b],i)=>{
+      const cy=T+row*i+row/2;
+      el('text',{x:L-14,y:cy+4,'text-anchor':'end',style:'font-family:var(--body);font-size:13px;fill:'+css('--ink-2')},svg).textContent=n;
+      el('line',{x1:x(a),x2:x(b),y1:cy,y2:cy,stroke:css('--base'),'stroke-width':2},svg);
+      el('circle',{cx:x(a),cy,r:6,fill:css('--base'),stroke:css('--surface'),'stroke-width':2},svg);
+      el('circle',{cx:x(b),cy,r:7,fill:css('--chart-line'),stroke:css('--surface'),'stroke-width':2},svg);
+      el('text',{x:x(b)+12,y:cy+5,class:'val'},svg).textContent='+'+(b-a);
+      const hit=el('rect',{x:L,y:cy-row/2,width:W-L-R,height:row,fill:'transparent'},svg);
+      hit.addEventListener('pointerenter',()=>{const r=svg.getBoundingClientRect(),pr=panel.getBoundingClientRect(),s=r.width/W;
+        tip.textContent=`${n}: ${a} → ${b} (+${b-a})`;tip.style.left=(r.left-pr.left+x(b)*s)+'px';tip.style.top=(r.top-pr.top+cy*s)+'px';tip.classList.add('on')});
+      hit.addEventListener('pointerleave',()=>tip.classList.remove('on'));
+    });
+  }
+  const draw=()=>{drawUse();drawSkills()};
+  draw();
+  try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw)}catch(e){}
+  new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(draw);
+})();
+</script>
+</body>
+</html>

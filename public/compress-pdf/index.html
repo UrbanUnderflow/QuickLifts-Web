@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="description" content="Compress a PDF with Pulse. Choose a file, reduce its size, and download. Files stay on your device.">
+<title>Compress PDF | Pulse</title>
+<link rel="stylesheet" href="/compress-pdf/style.css">
+<script src="/compress-pdf/app.js" defer></script>
+</head>
+<body>
+<header class="topbar"><a class="wordmark" href="/" aria-label="Pulse home">pulse<span>.</span></a><span class="tool-label">THE TOOLBOX <span class="dot"></span> PDF COMPRESSOR</span><span class="private-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/></svg>On your device</span></header>
+<main>
+<div class="intro"><span class="eyebrow">LESS SIZE. SAME STORY.</span><h1>A little lighter.<br>A lot easier to share.</h1><p>Drop in your PDF. We’ll make room for what’s next.</p></div>
+<section class="workspace" aria-label="PDF compressor">
+<div class="workspace-heading"><h2>Compress PDF</h2><span class="step-label" id="step-label">01 / ADD YOUR FILE</span></div>
+<input type="file" id="file-input" accept="application/pdf,.pdf" hidden>
+<div id="dropzone" class="dropzone">
+<div class="paper-stack" aria-hidden="true"><div class="paper-back"></div><div class="paper-front"><span>PDF</span><i></i><i></i><i></i><b>↓</b></div></div>
+<h3>Drop your PDF here</h3><p>or pick one from your device</p>
+<button id="browse" class="primary">Browse files <span aria-hidden="true">↗</span></button>
+<span class="file-limit">PDF files up to 50 MB</span>
+</div>
+<div id="selected" hidden>
+<div class="file-card"><div class="file-icon" aria-hidden="true">PDF</div><div class="file-info"><h3 id="file-name"></h3><p id="file-size"></p></div><button id="remove" class="icon-button" aria-label="Remove file">×</button></div>
+<fieldset id="levels"><legend>How small should we go?</legend><div class="level-grid">
+<label class="level"><input type="radio" name="level" value="gentle"><span class="level-title">Gentle</span><span>Higher image quality</span><span class="level-bars" aria-hidden="true">▰ ▱ ▱</span></label>
+<label class="level"><input type="radio" name="level" value="balanced" checked><span class="level-title">Balanced <small>BEST FIT</small></span><span>Smaller, still sharp</span><span class="level-bars" aria-hidden="true">▰ ▰ ▱</span></label>
+<label class="level"><input type="radio" name="level" value="strong"><span class="level-title">Strong</span><span>Smallest images, softer detail</span><span class="level-bars" aria-hidden="true">▰ ▰ ▰</span></label>
+</div></fieldset>
+<p class="quality-note">Text stays selectable. Compression works best on PDFs with large photos. Some files are already as small as they can be.</p>
+<button id="compress" class="primary wide">Compress PDF <span aria-hidden="true">↓</span></button>
+</div>
+<div id="processing" class="processing" hidden><div class="processing-symbol" aria-hidden="true">↓</div><h3>Making things lighter.</h3><p id="progress-label">Opening your PDF…</p><progress id="progress" max="100" value="0" aria-label="Compression progress"></progress><button id="cancel" class="text-button">Cancel</button></div>
+<div id="result" class="result" hidden><div class="success-icon" aria-hidden="true">✓</div><h3 id="result-title">Ready to go.</h3><p id="result-subtitle"></p><div class="size-comparison"><div><span>BEFORE</span><strong id="before-size"></strong></div><span class="size-arrow" aria-hidden="true">→</span><div><span>AFTER</span><strong id="after-size"></strong></div><span id="savings" class="savings"></span></div><a id="download" class="primary wide" download>Download PDF <span aria-hidden="true">↓</span></a><button id="again" class="text-button">Compress another PDF</button></div>
+<div id="error" class="error" role="alert" hidden></div>
+<div class="privacy-footer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></svg><span>Your file stays yours. Everything happens in your browser.</span></div>
+</section>
+<div class="footnotes"><span><b>01</b> Add a PDF</span><span><b>02</b> Find your balance</span><span><b>03</b> Download & carry on</span></div>
+<footer>Small tools. More room to move. <span>Made by Pulse.</span></footer>
+</main>
+<div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
+</body></html>

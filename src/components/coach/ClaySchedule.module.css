@@ -44,3 +44,12 @@
   .schedule :global([class*="grid-cols-7"]) { gap: 3px; }
   .schedule :global([class*="grid-cols-7"] button > div + div) { font-size: 9px; }
 }
+
+:global([data-dashboard-theme="dark"]) .schedule {color:var(--dashboard-text);color-scheme:dark;}
+:global([data-dashboard-theme="dark"]) .heading p {color:var(--dashboard-muted);}
+:global([data-dashboard-theme="dark"]) .imports,:global([data-dashboard-theme="dark"]) .schedule :global([role="dialog"]),:global([data-dashboard-theme="dark"]) .schedule :global([class*="bg-zinc-"]) {background:var(--dashboard-surface);color:var(--dashboard-text);border-color:var(--dashboard-border);}
+:global([data-dashboard-theme="dark"]) .schedule :global([class*="text-"]) {color:var(--dashboard-text);}
+:global([data-dashboard-theme="dark"]) .schedule :global([class*="text-red-"]) {color:#fca5a5;}
+:global([data-dashboard-theme="dark"]) .schedule :global(button[aria-pressed="true"]) {background:#334835;border-color:#8ca879;}
+:global([data-dashboard-theme="dark"]) .schedule :global(input::placeholder),:global([data-dashboard-theme="dark"]) .schedule :global(textarea::placeholder) {color:var(--dashboard-muted);}
+:global([data-dashboard-theme="dark"]) .schedule :global(button[class*="bg-[#E0FE10]"]),:global([data-dashboard-theme="dark"]) .schedule :global(button[class*="bg-[#E0FE10]"] *) {color:#22302e;}
