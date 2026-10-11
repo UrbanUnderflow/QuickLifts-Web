@@ -18,6 +18,7 @@ function loadBridge() {
   return { ...exports, imports };
 }
 const routes = [
+  ['/api/developer/partner/auntedna/login', '/api/developer/partner/auntedna/[action]', '../../src/pages/api/developer/partner/auntedna/[action].ts'],
   ['/api/admin/partner-api-keys', '/api/admin/partner-api-keys', '../../src/pages/api/admin/partner-api-keys/index.ts'],
   ['/api/developer/access-requests', '/api/developer/access-requests', '../../src/pages/api/developer/access-requests.ts'],
   ['/api/developer/docs/clinical-bridge/unlock', '/api/developer/docs/[slug]/unlock', '../../src/pages/api/developer/docs/[slug]/unlock.ts'],
@@ -56,4 +57,16 @@ test('Netlify redirects preserve each new public API path through the bridge', (
   for (const route of ['/api/admin/partner-api-keys', '/api/developer/access-requests', '/api/developer/docs/:slug/unlock']) {
     assert.ok(toml.includes(`from = "${route}"\n  to = "/.netlify/functions/firebase-next-api?originalPath=${route}"\n  status = 200\n  force = true`));
   }
+});
+
+test('portal bridge preserves cookie arrays and suppresses arbitrary exception details', async () => {
+  const bridge = loadBridge();
+  const ok = bridge.createFirebaseNextApiHandler([{pattern:'/api/developer/partner/auntedna/[action]',loadHandler:async()=>({default:async(req,res)=>{res.setHeader('Set-Cookie',['portal=synthetic','docs=synthetic']);res.status(200).json({success:true});}})}]);
+  const response = await ok(event('/api/developer/partner/auntedna/login','{}'));
+  assert.equal(JSON.stringify(response.multiValueHeaders['Set-Cookie']), JSON.stringify(['portal=synthetic','docs=synthetic']));
+  const fail = bridge.createFirebaseNextApiHandler([{pattern:'/api/developer/partner/auntedna/[action]',loadHandler:async()=>{throw new Error('PRIVATE_SECRET_ERROR');}}]);
+  const error = await fail(event('/api/developer/partner/auntedna/secret','{}'));
+  assert.equal(error.statusCode,503);
+  assert.match(error.headers['Cache-Control'],/no-store/);
+  assert.equal(error.body.includes('PRIVATE_SECRET_ERROR'),false);
 });

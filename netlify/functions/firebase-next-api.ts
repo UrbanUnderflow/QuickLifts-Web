@@ -307,6 +307,7 @@ export function createFirebaseNextApiHandler(
     }
 
     const protectedPartnerRoute = [
+      "/api/developer/partner/auntedna/[action]",
       "/api/admin/partner-api-keys",
       "/api/developer/access-requests",
       "/api/developer/docs/[slug]/unlock",
@@ -341,6 +342,11 @@ export function createFirebaseNextApiHandler(
       await module.default(request, response);
       return toHandlerResponse(response);
     } catch (error) {
+      if (protectedPartnerRoute) return {
+        statusCode: 503,
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "private, no-store, max-age=0" },
+        body: JSON.stringify({ error: "partner_route_unavailable" }),
+      };
       console.error("[firebase-next-api] Route execution failed:", {
         originalPath,
         pattern: matchedEntry.pattern,
@@ -360,6 +366,10 @@ export function createFirebaseNextApiHandler(
 }
 
 const ROUTE_ENTRIES: RouteEntry[] = [
+  {
+    pattern: "/api/developer/partner/auntedna/[action]",
+    loadHandler: () => import("../../src/pages/api/developer/partner/auntedna/[action].ts"),
+  },
   {
     pattern: "/api/admin/partner-api-keys",
     loadHandler: () => import("../../src/pages/api/admin/partner-api-keys/index.ts"),

@@ -192,7 +192,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
 
   // Add debugging for Android issues
   useEffect(() => {
-    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/group-meet/booking/')) {
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/group-meet/booking/') && !window.location.pathname.startsWith('/developer/')) {
       console.log('[App] User Agent:', navigator.userAgent);
       console.log('[App] Current URL:', window.location.href);
 

@@ -230,4 +230,4 @@ async function listPartnerAccess(db, { cursors = {} } = {}) {
   return { requests: requests.rows, keys: keys.rows.map(metadata), pagination: { requests: requests.page, keys: keys.page, organizations: organizations.page, teams: teams.page }, scopeOptions: { organizations: orgs.map(org => ({ id: org.id, name: org.name || org.displayName || org.id })), teams: teams.rows.filter(team => active(team)).map(team => ({ id: team.id, name: team.name || team.id, organizationId: team.organizationId })), apis: [SCOPE], environments: ['test', 'production'] } };
 }
 
-module.exports = { updatePartnerKeyGrants, normalizeGrants, COLLECTIONS, SCOPE, requestPartnerAccess, approvePartnerAccessRequest, rotatePartnerKey, revokePartnerKey, listPartnerAccess, authenticatePartnerRequest, revalidatePartnerPrincipal };
+module.exports = { decryptPartnerKeySecret: decryptSecret, updatePartnerKeyGrants, normalizeGrants, COLLECTIONS, SCOPE, requestPartnerAccess, approvePartnerAccessRequest, rotatePartnerKey, revokePartnerKey, listPartnerAccess, authenticatePartnerRequest, revalidatePartnerPrincipal };

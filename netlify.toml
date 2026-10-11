@@ -200,6 +200,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/developer/partner/auntedna/:action"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/developer/partner/auntedna/:action"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/admin/partner-api-keys"
   to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/partner-api-keys"
   status = 200
