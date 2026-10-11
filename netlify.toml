@@ -200,6 +200,24 @@
   force = true
 
 [[redirects]]
+  from = "/api/admin/partner-api-keys"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/partner-api-keys"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/developer/access-requests"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/developer/access-requests"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/developer/docs/:slug/unlock"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/developer/docs/:slug/unlock"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/admin/group-meet"
   to = "/.netlify/functions/firebase-next-api?originalPath=/api/admin/group-meet"
   status = 200

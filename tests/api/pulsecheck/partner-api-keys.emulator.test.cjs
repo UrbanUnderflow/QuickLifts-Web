@@ -15,9 +15,9 @@ test('encrypted partner key lifecycle, atomic scopes and quotas, revocation, rot
   for(const [id,org] of [['synthetic-team','synthetic-org'],['synthetic-other-team','synthetic-other'],['synthetic-pc-team','synthetic-pc']])await db.doc(`pulsecheck-teams/${id}`).set({status:'active',organizationId:org});
   const request=await keys.requestPartnerAccess(db,{organizationName:'Synthetic',contactName:'Developer',contactEmail:'dev@synthetic.example',intendedUse:'Synthetic test only',address:'local',now});
   assert.equal(request.status,'pending');assert.equal((await db.collection(keys.COLLECTIONS.keys).get()).size,0);
-  const input={requestId:request.requestId,organizationId:'synthetic-org',teamIds:['synthetic-team'],scopes:[keys.SCOPE],environment:'test',expiresAt:new Date(now+86400000).toISOString(),maxRequestsPerMinute:2,actorEmail:'admin@synthetic.example',now,env};
-  await assert.rejects(keys.approvePartnerAccessRequest(db,{...input,organizationId:'synthetic-pc',teamIds:['synthetic-pc-team']}),/invalid_saved/);
-  await assert.rejects(keys.approvePartnerAccessRequest(db,{...input,teamIds:['synthetic-other-team']}),/invalid_saved/);
+  const input={requestId:request.requestId,partnerId:'auntedna',partnerName:'AuntEdna',grants:[{organizationId:'synthetic-org',teamIds:['synthetic-team']}],scopes:[keys.SCOPE],environment:'test',expiresAt:new Date(now+86400000).toISOString(),maxRequestsPerMinute:2,actorEmail:'admin@synthetic.example',now,env};
+  await assert.rejects(keys.approvePartnerAccessRequest(db,{...input,grants:[{organizationId:'synthetic-pc',teamIds:['synthetic-pc-team']}]}),/invalid_saved/);
+  await assert.rejects(keys.approvePartnerAccessRequest(db,{...input,grants:[{organizationId:'synthetic-org',teamIds:['synthetic-other-team']}]}),/invalid_saved/);
   await assert.rejects(keys.approvePartnerAccessRequest(db,{...input,scopes:['clinical.read']}),/invalid_key_scope/);
   await assert.rejects(keys.approvePartnerAccessRequest(db,{...input,env:{}}),/key_encryption_unavailable/);
   const issued=await keys.approvePartnerAccessRequest(db,input);assert.match(issued.key.keyId,/^pk_/);assert.ok(issued.secret.length>=40);
@@ -46,5 +46,24 @@ test('encrypted partner key lifecycle, atomic scopes and quotas, revocation, rot
   const nextPage=await keys.listPartnerAccess(db,{cursors:{requests:page.pagination.requests.cursor}});assert.ok(nextPage.requests.length>0);assert.equal(nextPage.pagination.requests.hasMore,false);
   for(let i=0;i<4;i++)await keys.requestPartnerAccess(db,{organizationName:'Synthetic',contactName:'Dev',contactEmail:'dev@synthetic.example',intendedUse:'Synthetic',address:'local',now});
   await assert.rejects(keys.requestPartnerAccess(db,{organizationName:'Synthetic',contactName:'Dev',contactEmail:'dev@synthetic.example',intendedUse:'Synthetic',address:'local',now}),/rate_limited/);
+ } finally {await db.terminate();}
+});
+
+test('partner zero grants, dynamic all-AM, and transactional withdrawal preserve scope', { skip: host !== '127.0.0.1:8188' }, async () => {
+ const db = new Firestore({ projectId: 'demo-partner-grants-lifecycle' });
+ try {
+  for (const name of Object.values(keys.COLLECTIONS)) { const docs=await db.collection(name).get();for(const doc of docs.docs) await doc.ref.delete(); }
+  const request = await keys.requestPartnerAccess(db, { organizationName:'Synthetic Partner',contactName:'Developer',contactEmail:'dev@example.invalid',intendedUse:'Synthetic grants',address:'scope-test',now });
+  const issued = await keys.approvePartnerAccessRequest(db, {requestId:request.requestId,partnerId:'auntedna',partnerName:'AuntEdna',scopeMode:'explicit',grants:[],scopes:[keys.SCOPE],environment:'test',expiresAt:new Date(now+86400000).toISOString(),actorEmail:'admin@example.invalid',now,env});
+  const auth = pair => { const rawBody='{}',path='/synthetic',t=Math.floor(now/1000);return {keyId:pair.key.keyId,signature:`t=${t},v1=${crypto.createHmac('sha256',pair.secret).update(`${t}.POST.${path}.${rawBody}`).digest('hex')}`,method:'POST',path,rawBody,scope:keys.SCOPE,environment:'test',teamId:'synthetic-team',now,env}; };
+  assert.equal((await keys.authenticatePartnerRequest(db,auth(issued))).reason,'scope_not_authorized');
+  await keys.updatePartnerKeyGrants(db,{keyId:issued.key.keyId,scopeMode:'all-athleticmind',grants:[],actorEmail:'admin@example.invalid',now});
+  await db.doc('pulsecheck-organizations/synthetic-org').set({status:'active',productBrand:'athleticmind'});
+  await db.doc('pulsecheck-teams/synthetic-team').set({status:'active',organizationId:'synthetic-org'});
+  assert.equal((await keys.authenticatePartnerRequest(db,auth(issued))).ok,true);
+  const replacement=await keys.rotatePartnerKey(db,{keyId:issued.key.keyId,overlapMinutes:30,actorEmail:'admin@example.invalid',now,env});
+  await keys.updatePartnerKeyGrants(db,{keyId:replacement.key.keyId,scopeMode:'explicit',grants:[],actorEmail:'admin@example.invalid',now});
+  assert.equal((await keys.authenticatePartnerRequest(db,auth(issued))).reason,'invalid_authentication');
+  assert.equal((await keys.authenticatePartnerRequest(db,auth(replacement))).reason,'scope_not_authorized');
  } finally {await db.terminate();}
 });

@@ -186,7 +186,7 @@ async function managedFixture(options = {}) {
   f.records.get('pulsecheck-teams/team-am').status = 'active';
   const managedEnv = { ATHLETICMIND_SNAPSHOT_PULL_ENABLED: 'true', PARTNER_API_ENVIRONMENT: 'production', PARTNER_API_KEY_ACTIVE_ENCRYPTION_VERSION: 'v1', PARTNER_API_KEY_ENCRYPTION_KEYS_JSON: JSON.stringify({ v1: Buffer.alloc(32, 7).toString('base64') }) };
   const request = await keys.requestPartnerAccess(f.db, { organizationName: 'Synthetic Organization', contactName: 'Synthetic Engineer', contactEmail: 'engineer@example.invalid', intendedUse: 'Synthetic local request', address: 'fixture', now });
-  const issued = await keys.approvePartnerAccessRequest(f.db, { requestId: request.requestId, organizationId: 'org-am', teamIds: ['team-am'], scopes: [keys.SCOPE], environment: 'production', expiresAt: new Date(now + 86400000).toISOString(), maxRequestsPerMinute: options.rate || 30, actorEmail: 'admin@example.invalid', now, env: managedEnv });
+  const issued = await keys.approvePartnerAccessRequest(f.db, { requestId: request.requestId, partnerId: 'auntedna', partnerName: 'AuntEdna', scopeMode: options.scopeMode || 'explicit', grants: options.grants || [{ organizationId: 'org-am', teamIds: ['team-am'] }], scopes: [keys.SCOPE], environment: 'production', expiresAt: new Date(now + 86400000).toISOString(), maxRequestsPerMinute: options.rate || 30, actorEmail: 'admin@example.invalid', now, env: managedEnv });
   const signed = (body = input) => {
     const rawBody = JSON.stringify(body), timestamp = Math.floor(now / 1000);
     const signature = crypto.createHmac('sha256', issued.secret).update(`${timestamp}.POST.${PATH}.${rawBody}`).digest('hex');
@@ -239,7 +239,7 @@ test('deployed sandbox path serves deterministic synthetic data with an issued t
   f.records.set('pulsecheck-teams/synthetic-team', { ...f.records.get('pulsecheck-teams/team-am'), organizationId: 'synthetic-org' });
   const request = await f.keys.requestPartnerAccess(f.db, { organizationName: 'Synthetic Sandbox', contactName: 'Synthetic Engineer', contactEmail: 'sandbox@example.invalid', intendedUse: 'Synthetic sandbox test', address: 'sandbox', now });
   const sandboxEnv = { ...f.managedEnv, PARTNER_API_ENVIRONMENT: 'test', ATHLETICMIND_SNAPSHOT_SANDBOX_ENABLED: 'true' };
-  const issued = await f.keys.approvePartnerAccessRequest(f.db, { requestId: request.requestId, organizationId: 'synthetic-org', teamIds: ['synthetic-team'], scopes: [f.keys.SCOPE], environment: 'test', expiresAt: new Date(now + 86400000).toISOString(), actorEmail: 'admin@example.invalid', now, env: sandboxEnv });
+  const issued = await f.keys.approvePartnerAccessRequest(f.db, { requestId: request.requestId, partnerId: 'auntedna', partnerName: 'AuntEdna', grants: [{ organizationId: 'synthetic-org', teamIds: ['synthetic-team'] }], scopes: [f.keys.SCOPE], environment: 'test', expiresAt: new Date(now + 86400000).toISOString(), actorEmail: 'admin@example.invalid', now, env: sandboxEnv });
   const db = { ...f.db, collection(name) {
     assert.ok(['partner-api-keys', 'partner-api-key-rate-limits', 'partner-api-key-audit', 'pulsecheck-organizations', 'pulsecheck-teams', 'athleticmind-snapshot-pulls', 'athleticmind-snapshots'].includes(name), `No athlete source read: ${name}`);
     return f.db.collection(name);
@@ -262,4 +262,66 @@ test('deployed sandbox path serves deterministic synthetic data with an issued t
   assert.equal((await disabled(requestEvent)).statusCode, 503);
   const production = createDeployedSnapshotPullHandler({ getDb: () => db, env: { ...sandboxEnv, PARTNER_API_ENVIRONMENT: 'production' }, now: () => now });
   assert.equal((await production(requestEvent)).statusCode, 401);
+});
+
+test('partner identity can issue with zero grants and add or withdraw multiple explicit organization grants', async () => {
+  const f = await managedFixture({ grants: [] });
+  assert.equal(f.issued.key.partnerId, 'auntedna');
+  assert.deepEqual(f.issued.key.grants, []);
+  assert.equal((await f.handler(f.signed())).statusCode, 403);
+  f.records.set('pulsecheck-organizations/org-two', { status: 'active', productBrand: 'athleticmind' });
+  f.records.set('pulsecheck-teams/team-two', { status: 'active', organizationId: 'org-two' });
+  const grants = [{ organizationId: 'org-am', teamIds: ['team-am'] }, { organizationId: 'org-two', teamIds: ['team-two'] }];
+  const changed = await f.keys.updatePartnerKeyGrants(f.db, { keyId: f.issued.key.keyId, grants, actorEmail: 'admin@example.invalid', now });
+  assert.equal(changed.key.grants.length, 2);
+  assert.equal((await f.handler(f.signed())).statusCode, 200);
+  const signed = f.signed({ ...input, teamId: 'team-two' });
+  const authenticated = await f.keys.authenticatePartnerRequest(f.db, { keyId: f.issued.key.keyId, signature: signed.headers['x-auntedna-signature'], method: 'POST', path: PATH, rawBody: signed.body, teamId: 'team-two', scope: f.keys.SCOPE, environment: 'production', env: f.managedEnv, now });
+  assert.equal(authenticated.ok, true);
+  assert.equal(authenticated.principal.organizationId, 'org-two');
+  await f.keys.updatePartnerKeyGrants(f.db, { keyId: f.issued.key.keyId, grants: [], actorEmail: 'admin@example.invalid', now });
+  assert.equal((await f.handler(f.signed())).statusCode, 403);
+});
+
+test('legacy key records retain exactly their original organization and teams including after rotation', async () => {
+  const f = await managedFixture();
+  const record = f.records.get(`partner-api-keys/${crypto.createHash('sha256').update(f.issued.key.keyId).digest('hex')}`);
+  delete record.grants; delete record.scopeMode; delete record.partnerId; delete record.partnerName;
+  record.organizationId = 'org-am'; record.teamIds = ['team-am'];
+  assert.equal((await f.handler(f.signed())).statusCode, 200);
+  assert.equal((await f.handler(f.signed({ ...input, teamId: 'team-two' }))).statusCode, 403);
+  const rotated = await f.keys.rotatePartnerKey(f.db, { keyId: f.issued.key.keyId, actorEmail: 'admin@example.invalid', now, env: f.managedEnv });
+  assert.equal(rotated.key.scopeMode, 'explicit');
+  assert.deepEqual(rotated.key.grants, [{ organizationId: 'org-am', teamIds: ['team-am'] }]);
+});
+
+test('all-athleticmind dynamically admits future configured teams and rejects PC, missing brand and reclassification', async () => {
+  const f = await managedFixture({ grants: [], scopeMode: 'all-athleticmind' });
+  f.records.delete('pulsecheck-organizations/org-am');
+  assert.equal(f.issued.key.scopeMode, 'all-athleticmind');
+  assert.equal((await f.handler(f.signed())).statusCode, 403);
+  f.records.set('pulsecheck-organizations/org-am', { status: 'active', productBrand: 'athleticmind' });
+  assert.equal((await f.handler(f.signed())).statusCode, 200);
+  for (const brand of ['pulsecheck', undefined, 'AthleticMind']) {
+    f.records.set('pulsecheck-organizations/org-am', { status: 'active', productBrand: brand });
+    assert.equal((await f.handler(f.signed())).statusCode, 403);
+  }
+  f.records.set('pulsecheck-organizations/org-future', { status: 'active', productBrand: 'athleticmind' });
+  f.records.set('pulsecheck-teams/team-future', { status: 'active', organizationId: 'org-future' });
+  const signed = f.signed({ ...input, teamId: 'team-future' });
+  const authenticated = await f.keys.authenticatePartnerRequest(f.db, { keyId: f.issued.key.keyId, signature: signed.headers['x-auntedna-signature'], method: 'POST', path: PATH, rawBody: signed.body, teamId: 'team-future', scope: f.keys.SCOPE, environment: 'production', env: f.managedEnv, now });
+  assert.equal(authenticated.ok, true);
+  assert.equal(authenticated.principal.organizationId, 'org-future');
+  f.records.get('pulsecheck-teams/team-future').status = 'inactive';
+  assert.equal((await f.keys.revalidatePartnerPrincipal(f.db, { principal: authenticated.principal, teamId: 'team-future', scope: f.keys.SCOPE, environment: 'production', now })).ok, false);
+});
+
+test('scope withdrawal during assembly blocks release and grant changes revoke overlapping predecessor credentials', async () => {
+  const f = await managedFixture({ duringAssembly: async ({ keys, db, issued }) => keys.updatePartnerKeyGrants(db, { keyId: issued.key.keyId, grants: [], actorEmail: 'admin@example.invalid', now }) });
+  assert.equal((await f.handler(f.signed())).statusCode, 401);
+  const g = await managedFixture();
+  const rotated = await g.keys.rotatePartnerKey(g.db, { keyId: g.issued.key.keyId, overlapMinutes: 30, actorEmail: 'admin@example.invalid', now, env: g.managedEnv });
+  assert.equal((await g.handler(g.signed())).statusCode, 200);
+  await g.keys.updatePartnerKeyGrants(g.db, { keyId: rotated.key.keyId, grants: [], actorEmail: 'admin@example.invalid', now });
+  assert.equal((await g.handler(g.signed())).statusCode, 401);
 });

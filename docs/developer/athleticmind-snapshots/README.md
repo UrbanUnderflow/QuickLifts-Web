@@ -4,13 +4,17 @@ Exchange a scoped athlete snapshot through scheduled delivery or an authenticate
 
 ## Overview
 
-Snapshots include current onboarding answers, eligible check-ins, permitted Nora messages, limited support-status codes, and deterministic counts. Exchange requires an active Athletic Mind program, matching athlete membership, and current participation permission. PulseCheck-only programs are excluded. Each response reports its source coverage; the current contract does not guarantee complete Nora history. Wearable and private-journal data are excluded from this version.
+Snapshots include current onboarding answers, eligible check-ins, permitted Nora messages, limited support-status codes, and deterministic counts. Exchange requires an active Athletic Mind program, matching athlete membership, and current participation permission. PulseCheck programs and programs without an explicit Athletic Mind configuration are excluded. Each response reports its source coverage; the current contract does not guarantee complete Nora history. Wearable and private-journal data are excluded from this version.
 
 ## Request access and manage credentials
 
 Submit an API access request from the developer catalog. A request records your organization, contact, and intended use for administrator review; it does not grant API access or send an automatic approval email. Documentation access is separate.
 
-An administrator approves the saved organization, permitted teams, `athleticmind.snapshot.read` scope, environment, expiration, and request limit. Partners cannot select their own effective scopes. The issued key ID and HMAC secret are shown once to the approving administrator for secure delivery through the agreed channel. The secret cannot be retrieved later; rotate the key if it is lost. Key listings contain metadata only.
+A credential belongs to the partner, independently of any one program. An administrator confirms the partner identity, `athleticmind.snapshot.read` permission, environment, expiration, request limit, and program-access mode. Partners cannot approve their own access.
+
+With **All Athletic Mind programs** access, the same credential covers current and future active programs explicitly configured as Athletic Mind. Each request checks the current saved program and team configuration. PulseCheck programs and programs with missing or different brand configuration remain excluded; changing a program away from Athletic Mind removes its eligibility. This access mode does not require an existing Athletic Mind program at the time the credential is issued.
+
+Alternatively, the administrator can approve specific saved program and team grants. A credential with an empty explicit-grants list has no athlete data access. Administrators can later add or remove grants or change the access mode without issuing a new credential. Existing restricted credentials retain their saved access until explicitly changed. Every snapshot still requires current athlete membership, eligibility, and the applicable consent; a broad partner scope never replaces those checks. The issued key ID and HMAC secret are shown once to the approving administrator for secure delivery through the agreed channel. The secret cannot be retrieved later; rotate the key if it is lost. Key listings contain metadata only.
 
 Test and production credentials are separate. Test credentials are restricted to synthetic organizations, teams, and athletes in the configured sandbox. They cannot read production athlete data. Use the base URL supplied for the key's environment; a request cannot switch environments through headers or body fields.
 
@@ -22,7 +26,7 @@ Per-key request limits are enforced atomically. HTTP `429` indicates the request
 
 Pull requests use a partner-specific key ID and a separately provisioned HMAC secret. Send `X-AuntEdna-Key-Id` and `X-AuntEdna-Signature: t=<unix seconds>,v1=<hex digest>`.
 
-Calculate HMAC-SHA256 over the exact UTF-8 string `<timestamp>.POST./.netlify/functions/auntedna-snapshot-pull.<raw JSON body>`. Preserve JSON bytes after signing. The timestamp must be within five minutes of server time. Keys are limited to agreed organizations and teams. Never embed production secrets in client-side code or documentation links.
+Calculate HMAC-SHA256 over the exact UTF-8 string `<timestamp>.POST./.netlify/functions/auntedna-snapshot-pull.<raw JSON body>`. Preserve JSON bytes after signing. The timestamp must be within five minutes of server time. Keys are limited to their approved program-access mode and current eligibility checks. Never embed production secrets in client-side code or documentation links.
 
 Scheduled deliveries use `Authorization: Bearer <partner credential>`, `Idempotency-Key: <snapshotId>`, and `X-Snapshot-Contract: athleticmind-snapshot-v1`.
 

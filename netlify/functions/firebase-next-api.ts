@@ -306,8 +306,34 @@ export function createFirebaseNextApiHandler(
       };
     }
 
+    const protectedPartnerRoute = [
+      "/api/admin/partner-api-keys",
+      "/api/developer/access-requests",
+      "/api/developer/docs/[slug]/unlock",
+    ].includes(matchedEntry.pattern);
+    let scopedBody: unknown;
+    if (protectedPartnerRoute) {
+      const raw = event.isBase64Encoded
+        ? Buffer.from(event.body || "", "base64")
+        : Buffer.from(event.body || "", "utf8");
+      if (raw.length > 8192) return {
+        statusCode: 413,
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+        body: JSON.stringify({ error: "request_too_large" }),
+      };
+      const contentType = String(event.headers["content-type"] || event.headers["Content-Type"] || "").toLowerCase();
+      if (raw.length && contentType.includes("application/json")) {
+        try { scopedBody = JSON.parse(raw.toString("utf8")); }
+        catch { return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+          body: JSON.stringify({ error: "invalid_json" }),
+        }; }
+      } else scopedBody = raw.length ? raw.toString("utf8") : undefined;
+    }
     const params = matchRoutePattern(matchedEntry.pattern, originalPath) || {};
     const request = createRequest(event, params);
+    if (protectedPartnerRoute) request.body = scopedBody;
     const response = createResponse();
 
     try {
@@ -334,6 +360,18 @@ export function createFirebaseNextApiHandler(
 }
 
 const ROUTE_ENTRIES: RouteEntry[] = [
+  {
+    pattern: "/api/admin/partner-api-keys",
+    loadHandler: () => import("../../src/pages/api/admin/partner-api-keys/index.ts"),
+  },
+  {
+    pattern: "/api/developer/access-requests",
+    loadHandler: () => import("../../src/pages/api/developer/access-requests.ts"),
+  },
+  {
+    pattern: "/api/developer/docs/[slug]/unlock",
+    loadHandler: () => import("../../src/pages/api/developer/docs/[slug]/unlock.ts"),
+  },
   {
     pattern: "/api/admin/group-meet",
     loadHandler: () => import("../../src/pages/api/admin/group-meet/index.ts"),

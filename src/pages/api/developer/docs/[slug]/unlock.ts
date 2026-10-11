@@ -1,10 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { consumeDeveloperDocsAttempt, developerDocsConfig, developerDocsCookie, developerDocsPasswordValid, isDeveloperDocSlug } from '../../../../../lib/developerDocsServer';
+import { consumeDeveloperDocsAttempt, ensureDeveloperDocsRuntimeConfig, developerDocsConfig, developerDocsCookie, developerDocsPasswordValid, isDeveloperDocSlug } from '../../../../../lib/developerDocsServer';
 export const createDeveloperDocsUnlockHandler = (dependencies: { db?: any } = {}) => async (req: NextApiRequest, res: NextApiResponse) => {
   res.setHeader('Cache-Control', 'private, no-store');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
   const slug = req.query.slug;
   if (!isDeveloperDocSlug(slug)) return res.status(404).json({ error: 'Documentation not found.' });
+  try { await ensureDeveloperDocsRuntimeConfig(); } catch { return res.status(503).json({ error: 'Documentation access is temporarily unavailable.' }); }
   if (!developerDocsConfig()) return res.status(503).json({ error: 'Documentation access is not available yet.' });
   if (typeof req.body?.password !== 'string' || !req.body.password || req.body.password.length > 256) return res.status(400).json({ error: 'Enter the document password.' });
   try {

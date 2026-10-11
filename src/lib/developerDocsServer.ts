@@ -12,6 +12,10 @@ export type DeveloperDocSlug = keyof typeof DEVELOPER_DOCS;
 export type DeveloperDocArtifact = { name: string; content: string; contentType: string };
 const SESSION_MS = 12 * 60 * 60 * 1000;
 export function isDeveloperDocSlug(value: unknown): value is DeveloperDocSlug { return typeof value === 'string' && Object.prototype.hasOwnProperty.call(DEVELOPER_DOCS, value); }
+export async function ensureDeveloperDocsRuntimeConfig() {
+  const { ensurePartnerRuntimeConfig } = require('../../netlify/functions/lib/partner-runtime-config');
+  await ensurePartnerRuntimeConfig();
+}
 export function developerDocsConfig() {
   const hash = process.env.DEVELOPER_DOCS_PASSWORD_HASH || '';
   const salt = process.env.DEVELOPER_DOCS_PASSWORD_SALT || '';
@@ -48,6 +52,10 @@ export async function getDeveloperDocumentPageProps(slug: DeveloperDocSlug, { re
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   if (!isDeveloperDocSlug(slug)) return { notFound: true as const };
+  try { await ensureDeveloperDocsRuntimeConfig(); } catch {
+    res.statusCode = 503;
+    return { props: { slug, title: DEVELOPER_DOCS[slug].title, description: DEVELOPER_DOCS[slug].description, locked: true, available: false, artifacts: [] as DeveloperDocArtifact[] } };
+  }
   const available = !!developerDocsConfig();
   const locked = !developerDocsAuthorized(slug, req.cookies[developerDocsCookieName(slug)]);
   const artifacts = locked ? [] : await Promise.all(DEVELOPER_DOCS[slug].files.map(file => loadDeveloperDocArtifact(slug, file)));
