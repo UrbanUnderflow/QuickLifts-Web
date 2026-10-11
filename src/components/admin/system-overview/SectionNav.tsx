@@ -69,6 +69,7 @@ const SectionNav: React.FC<SectionNavProps> = ({
         className={depth > 0 ? "ml-4 border-l border-zinc-800 pl-3" : undefined}
       >
         <button
+          aria-current={isActive ? "page" : undefined}
           onClick={() => onSectionChange?.(section.id)}
           className={`block w-full border-l-2 px-3 py-2 text-left transition-colors ${
             isActive

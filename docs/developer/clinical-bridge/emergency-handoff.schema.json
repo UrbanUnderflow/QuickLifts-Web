@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Athletic Mind emergency handoff",
+  "type": "object",
+  "required": [
+    "payloadVersion",
+    "pulseUserId",
+    "pulseConversationId",
+    "escalationRecordId",
+    "athlete",
+    "tier",
+    "category",
+    "triggerContent",
+    "classificationReason",
+    "conversationSummary",
+    "relevantMentalNotes",
+    "escalationTimestamp",
+    "pulseApiCallback",
+    "organizationId",
+    "teamId",
+    "routingContext",
+    "consentState"
+  ],
+  "properties": {
+    "pulseUserId": {
+      "type": "string"
+    },
+    "pulseConversationId": {
+      "type": "string"
+    },
+    "escalationRecordId": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "conversationSummary": {
+      "type": "string"
+    },
+    "organizationId": {
+      "type": "string"
+    },
+    "teamId": {
+      "type": "string"
+    },
+    "payloadVersion": {
+      "const": "pulse-manas-v1-draft"
+    },
+    "tier": {
+      "const": 3
+    },
+    "athlete": {
+      "type": "object",
+      "required": [
+        "userId"
+      ],
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "triggerContent": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "classificationReason": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "relevantMentalNotes": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "escalationTimestamp": {
+      "type": "number"
+    },
+    "pulseApiCallback": {
+      "type": "string",
+      "format": "uri"
+    },
+    "routingContext": {
+      "type": "object"
+    },
+    "consentState": {
+      "type": "object",
+      "required": [
+        "status",
+        "disclosureVersion",
+        "consentedAt"
+      ],
+      "properties": {
+        "status": {
+          "const": "emergency_safety_basis"
+        },
+        "disclosureVersion": {
+          "const": "pulsecheck-clinical-handoff-v1"
+        },
+        "consentedAt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,101 @@
+{
+  "snapshot": {
+    "schemaVersion": "athleticmind-snapshot-v1",
+    "synthetic": true,
+    "scope": {
+      "teamId": "synthetic-team",
+      "organizationId": "synthetic-org",
+      "athleteId": "synthetic-athlete",
+      "membershipId": "synthetic-team_synthetic-athlete"
+    },
+    "window": {
+      "start": "2026-10-10T04:00:00.000Z",
+      "end": "2026-10-11T04:00:00.000Z"
+    },
+    "consent": {
+      "id": "athleticmind-automated-processing",
+      "version": "v1",
+      "eventId": "synthetic-consent-event",
+      "latestEvidenceEventId": "synthetic-consent-event",
+      "acceptedAt": "2026-10-09T12:00:00.000Z",
+      "documentHash": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "onboarding": {
+      "sourceId": "pulsecheck-team-memberships/synthetic-team_synthetic-athlete/athleteOnboarding",
+      "formVersion": "synthetic-form-v1",
+      "completedAt": "2026-10-09T12:01:00.000Z",
+      "responses": {
+        "synthetic_goal": "Build a steady pre-practice routine."
+      }
+    },
+    "checkIns": [
+      {
+        "sourceId": "pulsecheck-morning-checkins/synthetic-checkin-1/morning",
+        "period": "morning",
+        "dayKey": "2026-10-10",
+        "level": "steady",
+        "levelLabel": "Steady",
+        "eventAt": "2026-10-10T13:00:00.000Z",
+        "sourceIngestedAt": "2026-10-10T13:00:01.000Z",
+        "reflection": "Synthetic example: I slept well and feel ready for practice.",
+        "revision": "b2053367097c6bd2df39e7101eb524644cde10e689cc33349e755b6a0f79c181"
+      }
+    ],
+    "noraMessages": [
+      {
+        "sourceId": "pulsecheck-nora-conversations/synthetic-conversation-1/synthetic-turn-1",
+        "conversationId": "synthetic-conversation-1",
+        "speaker": "athlete",
+        "text": "Synthetic example: I want help planning a calm start to practice.",
+        "eventAt": "2026-10-10T14:00:00.000Z",
+        "sourceIngestedAt": "2026-10-10T14:02:00.000Z",
+        "revision": "55fee2bc4f9a9bcc84c1629afa37a4d59dab8835b55b911201f95af4456be751"
+      },
+      {
+        "sourceId": "pulsecheck-nora-conversations/synthetic-conversation-1/synthetic-turn-2",
+        "conversationId": "synthetic-conversation-1",
+        "speaker": "nora",
+        "text": "Synthetic example: What is one small step you can take before practice?",
+        "eventAt": "2026-10-10T14:01:00.000Z",
+        "sourceIngestedAt": "2026-10-10T14:02:00.000Z",
+        "revision": "ca31ee5e16b77197dd4067cdfdc6d47354c58e6ac9d7db39f098a93c49db3f5f"
+      }
+    ],
+    "supportStatus": [],
+    "coverage": {
+      "missing": [
+        "full_nora_coverage_not_guaranteed",
+        "journals_not_included_permission_unverified",
+        "legacy_mental_checkins_unscoped",
+        "no_per_message_ingestion_history",
+        "wearables_not_included_permission_unverified"
+      ],
+      "optionalSourcesIncluded": [],
+      "completeFullNoraTranscript": false
+    },
+    "summary": {
+      "method": "deterministic_counts_only",
+      "checkInCount": 1,
+      "checkInLevelCounts": {
+        "steady": 1
+      },
+      "noraMessageCount": 2,
+      "athleteMessageCount": 1,
+      "supportStatusCount": 0,
+      "latestSourceEventAt": "2026-10-10T14:01:00.000Z",
+      "sourceAgeAtWindowEndMs": 50340000
+    },
+    "ingestion": {
+      "selection": "event_time_or_firestore_document_update_time",
+      "deduplicationKey": "sourceId_and_revision",
+      "requiresRevisionDeduplication": true
+    },
+    "snapshotId": "782fe6d369131b44eded5ad0196e0867101cdfd50f64e94d2a540f1daa9bf16b",
+    "generatedAt": "2026-10-11T04:01:00.000Z"
+  },
+  "receipt": {
+    "requestId": "synthetic-request-1",
+    "snapshotId": "782fe6d369131b44eded5ad0196e0867101cdfd50f64e94d2a540f1daa9bf16b",
+    "replayed": false
+  }
+}

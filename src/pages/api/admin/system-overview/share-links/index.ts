@@ -4,6 +4,8 @@ import admin from '../../../../../lib/firebase-admin';
 import { requireAdminRequest } from './_auth';
 import { createPasscodeHash } from '../../../../../lib/systemOverviewShareAccess';
 
+import { SNAPSHOT_SECTION_ID, loadSnapshotArtifacts, snapshotArtifactHtml } from '../../../../../lib/systemOverviewSnapshotArtifacts';
+
 const COLLECTION = 'systemOverviewShareLinks';
 
 const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) => value?.toDate?.().toISOString?.() || null;
@@ -73,9 +75,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'sectionId, systemId, sectionLabel, and snapshotText are required.' });
     }
 
+    if (sectionId === SNAPSHOT_SECTION_ID && (typeof passcode !== 'string' || passcode.trim().length < 8)) {
+      return res.status(400).json({ error: 'Snapshot integration shares require a passcode of at least 8 characters.' });
+    }
+    if (sectionId === SNAPSHOT_SECTION_ID && process.env.NODE_ENV === 'production' && !process.env.SYSTEM_OVERVIEW_SHARE_COOKIE_SECRET && !process.env.NEXTAUTH_SECRET) {
+      return res.status(503).json({ error: 'Protected sharing is not configured.' });
+    }
     try {
-      const safeSnapshotHtml = sanitizeSnapshotHtml(snapshotHtml);
       const token = randomBytes(24).toString('hex');
+      const snapshotArtifacts = sectionId === SNAPSHOT_SECTION_ID ? await loadSnapshotArtifacts() : null;
+      const safeSnapshotHtml = snapshotArtifacts ? snapshotArtifactHtml(token, snapshotArtifacts) : sanitizeSnapshotHtml(snapshotHtml);
+      const safeSnapshotText = snapshotArtifacts ? snapshotArtifacts.map(item => `${item.name}\n\n${item.content}`).join('\n\n') : snapshotText;
+      if (snapshotArtifacts && Buffer.byteLength(JSON.stringify(snapshotArtifacts)) + Buffer.byteLength(safeSnapshotHtml) + Buffer.byteLength(safeSnapshotText) > 850000) {
+        return res.status(413).json({ error: 'Snapshot documents are too large to share.' });
+      }
+      const expiresAt = snapshotArtifacts ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString() : null;
       const baseUrl =
         process.env.NEXT_PUBLIC_SITE_URL ||
         `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`;
@@ -88,8 +102,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         systemId,
         sectionLabel,
         sectionDescription: sectionDescription || '',
-        snapshotText,
+        snapshotText: safeSnapshotText,
         snapshotHtml: safeSnapshotHtml,
+        ...(snapshotArtifacts ? { snapshotArtifacts, expiresAt } : {}),
         passcodeProtected: Boolean(passcodeHash),
         passcodeSalt: passcodeHash?.salt || null,
         passcodeHash: passcodeHash?.hash || null,
@@ -107,7 +122,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           systemId,
           sectionLabel,
           sectionDescription: sectionDescription || '',
-          snapshotText,
+          snapshotText: safeSnapshotText,
+          expiresAt,
           passcodeProtected: Boolean(passcodeHash),
           createdByEmail: adminUser.email,
           createdAt: new Date().toISOString(),

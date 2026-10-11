@@ -4,10 +4,12 @@ const PASSCODE_KEY_LENGTH = 64;
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
 const COOKIE_NAME_PREFIX = 'pc_so_share_';
 
-const getCookieSecret = () =>
-  process.env.SYSTEM_OVERVIEW_SHARE_COOKIE_SECRET ||
-  process.env.NEXTAUTH_SECRET ||
-  'development-system-overview-share-secret';
+const getCookieSecret = () => {
+  const secret = process.env.SYSTEM_OVERVIEW_SHARE_COOKIE_SECRET || process.env.NEXTAUTH_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') throw new Error('System overview share cookie secret is not configured.');
+  return 'development-system-overview-share-secret';
+};
 
 const normalizePasscode = (value: string) => value.trim().toUpperCase();
 

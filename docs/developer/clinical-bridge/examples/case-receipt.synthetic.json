@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "escalationId": "synthetic-case",
+    "status": "received",
+    "clinicianAssigned": null
+  },
+  "requestId": "synthetic-request"
+}

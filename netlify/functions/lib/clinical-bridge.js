@@ -179,6 +179,7 @@ class AuntEdnaClinicalBridge {
       httpStatus: response.status,
       ok: response.ok && normalized.success !== false,
       endpoint: path,
+      deliveryMode: this.transport ? 'mock' : this.config.credentialMode === 'live' ? 'live' : 'non_live',
       durationMs: Date.now() - startedAt,
     };
   }
@@ -215,7 +216,7 @@ class AuntEdnaClinicalBridge {
     const response = await this.request('POST', '/escalations', {
       ...payload,
       pulseApiCallback: callbackUrl,
-    });
+    }, { headers: { 'Idempotency-Key': escalationRecordId } });
     return normalizeCreateEscalationResult(response);
   }
 

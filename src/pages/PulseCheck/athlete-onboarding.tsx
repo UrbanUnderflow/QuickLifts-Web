@@ -1,5 +1,5 @@
 import ConsentChoices from '../../components/pulsecheck/consent/ConsentChoices';
-import { consentCategory, consentDecisionComplete, type ConsentDecisions } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
+import { consentCategory, consentDecisionComplete, usesAthleticMindConsent, selectConsentDocumentsForProduct, type ConsentDecisions } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
 import React, { useEffect, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -267,10 +267,10 @@ export default function PulseCheckAthleteOnboardingPage() {
       let active = true;
       (async () => {
         try {
-          const [previewOrg, previewTeam] = await Promise.all([
-            organizationId ? pulseCheckProvisioningService.getOrganization(organizationId) : Promise.resolve(null),
-            pulseCheckProvisioningService.getTeam(teamId),
-          ]);
+          const previewTeam = await pulseCheckProvisioningService.getTeam(teamId);
+          const previewOrg = previewTeam?.organizationId
+            ? await pulseCheckProvisioningService.getOrganization(previewTeam.organizationId)
+            : null;
           if (!active) return;
           setOrganization(previewOrg);
           setTeam(previewTeam);
@@ -299,11 +299,13 @@ export default function PulseCheckAthleteOnboardingPage() {
           const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
           nextMembership = memberships.find((entry) => entry.teamId === teamId && entry.role === 'athlete') || null;
           const targetPilotId = nextMembership?.athleteOnboarding?.targetPilotId || '';
-          [nextOrganization, nextTeam, nextPilot] = await Promise.all([
-            organizationId ? pulseCheckProvisioningService.getOrganization(organizationId) : Promise.resolve(null),
+          [nextTeam, nextPilot] = await Promise.all([
             pulseCheckProvisioningService.getTeam(teamId),
             targetPilotId ? pulseCheckProvisioningService.getPilot(targetPilotId) : Promise.resolve(null),
           ]);
+          nextOrganization = nextTeam?.organizationId
+            ? await pulseCheckProvisioningService.getOrganization(nextTeam.organizationId)
+            : null;
 
           if (nextMembership || attempt === MEMBERSHIP_RETRY_ATTEMPTS - 1) {
             break;
@@ -363,9 +365,13 @@ export default function PulseCheckAthleteOnboardingPage() {
 
   const requiresResearchConsent = pilot?.studyMode === 'research';
   const hasPilotEnrollment = Boolean(membership?.athleteOnboarding?.targetPilotId);
-  const requiredConsents = previewMode
+  const sourceRequiredConsents = previewMode
     ? (team?.requiredConsents || [])
     : (membership?.athleteOnboarding?.requiredConsents || []);
+  const verifiedProductBrand = organization?.id === team?.organizationId
+    && (previewMode || (membership?.teamId === team?.id && membership?.organizationId === organization?.id))
+    ? organization?.configuredProductBrand : undefined;
+  const requiredConsents = selectConsentDocumentsForProduct(sourceRequiredConsents, verifiedProductBrand);
   const athleteConsents = requiredConsents.filter(doc => consentCategory(doc) !== 'staff');
   const requiredConsentsComplete = athleteConsents.every(doc => consentDecisionComplete(doc, consentDecisions, completedConsentIds, completedConsentVersions));
   const recordChoices = (next: ConsentDecisions) => {
@@ -835,7 +841,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                   />
                 </SectionCard>
 
-                <ConsentChoices documents={athleteConsents} decisions={consentDecisions} onChange={recordChoices} name={displayName} />
+                <ConsentChoices documents={athleteConsents} decisions={consentDecisions} onChange={recordChoices} name={displayName} athleticMind={usesAthleticMindConsent(organization, team, membership, previewMode)} />
 
                 {consentAccepted && requiredConsentsComplete && intakeQuestions.length > 0 ? (
                   <SectionCard

@@ -3,8 +3,8 @@ import type { PulseCheckRequiredConsentDocument } from '../../../api/firebase/pu
 import { consentCategory, type ConsentDecisions } from '../../../api/firebase/pulsecheckProvisioning/consentPolicy';
 
 const labels = { participation: 'Program participation', health_authorization: 'Health information authorization', research: 'Optional research', staff: 'Staff responsibilities' };
-export default function ConsentChoices({ documents, decisions, onChange, name }: {
-  documents: PulseCheckRequiredConsentDocument[]; decisions: ConsentDecisions; onChange: (next: ConsentDecisions) => void; name: string;
+export default function ConsentChoices({ documents, decisions, onChange, name, athleticMind = false }: {
+  documents: PulseCheckRequiredConsentDocument[]; decisions: ConsentDecisions; onChange: (next: ConsentDecisions) => void; name: string; athleticMind?: boolean;
 }) {
   const [signedName, setSignedName] = useState('');
   const signatureHintId = useId();
@@ -28,7 +28,7 @@ export default function ConsentChoices({ documents, decisions, onChange, name }:
         <span className={`mt-1 block text-xs ${needsName ? 'text-red-300' : 'text-zinc-300'}`}>{needsName ? 'Signature required to agree' : 'Name entered. Review the terms, then sign below.'}</span>
         <input className={`mt-3 w-full rounded-xl border-2 bg-black/20 p-3 text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#0B0B1C] ${needsName ? 'border-red-400 focus:ring-red-300' : 'border-white/30 focus:ring-white/50'}`} aria-describedby={signatureHintId} autoComplete="name" placeholder="Type your full name here" value={signedName} onChange={e => setSignedName(e.target.value)} />
       </label>
-      <p id={signatureHintId} className={`mt-2 text-sm ${needsName ? 'text-red-200' : 'text-zinc-300'}`}>{needsName ? 'Enter your name here, then open Read terms to enable the signing button.' : 'Your name becomes your signature when you choose Agree and sign or Authorize and sign.'}</p>
+      <p id={signatureHintId} className={`mt-2 text-sm ${needsName ? 'text-red-200' : 'text-zinc-300'}`}>{needsName ? (athleticMind ? 'Enter your name here, then review the terms below before signing.' : 'Enter your name here, then open Read terms to enable the signing button.') : 'Your name becomes your signature when you choose Agree and sign or Authorize and sign.'}</p>
     </div>
     <p className="text-xs text-zinc-300">Choosing “Agree and sign” or “Authorize and sign” applies your typed name as your electronic signature to that set of terms.</p>
     {documents.map(doc => {
@@ -39,17 +39,20 @@ export default function ConsentChoices({ documents, decisions, onChange, name }:
       return <article key={doc.id} className="rounded-xl border border-white/15 p-4 space-y-3">
         <p className="text-xs uppercase tracking-wide text-zinc-300">{labels[category]}</p>
         <h3 className="font-semibold">{doc.title}</h3>
-        <details onToggle={e => { if (e.currentTarget.open) setOpened(v => ({ ...v, [doc.id]: true })); }}>
+        {athleticMind && category === 'participation' ? <div>
+          <h4 className="font-semibold">How your information is used · {doc.version}</h4>
+          <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-200">{doc.body}</div>
+        </div> : <details onToggle={e => { if (e.currentTarget.open) setOpened(v => ({ ...v, [doc.id]: true })); }}>
           <summary className="cursor-pointer underline">Read terms · {doc.version}</summary>
           <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-200">{doc.body}</div>
-        </details>
+        </details>}
         <div className="flex flex-wrap gap-3">
-          <button type="button" disabled={!signedName.trim() || !opened[doc.id]} onClick={() => decide(doc, 'accepted')} className="rounded-lg bg-white px-4 py-2 text-black disabled:opacity-40">{category === 'health_authorization' ? 'Authorize and sign' : 'Agree and sign'}</button>
+          <button type="button" disabled={!signedName.trim() || (!(athleticMind && category === 'participation') && !opened[doc.id])} onClick={() => decide(doc, 'accepted')} className="rounded-lg bg-white px-4 py-2 text-black disabled:opacity-40">{category === 'health_authorization' ? 'Authorize and sign' : 'Agree and sign'}</button>
           {category !== 'staff' && <button type="button" onClick={() => decide(doc, 'declined')} className="rounded-lg border border-white/30 px-4 py-2">{category === 'research' ? 'Decline research' : category === 'participation' ? 'Decline participation' : 'Decline authorization'}</button>}
           {category === 'health_authorization' && current?.decision === 'accepted' && <button type="button" onClick={() => decide(doc, 'revoked')} className="rounded-lg border border-white/30 px-4 py-2">Revoke authorization</button>}
           <button type="button" onClick={() => download(doc)} className="underline text-sm">Save {current ? 'decision and terms' : 'terms'}</button>
         </div>
-        <p role="status" className="text-sm text-zinc-300">{current ? `Selected choice: ${current.decision}.` : !signedName.trim() ? 'Type your full name in the signature field above to enable signing.' : !opened[doc.id] ? 'Open Read terms and review them to enable signing.' : 'Ready to sign. Continue afterward to save your choices.'}</p>
+        <p role="status" className="text-sm text-zinc-300">{current ? `Selected choice: ${current.decision}.` : !signedName.trim() ? 'Type your full name in the signature field above to enable signing.' : !(athleticMind && category === 'participation') && !opened[doc.id] ? 'Open Read terms and review them to enable signing.' : 'Ready to sign. Continue afterward to save your choices.'}</p>
         {optional && <p className="text-xs text-zinc-300">You can continue with the remaining program features if you decline.</p>}
       </article>;
     })}

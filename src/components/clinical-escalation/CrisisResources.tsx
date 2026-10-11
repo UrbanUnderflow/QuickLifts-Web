@@ -64,11 +64,12 @@ const CrisisResources: React.FC<CrisisResourcesProps> = ({
         >
           If you are in crisis, please reach out now.
         </p>
+        <p className="mt-2 text-xs text-rose-100/85">These numbers are for the United States. If you are elsewhere, contact your local emergency services or crisis line. You choose whether to call or text.</p>
         {clinicianNotified && (
           <p className="mt-1 text-xs text-rose-100/85">
             {clinicianDisplayName
-              ? `${clinicianDisplayName}, your team's clinician staff member, has been notified and is reviewing.`
-              : "Your team's clinician staff member has been notified and is reviewing."}
+              ? `${clinicianDisplayName}, your team's clinician staff member, has received a notification.`
+              : "Your team's clinician staff member has received a notification."}
           </p>
         )}
       </div>

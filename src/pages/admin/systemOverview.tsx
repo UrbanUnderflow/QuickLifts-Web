@@ -28,6 +28,8 @@ import {
   X,
 } from "lucide-react";
 import AdminRouteGuard from "../../components/auth/AdminRouteGuard";
+import SystemOverviewWorkspace from "../../components/admin/system-overview/SystemOverviewWorkspace";
+import workspace from "../../components/admin/system-overview/SystemOverviewWorkspace.module.css";
 import SectionNav from "../../components/admin/system-overview/SectionNav";
 import ProductHandbook from "../../components/admin/system-overview/ProductHandbook";
 import MacraSystemOverviewTab from "../../components/admin/system-overview/MacraSystemOverviewTab";
@@ -137,6 +139,7 @@ import QuickLiftsProfileHealthSystemTab, {
 import PulseCheckVisionProImmersiveTestsTab from "../../components/admin/system-overview/PulseCheckVisionProImmersiveTestsTab";
 import PulseSystemDesignLanguageTab from "../../components/admin/system-overview/PulseSystemDesignLanguageTab";
 import PulseEducationOfferingsTab from "../../components/admin/system-overview/PulseEducationOfferingsTab";
+import AuntEdnaSnapshotIntegrationTab from "../../components/admin/system-overview/AuntEdnaSnapshotIntegrationTab";
 import AuntEdnaIntegrationStrategyTab from "../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab";
 import AuntEdnaEscalationDataExchangeContractTab from "../../components/admin/system-overview/AuntEdnaEscalationDataExchangeContractTab";
 import ClinicalBridgePayloadSchemasTab from "../../components/admin/system-overview/ClinicalBridgePayloadSchemasTab";
@@ -381,6 +384,7 @@ const SYSTEM_TABS: SystemTab[] = [
     accent: "#f59e0b",
     sectionIds: [
       "auntedna-integration-strategy",
+      "auntedna-snapshot-integration",
       "auntedna-escalation-data-exchange-contract",
       "clinical-bridge-payload-schemas",
       "auntedna-pilot-authorization-memo",
@@ -1358,7 +1362,7 @@ const SystemOverviewPage: React.FC = () => {
     setShareLinks([]);
     setShareLinksLoading(false);
     setShareError(null);
-    setSharePasscodeEnabled(false);
+    setSharePasscodeEnabled(activeSectionId === "auntedna-snapshot-integration");
     setSharePasscode("");
   }, [activeSectionId]);
 
@@ -1409,8 +1413,9 @@ const SystemOverviewPage: React.FC = () => {
       return;
     }
 
-    if (sharePasscodeEnabled && sharePasscode.trim().length < 4) {
-      setShareError("Passcode must be at least 4 characters.");
+    const requiredPasscodeLength = activeSectionId === "auntedna-snapshot-integration" ? 8 : 4;
+    if ((sharePasscodeEnabled || activeSectionId === "auntedna-snapshot-integration") && sharePasscode.trim().length < requiredPasscodeLength) {
+      setShareError(`Passcode must be at least ${requiredPasscodeLength} characters.`);
       return;
     }
 
@@ -1425,12 +1430,12 @@ const SystemOverviewPage: React.FC = () => {
         sectionDescription: activeSectionMeta.description,
         snapshotText,
         snapshotHtml,
-        passcode: sharePasscodeEnabled ? sharePasscode.trim() : "",
+        passcode: sharePasscodeEnabled || activeSectionId === "auntedna-snapshot-integration" ? sharePasscode.trim() : "",
       });
 
       setShareLinks((current) => [createdLink, ...current]);
       await navigator.clipboard.writeText(createdLink.shareUrl);
-      setSharePasscodeEnabled(false);
+      setSharePasscodeEnabled(activeSectionId === "auntedna-snapshot-integration");
       setSharePasscode("");
     } catch (error) {
       console.error("[SystemOverview] Failed to create share link:", error);
@@ -2667,6 +2672,9 @@ const SystemOverviewPage: React.FC = () => {
       case "pulse-education-offerings":
         return <PulseEducationOfferingsTab />;
 
+      case "auntedna-snapshot-integration":
+        return <AuntEdnaSnapshotIntegrationTab />;
+
       case "auntedna-integration-strategy":
         return <AuntEdnaIntegrationStrategyTab />;
 
@@ -2935,35 +2943,17 @@ const SystemOverviewPage: React.FC = () => {
 
   return (
     <AdminRouteGuard>
-      <div className="min-h-screen bg-[#05070c] text-white overflow-x-clip">
-        <Head>
-          <title>{systemOverviewManifest.title} | Pulse Admin</title>
-        </Head>
-
-        <div className="w-full max-w-[1440px] mx-auto px-4 md:px-6 py-8 md:py-10 space-y-6">
-          <header className="space-y-2">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">
-              Operations Handbook
-            </p>
-            <h1 className="text-3xl font-semibold">
-              {systemOverviewManifest.title}
-            </h1>
-            <p className="text-zinc-300 text-sm max-w-4xl">
-              {systemOverviewManifest.subtitle}
-            </p>
-            <p className="text-xs text-zinc-500">
-              Last updated: {systemOverviewManifest.lastUpdated}
-            </p>
-          </header>
-
+      <SystemOverviewWorkspace onOpenSnapshot={() => handleHandbookSearchResultSelect("auntedna-snapshot-integration")}>
+        <Head><title>{systemOverviewManifest.title} | Pulse Admin</title></Head>
           {/* ---- SYSTEM-LEVEL TABS ---- */}
-          <nav className="flex items-center gap-1.5 overflow-x-auto pb-1 -mb-2">
+          <nav className={workspace.systems} aria-label="Documentation systems">
             {SYSTEM_TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = tab.id === activeSystemId;
               return (
                 <button
                   key={tab.id}
+                  aria-current={isActive ? "page" : undefined}
                   onClick={() => handleSystemChange(tab.id)}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
                     isActive
@@ -2990,7 +2980,7 @@ const SystemOverviewPage: React.FC = () => {
             })}
           </nav>
 
-          <section className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
+          <section className={workspace.search} aria-label="Find documentation">
             <form onSubmit={handleHandbookSearchSubmit}>
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div className="min-w-0 flex-1">
@@ -3129,7 +3119,7 @@ const SystemOverviewPage: React.FC = () => {
             </section>
           ) : null}
 
-          <main className="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)] gap-6 items-start min-w-0">
+          <main className={workspace.layout}>
             <SectionNav
               sections={sidebarSections}
               activeSectionId={activeSectionId}
@@ -3147,10 +3137,10 @@ const SystemOverviewPage: React.FC = () => {
             />
 
             <div className="min-w-0">
-              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-[#090f1c] p-4 md:flex-row md:items-center md:justify-between">
+              <div className={workspace.toolbar}>
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                    Artifact Actions
+                    Selected document
                   </p>
                   <p className="mt-1 text-sm font-semibold text-white">
                     {activeSectionMeta?.label || "Current Section"}
@@ -3190,7 +3180,7 @@ const SystemOverviewPage: React.FC = () => {
                     </button>
 
                     {shareMenuOpen ? (
-                      <div className="absolute right-0 z-30 mt-2 w-[360px] rounded-2xl border border-zinc-800 bg-[#090f1c] p-3 shadow-2xl">
+                      <div className="absolute right-0 z-30 mt-2 w-[360px] max-w-[calc(100vw-44px)] rounded-2xl border border-zinc-800 bg-[#090f1c] p-3 shadow-2xl">
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <p className="text-sm font-semibold text-white">
@@ -3223,12 +3213,16 @@ const SystemOverviewPage: React.FC = () => {
                                   Passcode Protection
                                 </p>
                                 <p className="mt-1 text-[11px] text-zinc-500">
-                                  Require a passcode before the shared artifact
-                                  can be viewed.
+                                  {activeSectionId === "auntedna-snapshot-integration"
+                                    ? "A passcode of at least 8 characters is required. This link expires after 14 days. Recipients do not need an account."
+                                    : "Require a passcode before the shared artifact can be viewed."}
                                 </p>
                               </div>
                               <button
                                 type="button"
+                                disabled={activeSectionId === "auntedna-snapshot-integration"}
+                                aria-label="Passcode protection"
+                                aria-pressed={sharePasscodeEnabled}
                                 onClick={() => {
                                   setSharePasscodeEnabled(
                                     (current) => !current,
@@ -3359,16 +3353,15 @@ const SystemOverviewPage: React.FC = () => {
                     ) : (
                       <Copy className="h-4 w-4" />
                     )}
-                    {copyState === "copied" ? "Copied" : "Copy to Clipboard"}
+                    {copyState === "copied" ? "Copied" : "Copy text"}
                   </button>
                 </div>
               </div>
 
-              <div ref={artifactContentRef}>{renderSectionContent()}</div>
+              <div className={workspace.document} ref={artifactContentRef}>{renderSectionContent()}</div>
             </div>
           </main>
-        </div>
-      </div>
+      </SystemOverviewWorkspace>
     </AdminRouteGuard>
   );
 };

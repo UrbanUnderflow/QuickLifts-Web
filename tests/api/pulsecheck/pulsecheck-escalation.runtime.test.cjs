@@ -387,7 +387,7 @@ test('synthetic Tier 3 staging uses the production escalation record path withou
   assert.equal(payload.success, true);
   assert.equal(payload.syntheticRedTeam, true);
   assert.equal(payload.externalSideEffects, false);
-  assert.equal(payload.handoffStatus, 'completed');
+  assert.equal(payload.handoffStatus, 'not_initiated');
   assert.equal(payload.handoffResult.supportRoute, 'synthetic_no_contact');
   assert.equal(payload.handoffResult.externalSideEffects, false);
   assert.equal(state.record.syntheticRedTeam, true);
@@ -447,8 +447,9 @@ test('dispatcher blocks athlete actions for a different user id', async () => {
   assert.equal(firestoreReads, 0);
 });
 
-test('care-state authorization is owner-bound while admins may reconcile another athlete', async () => {
-  const { runtimeHelpers } = loadEscalationModule();
+test('care-state authorization is owner-bound while admins may reconcile unscoped legacy state', async () => {
+  const { db } = createClinicalRuntimeDb();
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
   const owner = await runtimeHelpers.authorizeEscalationAction({
     caller: { uid: 'athlete-1', isAdmin: false },
     action: 'care-state',
@@ -658,7 +659,17 @@ test('accepted Tier 2 consent records the selected support recipient', async () 
   }];
   state.usersById['coach-1'] = { displayName: 'Coach Lane' };
   const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  state.organization = { productBrand: 'athleticmind' };
   let capturedHandoff = null;
+
+  const missingRecipient = await runtimeHelpers.handleConsent(
+    { escalationId: 'escalation-1', userId: 'athlete-1', consent: true },
+    db,
+    async () => { throw new Error('An implicit staff choice must never start a handoff'); },
+  );
+  assert.equal(missingRecipient.statusCode, 400);
+  assert.equal(JSON.parse(missingRecipient.body).errorCode, 'SUPPORT_RECIPIENT_REQUIRED');
+  assert.equal(state.record.consentStatus, 'pending');
 
   const response = await runtimeHelpers.handleConsent(
     {
@@ -962,7 +973,7 @@ test('athlete upsert failure stops case creation and records the failed phase', 
     'conversation-1',
     'escalation-1',
     {
-      tier: 3,
+      tier: 2,
       category: 'immediate_safety',
       conversationSummary: 'Approved minimum-necessary summary.',
       consentStatus: 'not-required',
@@ -1457,4 +1468,245 @@ test('program brand controls new routes while existing cases retain their route'
   state.organization = { productBrand: 'athleticmind' };
   assert.equal((await runtimeHelpers.resolveEscalationSupportContext(context, db)).route, 'clinician');
   assert.equal((await runtimeHelpers.resolveEscalationSupportContext({ ...context, escalationData: { supportRoute: 'hotline' } }, db)).route, 'hotline');
+});
+
+for (const scenario of [
+  { label: 'monitor signal', tier: 1 },
+  { label: 'pending elevated concern', tier: 2, consentStatus: 'pending' },
+  { label: 'accepted clinical route', tier: 2, consentStatus: 'accepted', supportSelection: { kind: 'configured_route', route: 'clinician' } },
+  { label: 'different named recipient', tier: 2, consentStatus: 'accepted', supportSelection: { kind: 'staff', userId: 'other-coach' } },
+]) {
+  test(`private concern does not notify a coach for ${scenario.label}`, async () => {
+    const { runtimeHelpers } = loadEscalationModule();
+    const record = { userId: 'athlete-test', teamId: 'team-test', category: 'general', ...scenario };
+    const db = { collection(name) {
+      if (name === 'pulsecheck-teams') return { doc: () => ({ get: async () => ({ exists: true, data: () => ({ organizationId: 'org-test' }) }) }) };
+      if (name === 'pulsecheck-organizations') return { doc: () => ({ get: async () => ({ exists: true, data: () => ({ productBrand: 'athleticmind' }) }) }) };
+      assert.equal(name, 'escalation-records', 'Must not look up a connected coach or create notifications');
+      return { doc: () => ({ async get() { return { exists: true, data: () => record }; } }) };
+    } };
+    const response = await runtimeHelpers.notifyCoach({ escalationId: 'test', userId: 'athlete-test', coachId: 'coach-test' }, db);
+    assert.equal(JSON.parse(response.body).reason, 'event_recipient_consent_required');
+  });
+}
+
+test('an accepted named staff selection reaches only that recipient without connection lookup', async () => {
+  const { runtimeHelpers } = loadEscalationModule();
+  const record = { userId: 'athlete-test', teamId: 'team-test', tier: 2, consentStatus: 'accepted', supportSelection: { kind: 'staff', userId: 'selected-staff' } };
+  const reachedDelivery = new Error('delivery boundary');
+  const db = { collection(name) {
+    if (name === 'pulsecheck-teams') return { doc: () => ({ get: async () => ({ exists: true, data: () => ({ organizationId: 'org-test' }) }) }) };
+    if (name === 'pulsecheck-organizations') return { doc: () => ({ get: async () => ({ exists: true, data: () => ({ productBrand: 'athleticmind' }) }) }) };
+    assert.equal(name, 'escalation-records', 'Must not consult the connected-coach fallback');
+    return { doc: () => ({
+      async get() { return { exists: true, data: () => record }; },
+      async update(value) { assert.equal(value.coachId, 'selected-staff'); throw reachedDelivery; },
+    }) };
+  } };
+  await assert.rejects(
+    runtimeHelpers.notifyCoach({ escalationId: 'test', userId: 'athlete-test' }, db),
+    (error) => error === reachedDelivery,
+  );
+});
+
+for (const organization of [{ productBrand: 'pulsecheck', appBranding: { pulsecheck: 'athleticmind' } }, {}, { productBrand: 'invalid' }]) {
+  test(`program scope rejects inferred Athletic Mind configuration: ${JSON.stringify(organization)}`, async () => {
+    const { db, state } = createClinicalRuntimeDb();
+    state.organization = organization;
+    const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+    assert.equal(await runtimeHelpers.isExplicitAthleticMindIncident(db, { teamId: 'team-1' }), false);
+  });
+}
+test('Athletic Mind incident scope cannot be inferred from another membership or mismatched organization', async () => {
+  const { db, state } = createClinicalRuntimeDb();
+  state.organization = { productBrand: 'athleticmind' };
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  assert.equal(await runtimeHelpers.isExplicitAthleticMindIncident(db, {}), false);
+  assert.equal(await runtimeHelpers.isExplicitAthleticMindIncident(db, { teamId: 'team-1', organizationId: 'other-org' }), false);
+  assert.equal(await runtimeHelpers.isExplicitAthleticMindIncident(db, { teamId: 'team-1', organizationId: 'organization-1' }), true);
+});
+
+for (const organization of [{ productBrand: 'pulsecheck', appBranding: { pulsecheck: 'athleticmind' } }, {}]) {
+  test(`noncritical notifyCoach preserves connection fallback for ${JSON.stringify(organization)}`, async () => {
+    const { runtimeHelpers } = loadEscalationModule();
+    const fallbackReached = new Error('existing connection fallback');
+    const db = { collection(name) {
+      if (name === 'escalation-records') return { doc: () => ({ get: async () => ({ exists: true, data: () => ({ userId: 'athlete', teamId: 'team', tier: 2, consentStatus: 'pending' }) }) }) };
+      if (name === 'pulsecheck-teams') return { doc: () => ({ get: async () => ({ exists: true, data: () => ({ organizationId: 'org' }) }) }) };
+      if (name === 'pulsecheck-organizations') return { doc: () => ({ get: async () => ({ exists: true, data: () => organization }) }) };
+      assert.equal(name, 'athlete-coach-connections');
+      throw fallbackReached;
+    } };
+    await assert.rejects(runtimeHelpers.notifyCoach({ escalationId: 'event', userId: 'athlete' }, db), (error) => error === fallbackReached);
+  });
+}
+
+async function withEmergencyDelivery(enabled, callback) {
+  const previous = process.env.ATHLETICMIND_EMERGENCY_HANDOFF_ENABLED;
+  if (enabled) process.env.ATHLETICMIND_EMERGENCY_HANDOFF_ENABLED = 'true';
+  else delete process.env.ATHLETICMIND_EMERGENCY_HANDOFF_ENABLED;
+  try { return await callback(); } finally {
+    if (previous === undefined) delete process.env.ATHLETICMIND_EMERGENCY_HANDOFF_ENABLED;
+    else process.env.ATHLETICMIND_EMERGENCY_HANDOFF_ENABLED = previous;
+  }
+}
+function emergencyRecord() {
+  return { userId: 'athlete-1', teamId: 'team-1', organizationId: 'organization-1', conversationId: 'conversation-1', tier: 3,
+    category: 'immediate_safety', triggerContent: 'Synthetic current safety concern.', classificationReason: 'Synthetic immediate risk.',
+    conversationSummary: 'Unrelated historical conversation must not be sent.', handoffStatus: 'pending', consentStatus: 'not-required', incident: {} };
+}
+const emergencyContext = { route: 'hotline', teamId: 'team-1', pilotContext: { organizationId: 'organization-1', pilotId: 'pilot-1', teamMembershipId: 'team-1_athlete-1' } };
+const liveFixtureBridge = overrides => ({
+  config: { provider: 'auntedna', credentialMode: 'live', apiKey: 'synthetic-fixture-only' },
+  upsertAthlete: async () => ({ success: true, ok: true, deliveryMode: 'live', httpStatus: 200 }),
+  createEscalation: async () => ({ success: true, ok: true, deliveryMode: 'live', httpStatus: 201, escalationId: 'case-1', requestId: 'receipt-1', status: 'received', data: { status: 'received' } }),
+  ...overrides,
+});
+
+for (const organization of [{ productBrand: 'pulsecheck', appBranding: { pulsecheck: 'athleticmind' } }, {}, { productBrand: 'athleticmind' }]) {
+  test(`critical direct coach notification is blocked regardless of product ${JSON.stringify(organization)}`, async () => {
+    const { db, state } = createClinicalRuntimeDb(emergencyRecord());
+    state.organization = organization;
+    const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+    const result = await runtimeHelpers.notifyCoach({ escalationId: 'escalation-1', userId: 'athlete-1', coachId: 'coach-1' }, db);
+    assert.equal(JSON.parse(result.body).reason, 'clinical_emergency_route_only');
+    assert.equal(state.notifications.length, 0);
+    assert.equal(state.record.coachNotified, undefined);
+  });
+}
+
+for (const organization of [{ productBrand: 'pulsecheck' }, {}, { productBrand: 'invalid' }]) {
+  test(`critical PulseCheck or unknown program provides resources without any handoff ${JSON.stringify(organization)}`, async () => {
+    const record = emergencyRecord();
+    const { db, state } = createClinicalRuntimeDb(record);
+    state.organization = organization;
+    let watchLists = 0;
+    const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db, pilotMetrics: { applyPilotWatchList: async () => { watchLists++; } } });
+    const result = await runtimeHelpers.triggerCriticalHandoff('athlete-1', 'conversation-1', 'escalation-1', record, { ...emergencyContext, route: 'clinician' }, db);
+    assert.equal(result.success, true);
+    assert.equal(result.resourcesOnly, true);
+    assert.equal(result.providerConfirmed, false);
+    assert.equal(state.record.handoffStatus, 'not_initiated');
+    assert.equal(state.record.clinicalReferenceId, undefined);
+    assert.equal(state.safetyState.emergencySupportMode, 'resources_only');
+    assert.equal(state.safetyState.emergencyHandoffStatus, 'not_applicable');
+    assert.match(result.message, /988/);
+    assert.match(result.message, /Outside the U.S./);
+    assert.equal(watchLists, 0);
+    assert.equal(state.notifications.length, 0);
+  });
+}
+
+test('Athletic Mind emergency delivery stays off and visibly failed until enabled', async () => withEmergencyDelivery(false, async () => {
+  const record = emergencyRecord();
+  const { db, state } = createClinicalRuntimeDb(record);
+  state.organization = { productBrand: 'athleticmind' };
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  const result = await runtimeHelpers.triggerCriticalHandoff('athlete-1', 'conversation-1', 'escalation-1', record, { ...emergencyContext }, db);
+  assert.equal(result.success, false);
+  assert.equal(result.error.code, 'ATHLETICMIND_EMERGENCY_HANDOFF_DISABLED');
+  assert.equal(state.record.handoffStatus, 'failed');
+  assert.equal(state.safetyState.emergencySupportMode, 'auntedna');
+  assert.equal(state.safetyState.emergencyHandoffStatus, 'failed');
+  assert.equal(state.notifications.length, 0);
+}));
+
+test('Athletic Mind emergency packet excludes unrelated profile, conversation, notes and state data', async () => withEmergencyDelivery(true, async () => {
+  const record = { ...emergencyRecord(), stateSnapshot: { overallReadiness: 'red', stateDimensions: { focusReadiness: 20 } } };
+  const { db: originalDb, state } = createClinicalRuntimeDb(record);
+  state.organization = { productBrand: 'athleticmind' };
+  state.userProfile = { displayName: 'Synthetic Athlete', email: 'athlete@example.test', phone: '+15550000000', goals: 'private goals', dateOfBirth: '2000-01-01', emergencyContact: { name: 'not a designated responder' }, primarySport: 'Track' };
+  const db = { ...originalDb, collection(name) { assert.ok(!['user-mental-notes', 'conversations'].includes(name), 'Emergency must not load unrelated text'); return originalDb.collection(name); } };
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  let packet;
+  const result = await runtimeHelpers.performClinicalHandoff('athlete-1', 'conversation-1', 'escalation-1', record, db, emergencyContext,
+    () => liveFixtureBridge({ createEscalation: async payload => { packet = payload; return liveFixtureBridge().createEscalation(); } }));
+  assert.equal(result.success, true);
+  const Ajv = require('ajv');
+  const schema = require('../../../docs/developer/clinical-bridge/emergency-handoff.schema.json');
+  const validate = new Ajv({ allErrors: true }).compile(schema);
+  assert.equal(validate(packet), true, JSON.stringify(validate.errors));
+  assert.equal(packet.consentState.status, 'emergency_safety_basis');
+  assert.deepEqual(Object.keys(packet.athlete).sort(), ['displayName', 'email', 'phone', 'userId']);
+  assert.deepEqual(packet.relevantMentalNotes, []);
+  assert.equal(packet.stateSnapshot, undefined);
+  assert.notEqual(packet.conversationSummary, record.conversationSummary);
+  assert.equal(packet.triggerContent, record.triggerContent);
+  assert.equal(state.record.clinicalReceiptVerified, true);
+  assert.equal(state.record.clinicalReceiptStatus, 'received');
+  assert.equal(state.safetyState.appState, undefined, 'Receipt never means active care');
+}));
+
+for (const acknowledgement of [
+  { deliveryMode: 'mock' }, { httpStatus: 503 }, { data: {} }, { escalationId: null }, { data: { status: 'failed' } },
+]) {
+  test(`unconfirmed Athletic Mind emergency response fails visibly ${JSON.stringify(acknowledgement)}`, async () => withEmergencyDelivery(true, async () => {
+    const record = emergencyRecord();
+    const { db, state } = createClinicalRuntimeDb(record);
+    state.organization = { productBrand: 'athleticmind' };
+    const alerts = [];
+    const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db, pilotMetrics: { recordPilotMetricAlert: async alert => { alerts.push(alert); } } });
+    const result = await runtimeHelpers.performClinicalHandoff('athlete-1', 'conversation-1', 'escalation-1', record, db, emergencyContext,
+      () => liveFixtureBridge({ createEscalation: async () => ({ ...await liveFixtureBridge().createEscalation(), ...acknowledgement }) }));
+    assert.equal(result.success, false);
+    assert.equal(state.record.handoffStatus, 'failed');
+    assert.equal(state.record.clinicalReceiptVerified, false);
+    assert.equal(state.record.clinicalReferenceId, undefined);
+    assert.equal(alerts.length, 1);
+    assert.equal(JSON.stringify(alerts).includes(record.triggerContent), false);
+  }));
+}
+
+test('lost emergency acknowledgement is retryable with the same incident ID and successful receipt dedupes', async () => withEmergencyDelivery(true, async () => {
+  const { db, state } = createClinicalRuntimeDb(emergencyRecord());
+  state.organization = { productBrand: 'athleticmind' };
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  const ids = [];
+  const factory = () => liveFixtureBridge({ createEscalation: async payload => {
+    ids.push(payload.escalationRecordId);
+    if (ids.length === 1) throw new Error('Synthetic acknowledgement lost');
+    return liveFixtureBridge().createEscalation();
+  } });
+  const attempt = () => runtimeHelpers.performClinicalHandoff('athlete-1', 'conversation-1', 'escalation-1', { ...state.record }, db, emergencyContext, factory);
+  assert.equal((await attempt()).success, false);
+  assert.equal(state.record.handoffStatus, 'failed');
+  assert.equal((await attempt()).success, true);
+  assert.deepEqual(ids, ['escalation-1', 'escalation-1']);
+  assert.equal((await attempt()).deduped, true);
+  assert.equal(ids.length, 2);
+}));
+
+
+test('critical source scope requires unique membership or matching persisted conversation scope', async () => {
+  const { db, state } = createClinicalRuntimeDb();
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  const member = { id: 'membership-1', userId: 'athlete-1', role: 'athlete', status: 'active', teamId: 'team-1', organizationId: 'organization-1' };
+  assert.equal(await runtimeHelpers.resolveCriticalSourceScope(db, 'athlete-1'), null);
+  state.teamMemberships = [member];
+  assert.deepEqual(await runtimeHelpers.resolveCriticalSourceScope(db, 'athlete-1'), { teamId: 'team-1', organizationId: 'organization-1', teamMembershipId: 'membership-1' });
+  state.teamMemberships.push({ ...member, id: 'membership-2', teamId: 'team-2' });
+  assert.equal(await runtimeHelpers.resolveCriticalSourceScope(db, 'athlete-1'), null);
+  assert.equal((await runtimeHelpers.resolveCriticalSourceScope(db, 'athlete-1', { teamId: 'team-1', organizationId: 'organization-1' })).teamId, 'team-1');
+  assert.equal(await runtimeHelpers.resolveCriticalSourceScope(db, 'athlete-1', { teamId: 'team-1', organizationId: 'different-org' }), null);
+  state.teamMemberships = [{ ...member, organizationId: 'different-org' }];
+  assert.equal(await runtimeHelpers.resolveCriticalSourceScope(db, 'athlete-1'), null);
+  state.teamMemberships = [{ ...member, revokedAt: '2026-01-01' }];
+  assert.equal(await runtimeHelpers.resolveCriticalSourceScope(db, 'athlete-1'), null);
+});
+
+
+test('private emergency actions deny role-only access but retain athlete handoff retry', async () => {
+  const { db: originalDb, state } = createClinicalRuntimeDb(emergencyRecord());
+  const db = { ...originalDb, collection(name) {
+    if (name === 'pulsecheck-clinical-escalations') return { doc: () => ({ get: async () => ({ exists: true, data: () => ({ ...state.record }) }) }) };
+    return originalDb.collection(name);
+  } };
+  state.organization = { productBrand: 'athleticmind' };
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  for (const action of ['consent', 'handoff', 'resolve']) {
+    const result = await runtimeHelpers.authorizeEscalationAction({ caller: { uid: 'administrator', isAdmin: true }, action, body: { escalationId: 'escalation-1', userId: 'athlete-1' }, runtimeDb: db });
+    assert.equal(result.ok, false, action);
+    assert.equal(result.statusCode, 403);
+  }
+  assert.equal((await runtimeHelpers.authorizeEscalationAction({ caller: { uid: 'athlete-1' }, action: 'handoff', body: { escalationId: 'escalation-1' }, runtimeDb: db })).ok, true);
 });

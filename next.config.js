@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+  experimental: {
+    outputFileTracingIncludes: {
+      '/developer/api/*': ['./docs/developer/**/*'],
+      '/developer/api/*/artifacts/*': ['./docs/developer/**/*'],
+      '/api/admin/system-overview/snapshot-artifacts': ['./docs/integrations/auntedna-snapshot/**/*'],
+      '/api/admin/system-overview/share-links': ['./docs/integrations/auntedna-snapshot/**/*'],
+    },
+  },
   // Enable gzip compression for responses
   compress: true,
   // Enable SWC minification for smaller bundles

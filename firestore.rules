@@ -186,6 +186,18 @@ service cloud.firestore {
         'pulsecheck-athlete-safety-state',
         'pulsecheck-clinical-escalations',
         'pulsecheck-clinical-webhook-events',
+        'athleticmind-snapshot-pulls',
+        'athleticmind-snapshots',
+        'athleticmind-snapshot-deliveries',
+        'athleticmind-snapshot-watermarks',
+        'athleticmind-snapshot-scheduler',
+        'systemOverviewShareUnlockAttempts',
+        'developerDocsUnlockAttempts',
+        'partner-api-access-requests',
+        'partner-api-keys',
+        'partner-api-key-audit',
+        'partner-api-key-rate-limits',
+        'systemOverviewShareLinks',
         'pulsecheck-referral-attributions',
         'coach-team-schedule',
         'company-config',
@@ -519,8 +531,29 @@ service cloud.firestore {
           )
         );
     }
+    // Product scope comes from persisted organization configuration, never display branding.
+    function pcOrganizationIsAthleticMind(organizationId) {
+      return organizationId is string && organizationId.size() > 0
+        && exists(/databases/$(database)/documents/pulsecheck-organizations/$(organizationId))
+        && get(/databases/$(database)/documents/pulsecheck-organizations/$(organizationId)).data.get('productBrand', '') == 'athleticmind';
+    }
+    function pcTeamIsAthleticMind(teamId) {
+      return teamId is string && teamId.size() > 0
+        && exists(/databases/$(database)/documents/pulsecheck-teams/$(teamId))
+        && pcOrganizationIsAthleticMind(get(/databases/$(database)/documents/pulsecheck-teams/$(teamId)).data.get('organizationId', ''));
+    }
+    function pcIsAthleticMindPrivateRecord(data) {
+      return pcTeamIsAthleticMind(data.get('teamId', ''))
+        || pcOrganizationIsAthleticMind(data.get('organizationId', ''));
+    }
+    function pcPrivateRecordRequiresOwner(data) {
+      return data.get('tier', 0) == 3 || data.get('tier', 0) == '3'
+        || data.get('classificationFamily', '') == 'critical_safety'
+        || pcIsAthleticMindPrivateRecord(data);
+    }
     function pcCanAccessClinicalEscalation(data) {
-      return isAdminUser()
+      // Existing event consent authorizes a selected alert, not the full private record.
+      return !pcPrivateRecordRequiresOwner(data) && (isAdminUser()
         || (
           isSignedIn()
           && data.teamId is string
@@ -529,7 +562,7 @@ service cloud.firestore {
             data.teamId,
             data.athleteUserId
           )
-        );
+        ));
     }
     function pcClinicalEscalationAcknowledgementUpdateIsValid() {
       return pcCanAccessClinicalEscalation(resource.data)
@@ -2143,20 +2176,8 @@ service cloud.firestore {
     // platform admin, and explicitly scoped clinical staff may read it. All
     // browser/mobile writes are denied; trusted services use the Admin SDK.
     match /pulsecheck-athlete-safety-state/{athleteUserId} {
-      allow read: if isAdminUser()
-        || (
-          isSignedIn()
-          && request.auth.uid == athleteUserId
-        )
-        || (
-          isSignedIn()
-          && resource.data.athleteUserId == athleteUserId
-          && resource.data.teamId is string
-          && pcCanAccessClinicalTeamAthlete(
-            resource.data.teamId,
-            athleteUserId
-          )
-        );
+      // Emergency state is private. Routine alert permission does not reveal it.
+      allow read: if isSignedIn() && request.auth.uid == athleteUserId;
       allow create, update, delete: if false;
     }
 
@@ -2165,7 +2186,9 @@ service cloud.firestore {
     // acknowledgement. Resolution must use the authenticated server route so
     // linked provider confirmation runs before local state closes.
     match /pulsecheck-clinical-escalations/{escalationId} {
-      allow read: if pcCanAccessClinicalEscalation(resource.data);
+      allow read: if pcCanAccessClinicalEscalation(resource.data)
+        || (isSignedIn() && pcPrivateRecordRequiresOwner(resource.data)
+          && resource.data.athleteUserId == request.auth.uid);
       allow create: if false;
       allow update: if pcClinicalEscalationAcknowledgementUpdateIsValid();
       allow delete: if false;
@@ -2182,63 +2205,22 @@ service cloud.firestore {
     // own record. Scoped staff reads require active care/coaching access, with
     // tier-three details limited to care/admin capability.
     match /escalation-records/{escalationId} {
-      allow read: if isAdminUser()
-        || (
-          isSignedIn()
-          && (
-            resource.data.userId == request.auth.uid
-            || resource.data.athleteId == request.auth.uid
-            || (
-              resource.data.teamId is string
-              && resource.data.organizationId is string
-              && pcDataMatchesTeamOrganization(
-                resource.data,
-                resource.data.teamId
-              )
-              && (
-                (
-                  resource.data.userId is string
-                  && (
-                    (
-                      resource.data.tier == 3
-                      && pcCanAccessClinicalTeamAthlete(
-                        resource.data.teamId,
-                        resource.data.userId
-                      )
-                    )
-                    || (
-                      resource.data.tier != 3
-                      && pcCanAccessCareTeamAthlete(
-                        resource.data.teamId,
-                        resource.data.userId
-                      )
-                    )
-                  )
-                )
-                || (
-                  resource.data.athleteId is string
-                  && (
-                    (
-                      resource.data.tier == 3
-                      && pcCanAccessClinicalTeamAthlete(
-                        resource.data.teamId,
-                        resource.data.athleteId
-                      )
-                    )
-                    || (
-                      resource.data.tier != 3
-                      && pcCanAccessCareTeamAthlete(
-                        resource.data.teamId,
-                        resource.data.athleteId
-                      )
-                    )
-                  )
-                )
-              )
-            )
-          )
+      function canReadPrivateRecord(data) {
+        let athleteId = data.get('userId', data.get('athleteId', ''));
+        return isSignedIn() && (
+          athleteId == request.auth.uid
+          || (!pcPrivateRecordRequiresOwner(data) && (
+            isAdminUser()
+            || (data.get('teamId', '') is string && data.get('organizationId', '') is string
+              && data.organizationId == get(pcTeamPath(data.teamId)).data.organizationId
+              && pcCanAccessCareTeamAthlete(data.teamId, athleteId))
+          ))
         );
-      allow create, update, delete: if isAdminUser();
+      }
+      allow read: if canReadPrivateRecord(resource.data);
+      allow create: if isAdminUser() && !pcPrivateRecordRequiresOwner(request.resource.data);
+      allow update: if isAdminUser() && !pcPrivateRecordRequiresOwner(resource.data) && !pcPrivateRecordRequiresOwner(request.resource.data);
+      allow delete: if isAdminUser() && !pcPrivateRecordRequiresOwner(resource.data);
     }
 
     // Train Nora knowledge vault. Modern records are scoped to one active
@@ -3461,6 +3443,20 @@ service cloud.firestore {
     match /groupMeetBookings/{document=**} { allow read, write: if false; }
     match /groupMeetBookingLimits/{document=**} { allow read, write: if false; }
     match /coach-team-insight-reports/{document=**} { allow read, write: if false; }
+
+    // Snapshot payloads, receipts, leases and partner pull replay state are server-only.
+    match /systemOverviewShareLinks/{document=**} { allow read, write: if false; }
+    match /partner-api-access-requests/{document=**} { allow read, write: if false; }
+    match /partner-api-keys/{document=**} { allow read, write: if false; }
+    match /partner-api-key-audit/{document=**} { allow read, write: if false; }
+    match /partner-api-key-rate-limits/{document=**} { allow read, write: if false; }
+    match /developerDocsUnlockAttempts/{document=**} { allow read, write: if false; }
+    match /systemOverviewShareUnlockAttempts/{document=**} { allow read, write: if false; }
+    match /athleticmind-snapshot-pulls/{document=**} { allow read, write: if false; }
+    match /athleticmind-snapshots/{document=**} { allow read, write: if false; }
+    match /athleticmind-snapshot-deliveries/{document=**} { allow read, write: if false; }
+    match /athleticmind-snapshot-watermarks/{document=**} { allow read, write: if false; }
+    match /athleticmind-snapshot-scheduler/{document=**} { allow read, write: if false; }
 
     match /{collectionName}/{document=**} {
       allow read: if isSignedIn()

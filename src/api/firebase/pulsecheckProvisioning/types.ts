@@ -1,5 +1,5 @@
 import type { ConsentCategory, ConsentDecisions } from './consentPolicy';
-import { HEALTH_CONSENT, STAFF_CONSENT, PARTICIPATION_CONSENT, RESEARCH_CONSENT } from './consentPolicy';
+import { selectConsentDocumentsForProduct, HEALTH_CONSENT, STAFF_CONSENT, PARTICIPATION_CONSENT, RESEARCH_CONSENT } from './consentPolicy';
 import type { Timestamp } from 'firebase/firestore';
 import type { SurveyQuestion } from '../creatorPages/service';
 
@@ -318,9 +318,13 @@ const ALL_DEFAULT_PULSECHECK_REQUIRED_CONSENT_IDS = new Set<string>([
 ]);
 
 export const getDefaultPulseCheckRequiredConsents = (
-  studyMode: PulseCheckPilotStudyMode = 'operational'
+  studyMode: PulseCheckPilotStudyMode = 'operational',
+  configuredProductBrand?: PulseCheckProductBrand
 ): PulseCheckRequiredConsentDocument[] =>
-  [PARTICIPATION_CONSENT, HEALTH_CONSENT, ...(studyMode === 'research' ? [RESEARCH_CONSENT] : []), STAFF_CONSENT].map(doc => ({ ...doc }));
+  selectConsentDocumentsForProduct(
+    [PARTICIPATION_CONSENT, HEALTH_CONSENT, ...(studyMode === 'research' ? [RESEARCH_CONSENT] : []), STAFF_CONSENT],
+    configuredProductBrand
+  ).map(doc => ({ ...doc }));
 
 export const mergePulseCheckRequiredConsents = (
   studyMode: PulseCheckPilotStudyMode = 'operational',
@@ -524,6 +528,8 @@ export type PulseCheckProductBrand = 'athleticmind' | 'pulsecheck';
 export type PulseCheckAppBranding = Partial<Record<PulseCheckProductBrand, PulseCheckProductBrand>>;
 
 export interface PulseCheckOrganization {
+  /** Read-only provenance of the persisted setting, before legacy display defaults. */
+  configuredProductBrand?: PulseCheckProductBrand;
   productBrand?: PulseCheckProductBrand;
   appBranding?: PulseCheckAppBranding;
   id: string;

@@ -205,3 +205,16 @@ test('normalizeCreateEscalationResult accepts a real provider caseId', () => {
   assert.equal(normalized.escalationId, 'ae-case-42');
   assert.equal(normalized.status, 'received');
 });
+
+test('existing escalation POST carries stable idempotency and injected transport is never a live receipt', async () => {
+  const keys = [];
+  const bridge = new AuntEdnaClinicalBridge({ provider: 'auntedna', baseUrl: 'https://synthetic.invalid', apiKey: 'synthetic-only', credentialMode: 'live', timeoutMs: 1000 }, async (_url, options) => {
+    keys.push(options.headers['Idempotency-Key']);
+    return new Response(JSON.stringify({ success: true, data: { escalationId: 'synthetic-case', status: 'received' } }), { status: 200 });
+  });
+  const first = await bridge.createEscalation({ escalationRecordId: 'same-event' });
+  const second = await bridge.createEscalation({ escalationRecordId: 'same-event' });
+  assert.deepEqual(keys, ['same-event', 'same-event']);
+  assert.equal(first.deliveryMode, 'mock');
+  assert.equal(second.deliveryMode, 'mock');
+});

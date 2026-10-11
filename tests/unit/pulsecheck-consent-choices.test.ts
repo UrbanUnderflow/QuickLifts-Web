@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { consentDecisionComplete, HEALTH_CONSENT, RESEARCH_CONSENT, PARTICIPATION_CONSENT, researchEligible, type ConsentDecisions } from '../../src/api/firebase/pulsecheckProvisioning/consentPolicy';
+import { consentDecisionComplete, usesAthleticMindConsent, selectConsentDocumentsForProduct, HEALTH_CONSENT, RESEARCH_CONSENT, PARTICIPATION_CONSENT, researchEligible, type ConsentDecisions } from '../../src/api/firebase/pulsecheckProvisioning/consentPolicy';
 import { hasCompletedRequiredConsents } from '../../src/api/firebase/pulsecheckProvisioning/accessState';
 import { getDefaultPulseCheckRequiredConsents } from '../../src/api/firebase/pulsecheckProvisioning/types';
 const receipt = (doc: typeof HEALTH_CONSENT, decision: 'accepted' | 'declined' | 'revoked') => ({ decision, version: doc.version, signedName: 'Test Athlete', decidedAt: new Date().toISOString(), document: doc });
@@ -24,4 +24,38 @@ test('research willingness alone is never dataset eligibility', () => {
 });
 test('default categories are independent and staff has its own terms', () => {
  assert.deepEqual(getDefaultPulseCheckRequiredConsents('research').map(d => d.category), ['participation', 'health_authorization', 'research', 'staff']);
+});
+
+test('Athletic Mind disclosure follows the current membership and explicit organization configuration', () => {
+ const team = { id: 'team-a', organizationId: 'org-a' };
+ const membership = { teamId: 'team-a', organizationId: 'org-a' };
+ assert.equal(usesAthleticMindConsent({ id: 'org-a', configuredProductBrand: 'athleticmind' }, team, membership), true);
+ for (const configuredProductBrand of ['pulsecheck', undefined, 'invalid']) {
+   assert.equal(usesAthleticMindConsent({ id: 'org-a', configuredProductBrand }, team, membership), false);
+ }
+ assert.equal(usesAthleticMindConsent({ id: 'org-a', configuredProductBrand: 'athleticmind' }, team, { ...membership, teamId: 'other-team' }), false);
+ assert.equal(usesAthleticMindConsent({ id: 'other-org', configuredProductBrand: 'athleticmind' }, team, membership), false);
+ assert.equal(usesAthleticMindConsent({ id: 'org-a', configuredProductBrand: 'athleticmind' }, team, null), false);
+ // Existing legacy completion remains unchanged while expanded terms are inactive.
+ assert.equal(consentDecisionComplete(PARTICIPATION_CONSENT, {}, [PARTICIPATION_CONSENT.id]), true);
+});
+
+test('PulseCheck stock terms exclude AuntEdna and require a fresh exact receipt without changing custom terms', () => {
+ const source = [PARTICIPATION_CONSENT, HEALTH_CONSENT, RESEARCH_CONSENT];
+ const selected = selectConsentDocumentsForProduct(source, 'pulsecheck');
+ assert.equal(selected.some(doc => /auntedna/i.test(doc.body)), false);
+ for (const doc of selected.slice(0, 2)) {
+   assert.equal(doc.version, 'v1-pulsecheck');
+   assert.equal(consentDecisionComplete(doc, {}, [doc.id], { [doc.id]: doc.version }), false);
+   assert.equal(consentDecisionComplete(doc, { [doc.id]: receipt(doc, 'accepted') }), true);
+ }
+ const custom = { ...PARTICIPATION_CONSENT, body: PARTICIPATION_CONSENT.body + '\nInstitution-specific terms.' };
+ assert.equal(selectConsentDocumentsForProduct([custom], 'pulsecheck')[0], custom);
+ for (const brand of ['athleticmind', undefined, 'invalid']) {
+   assert.deepEqual(selectConsentDocumentsForProduct(source, brand), source);
+ }
+ assert.deepEqual(selectConsentDocumentsForProduct(selected, 'pulsecheck'), selected);
+ assert.equal(selectConsentDocumentsForProduct([{ ...PARTICIPATION_CONSENT, title: 'University agreement' }], 'pulsecheck')[0].version, PARTICIPATION_CONSENT.version);
+ assert.equal(getDefaultPulseCheckRequiredConsents('research', 'pulsecheck').some(doc => /auntedna/i.test(doc.body)), false);
+ assert.deepEqual(getDefaultPulseCheckRequiredConsents('research', 'athleticmind'), getDefaultPulseCheckRequiredConsents('research'));
 });

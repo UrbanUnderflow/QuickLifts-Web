@@ -25,7 +25,10 @@ const {
   Timestamp,
   updateDoc,
   where,
+  setLogLevel,
 } = require('firebase/firestore');
+
+setLogLevel('silent');
 
 const repoRoot = path.resolve(__dirname, '../../..');
 const projectId = 'demo-pulsecheck-clinical-rules';
@@ -138,7 +141,7 @@ async function seedBaseData(db) {
       athleteUserId: athleteId,
       teamId,
       organizationId,
-      tier: 3,
+      tier: 2,
       deliveryStatus: 'clinician_paged',
       detectedAt: 1_754_395_200,
       evidence: [{label: 'synthetic rules test'}],
@@ -147,7 +150,7 @@ async function seedBaseData(db) {
       athleteUserId: otherAthleteId,
       teamId: otherTeamId,
       organizationId: otherOrganizationId,
-      tier: 3,
+      tier: 2,
       deliveryStatus: 'clinician_paged',
       detectedAt: 1_754_395_200,
       evidence: [{label: 'synthetic rules test'}],
@@ -232,7 +235,7 @@ test('webhook receipts and smoke runs are admin-readable and client-write-denied
   }
 });
 
-test('clinical escalation reads are limited to admins and the scoped clinical team', async () => {
+test('routine clinical escalation reads are limited to admins and the scoped clinical team', async () => {
   const adminDb = testEnv.authenticatedContext(adminId, {email: adminEmail}).firestore();
   const clinicianDb = testEnv.authenticatedContext(clinicianId).firestore();
   const otherClinicianDb = testEnv.authenticatedContext(otherClinicianId).firestore();
@@ -260,10 +263,10 @@ test('private athlete safety state has bounded reads and no client writes', asyn
   await assertFails(getDoc(target(anonymousDb)));
   await assertSucceeds(getDoc(target(ownerDb)));
   await assertFails(getDoc(target(otherAthleteDb)));
-  await assertSucceeds(getDoc(target(clinicianDb)));
+  await assertFails(getDoc(target(clinicianDb)));
   await assertFails(getDoc(target(otherClinicianDb)));
   await assertFails(getDoc(target(coachDb)));
-  await assertSucceeds(getDoc(target(adminDb)));
+  await assertFails(getDoc(target(adminDb)));
 
   for (const database of [ownerDb, clinicianDb, adminDb]) {
     await assertFails(updateDoc(target(database), {crisisWallActive: false}));
@@ -288,6 +291,7 @@ test('clinical queue queries constrain both the authorized team and athlete', as
   const scopedQueue = query(
     collection(clinicianDb, 'pulsecheck-clinical-escalations'),
     where('teamId', '==', teamId),
+    where('tier', '==', 2),
     where('athleteUserId', '==', athleteId),
     where('deliveryStatus', 'in', activeStatuses),
     orderBy('detectedAt', 'desc'),

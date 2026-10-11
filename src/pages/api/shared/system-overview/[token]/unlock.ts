@@ -6,6 +6,8 @@ import {
   verifyPasscodeHash,
 } from '../../../../../lib/systemOverviewShareAccess';
 
+import { SNAPSHOT_SECTION_ID, consumeSnapshotUnlockAttempt, isValidShareToken, shareExpired } from '../../../../../lib/systemOverviewSnapshotArtifacts';
+
 const COLLECTION = 'systemOverviewShareLinks';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -16,7 +18,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const token = typeof req.query.token === 'string' ? req.query.token : '';
   const passcode = typeof req.body?.passcode === 'string' ? req.body.passcode.trim() : '';
 
-  if (!token || !passcode) {
+  res.setHeader('Cache-Control', 'private, no-store');
+  if (!isValidShareToken(token) || !passcode || passcode.length > 256) {
     return res.status(400).json({ error: 'Token and passcode are required.' });
   }
 
@@ -27,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const share = shareSnap.data() || {};
-    if (share.revokedAt) {
+    if (share.revokedAt || shareExpired(share)) {
       return res.status(404).json({ error: 'Share link not found.' });
     }
 
@@ -35,6 +38,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'This share link does not require a passcode.' });
     }
 
+    if (share.sectionId === SNAPSHOT_SECTION_ID) {
+      // Netlify's edge-owned address avoids trusting arbitrary client-supplied forwarding headers.
+      const address = String(req.headers['x-nf-client-connection-ip'] || req.socket.remoteAddress || 'unknown');
+      if (!await consumeSnapshotUnlockAttempt(admin.firestore(), token, address)) {
+        res.setHeader('Retry-After', '900');
+        return res.status(429).json({ error: 'Too many attempts. Try again later.' });
+      }
+    }
     const verified = verifyPasscodeHash(passcode, String(share.passcodeSalt), String(share.passcodeHash));
     if (!verified) {
       return res.status(401).json({ error: 'Incorrect passcode.' });

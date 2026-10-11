@@ -497,6 +497,8 @@ function buildTrustedEscalationOutcome(created = {}) {
     handoffError: created.handoffError || null,
     handoffResult: created.handoffResult || null,
     supportRoute: created.supportRoute || null,
+    emergencySupportMode: created.emergencySupportMode || created.handoffResult?.emergencySupportMode || null,
+    emergencyHandoffStatus: created.emergencyHandoffStatus || created.handoffResult?.emergencyHandoffStatus || null,
     supportChoiceMode: created.supportChoiceMode || null,
     supportDefaultOptionId: created.supportDefaultOptionId || null,
     supportOptions: Array.isArray(created.supportOptions) ? created.supportOptions : [],
@@ -4037,10 +4039,14 @@ async function createEscalationRecord(db, userId, conversationId, messageId, tri
 }
 
 /**
- * Tier 1+ coach notification helper (Tier 1 required; Tier 2 optional; Tier 3 optional)
- * Mirrors `pulsecheck-escalation` notifyCoach behavior, but runs locally to avoid function-to-function calls.
+ * Legacy program coach notifications. Athletic Mind private monitor concerns
+ * require event-specific permission and do not enter this delivery path.
  */
 async function notifyCoachForEscalation(db, escalationId, userId, tier) {
+  const incident = await db.collection('escalation-records').doc(escalationId).get();
+  if (incident.exists && await escalationRuntime.isExplicitAthleticMindIncident(db, incident.data())) {
+    return { success: false, reason: 'event_recipient_consent_required' };
+  }
   const { sendCoachEscalationEmail } = require('./utils/sendCoachEscalationEmail');
   const { sendTwilioSms } = require('./utils/sendTwilioSms');
 
@@ -4312,6 +4318,7 @@ async function notifyCoachForEscalation(db, escalationId, userId, tier) {
 }
 
 exports.runtimeHelpers = {
+  notifyCoachForEscalation,
   sendNoraCoachHandoff,
   buildTrustedEscalationOutcome,
   getRequestHeader,

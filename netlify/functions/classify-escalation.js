@@ -9,7 +9,7 @@
  * Returns: { tier, category, reason, confidence, shouldEscalate, suggestedResponse? }
  */
 
-const { initializeFirebaseAdmin, db, headers } = require('./config/firebase');
+const { initializeFirebaseAdmin, db, headers, admin } = require('./config/firebase');
 
 // Escalation Tier enum values (match TypeScript types)
 const EscalationTier = {
@@ -56,12 +56,20 @@ exports.handler = async (event, context) => {
       return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
     }
 
+    const authorization = event.headers?.authorization || event.headers?.Authorization || '';
+    if (!authorization.startsWith('Bearer ')) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Authentication required' }) };
+    let caller;
+    try { caller = await admin.auth().verifyIdToken(authorization.slice(7)); }
+    catch { return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid authentication' }) }; }
+
     const body = JSON.parse(event.body || '{}');
     const { userId, message, conversationId, recentMessages = [], mentalNotes = [] } = body;
 
     if (!userId || !message) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing userId or message' }) };
     }
+
+    if (caller.uid !== userId) return { statusCode: 403, headers, body: JSON.stringify({ error: 'You can classify only your own conversation.' }) };
 
     // Load escalation conditions from Firestore (admin-defined)
     const conditionsSnap = await db

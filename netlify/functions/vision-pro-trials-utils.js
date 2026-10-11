@@ -532,7 +532,7 @@ function buildVisionProProtocolIssues({
   }
 
   if (protocolContext?.activeEscalation?.tier >= 2) {
-    issues.push(`This athlete has an active Tier ${protocolContext.activeEscalation.tier} escalation hold and cannot start a Vision Pro session.`);
+    issues.push('This athlete is not currently eligible to start a Vision Pro session.');
   }
 
   if (protocolContext?.enrollmentMode !== 'product-only') {
@@ -1076,8 +1076,6 @@ function sanitizeSession(sessionId, sessionData) {
           requiredFamilies: arrayOfStrings(sessionData.protocolContext.requiredFamilies),
           enrollmentMode: stringOrNull(sessionData.protocolContext.enrollmentMode),
           comfortScreenRequired: booleanOrNull(sessionData.protocolContext.comfortScreenRequired),
-          activeEscalationTier: numberOrNull(sessionData.protocolContext.activeEscalationTier),
-          activeEscalationRecordId: stringOrNull(sessionData.protocolContext.activeEscalationRecordId),
           queueValidatedAt: numberOrNull(sessionData.protocolContext.queueValidatedAt),
           startValidatedAt: numberOrNull(sessionData.protocolContext.startValidatedAt),
         }

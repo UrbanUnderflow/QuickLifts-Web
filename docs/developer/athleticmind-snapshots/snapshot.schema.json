@@ -1,0 +1,451 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:athleticmind:snapshot:v1",
+  "title": "Athletic Mind automated processing snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "synthetic",
+    "snapshotId",
+    "generatedAt",
+    "scope",
+    "window",
+    "consent",
+    "onboarding",
+    "checkIns",
+    "noraMessages",
+    "supportStatus",
+    "coverage",
+    "summary",
+    "ingestion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "athleticmind-snapshot-v1"
+    },
+    "synthetic": {
+      "type": "boolean"
+    },
+    "snapshotId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "teamId",
+        "organizationId",
+        "athleteId",
+        "membershipId"
+      ],
+      "properties": {
+        "teamId": {
+          "type": "string"
+        },
+        "organizationId": {
+          "type": "string"
+        },
+        "athleteId": {
+          "type": "string"
+        },
+        "membershipId": {
+          "type": "string"
+        }
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "eventId",
+        "latestEvidenceEventId",
+        "acceptedAt",
+        "documentHash"
+      ],
+      "properties": {
+        "id": {
+          "const": "athleticmind-automated-processing"
+        },
+        "version": {
+          "const": "v1"
+        },
+        "eventId": {
+          "type": "string"
+        },
+        "latestEvidenceEventId": {
+          "type": "string"
+        },
+        "acceptedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "documentHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "onboarding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceId",
+        "formVersion",
+        "completedAt",
+        "responses"
+      ],
+      "properties": {
+        "sourceId": {
+          "type": "string"
+        },
+        "formVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "completedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "responses": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "checkIns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceId",
+          "eventAt",
+          "sourceIngestedAt",
+          "revision",
+          "period",
+          "dayKey",
+          "level"
+        ],
+        "properties": {
+          "sourceId": {
+            "type": "string"
+          },
+          "eventAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourceIngestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "period": {
+            "enum": [
+              "morning",
+              "evening"
+            ]
+          },
+          "dayKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "level": {
+            "type": "string"
+          },
+          "levelLabel": {
+            "type": "string"
+          },
+          "subjectiveRecoveryLabel": {
+            "type": "string"
+          },
+          "reflection": {
+            "type": "string"
+          },
+          "subjectiveRecoveryLevel": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "noraMessages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceId",
+          "eventAt",
+          "sourceIngestedAt",
+          "revision",
+          "conversationId",
+          "speaker",
+          "text"
+        ],
+        "properties": {
+          "sourceId": {
+            "type": "string"
+          },
+          "eventAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourceIngestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "speaker": {
+            "enum": [
+              "athlete",
+              "nora"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "supportStatus": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceId",
+          "eventAt",
+          "sourceIngestedAt",
+          "revision"
+        ],
+        "properties": {
+          "sourceId": {
+            "type": "string"
+          },
+          "eventAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sourceIngestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "open",
+              "active",
+              "resolved",
+              "closed",
+              "initiated",
+              "completed",
+              "failed",
+              "not_initiated",
+              "pending_consent",
+              "declined"
+            ]
+          },
+          "incidentStatus": {
+            "enum": [
+              "pending",
+              "open",
+              "active",
+              "resolved",
+              "closed",
+              "initiated",
+              "completed",
+              "failed",
+              "not_initiated",
+              "pending_consent",
+              "declined"
+            ]
+          },
+          "handoffStatus": {
+            "enum": [
+              "pending",
+              "open",
+              "active",
+              "resolved",
+              "closed",
+              "initiated",
+              "completed",
+              "failed",
+              "not_initiated",
+              "pending_consent",
+              "declined"
+            ]
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "status"
+            ]
+          },
+          {
+            "required": [
+              "incidentStatus"
+            ]
+          },
+          {
+            "required": [
+              "handoffStatus"
+            ]
+          }
+        ]
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "missing",
+        "optionalSourcesIncluded",
+        "completeFullNoraTranscript"
+      ],
+      "properties": {
+        "missing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "optionalSourcesIncluded": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "completeFullNoraTranscript": {
+          "const": false
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "checkInCount",
+        "checkInLevelCounts",
+        "noraMessageCount",
+        "athleteMessageCount",
+        "supportStatusCount",
+        "latestSourceEventAt",
+        "sourceAgeAtWindowEndMs"
+      ],
+      "properties": {
+        "method": {
+          "const": "deterministic_counts_only"
+        },
+        "checkInCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "checkInLevelCounts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "noraMessageCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "athleteMessageCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supportStatusCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "latestSourceEventAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceAgeAtWindowEndMs": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "ingestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection",
+        "deduplicationKey",
+        "requiresRevisionDeduplication"
+      ],
+      "properties": {
+        "selection": {
+          "const": "event_time_or_firestore_document_update_time"
+        },
+        "deduplicationKey": {
+          "const": "sourceId_and_revision"
+        },
+        "requiresRevisionDeduplication": {
+          "const": true
+        }
+      }
+    }
+  }
+}

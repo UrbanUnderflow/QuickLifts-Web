@@ -123,7 +123,7 @@ Content-Type: application/json
 }`;
 
 const CLASSIFICATION_VOCABULARY_ROWS = [
-  ['`tier`', '`2` (Elevated Risk, consent-based handoff) or `3` (Critical Risk, mandatory handoff)', 'Tier 1 monitor-only concerns never cross the boundary.'],
+  ['`tier`', '`2` (Elevated Risk, consent-based handoff) or `3` (Critical Risk, Athletic Mind emergency handoff)', 'Tier 1 monitor-only concerns never cross the boundary.'],
   [
     'Tier 2 `category` values',
     '`persistent-distress`, `anxiety-indicators`, `disordered-eating`, `identity-impact`, `injury-psychological`, `recurrent-tier1`',
@@ -132,7 +132,7 @@ const CLASSIFICATION_VOCABULARY_ROWS = [
   [
     'Tier 3 `category` values',
     '`self-harm`, `suicidal-ideation`, `imminent-safety-risk`, `severe-psychological-distress`, `abuse-disclosure`, `rapid-deterioration`',
-    'Tier 3 packets route immediately; consent is recorded as `not-required`.',
+    'Explicit Athletic Mind Tier 3 packets use the emergency safety basis. PulseCheck-only and unknown configurations display crisis resources without a partner packet.',
   ],
 ];
 
@@ -425,7 +425,7 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
       <DocHeader
         eyebrow="AuntEdna Integration"
         title="Escalation Data Exchange Contract"
-        version="Version 0.3 | June 10, 2026"
+        version="Version 0.4 | October 11, 2026"
         summary="Data contract for the PulseCheck to AuntEdna escalation bridge, written for the AuntEdna engineering team. It defines the case packet PulseCheck sends for each escalation, the API surface PulseCheck calls on the AuntEdna side, the status webhooks PulseCheck consumes in return, the Tier 3 watch-list lifecycle that governs how an athlete in crisis returns to training, and the boundary rules for what each system stores."
         highlights={[
           {
@@ -442,6 +442,17 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
           },
         ]}
       />
+
+      <SectionBlock icon={Database} title="Emergency routing by program">
+        <div className="space-y-3 text-sm leading-relaxed text-zinc-300">
+          <p><strong>Athletic Mind:</strong> PulseCheck sends the emergency handoff to the configured AuntEdna bridge. AuntEdna owns clinical recipient selection, assignment, and after-hours handling. Automatic coach, trainer, and parent disclosure is outside this pathway.</p>
+          <p><strong>PulseCheck-only:</strong> The athlete receives crisis resources. This pathway does not register the athlete with AuntEdna, create a partner case, or notify staff. Missing program configuration also preserves resources without selecting AuntEdna.</p>
+          <p>U.S. resources include calling or texting 988 for mental-health crisis support and emergency services for immediate physical danger. Displaying a resource does not contact that service. Local protective app behavior is separate from a confirmed clinical handoff or active care.</p>
+          <p>Athletic Mind emergency packets use scoped identifiers, available contact information, and the current concern needed for handoff. Full conversation history, unrelated mental notes, and the broader optional payload fields below are excluded from this emergency path. Routine recipient-specific consent remains separate.</p>
+          <p>The bridge registers the athlete through POST /athletes and sends the case through POST /escalations. A successful response must confirm a case identifier. Delivery failure remains visible and retryable; it does not become coach fallback, accepted care, or clinician assignment. AuntEdna returns assignment and other clinical workflow updates through signed callbacks.</p>
+          <p>The revised Athletic Mind emergency route is disabled by default until the real receiver is configured. This local implementation and document update are not deployment evidence.</p>
+        </div>
+      </SectionBlock>
 
       <RuntimeAlignmentPanel
         sectionLabel="Document Role"

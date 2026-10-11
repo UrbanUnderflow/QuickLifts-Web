@@ -2294,7 +2294,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   };
 
   const handleSeedTeamConsents = (team: PulseCheckTeam, studyMode: PulseCheckPilotStudyMode) => {
-    setTeamConsentDraft(team.id, getDefaultPulseCheckRequiredConsents(studyMode).map((consent) => ({ ...consent })));
+    setTeamConsentDraft(team.id, getDefaultPulseCheckRequiredConsents(studyMode, organizations.find(organization => organization.id === team.organizationId)?.configuredProductBrand).map((consent) => ({ ...consent })));
   };
 
   const handleResetTeamConsentDraft = (teamId: string) => {

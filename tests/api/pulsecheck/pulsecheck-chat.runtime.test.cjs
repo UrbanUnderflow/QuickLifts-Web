@@ -1586,3 +1586,29 @@ test('signed synthetic red-team accounts in development skip the track gate', as
     assert.ok(runtime.collectionsRead.includes('conversations'));
   });
 });
+
+for (const organization of [{ productBrand: 'athleticmind' }, { productBrand: 'pulsecheck', appBranding: { pulsecheck: 'athleticmind' } }, {}]) {
+  test(`Tier 1 chat notification obeys authoritative program configuration ${JSON.stringify(organization)}`, async () => {
+    const { notifyCoachForEscalation } = loadRuntimeHelpers();
+    // No transport is invoked: non-AM cases stop at connection lookup.
+    for (const filename of ['sendCoachEscalationEmail.js', 'sendTwilioSms.js']) {
+      const transportPath = path.join(repoRoot, 'netlify/functions/utils', filename);
+      require.cache[transportPath] = { id: transportPath, filename: transportPath, loaded: true, exports: {} };
+    }
+    const fallbackReached = new Error('existing connection fallback');
+    const db = { collection(name) {
+      if (name === 'escalation-records') return { doc: () => ({ get: async () => ({ exists: true, data: () => ({ userId: 'athlete', teamId: 'team', tier: 1 }) }) }) };
+      if (name === 'pulsecheck-teams') return { doc: () => ({ get: async () => ({ exists: true, data: () => ({ organizationId: 'org' }) }) }) };
+      if (name === 'pulsecheck-organizations') return { doc: () => ({ get: async () => ({ exists: true, data: () => organization }) }) };
+      assert.equal(name, 'athlete-coach-connections');
+      throw fallbackReached;
+    } };
+    if (organization.productBrand === 'athleticmind') {
+      const result = await notifyCoachForEscalation(db, 'event', 'athlete', 1);
+      assert.equal(result.success, false);
+      assert.equal(result.reason, 'event_recipient_consent_required');
+    } else {
+      await assert.rejects(notifyCoachForEscalation(db, 'event', 'athlete', 1), (error) => error === fallbackReached);
+    }
+  });
+}

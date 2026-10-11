@@ -1604,7 +1604,9 @@ export const getServerSideProps: GetServerSideProps<SharedSystemOverviewPageProp
     if (!docSnap.exists) return { notFound: true };
 
     const data = docSnap.data() || {};
-    if (data.revokedAt) return { notFound: true };
+    const { SNAPSHOT_SECTION_ID, shareExpired } = await import('../../../lib/systemOverviewSnapshotArtifacts');
+    if (data.revokedAt || shareExpired(data)) return { notFound: true };
+    if (data.sectionId === SNAPSHOT_SECTION_ID && (!data.passcodeProtected || !data.passcodeHash || !data.passcodeSalt)) return { notFound: true };
     const passcodeProtected = Boolean(data.passcodeProtected && data.passcodeHash && data.passcodeSalt);
     const accessCookie = req.cookies[getSystemOverviewShareCookieName(token)];
     const isUnlocked = !passcodeProtected || verifySystemOverviewShareAccessCookieValue(token, accessCookie);

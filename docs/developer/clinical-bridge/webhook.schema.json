@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Clinical operational callback",
+  "type": "object",
+  "required": [
+    "webhookEventId",
+    "event",
+    "occurredAt"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "pulseEscalationId"
+      ]
+    },
+    {
+      "required": [
+        "clinicalCaseId"
+      ]
+    }
+  ],
+  "properties": {
+    "webhookEventId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event": {
+      "enum": [
+        "escalation.created",
+        "triage.requested",
+        "clinician.assigned",
+        "appointment.booked",
+        "crisis.invoked",
+        "watchlist.entered",
+        "watchlist.updated",
+        "watchlist.removed",
+        "watchlist.cleared_for_training",
+        "checkin.scheduled",
+        "checkin.completed",
+        "checkin.missed",
+        "case.resolved"
+      ]
+    },
+    "pulseEscalationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "clinicalCaseId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pulseUserId": {
+      "type": "string"
+    },
+    "statusCategory": {
+      "type": "string"
+    },
+    "assignmentLabel": {
+      "type": "string"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

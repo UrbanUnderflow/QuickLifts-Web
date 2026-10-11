@@ -3502,7 +3502,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
   const applyCurrentStudyModeDisclosureDefaults = () => {
     if (!detail) return;
-    setRequiredConsentDrafts(getDefaultPulseCheckRequiredConsents(detail.pilot.studyMode));
+    setRequiredConsentDrafts(getDefaultPulseCheckRequiredConsents(detail.pilot.studyMode, detail.team.organizationId === detail.organization.id ? detail.organization.configuredProductBrand : undefined));
     setPageMessage(null);
   };
 

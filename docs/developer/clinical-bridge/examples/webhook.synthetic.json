@@ -1,0 +1,9 @@
+{
+  "webhookEventId": "synthetic-event",
+  "event": "escalation.created",
+  "pulseEscalationId": "synthetic-incident",
+  "clinicalCaseId": "synthetic-case",
+  "pulseUserId": "synthetic-athlete",
+  "statusCategory": "created",
+  "occurredAt": "2026-10-11T12:00:00Z"
+}

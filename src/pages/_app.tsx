@@ -239,6 +239,11 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
   const ogType = ogMeta?.type || (ogMeta ? 'article' : 'website');
   const ogSiteName = ogMeta?.siteName || routeMeta?.siteName || 'Pulse Intelligence Labs';
 
+  // Developer pages own server-side password access and do not require a Pulse account.
+  if (router.pathname === "/developer" || router.pathname.startsWith("/developer/")) {
+    return <><Head><meta name="viewport" content="width=device-width, initial-scale=1" /></Head><Component {...pageProps} /></>;
+  }
+
   // Isolated intake surface: no global tracking, authentication wrapper, or Redux persistence.
   if (router.pathname === '/PulseCheck/questionnaire/cau') return <Component {...pageProps} />;
   // Guest booking links contain private management capabilities. Keep them outside analytics/auth.

@@ -1,7 +1,7 @@
 // src/api/firebase/config.ts
 import { initializeApp, deleteApp, FirebaseApp } from 'firebase/app';
-import { getAuth, setPersistence, browserLocalPersistence, browserSessionPersistence, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator, setPersistence, browserLocalPersistence, browserSessionPersistence, Auth } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { installPulseE2EHarness } from './mentaltraining/e2eHarness';
 import { initializeBrowserAuth } from './initializeBrowserAuth';
@@ -235,6 +235,11 @@ export const initializeFirebase = (isDev = false) => {
       timestamp: new Date().toISOString()
     });
 
+    const useLocalEmulators = process.env.NEXT_PUBLIC_FIREBASE_EMULATORS === 'true';
+    if (useLocalEmulators && (process.env.NODE_ENV !== 'development' || !config.projectId?.startsWith('demo-') || (typeof window !== 'undefined' && !isLocalhost))) {
+      throw new Error('Firebase emulators require localhost development and a demo project.');
+    }
+
     // Initialize Firebase
     firebaseApp = initializeApp(config);
     firebaseAuth = typeof window !== 'undefined'
@@ -242,6 +247,10 @@ export const initializeFirebase = (isDev = false) => {
       : getAuth(firebaseApp);
     firebaseDb = getFirestore(firebaseApp);
     firebaseStorage = getStorage(firebaseApp);
+    if (useLocalEmulators) {
+      connectAuthEmulator(firebaseAuth, 'http://127.0.0.1:9099', { disableWarnings: true });
+      connectFirestoreEmulator(firebaseDb, '127.0.0.1', 8188);
+    }
 
     // Set persistence immediately after auth initialization. Remote-login
     // impersonation must stay scoped to the current tab; otherwise a refresh

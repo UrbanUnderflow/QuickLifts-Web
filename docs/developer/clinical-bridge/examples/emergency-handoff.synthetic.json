@@ -1,0 +1,35 @@
+{
+  "payloadVersion": "pulse-manas-v1-draft",
+  "pulseUserId": "synthetic-athlete",
+  "pulseConversationId": "synthetic-conversation",
+  "escalationRecordId": "synthetic-incident",
+  "athlete": {
+    "userId": "synthetic-athlete",
+    "displayName": "Example Athlete",
+    "email": "athlete@example.invalid"
+  },
+  "tier": 3,
+  "category": "imminent-safety-risk",
+  "triggerContent": "Synthetic safety signal for integration testing.",
+  "classificationReason": "Synthetic emergency classification.",
+  "conversationSummary": "Critical safety signal from the current athlete message; clinical assessment is required.",
+  "relevantMentalNotes": [],
+  "escalationTimestamp": 1791720000000,
+  "pulseApiCallback": "https://example.invalid/.netlify/functions/clinical-callback",
+  "organizationId": "synthetic-organization",
+  "teamId": "synthetic-team",
+  "routingContext": {
+    "organizationId": "synthetic-organization",
+    "teamId": "synthetic-team",
+    "pilotId": null,
+    "pilotEnrollmentId": null,
+    "teamMembershipId": "synthetic-team_synthetic-athlete",
+    "environment": "test",
+    "selectedSupportOption": null
+  },
+  "consentState": {
+    "status": "emergency_safety_basis",
+    "disclosureVersion": "pulsecheck-clinical-handoff-v1",
+    "consentedAt": null
+  }
+}

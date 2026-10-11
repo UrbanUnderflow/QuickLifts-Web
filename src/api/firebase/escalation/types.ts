@@ -55,6 +55,7 @@ export enum ConsentStatus {
 }
 
 export enum HandoffStatus {
+  NotInitiated = 'not_initiated',
   Pending = 'pending',
   Initiated = 'initiated',
   Completed = 'completed',
@@ -487,14 +488,15 @@ export function getCategoryLabel(category: EscalationCategory): string {
 
 export function getCoachStatusLabel(tier: EscalationTier, handoffStatus: HandoffStatus): string {
   if (tier === EscalationTier.CriticalRisk) {
+    if (handoffStatus === HandoffStatus.NotInitiated) return 'Emergency resources available';
     if (handoffStatus === HandoffStatus.Completed) {
-      return 'Engaged with care';
+      return 'Clinical handoff received';
     }
-    return 'Clinical escalation initiated';
+    return handoffStatus === HandoffStatus.Failed ? 'Clinical handoff unavailable' : 'Clinical handoff pending';
   }
   if (tier === EscalationTier.ElevatedRisk) {
     if (handoffStatus === HandoffStatus.Completed) {
-      return 'Connected with support';
+      return 'Support handoff received';
     }
     return 'Elevated concern flagged';
   }
