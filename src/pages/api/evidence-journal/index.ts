@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { authorizeLinearAthlete } from '../curriculum/runtime';
 import { EVIDENCE_COLLECTION, EvidenceError, evidenceEntries, isJournalType, journalTypeOf, parseEvidence, saveEvidence, validEvidenceId, withJournalType } from '../../../lib/evidence-journal';
+const {journalEntryRevision, appendWithdrawal, applyFutureJournalSharing} = require('../../../../netlify/functions/lib/journal-sharing');
 
 // A type filter scans newest first in batches, because entries saved before types existed have no type field to query on.
 const FILTER_BATCH = 50;
@@ -11,12 +12,10 @@ const SCREENING_BUDGET_MS = 9000;
 
 type SafetyBlock = { status: string; escalationId?: string | null; handoff?: string };
 export async function requestScreening(req: NextApiRequest, entryId: string): Promise<SafetyBlock> {
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
-  const proto = req.headers['x-forwarded-proto'] || 'https';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SCREENING_BUDGET_MS);
   try {
-    const response = await fetch(`${proto}://${host}/.netlify/functions/journal-safety-screen`, {
+    const response = await fetch('https://fitwithpulse.ai/.netlify/functions/journal-safety-screen', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -38,7 +37,7 @@ export async function requestScreening(req: NextApiRequest, entryId: string): Pr
 
 export const createEvidenceJournalHandler = (deps: { authorize?: typeof authorizeLinearAthlete; now?: () => number; screen?: typeof requestScreening } = {}) => async (req: NextApiRequest, res: NextApiResponse) => {
   res.setHeader('Cache-Control', 'no-store');
-  if (!['GET', 'POST', 'DELETE'].includes(req.method || '')) return res.status(405).json({ error: 'Method not allowed' });
+  if (!['GET', 'POST', 'PATCH', 'DELETE'].includes(req.method || '')) return res.status(405).json({ error: 'Method not allowed' });
   let identity;
   try { identity = await (deps.authorize || authorizeLinearAthlete)(req); if (!identity.uid) throw Error(); }
   catch { return res.status(401).json({ error: 'Sign in to open your evidence.' }); }
@@ -51,17 +50,53 @@ export const createEvidenceJournalHandler = (deps: { authorize?: typeof authoriz
         throw new EvidenceError(403, 'That photo belongs to another account.');
       }
       const result = await saveEvidence(identity.db, identity.uid, input, now);
+      // A saved, current prospective choice can authorize only a genuinely new entry.
+      // Failed or stale preferences leave the entry private, without rolling back the save.
+      let sharing = null;
+      if (result.created) try { sharing = (await applyFutureJournalSharing(identity.db, identity.uid, result.entry, now))?.sharing || null; } catch { /* Keep the saved entry private. */ }
       const entryId = String(result.entry.id);
       // Mark the screening pending before asking for it, so the sweep finishes it if this request never gets an answer.
       const screening = identity.db.collection(EVIDENCE_COLLECTION).doc(identity.uid).collection('screenings').doc(entryId);
       if (result.created) await screening.set({ status: 'pending', attempts: 0, createdAt: now }, { merge: true });
       const safety = await (deps.screen || requestScreening)(req, entryId);
-      return res.status(200).json({ ...result, safety });
+      return res.status(200).json({ ...result, entryRevision: journalEntryRevision(result.entry), sharing, safety });
+    }
+    if (req.method === 'PATCH') {
+      const input = parseEvidence(req.body), now = (deps.now || Date.now)();
+      if ('photoStoragePath' in input && input.photoStoragePath && !input.photoStoragePath.startsWith(`pulsecheck-journal-photos/${identity.uid}/`)) throw new EvidenceError(403, 'That photo belongs to another account.');
+      const root = identity.db.collection(EVIDENCE_COLLECTION).doc(identity.uid);
+      const result = await identity.db.runTransaction(async tx => {
+        const ref = entries.doc(input.id), shareRef = root.collection('sharing').doc(input.id);
+        const [saved, share] = await Promise.all([tx.get(ref), tx.get(shareRef)]);
+        if (!saved.exists) throw new EvidenceError(404, 'This entry was deleted.');
+        const old = saved.data()!;
+        if (req.body.entryRevision !== journalEntryRevision(old)) throw new EvidenceError(409, 'This entry changed. Open it again before editing.');
+        if ((input.sourceAssignmentId || null) !== (old.sourceAssignmentId || null)) throw new EvidenceError(400, 'The source assignment cannot be changed.');
+        const entry: Record<string, any> = {...old, ...input, updatedAt: now};
+        // Replace optional fields so changing type cannot retain obsolete content.
+        for (const key of ['effortRating', 'photoStoragePath']) if (!(key in input)) delete entry[key];
+        appendWithdrawal(tx, root, share.data(), 'invalidated', now);
+        if (share.exists) tx.set(shareRef, {...share.data(), status: 'invalidated', updatedAt: now});
+        tx.set(ref, entry);
+        tx.set(root.collection('screenings').doc(input.id), {status: 'pending', attempts: 0, createdAt: now, entryRevision: journalEntryRevision(entry)});
+        return {entry, entryRevision: journalEntryRevision(entry)};
+      });
+      const safety = await (deps.screen || requestScreening)(req, input.id);
+      return res.status(200).json({...result, safety});
     }
     if (req.method === 'DELETE') {
       if (!validEvidenceId(req.query.entryId)) throw new EvidenceError(400, 'Choose a valid entry.');
-      // Recursive deletion also removes private event deduplication records.
-      await identity.db.recursiveDelete(entries.doc(req.query.entryId.toLowerCase()));
+      const entryId = req.query.entryId.toLowerCase(), root = identity.db.collection(EVIDENCE_COLLECTION).doc(identity.uid);
+      await identity.db.runTransaction(async tx => {
+        const ref = entries.doc(entryId), shareRef = root.collection('sharing').doc(entryId);
+        const [entry, share] = await Promise.all([tx.get(ref), tx.get(shareRef)]);
+        if (!entry.exists) return;
+        appendWithdrawal(tx, root, share.data(), 'deleted', (deps.now || Date.now)());
+        tx.set(shareRef, {...(share.data() || {}), entryId, athleteId: identity.uid, status: 'deleted', updatedAt: (deps.now || Date.now)()});
+        tx.delete(ref);
+      });
+      // Keep non-text withdrawal evidence, remove private event deduplication records.
+      await identity.db.recursiveDelete(entries.doc(entryId));
       return res.status(200).json({ deleted: true });
     }
     const rawLimit = req.query.limit;

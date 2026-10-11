@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "athleticmind-snapshot-v1",
+  "schemaVersion": "athleticmind-snapshot-v2",
   "synthetic": true,
   "scope": {
     "teamId": "synthetic-team",
@@ -64,12 +64,13 @@
   "coverage": {
     "missing": [
       "full_nora_coverage_not_guaranteed",
-      "journals_not_included_permission_unverified",
       "legacy_mental_checkins_unscoped",
       "no_per_message_ingestion_history",
       "wearables_not_included_permission_unverified"
     ],
-    "optionalSourcesIncluded": [],
+    "optionalSourcesIncluded": [
+      "entry_authorized_journals"
+    ],
     "completeFullNoraTranscript": false
   },
   "summary": {
@@ -82,13 +83,44 @@
     "athleteMessageCount": 1,
     "supportStatusCount": 0,
     "latestSourceEventAt": "2026-10-10T14:01:00.000Z",
-    "sourceAgeAtWindowEndMs": 50340000
+    "sourceAgeAtWindowEndMs": 50340000,
+    "journalEntryCount": 1,
+    "journalWithdrawalCount": 1
   },
   "ingestion": {
     "selection": "event_time_or_firestore_document_update_time",
     "deduplicationKey": "sourceId_and_revision",
     "requiresRevisionDeduplication": true
   },
-  "snapshotId": "782fe6d369131b44eded5ad0196e0867101cdfd50f64e94d2a540f1daa9bf16b",
-  "generatedAt": "2026-10-11T04:01:00.000Z"
+  "snapshotId": "0ff297313c31fd82beea112a4050317b0ae4d0a11313ff7f486a7a1848925eff",
+  "generatedAt": "2026-10-11T04:01:00.000Z",
+  "journalEntries": [
+    {
+      "sourceId": "pulsecheck-evidence-journals/synthetic-athlete/entries/synthetic-journal",
+      "entryId": "synthetic-journal",
+      "type": "evidence",
+      "moment": "Synthetic example: I stayed patient during practice.",
+      "action": "I paused and reset.",
+      "createdAt": "2026-10-10T12:00:00.000Z",
+      "updatedAt": "2026-10-10T12:00:00.000Z",
+      "eventAt": "2026-10-10T13:00:00.000Z",
+      "sourceIngestedAt": "2026-10-10T13:00:00.000Z",
+      "sharing": {
+        "permissionVersion": "athleticmind-journal-sharing-v1",
+        "permissionEventId": "synthetic-journal-permission",
+        "sharedAt": "2026-10-10T13:00:00.000Z",
+        "status": "shared"
+      },
+      "revision": "296d777dfe4194bfc0febb3f4f4cf9084f3bfdee58486f5dc520d2fdcb789e60"
+    }
+  ],
+  "journalWithdrawals": [
+    {
+      "sourceId": "pulsecheck-evidence-journals/synthetic-athlete/entries/synthetic-old-journal",
+      "permissionEventId": "synthetic-old-permission",
+      "withdrawnAt": "2026-10-10T14:00:00.000Z",
+      "reason": "unshared",
+      "revision": "6847e05509e6f9ccc1dc34cbd5706593cc11199e33265902dabaa01eb3b4011a"
+    }
+  ]
 }

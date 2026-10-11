@@ -1,6 +1,7 @@
 const { createHash } = require('node:crypto');
 
-const SCHEMA_VERSION = 'athleticmind-snapshot-v1';
+const SCHEMA_VERSION = 'athleticmind-snapshot-v2';
+const { journalEntryRevision } = require('./journal-sharing');
 const MAX_RECORDS = 5000;
 const DOC_FIELDS = ['id', 'version', 'category', 'title', 'body'];
 const idValid = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -73,14 +74,16 @@ async function assembleAthleticMindSnapshot(db, { teamId, athleteId, windowStart
   const { scope, consent, membership } = eligibility;
   const accepted = timestamp(consent.acceptedAt);
   if (end <= accepted) return deny('window_precedes_acceptance');
-  const [checkDocuments, scheduledDocuments, mainDocuments, supportDocuments] = await Promise.all([
+  const [checkDocuments, scheduledDocuments, mainDocuments, supportDocuments, journalPermissions, journalSharingEvents] = await Promise.all([
     bounded(db.collection('pulsecheck-morning-checkins').where('athleteUserId', '==', athleteId), 'checkins'),
     bounded(db.collection('pulsecheck-nora-conversations').where('athleteUserId', '==', athleteId), 'scheduled_nora'),
     bounded(db.collection('conversations').where('userId', '==', athleteId), 'main_nora'),
     bounded(db.collection('escalation-records').where('userId', '==', athleteId), 'support_status'),
+    bounded(db.collection('pulsecheck-evidence-journals').doc(athleteId).collection('sharing'), 'journal_permissions'),
+    bounded(db.collection('pulsecheck-evidence-journals').doc(athleteId).collection('sharing-events'), 'journal_sharing_events'),
   ]);
-  const checkIns = [], noraMessages = [], supportStatus = [];
-  const missing = new Set(['wearables_not_included_permission_unverified', 'journals_not_included_permission_unverified', 'legacy_mental_checkins_unscoped']);
+  const checkIns = [], noraMessages = [], supportStatus = [], journalEntries = [], journalWithdrawals = [];
+  const missing = new Set(['wearables_not_included_permission_unverified', 'legacy_mental_checkins_unscoped']);
   const range = value => value >= start && value < end;
   function sourceTimes(document, eventValue) {
     const eventAt = timestamp(eventValue), createdAt = timestamp(document.createTime), ingestedAt = timestamp(document.updateTime);
@@ -111,6 +114,39 @@ async function assembleAthleticMindSnapshot(db, { teamId, athleteId, windowStart
       checkIns.push(stamp(record));
     }
   }
+  for (const permissionDocument of journalPermissions) {
+    const permission = permissionDocument.data();
+    if (permission.entryId !== permissionDocument.id || !idValid(permission.entryId) || permission.athleteId !== athleteId || permission.teamId !== teamId || permission.organizationId !== scope.organizationId || permission.permissionVersion !== 'athleticmind-journal-sharing-v1' || !idValid(permission.permissionEventId) || permission.processingConsentEventId !== consent.eventId || permission.processingDocumentHash !== consent.documentHash || permission.processingConsentVersion !== consent.version) { missing.add('journal_permission_missing_or_other_scope'); continue; }
+    const sharedAt = timestamp(permission.sharedAt), permissionUpdatedAt = timestamp(permission.updatedAt);
+    if (![sharedAt, permissionUpdatedAt].every(Number.isFinite) || sharedAt < accepted || sharedAt > nowMs || permissionUpdatedAt < sharedAt || permissionUpdatedAt > nowMs) { missing.add('journal_permission_timestamp_invalid'); continue; }
+    const document = permission.status === 'shared' ? await db.collection('pulsecheck-evidence-journals').doc(athleteId).collection('entries').doc(permission.entryId).get() : null;
+    const entry = document?.exists ? document.data() : null;
+    const sourceId = `pulsecheck-evidence-journals/${athleteId}/entries/${permission.entryId}`;
+    const deleted = !entry || entry.deletedAt || entry.isDeleted === true;
+    const currentRevision = !deleted ? journalEntryRevision(entry) : null;
+    let reason = permission.status === 'deleted' ? 'entry_deleted' : permission.status === 'unshared' ? 'unshared' : permission.status === 'invalidated' ? 'entry_changed' : permission.status === 'shared' && deleted ? 'entry_deleted' : permission.status === 'shared' && currentRevision !== permission.entryRevision ? 'entry_changed' : null;
+    if (reason) {
+      const entryUpdated = timestamp(document?.updateTime);
+      const withdrawnAt = Math.max(permissionUpdatedAt, Number.isFinite(entryUpdated) && entryUpdated <= nowMs ? entryUpdated : permissionUpdatedAt);
+      journalWithdrawals.push(stamp({ sourceId, permissionEventId: permission.permissionEventId, withdrawnAt: new Date(withdrawnAt).toISOString(), reason }));
+      continue;
+    }
+    if (permission.status !== 'shared') { missing.add('journal_permission_not_shared'); continue; }
+    const createdAt = timestamp(entry.createdAt), updatedAt = timestamp(entry.updatedAt || entry.createdAt), ingestedAt = timestamp(document.updateTime);
+    if (![createdAt, updatedAt, ingestedAt].every(Number.isFinite) || createdAt > updatedAt || updatedAt > nowMs || ingestedAt > nowMs || typeof entry.moment !== 'string' || (entry.action != null && typeof entry.action !== 'string') || (entry.type != null && typeof entry.type !== 'string')) { missing.add('journal_entry_invalid'); continue; }
+    // Optional entry permission may explicitly include earlier writing; its sharing time starts this exchange.
+    const eventAt = Math.max(updatedAt, sharedAt);
+    if (eventAt >= end || (!range(eventAt) && !range(ingestedAt) && !range(permissionUpdatedAt))) continue;
+    journalEntries.push(stamp({ sourceId, entryId: permission.entryId, type: entry.type || 'evidence', moment: entry.moment, action: entry.action || null, createdAt: new Date(createdAt).toISOString(), updatedAt: new Date(updatedAt).toISOString(), eventAt: new Date(eventAt).toISOString(), sourceIngestedAt: new Date(Math.max(ingestedAt, permissionUpdatedAt)).toISOString(), sharing: { status: 'shared', permissionVersion: permission.permissionVersion, permissionEventId: permission.permissionEventId, sharedAt: new Date(sharedAt).toISOString() } }));
+  }
+  // Server-retained withdrawals preserve the former program scope when sharing moves elsewhere.
+  for (const document of journalSharingEvents) {
+    const event = document.data();
+    if (!['unshared', 'invalidated', 'deleted'].includes(event.status) || event.athleteId !== athleteId || event.teamId !== teamId || event.organizationId !== scope.organizationId || event.permissionVersion !== 'athleticmind-journal-sharing-v1' || !idValid(event.entryId) || !idValid(event.permissionEventId)) continue;
+    const withdrawnAt = timestamp(event.updatedAt);
+    if (!Number.isFinite(withdrawnAt) || withdrawnAt > nowMs) continue;
+    journalWithdrawals.push(stamp({ sourceId: `pulsecheck-evidence-journals/${athleteId}/entries/${event.entryId}`, permissionEventId: event.permissionEventId, withdrawnAt: new Date(withdrawnAt).toISOString(), reason: event.status === 'unshared' ? 'unshared' : event.status === 'deleted' ? 'entry_deleted' : 'entry_changed' }));
+  }
   for (const [source, documents, field, userField, requiresOrg] of [
     ['pulsecheck-nora-conversations', scheduledDocuments, 'turns', 'athleteUserId', false],
     ['conversations', mainDocuments, 'messages', 'userId', true],
@@ -120,7 +156,11 @@ async function assembleAthleticMindSnapshot(db, { teamId, athleteId, windowStart
       if (!scoped(data, userField, requiresOrg)) { missing.add(`${source}_unscoped_or_other_team_excluded`); continue; }
       if (data.state === 'closed-revoked' || data.storagePolicy?.restricted === true) { missing.add('nora_restricted_or_revoked_content_unavailable'); continue; }
       if (!Array.isArray(data[field])) continue;
+      const journalDerived = data.trustedSource?.kind === 'journal' || data[field].some(message => message?.trustedSource?.kind === 'journal' || /I'm sharing[\s\S]{0,150}from my journal with you/i.test(String(message?.content || message?.text || '')));
+      if (journalDerived) { missing.add('journal_derived_nora_conversation_excluded'); continue; }
+      if (source === 'conversations' && data[field].some(message => message?.trustedSource?.kind !== 'nora_chat' || message?.trustedSource?.recordedBy !== 'pulsecheck-chat-v2')) { missing.add('legacy_nora_conversation_provenance_unverified'); continue; }
       for (const message of data[field]) {
+        if (source === 'conversations' && (message?.trustedSource?.kind !== 'nora_chat' || message?.trustedSource?.recordedBy !== 'pulsecheck-chat-v2')) { missing.add('legacy_nora_message_provenance_unverified'); continue; }
         const messageId = field === 'turns' ? message.turnId : message.id;
         const text = field === 'turns' ? message.text : message.content;
         const speaker = field === 'turns' ? (message.role === 'athlete-reply' ? 'athlete' : ['nora-opener', 'nora-probe', 'nora-action'].includes(message.role) ? 'nora' : null) : typeof message.isFromUser === 'boolean' ? message.isFromUser ? 'athlete' : 'nora' : null;
@@ -143,15 +183,29 @@ async function assembleAthleticMindSnapshot(db, { teamId, athleteId, windowStart
     if (Object.keys(record).some(key => ['status', 'incidentStatus', 'handoffStatus'].includes(key))) supportStatus.push(stamp(record));
   }
   const sort = (left, right) => left.eventAt.localeCompare(right.eventAt) || left.sourceId.localeCompare(right.sourceId);
-  checkIns.sort(sort); noraMessages.sort(sort); supportStatus.sort(sort);
+  checkIns.sort(sort); noraMessages.sort(sort); supportStatus.sort(sort); journalEntries.sort(sort); journalWithdrawals.sort((a, b) => a.sourceId.localeCompare(b.sourceId) || a.revision.localeCompare(b.revision));
+  for (let i = journalWithdrawals.length - 1; i > 0; i--) if (journalWithdrawals[i].revision === journalWithdrawals[i - 1].revision) journalWithdrawals.splice(i, 1);
   const intake = membership.athleteOnboarding || {};
   const onboarding = { sourceId: `pulsecheck-team-memberships/${scope.membershipId}/athleteOnboarding`, formVersion: typeof intake.intakeFormVersion === 'string' ? intake.intakeFormVersion : null, completedAt: Number.isFinite(timestamp(intake.intakeCompletedAt)) ? new Date(timestamp(intake.intakeCompletedAt)).toISOString() : null, responses: canonical(intake.intakeResponses && typeof intake.intakeResponses === 'object' && !Array.isArray(intake.intakeResponses) ? intake.intakeResponses : {}) };
   if (!Object.keys(onboarding.responses).length) missing.add('onboarding_responses_missing');
   missing.add('no_per_message_ingestion_history');
   missing.add('full_nora_coverage_not_guaranteed');
   const levels = checkIns.reduce((result, checkin) => ({ ...result, [checkin.level]: (result[checkin.level] || 0) + 1 }), {});
-  const lastEvent = [...checkIns, ...noraMessages, ...supportStatus].sort(sort).at(-1)?.eventAt || null;
-  const snapshot = { schemaVersion: SCHEMA_VERSION, synthetic: false, scope, window: { start: new Date(start).toISOString(), end: new Date(end).toISOString() }, consent, onboarding, checkIns, noraMessages, supportStatus, coverage: { missing: [...missing].sort(), optionalSourcesIncluded: [], completeFullNoraTranscript: false }, summary: { method: 'deterministic_counts_only', checkInCount: checkIns.length, checkInLevelCounts: levels, noraMessageCount: noraMessages.length, athleteMessageCount: noraMessages.filter(message => message.speaker === 'athlete').length, supportStatusCount: supportStatus.length, latestSourceEventAt: lastEvent, sourceAgeAtWindowEndMs: lastEvent ? end - timestamp(lastEvent) : null }, ingestion: { selection: 'event_time_or_firestore_document_update_time', deduplicationKey: 'sourceId_and_revision', requiresRevisionDeduplication: true } };
+  const lastEvent = [...checkIns, ...noraMessages, ...supportStatus, ...journalEntries].sort(sort).at(-1)?.eventAt || null;
+  const snapshot = { schemaVersion: SCHEMA_VERSION, synthetic: false, scope, window: { start: new Date(start).toISOString(), end: new Date(end).toISOString() }, consent, onboarding, checkIns, noraMessages, supportStatus, journalEntries, journalWithdrawals, coverage: { missing: [...missing].sort(), optionalSourcesIncluded: journalEntries.length ? ['entry_authorized_journals'] : [], completeFullNoraTranscript: false }, summary: { method: 'deterministic_counts_only', checkInCount: checkIns.length, checkInLevelCounts: levels, noraMessageCount: noraMessages.length, athleteMessageCount: noraMessages.filter(message => message.speaker === 'athlete').length, supportStatusCount: supportStatus.length, journalEntryCount: journalEntries.length, journalWithdrawalCount: journalWithdrawals.length, latestSourceEventAt: lastEvent, sourceAgeAtWindowEndMs: lastEvent ? end - timestamp(lastEvent) : null }, ingestion: { selection: 'event_time_or_firestore_document_update_time', deduplicationKey: 'sourceId_and_revision', requiresRevisionDeduplication: true } };
   return { eligible: true, reasonCodes: [], snapshot: { ...snapshot, snapshotId: hash(snapshot), generatedAt: new Date(nowMs).toISOString() } };
 }
-module.exports = { SCHEMA_VERSION, assembleAthleticMindSnapshot, checkAthleticMindSnapshotEligibility };
+async function revalidateSnapshotJournalSources(db, snapshot, { now = Date.now() } = {}) {
+  if (!Array.isArray(snapshot?.journalEntries)) return false;
+  for (const entry of snapshot.journalEntries) {
+    if (!idValid(entry.entryId)) return false;
+    const base = db.collection('pulsecheck-evidence-journals').doc(snapshot.scope.athleteId);
+    const [permissionDoc, entryDoc] = await Promise.all([base.collection('sharing').doc(entry.entryId).get(), base.collection('entries').doc(entry.entryId).get()]);
+    const permission = permissionDoc.data(), current = entryDoc.data();
+    if (!permissionDoc.exists || !entryDoc.exists || !current || current.deletedAt || current.isDeleted === true || permission.status !== 'shared' || entry.sharing?.status !== 'shared' || permission.entryId !== entry.entryId || permission.athleteId !== snapshot.scope.athleteId || permission.teamId !== snapshot.scope.teamId || permission.organizationId !== snapshot.scope.organizationId || permission.permissionVersion !== 'athleticmind-journal-sharing-v1' || permission.permissionEventId !== entry.sharing?.permissionEventId || permission.processingConsentEventId !== snapshot.consent.eventId || permission.processingDocumentHash !== snapshot.consent.documentHash || permission.processingConsentVersion !== snapshot.consent.version || journalEntryRevision(current) !== permission.entryRevision) return false;
+    if (!Number.isFinite(timestamp(permission.updatedAt)) || timestamp(permission.updatedAt) > timestamp(now)) return false;
+    if ((current.type || 'evidence') !== entry.type || current.moment !== entry.moment || (current.action || null) !== entry.action || timestamp(current.createdAt) !== timestamp(entry.createdAt) || timestamp(current.updatedAt || current.createdAt) !== timestamp(entry.updatedAt) || timestamp(permission.sharedAt) !== timestamp(entry.sharing.sharedAt)) return false;
+  }
+  return true;
+}
+module.exports = { revalidateSnapshotJournalSources, SCHEMA_VERSION, assembleAthleticMindSnapshot, checkAthleticMindSnapshotEligibility };

@@ -1955,6 +1955,7 @@ async function recoverSnapshotFromSavedConversation({
 
   const conversations = conversationSnap.docs
     .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+    .filter(entry => entry.trustedSource?.kind !== 'journal' && !(entry.messages || []).some(message => message?.trustedSource?.kind === 'journal' || /I'm sharing[\s\S]{0,150}from my journal with you/i.test(String(message?.content || ''))))
     .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
 
   const conversation = conversations.find((entry) => buildTodaysConversationMessages(entry, sourceDate).length > 0);
@@ -2239,8 +2240,8 @@ exports.handler = async (event, context) => {
     }
     const {
       userId: claimedUserId,
-      message, 
-      conversationId, 
+      message: suppliedMessage,
+      conversationId: suppliedConversationId,
       systemPromptContext, // DEPRECATED: iOS used to send full prompt, now sends raw data
       userContext,         // Optional: iOS sends structured user context
       healthContext,       // Optional: iOS sends health data from HealthKit
@@ -2261,6 +2262,19 @@ exports.handler = async (event, context) => {
       };
     }
     const userId = verifiedCaller.userId;
+    let journalAnalysis = null;
+    if (body.journalEntryId !== undefined) {
+      try { journalAnalysis = await require('./lib/journal-sharing').authorizedJournalAnalysis(db, userId, body.journalEntryId); }
+      catch (error) { return { statusCode: error.status || 503, headers, body: JSON.stringify({ error: error.status ? error.message : 'Journal sharing could not be verified.' }) }; }
+    }
+    const message = journalAnalysis
+      ? `I'm sharing a ${journalAnalysis.entry.type || 'evidence'} entry from my journal with you.\n\n${journalAnalysis.entry.moment || ''}${journalAnalysis.entry.action ? `\n\n${journalAnalysis.entry.action}` : ''}`
+      : suppliedMessage;
+    if (!journalAnalysis && /^I'm sharing[\s\S]{0,150}from my journal with you/i.test(String(message || ''))) {
+      return {statusCode: 409, headers, body: JSON.stringify({error: 'Open the saved entry in an updated app and review its sharing permission before asking Nora to read it.', errorCode: 'JOURNAL_ENTRY_PERMISSION_REQUIRED'})};
+    }
+    const conversationId = journalAnalysis ? null : suppliedConversationId;
+    let trustedSource = journalAnalysis?.trustedSource || {kind: clientCapabilities?.journalSourceProtocol === 2 ? 'nora_chat' : 'legacy_unattributed', recordedBy: 'pulsecheck-chat-v2'};
     const syntheticRedTeamRequested = ['true', '1'].includes(
       getRequestHeader(event, 'x-nora-red-team-synthetic').toLowerCase()
     );
@@ -2384,7 +2398,7 @@ exports.handler = async (event, context) => {
       }
     }
 
-    if (!convo) {
+    if (!convo && !journalAnalysis) {
       // Get most recent conversation for this user
       try {
         const snap = await db
@@ -2405,6 +2419,20 @@ exports.handler = async (event, context) => {
       }
     }
 
+    // Journal analysis has an isolated conversation. Do not import its text into
+    // an unrelated new turn, and never reopen it after sharing was withdrawn.
+    if (convo?.trustedSource?.kind === 'journal') {
+      if (!conversationId) { convo = null; convoRef = null; }
+      else {
+        try {
+          const current = await require('./lib/journal-sharing').authorizedJournalAnalysis(db, userId, convo.trustedSource.journalEntryId);
+          if (current.sharing.permissionEventId !== convo.trustedSource.journalPermissionEventId) throw Object.assign(new Error('Review and share the current journal entry again.'), {status: 403});
+          journalAnalysis = current;
+          trustedSource = current.trustedSource;
+        } catch (error) { return {statusCode: error.status || 503, headers, body: JSON.stringify({error: error.status ? error.message : 'Journal sharing could not be verified.'})}; }
+      }
+    }
+
     if (!convoRef) {
       convoRef = db.collection('conversations').doc();
     }
@@ -2412,7 +2440,7 @@ exports.handler = async (event, context) => {
     // Build recent message history
     // Prefer client-provided messages (iOS sends these), fall back to Firestore conversation
     let recentMessages;
-    if (Array.isArray(clientRecentMessages) && clientRecentMessages.length > 0) {
+    if (!journalAnalysis && Array.isArray(clientRecentMessages) && clientRecentMessages.length > 0) {
       // iOS client provided recent messages (includes local context)
       recentMessages = clientRecentMessages.slice(-20);
       console.log('[pulsecheck-chat] Using client-provided recent messages:', recentMessages.length);
@@ -2420,6 +2448,17 @@ exports.handler = async (event, context) => {
       // Use Firestore conversation (web clients)
       recentMessages = Array.isArray(convo?.messages) ? convo.messages.slice(-20) : [];
     }
+
+    // Client history is useful to the athlete, but cannot establish journal-free
+    // provenance for routine partner export. Keep those turns conservatively excluded.
+    if (!journalAnalysis && Array.isArray(clientRecentMessages) && clientRecentMessages.length) {
+      trustedSource = {kind: 'legacy_unattributed', recordedBy: 'pulsecheck-chat-v2'};
+    }
+    const transcriptWithProvenance = messages => safeTranscript(messages, storagePolicy).map((message, index) => ({
+      ...message,
+      // Only persisted server messages and this server-created turn enter this list.
+      ...(messages[index].trustedSource ? {trustedSource: messages[index].trustedSource} : {}),
+    }));
 
     let todaysNoraAssignment = null;
     let athleteMentalProgress = null;
@@ -2439,6 +2478,7 @@ exports.handler = async (event, context) => {
 
     const nowSec = Math.floor(Date.now() / 1000);
     const userMsg = {
+      trustedSource,
       id: cryptoRandomId(),
       content: message,
       isFromUser: true,
@@ -2448,7 +2488,7 @@ exports.handler = async (event, context) => {
     let newConvoId = conversationId || convo?.id || convoRef.id;
 
     try {
-      const signalAnalysis = storagePolicy.restricted ? null : await deriveConversationSignalAnalysis({
+      const signalAnalysis = journalAnalysis || storagePolicy.restricted ? null : await deriveConversationSignalAnalysis({
         message,
         recentMessages,
         snapshot: currentStateSnapshot,
@@ -2780,7 +2820,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       ?.toLowerCase()
       ?.includes('which coach should i send this to') === true;
 
-    if (!storagePolicy.restricted && !handledOnboarding && (isCoachIdentityQuestion(message) || isCoachHandoffRequest(message) || awaitingCoachHandoffSelection)) {
+    if (!journalAnalysis && !storagePolicy.restricted && !handledOnboarding && (isCoachIdentityQuestion(message) || isCoachHandoffRequest(message) || awaitingCoachHandoffSelection)) {
       const coachContacts = await loadAthleteCoachContacts(db, userId, userDataForPrefs);
       const primaryCoach = coachContacts.find((contact) => contact.isPrimary && contact.canBePrimary);
 
@@ -3136,6 +3176,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     // leave an assistant reply in history while the API reports that the
     // message was not processed.
     const aiMsg = {
+      trustedSource,
       id: cryptoRandomId(),
       content: assistantMessage,
       isFromUser: false,
@@ -3208,18 +3249,25 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       });
     }
 
-    const chatActions = buildNoraChatActions({message, reply:assistantMessage, recentMessages, enabled:clientCapabilities?.noraChatActions === true, escalationTier:escalation.tier}).map(action => ({...action, messageId: aiMsg.id}));
+    const chatActions = buildNoraChatActions({message, reply:assistantMessage, recentMessages, enabled:!journalAnalysis && clientCapabilities?.noraChatActions === true, escalationTier:escalation.tier}).map(action => ({...action, messageId: aiMsg.id}));
     aiMsg.chatActions = chatActions;
 
     // The live safety classification completed, so this turn is eligible to be
     // stored and returned. Persistence remains non-blocking for chat delivery.
+    if (journalAnalysis) {
+      try {
+        const current = await require('./lib/journal-sharing').authorizedJournalAnalysis(db, userId, journalAnalysis.entry.id);
+        if (current.sharing.permissionEventId !== journalAnalysis.sharing.permissionEventId) throw Object.assign(new Error('Journal sharing changed. Review this entry again.'), {status: 409});
+      } catch (error) { return {statusCode: error.status || 503, headers, body: JSON.stringify({error: error.status ? error.message : 'Journal sharing could not be verified.'})}; }
+    }
     try {
       if (!convo?.messages?.length) {
         const data = {
           id: convoRef.id,
           userId,
           title: 'Nora',
-          messages: safeTranscript([userMsg, aiMsg], storagePolicy),
+          trustedSource,
+          messages: transcriptWithProvenance([userMsg, aiMsg]),
           storagePolicy,
           tags: [],
           actionCardInteractions: [],
@@ -3239,7 +3287,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           id: convoRef.id,
           userId,
           title: storagePolicy.restricted ? 'Nora' : (convo?.title || 'Nora'),
-          messages: safeTranscript(updated, storagePolicy),
+          messages: transcriptWithProvenance(updated),
           storagePolicy,
           updatedAt: nowSec,
           ...(syntheticRedTeam ? {
@@ -3256,18 +3304,19 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     }
 
     const shouldCreateEscalation = Boolean(
-      escalation && isTrueCareEscalationClassification(escalation, message, recentMessages)
+      escalation && (!journalAnalysis || Number(escalation.tier) >= EscalationTier.ElevatedRisk) && isTrueCareEscalationClassification(escalation, message, recentMessages)
     );
     if (shouldCreateEscalation) {
       const recordCreationStartedAt = Date.now();
       try {
         const created = await escalationRuntime.createEscalationFromTrustedRuntime({
           userId,
-          conversationId: newConvoId,
+          conversationId: journalAnalysis ? `journal-${journalAnalysis.entry.id}` : newConvoId,
+          ...(journalAnalysis ? {sourceType: 'journal', sourceRef: journalAnalysis.entry.id} : {}),
           tier: escalation.tier,
           category: escalation.category,
           triggerMessageId: userMsg.id,
-          triggerContent: storagePolicy.restricted ? WITHHELD : message,
+          triggerContent: journalAnalysis ? String(journalAnalysis.entry.moment || '').trim().slice(0, 500) : storagePolicy.restricted ? WITHHELD : message,
           classificationReason: storagePolicy.restricted ? WITHHELD : escalation.reason,
           classificationConfidence: escalation.confidence,
           disposition: escalation.disposition,
@@ -3279,7 +3328,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           dedupeEligible: escalation.dedupeEligible,
           sourceTriggerMessageId: escalation.sourceTriggerMessageId || userMsg.id,
           incident: storagePolicy.restricted ? undefined : escalation.incident,
-          stateSnapshot: !storagePolicy.restricted && currentStateSnapshot ? {
+          stateSnapshot: !journalAnalysis && !storagePolicy.restricted && currentStateSnapshot ? {
             snapshotId: currentStateSnapshot.id,
             sourceDate: currentStateSnapshot.sourceDate,
             overallReadiness: currentStateSnapshot.overallReadiness,
@@ -3299,11 +3348,12 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         }, db, {
           syntheticRedTeam,
           syntheticRedTeamRunId,
+          ...(journalAnalysis?.sharing.teamId ? {journalScope: {teamId: journalAnalysis.sharing.teamId, organizationId: journalAnalysis.sharing.organizationId}} : {}),
         });
 
         escalationOutcome = buildTrustedEscalationOutcome(created);
 
-        if (!syntheticRedTeam && escalation.tier === EscalationTier.MonitorOnly && escalationOutcome.escalationRecordId) {
+        if (!journalAnalysis && !syntheticRedTeam && escalation.tier === EscalationTier.MonitorOnly && escalationOutcome.escalationRecordId) {
           try {
             await notifyCoachForEscalation(db, escalationOutcome.escalationRecordId, userId, escalation.tier);
           } catch (notifyError) {

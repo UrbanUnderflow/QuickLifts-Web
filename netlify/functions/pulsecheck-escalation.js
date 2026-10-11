@@ -1398,6 +1398,10 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
   const syntheticRedTeam = runtimeOptions.syntheticRedTeam === true;
   const syntheticRedTeamRunId = normalizeString(runtimeOptions.syntheticRedTeamRunId);
   let sourceScope = null;
+  const trustedJournalScope = isJournalSource
+    ? await resolveTrustedJournalScope(runtimeDb, userId, runtimeOptions.journalScope)
+    : { explicit: false, scope: null };
+  if (trustedJournalScope.explicit) sourceScope = trustedJournalScope.scope || { teamId: '', organizationId: '' };
 
   if (!userId || !conversationId || tier === undefined || (isJournalSource && !sourceRef)) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) };
@@ -1439,12 +1443,15 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
     sourceTriggerMessageId,
     incident,
   });
-  const existingRecord = await findMergeableEscalationRecord({
+  let existingRecord = await findMergeableEscalationRecord({
     userId,
     conversationId,
     model,
     runtimeDb,
   });
+
+  if (trustedJournalScope.explicit && (!trustedJournalScope.scope ||
+      existingRecord?.teamId !== trustedJournalScope.scope.teamId || existingRecord?.organizationId !== trustedJournalScope.scope.organizationId)) existingRecord = null;
 
   let escalationId = existingRecord?.id || '';
   let escalationData = null;
@@ -1469,7 +1476,7 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
       nowSec,
       existingRecord,
     });
-    if (isJournalSource) Object.assign(escalationData, { sourceType, sourceRef });
+    if (isJournalSource) Object.assign(escalationData, { sourceType, sourceRef }, trustedJournalScope.scope || {});
     escalationData.dedupeMergedCount = Number(existingRecord.dedupeMergedCount || 0) + 1;
     escalationData.dedupeLastMergedAt = nowSec;
     escalationData.dedupeLastTriggerMessageId = triggerMessageId || '';
@@ -1533,7 +1540,7 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
       model,
       nowSec,
     });
-    if (isJournalSource) Object.assign(escalationData, { sourceType, sourceRef });
+    if (isJournalSource) Object.assign(escalationData, { sourceType, sourceRef }, trustedJournalScope.scope || {});
     if (stateSnapshot) escalationData.stateSnapshot = stateSnapshot;
     const docRef = await runtimeDb.collection('escalation-records').add(escalationData);
     escalationId = docRef.id;
@@ -1603,13 +1610,24 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
       await runtimeDb.collection('escalation-records').doc(escalationId).set(criticalScope, { merge: true });
     }
   }
-  const supportContext = await resolveEscalationSupportContext({
+  const supportContext = trustedJournalScope.explicit && !trustedJournalScope.scope
+    ? { route: 'hotline', teamId: '', team: null, pilotContext: null }
+    : await resolveEscalationSupportContext({
     athleteId: userId,
     preferredPilotId: escalationData?.pilotId || null,
     preferredTeamMembershipId: escalationData?.teamMembershipId || null,
     preferredTeamId: escalationData?.teamId || null,
     escalationData: createdNewRecord ? null : escalationData,
   }, runtimeDb);
+  if (trustedJournalScope.scope) {
+    // Enrollment lookup may fall back independently; never carry another team's pilot context
+    // into an explicitly selected journal program.
+    if (supportContext.pilotContext?.teamId !== trustedJournalScope.scope.teamId ||
+        supportContext.pilotContext?.organizationId !== trustedJournalScope.scope.organizationId) supportContext.pilotContext = null;
+    supportContext.product = await resolveProgramProductConfig(runtimeDb, {
+      team: supportContext.team, teamId: trustedJournalScope.scope.teamId, organizationId: trustedJournalScope.scope.organizationId,
+    });
+  }
   if (activeTier === EscalationTier.CriticalRisk && !normalizeString(escalationData.teamId)) {
     supportContext.teamId = '';
     supportContext.team = null;
@@ -1625,7 +1643,7 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
       productBrand: escalationData.productBrand,
     }, { merge: true });
   }
-  const supportOptionsPayload = activeTier === EscalationTier.ElevatedRisk
+  const supportOptionsPayload = activeTier === EscalationTier.ElevatedRisk && !(trustedJournalScope.explicit && !trustedJournalScope.scope)
     ? await buildEscalationSupportOptions({
         athleteId: userId,
         escalationData,
@@ -2344,6 +2362,25 @@ function buildCoachEscalationSms({ tier, siteUrl }) {
 /**
  * Notify coach of escalation (Tier 1 and above)
  */
+/** Only trusted runtime options may supply a journal's selected program. Personal sharing
+ * leaves the separate emergency safety resolver unchanged; invalid explicit scope never falls back. */
+async function resolveTrustedJournalScope(runtimeDb, userId, preferred) {
+  if (preferred == null || (preferred.teamId == null && preferred.organizationId == null)) return { explicit: false, scope: null };
+  const unavailable = { explicit: true, scope: null };
+  if (!normalizeString(preferred.teamId) || !normalizeString(preferred.organizationId)) return unavailable;
+  try {
+    const scope = await resolveCriticalSourceScope(runtimeDb, userId, preferred);
+    if (!scope) return unavailable;
+    const [team, organization] = await Promise.all([
+      runtimeDb.collection(TEAMS_COLLECTION).doc(scope.teamId).get(),
+      runtimeDb.collection('pulsecheck-organizations').doc(scope.organizationId).get(),
+    ]);
+    if (!team.exists || !organization.exists || team.data()?.status !== 'active' || organization.data()?.status !== 'active' ||
+        team.data()?.organizationId !== scope.organizationId || organization.data()?.productBrand !== 'athleticmind') return unavailable;
+    return { explicit: true, scope };
+  } catch (_error) { return unavailable; }
+}
+
 async function resolveCriticalSourceScope(runtimeDb, userId, preferred = null) {
   const memberships = await runtimeDb.collection(TEAM_MEMBERSHIPS_COLLECTION)
     .where('userId', '==', userId).where('role', '==', 'athlete').where('status', '==', 'active').limit(21).get();
@@ -3823,6 +3860,7 @@ async function createEscalationFromTrustedRuntime(body, runtimeDb, runtimeOption
 }
 
 exports.runtimeHelpers = {
+  resolveTrustedJournalScope,
   resolveCriticalSourceScope,
   triggerCriticalHandoff,
   isExplicitAthleticMindIncident,

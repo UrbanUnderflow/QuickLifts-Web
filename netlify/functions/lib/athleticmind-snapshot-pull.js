@@ -1,6 +1,6 @@
 const crypto = require('node:crypto');
 const { consentAndScopeMatch, isSnapshotReplayPermitted } = require('./athleticmind-snapshot-delivery');
-const { assembleAthleticMindSnapshot, checkAthleticMindSnapshotEligibility } = require('./athleticmind-snapshot');
+const { assembleAthleticMindSnapshot, checkAthleticMindSnapshotEligibility, revalidateSnapshotJournalSources } = require('./athleticmind-snapshot');
 
 const PATH = '/.netlify/functions/auntedna-snapshot-pull';
 const REQUESTS = 'athleticmind-snapshot-pulls';
@@ -40,7 +40,7 @@ function parsePullRequest(rawBody, now) {
 }
 
 function snapshotMatchesRequest(snapshot, input, organizationId, environment = 'production') {
-  return snapshot?.schemaVersion === 'athleticmind-snapshot-v1' && snapshot.synthetic === (environment === 'test')
+  return snapshot?.schemaVersion === 'athleticmind-snapshot-v2' && snapshot.synthetic === (environment === 'test')
     && /^[a-f0-9]{64}$/.test(snapshot.snapshotId || '')
     && snapshot.scope?.organizationId === organizationId && snapshot.scope?.teamId === input.teamId
     && snapshot.scope?.athleteId === input.athleteId && ID.test(snapshot.scope?.membershipId || '')
@@ -95,7 +95,7 @@ function createSnapshotPullHandler({ getDb, env = process.env, now = () => Date.
       const data = team.exists ? team.data() : {};
       if (data.organizationId !== principal.organizationId) return json(403, { error: 'scope_not_authorized' });
       const delivery = data.snapshotDelivery;
-      if (delivery?.pullEnabled !== true || delivery?.receiver?.status !== 'verified' || !delivery?.receiver?.verifiedAt || !delivery?.receiver?.verifiedBy || delivery?.receiver?.contractVersion !== 'athleticmind-snapshot-v1') return json(503, { error: 'program_snapshot_pull_disabled' });
+      if (delivery?.pullEnabled !== true || delivery?.receiver?.status !== 'verified' || !delivery?.receiver?.verifiedAt || !delivery?.receiver?.verifiedBy || delivery?.receiver?.contractVersion !== 'athleticmind-snapshot-v2') return json(503, { error: 'program_snapshot_pull_disabled' });
       const eligibility = await checkEligibility(db, { teamId: input.teamId, athleteId: input.athleteId, now: at });
       if (!eligibility.eligible || eligibility.scope?.organizationId !== principal.organizationId) return json(403, { error: 'athlete_not_eligible' });
       const requestKey = hash(`${principal.keyId}:${input.requestId}`);
@@ -123,6 +123,7 @@ function createSnapshotPullHandler({ getDb, env = process.env, now = () => Date.
         if (!current.eligible || !snapshotMatchesRequest(current.snapshot, input, principal.organizationId, environment) || !isSnapshotReplayPermitted(frozen, current.snapshot)) return json(409, { error: 'snapshot_sources_changed_use_new_request_id' });
         const finalEligibility = await checkEligibility(db, { teamId: input.teamId, athleteId: input.athleteId, now: now() });
         if (!finalEligibility.eligible || !consentAndScopeMatch(frozen, finalEligibility)) return json(403, { error: 'consent_changed' });
+        if (environment !== 'test' && !await revalidateSnapshotJournalSources(db, frozen, { now: now() })) return json(409, { error: 'journal_sources_changed_use_new_request_id' });
         if (!await accessStillValid()) return json(401, { error: 'invalid_authentication' });
         return json(200, { snapshot: frozen, receipt: { requestId: input.requestId, snapshotId: claim.cached.snapshotId, replayed: true } });
       }
@@ -151,6 +152,7 @@ function createSnapshotPullHandler({ getDb, env = process.env, now = () => Date.
         });
         const releaseEligibility = await checkEligibility(db, { teamId: input.teamId, athleteId: input.athleteId, now: now() });
         if (!releaseEligibility.eligible || !consentAndScopeMatch(responseSnapshot, releaseEligibility)) throw Object.assign(new Error('consent_changed'), { statusCode: 403 });
+        if (environment !== 'test' && !await revalidateSnapshotJournalSources(db, responseSnapshot, { now: now() })) throw Object.assign(new Error('journal_sources_changed_use_new_request_id'), { statusCode: 409 });
         if (!await accessStillValid()) throw Object.assign(new Error('invalid_authentication'), { statusCode: 401 });
         // Pull is an immutable read receipt, never scheduled-delivery acknowledgement.
         return json(200, { snapshot: responseSnapshot, receipt: { requestId: input.requestId, snapshotId: snapshot.snapshotId, replayed: false } });
@@ -179,11 +181,11 @@ async function assembleSandboxSnapshot(db, input) {
   const start = new Date(input.windowStart).toISOString(), end = new Date(input.windowEnd).toISOString();
   const message = { sourceId: 'synthetic-conversation/synthetic-message', conversationId: 'synthetic-conversation', speaker: 'athlete', text: 'Synthetic example: I am planning a steady start to practice.', eventAt: start, sourceIngestedAt: start };
   message.revision = hash(JSON.stringify(message));
-  const snapshot = { schemaVersion: 'athleticmind-snapshot-v1', synthetic: true, scope: eligibility.scope, window: { start, end }, consent: eligibility.consent,
+  const snapshot = { schemaVersion: 'athleticmind-snapshot-v2', synthetic: true, scope: eligibility.scope, window: { start, end }, consent: eligibility.consent,
     onboarding: { sourceId: 'synthetic-onboarding', formVersion: 'synthetic-v1', completedAt: '2000-01-01T00:00:00.000Z', responses: { synthetic_goal: 'Practice integration with fictional data.' } },
-    checkIns: [], noraMessages: [message], supportStatus: [],
+    checkIns: [], noraMessages: [message], supportStatus: [], journalEntries: [], journalWithdrawals: [],
     coverage: { missing: ['synthetic_fixture_only'], optionalSourcesIncluded: [], completeFullNoraTranscript: false },
-    summary: { method: 'deterministic_counts_only', checkInCount: 0, checkInLevelCounts: {}, noraMessageCount: 1, athleteMessageCount: 1, supportStatusCount: 0, latestSourceEventAt: start, sourceAgeAtWindowEndMs: Date.parse(end) - Date.parse(start) },
+    summary: { method: 'deterministic_counts_only', checkInCount: 0, checkInLevelCounts: {}, noraMessageCount: 1, athleteMessageCount: 1, supportStatusCount: 0, journalEntryCount: 0, journalWithdrawalCount: 0, latestSourceEventAt: start, sourceAgeAtWindowEndMs: Date.parse(end) - Date.parse(start) },
     ingestion: { selection: 'event_time_or_firestore_document_update_time', deduplicationKey: 'sourceId_and_revision', requiresRevisionDeduplication: true } };
   snapshot.snapshotId = hash(JSON.stringify(snapshot));
   snapshot.generatedAt = end;

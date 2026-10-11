@@ -5,7 +5,7 @@ import styles from './SnapshotArtifactReader.module.css';
 
 export type SnapshotArtifact = { name: string; content: string };
 const labels: Record<string, string> = {'README.md':'Integration guide','snapshot.schema.json':'JSON Schema','examples/snapshot.synthetic.json':'Snapshot example','examples/pull-request.synthetic.json':'Pull request','examples/pull-response.synthetic.json':'Pull response','examples/push-ack.synthetic.json':'Push receipt','emergency-handoff.schema.json':'Handoff schema','webhook.schema.json':'Webhook schema','examples/emergency-handoff.synthetic.json':'Handoff example','examples/case-receipt.synthetic.json':'Case receipt','examples/webhook.synthetic.json':'Webhook example'};
-type Token = {type:string;text?:string;raw?:string;depth?:number;href?:string;ordered?:boolean;tokens?:Token[];items?:{tokens:Token[]}[]};
+type Token = {type:string;text?:string;raw?:string;depth?:number;href?:string;ordered?:boolean;tokens?:Token[];items?:{tokens:Token[]}[];header?:{tokens:Token[]}[];rows?:{tokens:Token[]}[][]};
 function SafeMarkdown({content,onSelect,names}:{content:string;onSelect:(name:string)=>void;names:string[]}) {
   const render=(tokens:Token[]):React.ReactNode=>tokens.map((token,index)=>{
     const child=token.tokens?render(token.tokens):token.text;
@@ -19,6 +19,7 @@ function SafeMarkdown({content,onSelect,names}:{content:string;onSelect:(name:st
       case 'codespan':return <code key={index}>{token.text}</code>;
       case 'list':return token.ordered?<ol key={index}>{token.items?.map((item,i)=><li key={i}>{render(item.tokens)}</li>)}</ol>:<ul key={index}>{token.items?.map((item,i)=><li key={i}>{render(item.tokens)}</li>)}</ul>;
       case 'link':return token.href&&names.includes(token.href)?<button key={index} className={styles.inlineLink} onClick={()=>onSelect(token.href!)}>{child}</button>:<span key={index}>{child}</span>;
+      case 'table':return <div key={index} className={styles.tableWrap}><table><thead><tr>{token.header?.map((cell,i)=><th key={i} scope="col">{render(cell.tokens)}</th>)}</tr></thead><tbody>{token.rows?.map((row,i)=><tr key={i}>{row.map((cell,j)=><td key={j}>{render(cell.tokens)}</td>)}</tr>)}</tbody></table></div>;
       case 'br':return <br key={index}/>;
       default:return <React.Fragment key={index}>{child||token.raw}</React.Fragment>;
     }

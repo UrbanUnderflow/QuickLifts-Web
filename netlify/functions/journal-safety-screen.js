@@ -13,6 +13,8 @@
  * Returns: { safety: { status: 'clear' | 'skipped' | 'checkIn' | 'critical', escalationId?, handoff? } }
  */
 
+const { randomUUID } = require('node:crypto');
+const { journalEntryRevision } = require('./lib/journal-sharing');
 const { initializeFirebaseAdmin, getFirebaseAdminApp, headers, admin } = require('./config/firebase');
 const { runtimeHelpers: chatRuntime } = require('./pulsecheck-chat');
 const { runtimeHelpers: escalationRuntime } = require('./pulsecheck-escalation');
@@ -168,29 +170,50 @@ async function screenJournalEntry({ db, userId, entryId, messaging = null, class
       tx.set(screeningDoc, { status: 'skipped', reason: 'entry_deleted', screenedAt: now() }, { merge: true });
       return { done: { status: 'skipped' } };
     }
-    if (existing?.status === 'done' || existing?.status === 'skipped') return { done: existing };
-    const runningFresh = existing?.status === 'running' && now() - Number(existing.claimedAt || 0) < 60_000;
+    const revision = journalEntryRevision(entrySnap.data());
+    const sameRevision = existing?.entryRevision === revision || (!existing?.entryRevision && !entrySnap.data().updatedAt);
+    if (sameRevision && (existing?.status === 'done' || existing?.status === 'skipped')) return { done: existing };
+    const claimId = randomUUID();
+    const runningFresh = sameRevision && existing?.status === 'running' && now() - Number(existing.claimedAt || 0) < 60_000;
     if (runningFresh) return { done: existing };
-    if (Number(existing?.attempts || 0) >= MAX_ATTEMPTS) {
+    if (sameRevision && Number(existing?.attempts || 0) >= MAX_ATTEMPTS) {
       tx.set(screeningDoc, { status: 'failed', failedAt: now() }, { merge: true });
       return { done: { status: 'failed' } };
     }
     tx.set(screeningDoc, {
       status: 'running',
-      attempts: Number(existing?.attempts || 0) + 1,
+      outcome: null,
+      escalationId: null,
+      handoff: null,
+      attempts: (sameRevision ? Number(existing?.attempts || 0) : 0) + 1,
+      entryRevision: revision,
+      claimId,
       claimedAt: now(),
       createdAt: existing?.createdAt || now(),
       classifierVersion: CLASSIFIER_VERSION,
     }, { merge: true });
-    return { entry: entrySnap.data() };
+    return { entry: entrySnap.data(), revision, claimId };
   });
   if (claim.done) return claim.done;
 
+  // The transaction is the authorization point for dispatch. An edit/delete or replacement worker
+  // that wins before this point cancels the old result. External delivery already authorized here
+  // cannot be recalled, but its completion must never overwrite a newer revision's pending screen.
+  async function commitIfCurrent(update) {
+    return db.runTransaction(async tx => {
+      const [entry, screening] = await Promise.all([tx.get(entryRef(db, userId, entryId)), tx.get(screeningDoc)]);
+      const current = screening.exists ? screening.data() : null;
+      if (!entry.exists || journalEntryRevision(entry.data()) !== claim.revision ||
+          current?.entryRevision !== claim.revision || current?.claimId !== claim.claimId || current?.status !== 'running') return false;
+      tx.set(screeningDoc, update, { merge: true });
+      return true;
+    });
+  }
+  const superseded = { status: 'pending', reason: 'revision_superseded' };
   try {
     if (await screeningDisabledForAthlete(db, userId)) {
       const skipped = { status: 'skipped', reason: 'organization_disabled', screenedAt: now() };
-      await screeningDoc.set(skipped, { merge: true });
-      return skipped;
+      return await commitIfCurrent(skipped) ? skipped : superseded;
     }
 
     const entry = claim.entry;
@@ -218,6 +241,7 @@ async function screenJournalEntry({ db, userId, entryId, messaging = null, class
     };
 
     // Decision D4: below Tier 2 a journal only leaves a screening record, so private writing never reaches coaches.
+    if (!await commitIfCurrent({ dispatchAuthorizedAt: now() })) return superseded;
     const escalated = await escalateJournalClassification({
       db, userId, messaging, now, message,
       classification: { ...classification, tier },
@@ -228,11 +252,10 @@ async function screenJournalEntry({ db, userId, entryId, messaging = null, class
     });
     Object.assign(record, escalated);
 
-    await screeningDoc.set(record, { merge: true });
-    return record;
+    return await commitIfCurrent(record) ? record : superseded;
   } catch (error) {
     console.error('[journal-safety-screen] Screening failed:', error?.message || error);
-    await screeningDoc.set({ status: 'pending', lastError: String(error?.message || error).slice(0, 300) }, { merge: true });
+    await commitIfCurrent({ status: 'pending', lastError: String(error?.message || error).slice(0, 300) });
     return { status: 'pending' };
   }
 }

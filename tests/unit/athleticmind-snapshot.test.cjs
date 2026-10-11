@@ -60,7 +60,7 @@ test('current intake, scoped full messages and deterministic counts exclude unre
   scheduled(rows, 'scheduled', [{ turnId: 'turn1', role: 'athlete-reply', text: 'Full text. '.repeat(100), createdAt: T + 3900000 }, { turnId: 'turn2', role: 'nora-action', text: 'Try this.', createdAt: T + 3900001 }], { staffNotes: 'NEVER_COPY', rawModelOutput: 'NEVER_COPY' });
   scheduled(rows, 'other', [{ turnId: 'other', role: 'athlete-reply', text: 'NEVER_COPY', createdAt: T + 3900000 }], { teamId: 'other-team' });
   rows['conversations/global'] = { userId: 'athlete', messages: [{ id: 'raw', content: 'NEVER_COPY', timestamp: (T + 3900000) / 1000, isFromUser: true }] };
-  rows['conversations/scoped'] = { userId: 'athlete', teamId: 'team', organizationId: 'org', messages: [{ id: 'main', content: 'Explicitly scoped full message', timestamp: (T + 3900000) / 1000, isFromUser: true }] };
+  rows['conversations/scoped'] = { userId: 'athlete', teamId: 'team', organizationId: 'org', messages: [{ id: 'main', trustedSource: { kind: 'nora_chat', recordedBy: 'pulsecheck-chat-v2' }, content: 'Explicitly scoped full message', timestamp: (T + 3900000) / 1000, isFromUser: true }] };
   rows['escalation-records/support'] = { userId: 'athlete', teamId: 'team', organizationId: 'org', status: 'active', handoffStatus: 'pending', createdAt: (T + 3900000) / 1000, summary: 'NEVER_COPY', staffNotes: 'NEVER_COPY' };
   const result = await assembleAthleticMindSnapshot(fakeDb(rows), params);
   assert.equal(result.eligible, true);
@@ -105,4 +105,78 @@ test('bounded scans throw rather than export silently truncated data; future win
   for (let index = 0; index < 5001; index += 1) scheduled(rows, `record${index}`, []);
   await assert.rejects(assembleAthleticMindSnapshot(fakeDb(rows), params), /SCAN_LIMIT:scheduled_nora/);
   assert.equal((await assembleAthleticMindSnapshot(fakeDb(fixture()), { ...params, windowEnd: iso(9000000) })).eligible, false);
+});
+
+async function sharedJournal(rows, { entryId = 'journal', teamId = 'team', organizationId = 'org' } = {}) {
+  const { journalEntryRevision } = require('../../netlify/functions/lib/journal-sharing');
+  const eligibility = await checkAthleticMindSnapshotEligibility(fakeDb(rows), params);
+  const entry = { moment: 'Synthetic private journal text', action: null, createdAt: T - 86400000, updatedAt: T - 86400000 };
+  rows[`pulsecheck-evidence-journals/athlete/entries/${entryId}`] = entry;
+  const permission = { entryId, athleteId: 'athlete', teamId, organizationId, status: 'shared', entryRevision: journalEntryRevision(entry), permissionVersion: 'athleticmind-journal-sharing-v1', permissionEventId: `permission-${entryId}`, sharedAt: T + 3700000, updatedAt: T + 3700000, processingConsentEventId: eligibility.consent.eventId, processingDocumentHash: eligibility.consent.documentHash, processingConsentVersion: eligibility.consent.version };
+  rows[`pulsecheck-evidence-journals/athlete/sharing/${entryId}`] = permission;
+  return { entry, permission };
+}
+test('only newly authorized exact-entry journals are read/exported; explicit sharing can include earlier writing', async () => {
+  const rows = fixture();
+  rows['pulsecheck-evidence-journals/athlete/entries/private'] = { moment: 'NEVER_READ_PRIVATE', createdAt: T, updatedAt: T };
+  const { entry } = await sharedJournal(rows);
+  const db = fakeDb(rows), result = await assembleAthleticMindSnapshot(db, params);
+  assert.equal(result.snapshot.schemaVersion, 'athleticmind-snapshot-v2');
+  assert.equal(result.snapshot.journalEntries.length, 1);
+  assert.equal(result.snapshot.journalEntries[0].moment, entry.moment);
+  assert.equal(result.snapshot.journalEntries[0].action, null);
+  assert.equal(result.snapshot.journalEntries[0].sharing.status, 'shared');
+  assert.equal(result.snapshot.journalEntries[0].type, 'evidence');
+  assert.equal(result.snapshot.journalEntries[0].createdAt, iso(-86400000));
+  assert.equal(result.snapshot.journalEntries[0].sharing.permissionVersion, 'athleticmind-journal-sharing-v1');
+  assert.equal(db.reads.some(path => path.endsWith('/entries/private')), false);
+  const Ajv = require('ajv');
+  const validate = new Ajv({ allErrors: true }).compile(require('../../docs/developer/athleticmind-snapshots/snapshot.schema.json'));
+  assert.equal(validate(result.snapshot), true, JSON.stringify(validate.errors));
+});
+test('other-team, personal, legacy, stale consent and untrusted entry permissions cannot read or export journal text', async () => {
+  for (const change of [p => { p.teamId = 'other'; }, p => { p.organizationId = 'other'; }, p => { p.teamId = null; p.organizationId = null; p.permissionVersion = 'nora-journal-sharing-v1'; }, p => { delete p.permissionVersion; }, p => { p.processingConsentEventId = 'old'; }, p => { p.processingDocumentHash = 'old'; }, p => { p.athleteId = 'other'; }]) {
+    const rows = fixture(), { permission } = await sharedJournal(rows); change(permission);
+    const db = fakeDb(rows), result = await assembleAthleticMindSnapshot(db, params);
+    assert.equal(result.snapshot.journalEntries.length, 0);
+    assert.equal(db.reads.some(path => path.endsWith('/entries/journal')), false);
+  }
+});
+test('edit, unshare and deletion block frozen journal replay and produce text-free withdrawals', async () => {
+  const { isSnapshotReplayPermitted } = require('../../netlify/functions/lib/athleticmind-snapshot-delivery');
+  const { revalidateSnapshotJournalSources } = require('../../netlify/functions/lib/athleticmind-snapshot');
+  for (const change of [({entry}) => { entry.moment = 'Changed after sharing'; }, ({permission}) => { permission.status = 'unshared'; }, (_state, rows) => { delete rows['pulsecheck-evidence-journals/athlete/entries/journal']; }]) {
+    const rows = fixture(), state = await sharedJournal(rows), db = fakeDb(rows);
+    const first = (await assembleAthleticMindSnapshot(db, params)).snapshot;
+    assert.equal(await revalidateSnapshotJournalSources(db, first, { now: params.now }), true);
+    change(state, rows);
+    assert.equal(await revalidateSnapshotJournalSources(db, first, { now: params.now }), false);
+    const current = (await assembleAthleticMindSnapshot(db, params)).snapshot;
+    assert.equal(current.journalEntries.length, 0);
+    assert.equal(current.journalWithdrawals.length, 1);
+    assert.equal(JSON.stringify(current.journalWithdrawals).includes('Synthetic private'), false);
+    assert.equal(isSnapshotReplayPermitted(first, current), false);
+  }
+});
+test('withdrawal events preserve former scope after moving current sharing to another team and repeat outside the window', async () => {
+  const rows = fixture(), { permission } = await sharedJournal(rows);
+  rows['pulsecheck-evidence-journals/athlete/sharing-events/withdrawal'] = { ...permission, status: 'unshared', updatedAt: T + 3500000 };
+  permission.teamId = 'other'; permission.organizationId = 'other-org';
+  const result = (await assembleAthleticMindSnapshot(fakeDb(rows), params)).snapshot;
+  assert.equal(result.journalEntries.length, 0);
+  assert.equal(result.journalWithdrawals.length, 1);
+  assert.equal(result.journalWithdrawals[0].permissionEventId, 'permission-journal');
+  rows['pulsecheck-evidence-journals/athlete/sharing-events/withdrawal'].teamId = 'other';
+  assert.equal((await assembleAthleticMindSnapshot(fakeDb(rows), params)).snapshot.journalWithdrawals.length, 0);
+});
+test('journal-derived and ambiguous legacy Nora conversations cannot duplicate journal text or dependent responses', async () => {
+  const rows = fixture();
+  const trustedSource = { kind: 'nora_chat', recordedBy: 'pulsecheck-chat-v2' };
+  const messages = [{ id: 'user', isFromUser: true, content: 'Journal copy', timestamp: T + 3800000 }, { id: 'reply', isFromUser: false, content: 'Dependent quoted text', timestamp: T + 3900000, trustedSource }];
+  rows['conversations/legacy'] = { userId: 'athlete', teamId: 'team', organizationId: 'org', messages };
+  rows['conversations/journal'] = { userId: 'athlete', teamId: 'team', organizationId: 'org', trustedSource: { kind: 'journal', recordedBy: 'pulsecheck-chat-v2' }, messages: messages.map(m => ({ ...m, trustedSource })) };
+  const result = (await assembleAthleticMindSnapshot(fakeDb(rows), params)).snapshot;
+  assert.equal(result.noraMessages.length, 0);
+  assert.ok(result.coverage.missing.includes('legacy_nora_conversation_provenance_unverified'));
+  assert.ok(result.coverage.missing.includes('journal_derived_nora_conversation_excluded'));
 });

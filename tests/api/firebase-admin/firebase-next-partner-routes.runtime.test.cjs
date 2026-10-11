@@ -70,3 +70,23 @@ test('portal bridge preserves cookie arrays and suppresses arbitrary exception d
   assert.match(error.headers['Cache-Control'],/no-store/);
   assert.equal(error.body.includes('PRIVATE_SECRET_ERROR'),false);
 });
+
+for (const route of ['/api/evidence-journal', '/api/evidence-journal/sharing', '/api/evidence-journal/event']) {
+  test(`journal bridge handles UTF-8 content, decoded limits and sanitized failures: ${route}`, async () => {
+    const bridge = loadBridge();
+    assert.equal(bridge.__test.resolveRoutePattern(route), route);
+    const body = {moment: '🟢'.repeat(8000)};
+    const valid = await bridge.handler(event(route, JSON.stringify(body), true));
+    assert.equal(valid.statusCode, 200);
+    assert.deepEqual(JSON.parse(valid.body).body, body);
+    assert.equal((await bridge.handler(event(route, JSON.stringify({moment: 'x'.repeat(65536)}), true))).statusCode, 413);
+    assert.equal((await bridge.handler(event(route, '{bad', true))).statusCode, 400);
+    const fail = bridge.createFirebaseNextApiHandler([{pattern:route,loadHandler:async()=>{throw Error('PRIVATE_JOURNAL_TEXT');}}]);
+    const failed = await fail(event(route, '{}'));
+    assert.equal(failed.statusCode, 503);
+    assert.equal(failed.body.includes('PRIVATE_JOURNAL_TEXT'), false);
+    assert.match(failed.headers['Cache-Control'], /no-store/);
+    const toml = fs.readFileSync(path.join(root, 'netlify.toml'), 'utf8');
+    assert.ok(toml.includes(`from = "${route}"\n  to = "/.netlify/functions/firebase-next-api?originalPath=${route}"\n  status = 200\n  force = true`));
+  });
+}

@@ -44,3 +44,26 @@ test('an uncertain event retry preserves the exact supplied event id and payload
   assert.equal(requests[0], requests[1]);
   assert.equal(JSON.parse(requests[1]).eventId, 'stable-use-id');
 });
+test('journal sharing sends a saved entry revision and explicit disclosure without raw writing', async () => {
+  const auth = {currentUser: {uid: 'athlete-a', getIdToken: async () => 'token-a'}};
+  let sent;
+  const api = client(auth, async (url, init) => {sent = {url, init}; return {ok: true, json: async () => ({sharing: {status: 'shared'}})};});
+  await api.updateJournalSharing('athlete-a', {action: 'share', entryId: 'entry-id', entryRevision: 'saved-revision', teamId: 'am-team', disclosureVersion: 'athleticmind-journal-sharing-v1', accepted: true});
+  assert.equal(sent.url, '/api/evidence-journal/sharing');
+  const payload = JSON.parse(sent.init.body);
+  assert.equal(payload.entryRevision, 'saved-revision'); assert.equal(payload.accepted, true); assert.equal(payload.moment, undefined);
+});
+test('entry editing preserves the captured revision and source fields for conflict checks', async () => {
+  const auth = {currentUser: {uid: 'athlete-a', getIdToken: async () => 'token-a'}};
+  let sent;
+  const api = client(auth, async (url, init) => {sent = {url, init}; return {ok: true, json: async () => ({entry: {id: 'entry-id'}})};});
+  await api.editEvidence('athlete-a', {id: 'entry-id', type: 'workout', moment: 'old', effortRating: 6}, 'revision-at-edit-open', 'updated', 'action');
+  assert.equal(sent.init.method, 'PATCH'); const payload = JSON.parse(sent.init.body);
+  assert.equal(payload.entryRevision, 'revision-at-edit-open'); assert.equal(payload.effortRating, 6); assert.equal(payload.type, 'workout');
+});
+test('journal sharing is not submitted for an account that changed during token retrieval', async () => {
+  const auth = {currentUser: {uid: 'athlete-a', getIdToken: async () => {auth.currentUser = {uid: 'athlete-b'}; return 'token-a';}}};
+  let calls = 0; const api = client(auth, async () => {calls++;});
+  await assert.rejects(api.updateJournalSharing('athlete-a', {action: 'analyze', entryId: 'entry-id'}), /account changed/);
+  assert.equal(calls, 0);
+});

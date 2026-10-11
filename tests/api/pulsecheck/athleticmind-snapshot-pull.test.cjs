@@ -11,7 +11,7 @@ function event(body = input, time = now) {
   return { httpMethod: 'POST', body: raw, headers: { 'X-AuntEdna-Key-Id': 'partner', 'X-AuntEdna-Signature': `t=${t},v1=${signature}` } };
 }
 function fixture() {
-  const records = new Map([['pulsecheck-teams/team-am', { organizationId: 'org-am', snapshotDelivery: { pullEnabled: true, receiver: { status: 'verified', verifiedAt: 'synthetic-date', verifiedBy: 'synthetic-reviewer', contractVersion: 'athleticmind-snapshot-v1' } } }]]);
+  const records = new Map([['pulsecheck-teams/team-am', { organizationId: 'org-am', snapshotDelivery: { pullEnabled: true, receiver: { status: 'verified', verifiedAt: 'synthetic-date', verifiedBy: 'synthetic-reviewer', contractVersion: 'athleticmind-snapshot-v2' } } }]]);
   const ref = path => ({ path, get: async () => ({ exists: records.has(path), data: () => structuredClone(records.get(path)) }) });
   let serial = Promise.resolve();
   const db = {
@@ -24,7 +24,7 @@ function fixture() {
   };
   let eligible = true, assemblies = 0;
   const eligibility = () => ({ eligible, scope: { teamId: 'team-am', organizationId: 'org-am', athleteId: 'athlete-1', membershipId: 'team-am_athlete-1' }, consent: { id: 'policy', version: 'v2', eventId: 'receipt-1', acceptedAt: '2026-10-10T00:00:00Z', documentHash: 'policy-hash' } });
-  const snapshot = { schemaVersion: 'athleticmind-snapshot-v1', onboarding: { responses: {} }, checkIns: [], supportStatus: [], snapshotId: 'a'.repeat(64), synthetic: false, scope: eligibility().scope, consent: eligibility().consent, window: { start: new Date(input.windowStart).toISOString(), end: new Date(input.windowEnd).toISOString() }, noraMessages: [{ sourceId: 'synthetic-conversation/message-1', revision: 'revision-1', text: 'Synthetic practice reflection.' }] };
+  const snapshot = { schemaVersion: 'athleticmind-snapshot-v2', onboarding: { responses: {} }, checkIns: [], journalEntries: [], journalWithdrawals: [], supportStatus: [], snapshotId: 'a'.repeat(64), synthetic: false, scope: eligibility().scope, consent: eligibility().consent, window: { start: new Date(input.windowStart).toISOString(), end: new Date(input.windowEnd).toISOString() }, noraMessages: [{ sourceId: 'synthetic-conversation/message-1', revision: 'revision-1', text: 'Synthetic practice reflection.' }] };
   const handler = createSnapshotPullHandler({ getDb: () => db, env, now: () => now, checkEligibility: async () => eligibility(), assemble: async () => { assemblies++; return { eligible: true, snapshot: structuredClone(snapshot) }; } });
   return { handler, db, records, snapshot, revoke: () => { eligible = false; }, assemblies: () => assemblies };
 }
@@ -324,4 +324,25 @@ test('scope withdrawal during assembly blocks release and grant changes revoke o
   assert.equal((await g.handler(g.signed())).statusCode, 200);
   await g.keys.updatePartnerKeyGrants(g.db, { keyId: rotated.key.keyId, grants: [], actorEmail: 'admin@example.invalid', now });
   assert.equal((await g.handler(g.signed())).statusCode, 401);
+});
+
+test('fresh and cached journal pulls recheck persisted entry sharing immediately before release', async () => {
+  const { journalEntryRevision } = require('../../../netlify/functions/lib/journal-sharing');
+  for (const cached of [false, true]) {
+    const f = fixture();
+    const entry = { type: 'evidence', moment: 'Synthetic authorized journal', action: null, createdAt: now - 7200000, updatedAt: now - 7200000 };
+    const permission = { status: 'shared', entryId: 'journal', athleteId: 'athlete-1', teamId: 'team-am', organizationId: 'org-am', permissionVersion: 'athleticmind-journal-sharing-v1', permissionEventId: 'journal-permission', processingConsentEventId: f.snapshot.consent.eventId, processingDocumentHash: f.snapshot.consent.documentHash, processingConsentVersion: f.snapshot.consent.version, entryRevision: journalEntryRevision(entry), sharedAt: now - 3600000, updatedAt: now - 3600000 };
+    f.records.set('pulsecheck-evidence-journals/athlete-1/entries/journal', entry);
+    f.records.set('pulsecheck-evidence-journals/athlete-1/sharing/journal', permission);
+    f.snapshot.journalEntries = [{ sourceId: 'pulsecheck-evidence-journals/athlete-1/entries/journal', entryId: 'journal', type: entry.type, moment: entry.moment, action: null, createdAt: new Date(entry.createdAt).toISOString(), updatedAt: new Date(entry.updatedAt).toISOString(), sharing: { status: 'shared', permissionVersion: permission.permissionVersion, permissionEventId: permission.permissionEventId, sharedAt: new Date(permission.sharedAt).toISOString() }, revision: 'synthetic-journal-revision' }];
+    const nestedDb = { ...f.db, collection(name) { const collection = f.db.collection(name); return { ...collection, doc(id) { return { ...collection.doc(id), collection(child) { return f.db.collection(`${name}/${id}/${child}`); } }; } }; } };
+    let revoke = false, checks = 0;
+    const handler = createSnapshotPullHandler({ getDb: () => nestedDb, env, now: () => now, assemble: async () => ({ eligible: true, snapshot: structuredClone(f.snapshot) }), checkEligibility: async () => { if (revoke && ++checks >= 2) permission.status = 'unshared'; return { eligible: true, scope: f.snapshot.scope, consent: f.snapshot.consent }; } });
+    if (cached) assert.equal((await handler(event())).statusCode, 200);
+    revoke = true; checks = 0;
+    const result = await handler(event());
+    assert.equal(result.statusCode, 409, result.body);
+    assert.equal(JSON.parse(result.body).error, 'journal_sources_changed_use_new_request_id');
+    assert.equal(result.body.includes(entry.moment), false);
+  }
 });

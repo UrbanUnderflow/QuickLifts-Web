@@ -200,6 +200,24 @@
   force = true
 
 [[redirects]]
+  from = "/api/evidence-journal"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/evidence-journal"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/evidence-journal/sharing"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/evidence-journal/sharing"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/evidence-journal/event"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/evidence-journal/event"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/developer/partner/auntedna/:action"
   to = "/.netlify/functions/firebase-next-api?originalPath=/api/developer/partner/auntedna/:action"
   status = 200

@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../../../api/firebase/config';
-import { evidenceRequest, saveEvidence, recordEvidenceEvent, type EvidenceEntry } from '../../../api/firebase/evidenceJournalClient';
+import { evidenceRequest, saveEvidence, recordEvidenceEvent, getJournalSharing, editEvidence, type EvidenceEntry } from '../../../api/firebase/evidenceJournalClient';
+
+import JournalSharingControls from './JournalSharingControls';
 
 type Props = { initialMoment?: string; sourceAssignmentId?: string; sourceSkillName?: string; onClose?: () => void };
 const button = 'rounded-lg border border-white/30 px-4 py-2 text-sm text-white disabled:opacity-40';
@@ -20,6 +22,8 @@ function AccountEvidence({ ownerId, initialMoment, sourceAssignmentId, sourceSki
   const [entries, setEntries] = useState<EvidenceEntry[]>([]), [cursor, setCursor] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false), [query, setQuery] = useState(''), [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
+  const [editing, setEditing] = useState(false), [editMoment, setEditMoment] = useState(''), [editAction, setEditAction] = useState(''), [editRevision, setEditRevision] = useState('');
+  const [sharingBusy, setSharingBusy] = useState(false), [sharingRefresh, setSharingRefresh] = useState(0);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [usedThisVisit, setUsedThisVisit] = useState(false), [revisitFailed, setRevisitFailed] = useState(false);
   const visit = useRef<{ entryId: string; revisitId: string; useId: string; used: boolean } | null>(null);
@@ -70,7 +74,7 @@ function AccountEvidence({ ownerId, initialMoment, sourceAssignmentId, sourceSki
   const openEntry = (entry: EvidenceEntry) => {
     if (operation.current || !active()) return;
     visit.current = { entryId: entry.id, revisitId: crypto.randomUUID(), useId: crypto.randomUUID(), used: false };
-    setSelected(entry.id); setDeleteId(null); setUsedThisVisit(false); setRevisitFailed(false);
+    setSelected(entry.id); setDeleteId(null); setEditing(false); setUsedThisVisit(false); setRevisitFailed(false);
     void recordVisit();
   };
   const share = (entry: EvidenceEntry, copy: boolean) => run(async () => {
@@ -85,28 +89,44 @@ function AccountEvidence({ ownerId, initialMoment, sourceAssignmentId, sourceSki
     if (cursor === id) { setCursor(null); setLoaded(false); }
     setNotice('Entry deleted.');
   });
+  const beginEdit = (entry: EvidenceEntry) => run(async () => {
+    const context = await getJournalSharing(ownerId, entry.id);
+    if (!active()) return;
+    const current = context.entry || entry;
+    setEntries(previous => previous.map(item => item.id === entry.id ? current : item));
+    setEditRevision(context.entryRevision); setEditMoment(current.moment); setEditAction(current.action || ''); setEditing(true);
+  });
+  const updateEntry = (entry: EvidenceEntry) => run(async () => {
+    const result = await editEvidence(ownerId, entry, editRevision, editMoment.trim(), editAction.trim());
+    if (!active()) return;
+    setEntries(previous => previous.map(item => item.id === entry.id ? result.entry : item));
+    setEditing(false); setSharingRefresh(value => value + 1);
+    setNotice('Entry updated. Its previous sharing permission has ended. Review the updated entry before sharing it again. Previously received copies follow the recipient’s retention and deletion process.');
+  });
   const filtered = entries.filter(entry => `${entry.moment} ${entry.action || ''}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   const selectedEntry = entries.find(entry => entry.id === selected);
   return <section aria-label="Your evidence" className="space-y-4 rounded-2xl border border-white/15 bg-zinc-900 p-5 text-white">
     <header className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Your evidence</h2><p className="mt-1 text-sm text-zinc-300">Keep moments you want to remember, in sport or outside it. An imperfect day can still hold a moment when you tried, learned, or kept going.</p></div>{onClose && <button type="button" onClick={onClose} className={button}>Close</button>}</header>
-    <p className="text-xs text-zinc-400">Private to you. You choose if you share an entry.</p>
-    <div className="flex flex-wrap gap-3"><button type="button" disabled={busy} className={button} onClick={() => { setView('add'); setNotice(''); }}>Add a moment</button><button type="button" disabled={busy} className={button} onClick={() => { setView('history'); setSelected(null); if (!loaded) void load(); }}>Look back</button></div>
+    <p className="text-xs text-zinc-400">Private by default. You control Nora sharing and copies you send. Saved entries also receive automated safety checks.</p>
+    <div className="flex flex-wrap gap-3"><button type="button" disabled={busy || sharingBusy} className={button} onClick={() => { setView('add'); setNotice(''); }}>Add a moment</button><button type="button" disabled={busy || sharingBusy} className={button} onClick={() => { setView('history'); setSelected(null); if (!loaded) void load(); }}>Look back</button></div>
     {view === 'add' && <form className="space-y-4" onSubmit={event => { event.preventDefault(); void save(); }}>
-      <label className="block space-y-2"><span>What happened today that you want to remember?</span><textarea required maxLength={4000} rows={4} className={field} value={moment} disabled={busy} onChange={event => { setMoment(event.target.value); draftId.current = null; }} /></label>
-      <label className="block space-y-2"><span>What did you do that made that possible? <span className="text-zinc-400">(optional)</span></span><textarea maxLength={2000} rows={2} className={field} value={action} disabled={busy} onChange={event => { setAction(event.target.value); draftId.current = null; }} /></label>
-      <div className="flex gap-3"><button type="submit" disabled={busy || !moment.trim()} className={button}>{busy ? 'Saving…' : 'Save moment'}</button><button type="button" disabled={busy} className={button} onClick={() => setView('closed')}>Keep writing later</button></div>
-      <p className="text-xs text-zinc-400">Unsaved writing stays here until you leave this page.</p>
+      <label className="block space-y-2"><span>What happened today that you want to remember?</span><textarea required maxLength={4000} rows={4} className={field} value={moment} disabled={busy || sharingBusy} onChange={event => { setMoment(event.target.value); draftId.current = null; }} /></label>
+      <label className="block space-y-2"><span>What did you do that made that possible? <span className="text-zinc-400">(optional)</span></span><textarea maxLength={2000} rows={2} className={field} value={action} disabled={busy || sharingBusy} onChange={event => { setAction(event.target.value); draftId.current = null; }} /></label>
+      <div className="flex gap-3"><button type="submit" disabled={busy || sharingBusy || !moment.trim()} className={button}>{busy ? 'Saving…' : 'Save moment'}</button><button type="button" disabled={busy || sharingBusy} className={button} onClick={() => setView('closed')}>Keep writing later</button></div>
+      <p className="text-xs text-zinc-400">Unsaved writing stays here until you leave this page. New entries stay private unless you enabled a future-entry sharing preference.</p>
     </form>}
     {view === 'history' && <div className="space-y-4">
       <label className="block space-y-2"><span className="text-sm">Search loaded entries</span><input type="search" className={field} value={query} onChange={event => setQuery(event.target.value)} /></label>
       {loaded && filtered.length === 0 && <p className="text-sm text-zinc-300">{entries.length ? 'No matching moments in the entries loaded so far.' : 'Your moments will appear here after you save one.'}</p>}
-      <ul className="space-y-2">{filtered.map(entry => <li key={entry.id}><button type="button" disabled={busy} onClick={() => openEntry(entry)} className="w-full rounded-lg border border-white/20 p-3 text-left disabled:opacity-40"><span className="block text-xs text-zinc-400">{new Date(entry.createdAt).toLocaleDateString()}</span><span className="mt-1 block whitespace-pre-wrap break-words">{entry.moment.slice(0, 180)}{entry.moment.length > 180 ? '…' : ''}</span></button></li>)}</ul>
+      <ul className="space-y-2">{filtered.map(entry => <li key={entry.id}><button type="button" disabled={busy || sharingBusy} onClick={() => openEntry(entry)} className="w-full rounded-lg border border-white/20 p-3 text-left disabled:opacity-40"><span className="block text-xs text-zinc-400">{new Date(entry.createdAt).toLocaleDateString()}</span><span className="mt-1 block whitespace-pre-wrap break-words">{entry.moment.slice(0, 180)}{entry.moment.length > 180 ? '…' : ''}</span></button></li>)}</ul>
       {selectedEntry && <article aria-label="Saved moment" className="space-y-3 rounded-xl border border-white/25 bg-zinc-950 p-4"><p className="whitespace-pre-wrap break-words">{selectedEntry.moment}</p>{selectedEntry.action && <div><h3 className="text-sm text-zinc-400">What I did</h3><p className="whitespace-pre-wrap break-words">{selectedEntry.action}</p></div>}
-        <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || usedThisVisit} className={button} onClick={() => void useReminder()}>{usedThisVisit ? 'Use recorded' : 'I used this reminder'}</button>{typeof navigator !== 'undefined' && !!navigator.share && <button type="button" disabled={busy} className={button} onClick={() => void share(selectedEntry, false)}>Share this entry</button>}<button type="button" disabled={busy} className={button} onClick={() => void share(selectedEntry, true)}>Copy this entry</button><button type="button" disabled={busy} className={button} onClick={() => setDeleteId(selectedEntry.id)}>Delete</button></div>
-        {revisitFailed && <button type="button" disabled={busy} className={button} onClick={() => void recordVisit()}>Retry recording this visit</button>}
-        {deleteId === selectedEntry.id && <div className="space-y-2"><p>Delete this moment from your evidence?</p><button type="button" disabled={busy} className={button} onClick={() => void remove(selectedEntry.id)}>Delete entry</button><button type="button" disabled={busy} className={`${button} ml-2`} onClick={() => setDeleteId(null)}>Keep entry</button></div>}
+        <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || sharingBusy || usedThisVisit} className={button} onClick={() => void useReminder()}>{usedThisVisit ? 'Use recorded' : 'I used this reminder'}</button>{typeof navigator !== 'undefined' && !!navigator.share && <button type="button" disabled={busy || sharingBusy} className={button} onClick={() => void share(selectedEntry, false)}>Share a copy</button>}<button type="button" disabled={busy || sharingBusy} className={button} onClick={() => void share(selectedEntry, true)}>Copy this entry</button><button type="button" disabled={busy || sharingBusy} className={button} onClick={() => void beginEdit(selectedEntry)}>Edit entry</button><button type="button" disabled={busy || sharingBusy} className={button} onClick={() => setDeleteId(selectedEntry.id)}>Delete</button></div>
+        {editing && <form className="space-y-3 rounded-lg border border-white/25 p-3" onSubmit={event => {event.preventDefault(); void updateEntry(selectedEntry);}}><label className="block space-y-2"><span>Edit your entry</span><textarea className={field} maxLength={selectedEntry.type === 'freewrite' ? 8000 : 4000} required={!selectedEntry.photoStoragePath} rows={4} value={editMoment} disabled={busy || sharingBusy} onChange={event => setEditMoment(event.target.value)}/></label>{selectedEntry.type !== 'freewrite' && <label className="block space-y-2"><span>What I did (optional)</span><textarea className={field} maxLength={2000} rows={2} value={editAction} disabled={busy || sharingBusy} onChange={event => setEditAction(event.target.value)}/></label>}<p className="text-xs text-zinc-400">Saving changes ends this entry’s previous sharing permission. You can review and share the new version afterward.</p><button type="submit" className={button} disabled={busy || sharingBusy}>Save changes</button><button type="button" className={`${button} ml-2`} disabled={busy || sharingBusy} onClick={() => setEditing(false)}>Cancel edit</button></form>}
+        <JournalSharingControls key={selectedEntry.id} ownerId={ownerId} entryId={selectedEntry.id} disabled={busy || editing} refreshKey={sharingRefresh} onBusyChange={setSharingBusy}/>
+        {revisitFailed && <button type="button" disabled={busy || sharingBusy} className={button} onClick={() => void recordVisit()}>Retry recording this visit</button>}
+        {deleteId === selectedEntry.id && <div className="space-y-2"><p>Delete this moment from your evidence? Future sharing of its text will stop. Copies already received follow the recipient’s retention and deletion process.</p><button type="button" disabled={busy || sharingBusy} className={button} onClick={() => void remove(selectedEntry.id)}>Delete entry</button><button type="button" disabled={busy || sharingBusy} className={`${button} ml-2`} onClick={() => setDeleteId(null)}>Keep entry</button></div>}
       </article>}
-      {cursor && <button type="button" disabled={busy} className={button} onClick={() => void load(true)}>Load older moments</button>}
+      {cursor && <button type="button" disabled={busy || sharingBusy} className={button} onClick={() => void load(true)}>Load older moments</button>}
       {!loaded && !busy && <button type="button" className={button} onClick={() => void load()}>Load moments</button>}
     </div>}
     {busy && <p role="status" className="text-sm text-zinc-300">Updating your evidence…</p>}{notice && <p role="status" className="text-sm text-zinc-200">{notice}</p>}{error && <p role="alert" className="text-sm text-rose-200">{error}</p>}

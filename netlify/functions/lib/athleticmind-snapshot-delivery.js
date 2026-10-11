@@ -5,7 +5,7 @@ const DELIVERY_COLLECTION = 'athleticmind-snapshot-deliveries';
 const WATERMARK_COLLECTION = 'athleticmind-snapshot-watermarks';
 const LEASE_MS = 120000;
 const MAX_ENVELOPE_BYTES = 512 * 1024;
-const SCHEMA_VERSION = 'athleticmind-snapshot-v1';
+const SCHEMA_VERSION = 'athleticmind-snapshot-v2';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const iso = value => new Date(value).toISOString();
 function millis(value) {
@@ -104,7 +104,7 @@ function isSnapshotReplayPermitted(frozen, current) {
     || !consentAndScopeMatch(frozen, current)) return false;
   // Replaying a frozen payload may omit newly available items, but may never
   // resurrect a removed/restricted source or an outdated source revision.
-  for (const field of ['checkIns', 'noraMessages', 'supportStatus']) {
+  for (const field of ['checkIns', 'noraMessages', 'supportStatus', 'journalEntries', 'journalWithdrawals']) {
     if (!Array.isArray(frozen[field]) || !Array.isArray(current[field])) return false;
     const permitted = new Set(current[field].map(item => `${item.sourceId}\n${item.revision}`));
     if (frozen[field].some(item => !item.sourceId || !item.revision || !permitted.has(`${item.sourceId}\n${item.revision}`))) return false;
@@ -206,6 +206,7 @@ async function deliverAthleticMindSnapshot(db, input, dependencies = {}) {
     });
     const finalEligibility = await checkEligibility(db, { teamId: input.teamId, athleteId: input.athleteId, now: clock() });
     if (finalEligibility?.eligible !== true || !consentAndScopeMatch(envelope, finalEligibility)) throw Object.assign(new Error('Snapshot consent changed.'), { snapshotFailure: 'consent_changed' });
+    if (mode === 'live' && !await require('./athleticmind-snapshot').revalidateSnapshotJournalSources(db, envelope, { now: clock() })) throw Object.assign(new Error('Journal sources changed.'), { snapshotFailure: 'journal_sources_changed' });
     const response = mode === 'synthetic'
       ? await dependencies.syntheticTransport(envelope, { idempotencyKey: envelope.snapshotId })
       : await (dependencies.bridgeFactory || createClinicalBridge)(bridgeConfig).request('POST', destination.path, envelope, {

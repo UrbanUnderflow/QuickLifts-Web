@@ -1612,3 +1612,27 @@ for (const organization of [{ productBrand: 'athleticmind' }, { productBrand: 'p
     }
   });
 }
+
+test('journal conversations and legacy journal copies cannot become recovered performance signals', async () => {
+  const { recoverSnapshotFromSavedConversation } = loadRuntimeHelpers();
+  for (const source of ['conversation-marker', 'message-marker', 'legacy-copy']) {
+    const message = {id: 'journal-message', content: source === 'legacy-copy' ? "I'm sharing an evidence entry from my journal with you. I like visualization" : 'I like visualization', isFromUser: true, timestamp: 795696960};
+    if (source === 'message-marker') message.trustedSource = {kind: 'journal'};
+    const conversation = {id: 'journal-analysis', updatedAt: 1774028880, messages: [message]};
+    if (source === 'conversation-marker') conversation.trustedSource = {kind: 'journal'};
+    const {db, writes} = createConversationRecoveryDb({conversations: [conversation]});
+    const result = await recoverSnapshotFromSavedConversation({db, userId: 'athlete-1', sourceDate: '2026-03-20', snapshot: {id: 'snapshot'}, assessStorage: async () => {throw Error('Journal should not enter signal recovery');}});
+    assert.equal(result.applied, false);
+    assert.equal(writes.event, null);
+    assert.equal(writes.snapshot, null);
+  }
+});
+
+
+test('legacy raw journal sharing cannot bypass the saved entry permission flow', async () => {
+  const runtime = loadAuthBoundaryHandler({decoded: {uid: 'athlete-1'}});
+  const response = await runtime.handler({httpMethod: 'POST', headers: {Authorization: 'Bearer valid-athlete-token'}, body: JSON.stringify({message: "I'm sharing an evidence entry from my journal with you. Private writing", clientCapabilities: {journalSourceProtocol: 2}})});
+  assert.equal(response.statusCode, 409);
+  assert.equal(JSON.parse(response.body).errorCode, 'JOURNAL_ENTRY_PERMISSION_REQUIRED');
+  assert.equal(runtime.firestoreReads(), 0);
+});

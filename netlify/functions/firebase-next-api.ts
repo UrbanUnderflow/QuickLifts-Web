@@ -312,12 +312,14 @@ export function createFirebaseNextApiHandler(
       "/api/developer/access-requests",
       "/api/developer/docs/[slug]/unlock",
     ].includes(matchedEntry.pattern);
+    const protectedJournalRoute = ["/api/evidence-journal", "/api/evidence-journal/sharing", "/api/evidence-journal/event"].includes(matchedEntry.pattern);
+    const protectedRoute = protectedPartnerRoute || protectedJournalRoute;
     let scopedBody: unknown;
-    if (protectedPartnerRoute) {
+    if (protectedRoute) {
       const raw = event.isBase64Encoded
         ? Buffer.from(event.body || "", "base64")
         : Buffer.from(event.body || "", "utf8");
-      if (raw.length > 8192) return {
+      if (raw.length > (protectedJournalRoute ? 65536 : 8192)) return {
         statusCode: 413,
         headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
         body: JSON.stringify({ error: "request_too_large" }),
@@ -334,7 +336,7 @@ export function createFirebaseNextApiHandler(
     }
     const params = matchRoutePattern(matchedEntry.pattern, originalPath) || {};
     const request = createRequest(event, params);
-    if (protectedPartnerRoute) request.body = scopedBody;
+    if (protectedRoute) request.body = scopedBody;
     const response = createResponse();
 
     try {
@@ -342,10 +344,10 @@ export function createFirebaseNextApiHandler(
       await module.default(request, response);
       return toHandlerResponse(response);
     } catch (error) {
-      if (protectedPartnerRoute) return {
+      if (protectedRoute) return {
         statusCode: 503,
         headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "private, no-store, max-age=0" },
-        body: JSON.stringify({ error: "partner_route_unavailable" }),
+        body: JSON.stringify({ error: protectedJournalRoute ? "journal_route_unavailable" : "partner_route_unavailable" }),
       };
       console.error("[firebase-next-api] Route execution failed:", {
         originalPath,
@@ -366,6 +368,9 @@ export function createFirebaseNextApiHandler(
 }
 
 const ROUTE_ENTRIES: RouteEntry[] = [
+  {pattern: "/api/evidence-journal", loadHandler: () => import("../../src/pages/api/evidence-journal/index.ts")},
+  {pattern: "/api/evidence-journal/sharing", loadHandler: () => import("../../src/pages/api/evidence-journal/sharing.ts")},
+  {pattern: "/api/evidence-journal/event", loadHandler: () => import("../../src/pages/api/evidence-journal/event.ts")},
   {
     pattern: "/api/developer/partner/auntedna/[action]",
     loadHandler: () => import("../../src/pages/api/developer/partner/auntedna/[action].ts"),

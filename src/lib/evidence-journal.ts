@@ -50,6 +50,8 @@ export async function saveEvidence(db: firestore.Firestore, uid: string, input: 
       if (previous.exists) return { entry: withJournalType(previous.data()!), created: false };
     }
     const existing = await tx.get(ref);
+    const sharing = await tx.get(db.collection(EVIDENCE_COLLECTION).doc(uid).collection('sharing').doc(input.id));
+    if (sharing.data()?.status === 'deleted') throw new EvidenceError(409, 'This entry was deleted. Save a new entry instead.');
     if (existing.exists) {
       const record = withJournalType(existing.data()!);
       if (Object.entries(input).some(([key, value]) => record[key] !== value)) throw new EvidenceError(409, 'This entry ID already belongs to a different moment.');

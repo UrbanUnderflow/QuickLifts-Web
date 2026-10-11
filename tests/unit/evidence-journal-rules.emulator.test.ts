@@ -14,6 +14,7 @@ test('private evidence denies all direct client access including coach/admin and
       await setDoc(doc(context.firestore(), path), { moment: 'Private athlete text', createdAt: 1 });
       await setDoc(doc(context.firestore(), `${path}/events/event`), { event: 'used', createdAt: 2 });
       await setDoc(doc(context.firestore(), `${root}/sources/assignment`), { entryId: 'moment' });
+      for (const subcollection of ['sharing', 'preferences', 'sharing-events']) await setDoc(doc(context.firestore(), `${root}/${subcollection}/permission`), {status: 'shared', athleteId: 'owner'});
     });
     const contexts = [env.unauthenticatedContext(), env.authenticatedContext('owner'), env.authenticatedContext('other'), env.authenticatedContext('coach', { role: 'coach' }), env.authenticatedContext('admin', { admin: true, role: 'admin' })];
     for (const context of contexts) {
@@ -28,6 +29,15 @@ test('private evidence denies all direct client access including coach/admin and
       await assertFails(getDoc(doc(db, `${path}/events/event`)));
       await assertFails(setDoc(doc(db, `${path}/events/new`), { event: 'used' }));
       await assertFails(getDoc(doc(db, `${root}/sources/assignment`)));
+      for (const subcollection of ['sharing', 'preferences', 'sharing-events']) {
+        const permission = doc(db, `${root}/${subcollection}/permission`);
+        await assertFails(getDoc(permission));
+        await assertFails(getDocs(collection(db, `${root}/${subcollection}`)));
+        await assertFails(getDocs(collectionGroup(db, subcollection)));
+        await assertFails(setDoc(doc(db, `${root}/${subcollection}/forged`), {status: 'shared', athleteId: 'owner'}));
+        await assertFails(updateDoc(permission, {status: 'shared', teamId: 'forged-team'}));
+        await assertFails(deleteDoc(permission));
+      }
     }
   } finally { await env.cleanup(); }
 });

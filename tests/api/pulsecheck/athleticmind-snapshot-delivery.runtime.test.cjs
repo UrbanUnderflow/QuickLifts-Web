@@ -23,7 +23,7 @@ function memoryDb(initial) {
   };
 }
 const now = Date.parse('2026-10-11T18:00:00Z');
-const receiver = { status: 'verified', baseUrl: 'https://partner-api.manasinsights.me/partner', path: '/verified-synthetic-contract', contractVersion: 'athleticmind-snapshot-v1', verifiedBy: 'synthetic-operator', verifiedAt: '2026-10-10T00:00:00Z' };
+const receiver = { status: 'verified', baseUrl: 'https://partner-api.manasinsights.me/partner', path: '/verified-synthetic-contract', contractVersion: 'athleticmind-snapshot-v2', verifiedBy: 'synthetic-operator', verifiedAt: '2026-10-10T00:00:00Z' };
 const config = { enabled: true, timeZone: 'America/New_York', cutoff: '00:00', receiver };
 const bridgeConfig = { provider: 'auntedna', baseUrl: receiver.baseUrl, apiKey: 'ae_pk_live_synthetic_fixture', credentialMode: 'live' };
 const env = { ATHLETICMIND_SNAPSHOT_PUSH_ENABLED: 'true', CLINICAL_BRIDGE_SNAPSHOT_PATH: receiver.path };
@@ -49,8 +49,8 @@ function dependencies(overrides = {}) {
   result.assemble = async (db, options) => {
     const assembled = await assemble(db, options);
     if (assembled.snapshot) assembled.snapshot = {
-      checkIns: [], noraMessages: [], supportStatus: [], onboarding: { responses: {} },
-      schemaVersion: 'athleticmind-snapshot-v1',
+      checkIns: [], noraMessages: [], journalEntries: [], journalWithdrawals: [], supportStatus: [], onboarding: { responses: {} },
+      schemaVersion: 'athleticmind-snapshot-v2',
       scope: { teamId: options.teamId, athleteId: options.athleteId, organizationId: 'synthetic-org', membershipId: 'synthetic-membership' },
       window: { start: options.windowStart, end: options.windowEnd },
       consent: { id: 'synthetic-consent', version: 'v2', eventId: 'synthetic-event', acceptedAt: '2026-10-08T04:00:00Z', documentHash: 'synthetic-document-hash' },
@@ -298,4 +298,15 @@ test('a withdrawal during outbox preparation blocks transport and watermark adva
   assert.equal((await deliverAthleticMindSnapshot(db, input, deps)).reason, 'consent_changed');
   assert.equal(sends, 0);
   assert.equal(watermarks(db).length, 0);
+});
+
+test('frozen journal push blocks edited or withdrawn journal revisions without advancing watermark', async () => {
+  for (const removed of [false, true]) {
+    const db = fixture(); let changed = false, sends = 0;
+    const deps = dependencies({ mode: 'synthetic', env: {}, assemble: async () => ({ eligible: true, snapshot: { snapshotId: 'journal-snapshot', synthetic: true, journalEntries: changed && removed ? [] : [{ sourceId: 'synthetic-journal', revision: changed ? 'changed' : 'original' }] } }), syntheticTransport: async () => { sends++; throw new Error('Synthetic lost response'); } });
+    assert.equal((await deliverAthleticMindSnapshot(db, input, deps)).status, 'failed');
+    changed = true;
+    assert.equal((await deliverAthleticMindSnapshot(db, input, deps)).reason, 'snapshot_sources_changed');
+    assert.equal(sends, 1); assert.equal(watermarks(db).length, 0);
+  }
 });

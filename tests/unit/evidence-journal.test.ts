@@ -3,15 +3,22 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseEvidence, saveEvidence } from '../../src/lib/evidence-journal';
 import { createEvidenceJournalHandler } from '../../src/pages/api/evidence-journal';
+import { createJournalSharingHandler } from '../../src/pages/api/evidence-journal/sharing';
+const { journalEntryRevision, setJournalSharing } = require('../../netlify/functions/lib/journal-sharing');
 import { createEvidenceEventHandler } from '../../src/pages/api/evidence-journal/event';
 const id = 'ef1be120-cc70-4abc-8ccc-e8b64dace850';
 const secondId = 'ef1be120-cc70-4abc-8ccc-e8b64dace851';
 function database() {
   const records = new Map<string, any>();
   const paths: string[] = [];
-  const ref = (path: string): any => ({ path, collection: (s: string) => ref(`${path}/${s}`), doc: (s: string) => ref(`${path}/${s}`) });
-  const db: any = { collection: (s: string) => ref(s), runTransaction: async (fn: any) => fn({ get: async (r: any) => { paths.push(r.path); return { exists: records.has(r.path), data: () => records.get(r.path) }; }, create: (r: any, v: any) => records.set(r.path, v), set: (r: any, v: any) => records.set(r.path, v), update: (r: any, v: any) => records.set(r.path, { ...records.get(r.path), ...v }) }) };
-  return { db, records, paths };
+  const snapshot = (path: string, store = records): any => ({id: path.split('/').at(-1), exists: store.has(path), data: () => store.get(path)});
+  const ref = (path: string): any => ({path, collection: (part: string) => ref(`${path}/${part}`), doc: (part: string) => ref(`${path}/${part}`), get: async () => {paths.push(path); return snapshot(path);}, set: async (value: any, options?: any) => records.set(path, options?.merge ? {...records.get(path), ...value} : value)});
+  const db: any = {collection: (path: string) => ref(path), recursiveDelete: async (r: any) => {paths.push(r.path); for (const key of records.keys()) if (key === r.path || key.startsWith(r.path + '/')) records.delete(key);}, runTransaction: async (fn: any) => {
+    const staged = new Map(records);
+    const result = await fn({get: async (r: any) => {paths.push(r.path); return snapshot(r.path, staged);}, create: (r: any, value: any) => {assert.equal(staged.has(r.path), false); staged.set(r.path, value);}, set: (r: any, value: any) => staged.set(r.path, value), update: (r: any, value: any) => staged.set(r.path, {...staged.get(r.path), ...value}), delete: (r: any) => staged.delete(r.path)});
+    records.clear(); for (const [key, value] of staged) records.set(key, value); return result;
+  }};
+  return {db, records, paths};
 }
 function response() { return { code: 0, body: null as any, setHeader() {}, status(n: number) { this.code = n; return this; }, json(v: any) { this.body = v; return this; } }; }
 test('validates source and preserves reflection text; ignores supplied ownership', () => {
@@ -57,12 +64,12 @@ test('listing pages only within owner and deleting cannot select another account
   const paths: string[] = []; const calls: any[] = [];
   const docs = [{ id, data: () => ({ id, moment: 'Mine' }) }, { id: secondId, data: () => ({ id: secondId }) }];
   const ref = (path: string): any => ({ path, collection: (s: string) => ref(`${path}/${s}`), doc: (s: string) => ref(`${path}/${s}`), orderBy: (...args: any[]) => { calls.push(args); return ref(path); }, limit: (n: number) => { calls.push(n); return ref(path); }, get: async () => { paths.push(path); return { docs }; } });
-  const db: any = { collection: (s: string) => ref(s), recursiveDelete: async (r: any) => paths.push(r.path) };
+  const db: any = { collection: (s: string) => ref(s), recursiveDelete: async (r: any) => paths.push(r.path), runTransaction: async (fn: any) => fn({get: async (r: any) => {paths.push(r.path); return {exists: r.path.includes('/entries/'), data: () => ({id, moment: 'Mine'})};}, set: (r: any) => paths.push(r.path), delete: (r: any) => paths.push(r.path), create: (r: any) => paths.push(r.path)}) };
   const handler = createEvidenceJournalHandler({ authorize: async () => ({ uid: 'owner', db }) });
   const res = response(); await handler({ method: 'GET', query: { limit: '1', uid: 'victim' } } as any, res as any);
   assert.equal(res.code, 200); assert.equal(res.body.entries.length, 1); assert.equal(res.body.nextCursor, id); assert.ok(calls.includes(2));
   const deleted = response(); await handler({ method: 'DELETE', query: { entryId: id, uid: 'victim' } } as any, deleted as any);
-  assert.equal(deleted.code, 200); assert.ok(paths.every(p => p.startsWith('pulsecheck-evidence-journals/owner/entries')));
+  assert.equal(deleted.code, 200); assert.ok(paths.every(p => p.startsWith('pulsecheck-evidence-journals/owner/')));
   const invalid = response(); await handler({ method: 'GET', query: { limit: '99999' } } as any, invalid as any); assert.equal(invalid.code, 400);
 });
 
@@ -127,4 +134,72 @@ test('injury entries preserve recovery reflections through save and retry', asyn
   assert.equal(parseEvidence({ entryId: secondId, type: 'injury', moment: 'Hopeful.' }).action, null);
   assert.throws(() => parseEvidence({ entryId: id, type: 'injury', moment: ' ' }));
   assert.throws(() => parseEvidence({ entryId: id, type: 'injury', moment: 'a'.repeat(4001) }));
+});
+
+const ownerRoot = 'pulsecheck-evidence-journals/owner';
+const thirdId = 'ef1be120-cc70-4abc-8ccc-e8b64dace852';
+async function sharedEntry(db: any, records: Map<string, any>, now = 100) {
+  const saved = await saveEvidence(db, 'owner', parseEvidence({entryId: id, moment: 'Private original', action: 'Reset'}), now);
+  const receipt = {entryId: id, athleteId: 'owner', teamId: 'am-team', organizationId: 'am-org', status: 'shared', permissionEventId: secondId, permissionVersion: 'athleticmind-journal-sharing-v1', entryRevision: journalEntryRevision(saved.entry), sharedAt: now, updatedAt: now};
+  records.set(`${ownerRoot}/sharing/${id}`, receipt);
+  return {entry: saved.entry, receipt};
+}
+test('PATCH rejects stale revisions without changing text, permission, or screening', async () => {
+  const {db, records} = database(); const {entry, receipt} = await sharedEntry(db, records);
+  let screens = 0;
+  const handler = createEvidenceJournalHandler({authorize: async () => ({uid: 'owner', db}), now: () => 200, screen: async () => {screens++; return {status: 'screened'};}});
+  const res = response(); await handler({method: 'PATCH', body: {entryId: id, entryRevision: 'stale', moment: 'Changed'}, query: {}} as any, res as any);
+  assert.equal(res.code, 409); assert.deepEqual(records.get(`${ownerRoot}/entries/${id}`), entry); assert.deepEqual(records.get(`${ownerRoot}/sharing/${id}`), receipt);
+  assert.equal(screens, 0); assert.equal([...records.keys()].some(key => key.includes('/sharing-events/')), false);
+});
+test('PATCH invalidates the exact previous grant and schedules screening of the edited revision', async () => {
+  const {db, records, paths} = database(); const {entry, receipt} = await sharedEntry(db, records);
+  const handler = createEvidenceJournalHandler({authorize: async () => ({uid: 'owner', db}), now: () => 200, screen: async () => ({status: 'pending'})});
+  const res = response(); await handler({method: 'PATCH', body: {entryId: id, entryRevision: journalEntryRevision(entry), moment: 'Edited reflection', action: 'New action', athleteId: 'victim'}, query: {}} as any, res as any);
+  assert.equal(res.code, 200); assert.equal(res.body.entry.moment, 'Edited reflection'); assert.equal(res.body.entry.createdAt, 100); assert.equal(res.body.entry.updatedAt, 200);
+  assert.equal(records.get(`${ownerRoot}/sharing/${id}`).status, 'invalidated');
+  const events = [...records].filter(([key]) => key.includes('/sharing-events/')).map(([, value]) => value);
+  assert.equal(events.length, 1); assert.equal(events[0].permissionEventId, receipt.permissionEventId); assert.equal(events[0].status, 'invalidated'); assert.equal(events[0].moment, undefined);
+  assert.equal(records.get(`${ownerRoot}/screenings/${id}`).entryRevision, res.body.entryRevision); assert.ok(paths.every(path => path.startsWith(ownerRoot + '/')));
+});
+test('unshare records a content-free withdrawal under the owner and blocks later analysis', async () => {
+  const {db, records, paths} = database(); const {receipt} = await sharedEntry(db, records);
+  const handler = createJournalSharingHandler({authorize: async () => ({uid: 'owner', db}), now: () => 200});
+  const res = response(); await handler({method: 'POST', body: {action: 'unshare', entryId: id, athleteId: 'victim'}, query: {}} as any, res as any);
+  assert.equal(res.code, 200); assert.equal(records.get(`${ownerRoot}/sharing/${id}`).status, 'unshared');
+  const events = [...records].filter(([key]) => key.includes('/sharing-events/')).map(([, value]) => value);
+  assert.equal(events.length, 1); assert.equal(events[0].permissionEventId, receipt.permissionEventId); assert.equal(events[0].status, 'unshared'); assert.equal(events[0].moment, undefined);
+  const denied = response(); await handler({method: 'POST', body: {action: 'analyze', entryId: id}, query: {}} as any, denied as any); assert.equal(denied.code, 403);
+  assert.ok(paths.every(path => path.startsWith(ownerRoot + '/')));
+});
+test('DELETE retains withdrawal and tombstone while removing entry/events, preventing stale recreation', async () => {
+  const {db, records} = database(); const {entry, receipt} = await sharedEntry(db, records);
+  records.set(`${ownerRoot}/entries/${id}/events/${thirdId}`, {event: 'used'});
+  const handler = createEvidenceJournalHandler({authorize: async () => ({uid: 'owner', db}), now: () => 300});
+  const res = response(); await handler({method: 'DELETE', query: {entryId: id, uid: 'victim'}} as any, res as any);
+  assert.equal(res.code, 200); assert.equal(records.has(`${ownerRoot}/entries/${id}`), false); assert.equal(records.has(`${ownerRoot}/entries/${id}/events/${thirdId}`), false);
+  assert.equal(records.get(`${ownerRoot}/sharing/${id}`).status, 'deleted');
+  const events = [...records].filter(([key]) => key.includes('/sharing-events/')).map(([, value]) => value);
+  assert.equal(events.length, 1); assert.equal(events[0].permissionEventId, receipt.permissionEventId); assert.equal(events[0].status, 'deleted'); assert.equal(events[0].moment, undefined);
+  await assert.rejects(saveEvidence(db, 'owner', parseEvidence({entryId: id, moment: entry.moment, action: entry.action}), 400), /deleted/);
+});
+test('other authenticated owners cannot edit, unshare, or delete the original owner entry', async () => {
+  const {db, records, paths} = database(); const {entry, receipt} = await sharedEntry(db, records); paths.length = 0;
+  const journal = createEvidenceJournalHandler({authorize: async () => ({uid: 'other', db})});
+  const edit = response(); await journal({method: 'PATCH', body: {entryId: id, entryRevision: journalEntryRevision(entry), moment: 'Overwrite', athleteId: 'owner'}} as any, edit as any); assert.equal(edit.code, 404);
+  const share = createJournalSharingHandler({authorize: async () => ({uid: 'other', db})});const unshare = response();await share({method:'POST',body:{action:'unshare',entryId:id,athleteId:'owner'}} as any,unshare as any);assert.equal(unshare.code,404);
+  const deleted = response();await journal({method:'DELETE',query:{entryId:id,uid:'owner'}} as any,deleted as any);assert.equal(deleted.code,200);
+  assert.deepEqual(records.get(`${ownerRoot}/entries/${id}`),entry);assert.deepEqual(records.get(`${ownerRoot}/sharing/${id}`),receipt);assert.ok(paths.every(path=>path.startsWith('pulsecheck-evidence-journals/other/')));
+});
+test('future preference applies only to new entries, never replay, edited entries, or an entry-specific unshare', async () => {
+  const {db,records}=database();let now=100;
+  const handler=createEvidenceJournalHandler({authorize:async()=>({uid:'owner',db}),now:()=>now,screen:async()=>({status:'screened'})});
+  const post=async(entryId:string,moment:string)=>{const res=response();await handler({method:'POST',body:{entryId,moment},query:{}} as any,res as any);assert.equal(res.code,200);return res.body;};
+  const old=await post(id,'Before preference');
+  now=200;await setJournalSharing(db,'owner',{action:'preference',enabled:true,teamId:null,disclosureVersion:'nora-journal-sharing-v1',accepted:true},now);
+  now=300;await post(id,'Before preference');assert.equal(records.has(`${ownerRoot}/sharing/${id}`),false);
+  const fresh=await post(secondId,'New with preference');assert.equal(fresh.sharing.status,'shared');assert.equal(fresh.sharing.teamId,null);
+  now=400;await setJournalSharing(db,'owner',{action:'unshare',entryId:secondId},now);await post(secondId,'New with preference');assert.equal(records.get(`${ownerRoot}/sharing/${secondId}`).status,'unshared');
+  const edited=response();await handler({method:'PATCH',body:{entryId:id,entryRevision:old.entryRevision,moment:'Edited old entry'},query:{}} as any,edited as any);assert.equal(edited.code,200);assert.equal(records.has(`${ownerRoot}/sharing/${id}`),false);
+  now=500;await setJournalSharing(db,'owner',{action:'preference',enabled:false},now);await post(thirdId,'After preference disabled');assert.equal(records.has(`${ownerRoot}/sharing/${thirdId}`),false);
 });
