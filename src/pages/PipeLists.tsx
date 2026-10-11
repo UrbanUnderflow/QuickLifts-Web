@@ -1,3 +1,6 @@
+import { getLinkedLeads, normalizeLinkedLeadIds, setLeadLink } from '../utils/pipelistsLinkedLeads';
+import { reconcilePipeListStages } from '../utils/pipelistsStages';
+import { parseContactImport, selectNewContacts, type ImportedContact } from '../utils/pipelistsContactImport';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { NextPage } from 'next';
 import PipeListsSaveStatus, { saveFailureDetails, type SaveFailure } from '../components/pipelists/PipeListsSaveStatus';
@@ -33,7 +36,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref as storageRef, uploadBytes, uploadBytesResumable } from 'firebase/storage';
 import {
   Activity,
   ArrowDown,
@@ -301,6 +304,7 @@ type LeadAttachment = {
 
 type PipelineItem = {
   id: string;
+  linkedLeadIds?: string[];
   title: string;
   organization: string;
   description: string;
@@ -443,7 +447,7 @@ type FriendOfBusinessContact = {
 
 type ItemDraft = Omit<
   PipelineItem,
-  'id' | 'createdAt' | 'updatedAt' | 'weeklyLogs' | 'deletedAt' | 'deletedByLogId' | 'restorableUntil' | 'movedToListId'
+  'id' | 'createdAt' | 'updatedAt' | 'weeklyLogs' | 'deletedAt' | 'deletedByLogId' | 'restorableUntil' | 'movedToListId' | 'linkedLeadIds'
 >;
 type ActivityLogDraft = Omit<ActivityLog, 'id' | 'createdAt' | 'systemAction' | 'relatedItemId' | 'restorableUntil'>;
 type GeneratedLead = ItemDraft & {
@@ -856,6 +860,8 @@ const investorContactStages: StageConfig[] = [
 const contactStages: StageConfig[] = [
   { id: 'sourced', label: 'Sourced', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
   { id: 'cold-contact', label: 'Cold Contact', probability: 15, track: 'general', tone: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+  { id: 'warm-introduction', label: 'Warm Introduction', probability: 20, track: 'general', tone: 'bg-orange-50 text-orange-800 border-orange-100' },
+  { id: 'met-in-person', label: 'Met in person', probability: 20, track: 'general', tone: 'bg-violet-50 text-violet-700 border-violet-100' },
   { id: 'contacted', label: 'Contacted', probability: 25, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
   { id: 'engaged', label: 'Engaged', probability: 45, track: 'general', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
   { id: 'follow-up-needed', label: 'Follow-Up Needed', probability: 60, track: 'general', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
@@ -2476,6 +2482,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[]): 
     owner: item.owner || '',
     contactEmails: normalizeContactEmails(item.contactEmails),
     contactPhone: item.contactPhone || '',
+    linkedLeadIds: normalizeLinkedLeadIds(item.linkedLeadIds, item.id || ''),
     linkedinUrl: normalizeLinkedInProfileUrlForLead(item.linkedinUrl || '', title, organization),
     emailStatus: item.emailStatus || '',
     lastEmailType: item.lastEmailType || '',
@@ -2554,7 +2561,7 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
       : templateKey === 'university-pilot'
       ? reconcileUniversityStages(savedStages)
       : templateKey === 'investor-metrics' || templateKey === 'contacts'
-      ? template.stages
+      ? reconcilePipeListStages(savedStages, template.stages)
       : templateKey === 'vc'
       ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
           if (mergedStages.some((stage) => stage.id === templateStage.id)) return mergedStages;
@@ -3431,6 +3438,22 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({
   </main>
 );
 
+const GoodSoilPriorityBadge = ({ notes }: { notes: string }) => {
+  if (!notes.includes('Good Soil Forum 2026 - PulseCheck Speaker Brief With Photos')) return null;
+  const match = notes.match(/source priority rank (\d{1,2})\/50\b/i);
+  const rank = match ? Number(match[1]) : 0;
+  if (rank < 1 || rank > 10) return null;
+  return (
+    <span
+      className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-amber-100 px-1.5 text-xs font-bold tabular-nums text-amber-950"
+      title={`Good Soil top 10: priority #${rank}`}
+      aria-label={`Good Soil top 10: priority #${rank}`}
+    >
+      #{rank}
+    </span>
+  );
+};
+
 const PipelinePage: NextPage = () => {
   const [lists, setLists] = useState<PipeList[]>(initialLists);
   const liveListsRef = useRef<PipeList[]>(initialLists);
@@ -3462,7 +3485,12 @@ const PipelinePage: NextPage = () => {
   const [newListTemplateKey, setNewListTemplateKey] = useState<TemplateKey>('university-pilot');
   const [isDeleteListModalOpen, setIsDeleteListModalOpen] = useState(false);
   const [isListProfileModalOpen, setIsListProfileModalOpen] = useState(false);
+  const [contactImport, setContactImport] = useState<{ listId: string; rows: (ImportedContact & { id: string })[] } | null>(null);
+  const [contactImportBusy, setContactImportBusy] = useState(false);
+  const [contactImportMessage, setContactImportMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const contactImportLock = useRef(false);
   const [listProfileDraft, setListProfileDraft] = useState({
+    templateKey: 'contacts' as TemplateKey,
     name: '',
     description: '',
     objective: '',
@@ -5187,6 +5215,15 @@ const PipelinePage: NextPage = () => {
     setBulkMoveTargetListId('');
     setBulkActionMessage(null);
   }, [activeList.id, activeListItems]);
+
+  const selectedLinkedLeads = selectedDetailItem ? getLinkedLeads(activeList.items, selectedDetailItem.id) : [];
+  const handleLeadLink = (targetId: string, linked: boolean) => {
+    if (!canModify || isLeadSharedView || !selectedDetailItem || !targetId) return;
+    const updatedAt = new Date().toISOString();
+    setLists(current => current.map(list => list.id === activeList.id
+      ? { ...list, items: setLeadLink(list.items, selectedDetailItem.id, targetId, linked, updatedAt) }
+      : list));
+  };
 
   const applySyncedEmailStatus = (args: {
     listId: string;
@@ -7138,6 +7175,62 @@ Rules:
   const safeAttachmentFileName = (value: string) =>
     value.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment';
 
+  const readContactImport = async (file?: File) => {
+    if (!file || !canManageActiveList || !isContactListActive) return;
+    setContactImportMessage(null);
+    try {
+      if (file.size > 25 * 1024 * 1024) throw new Error('Keep contact files under 25 MB.');
+      const rows = parseContactImport(JSON.parse(await file.text())).map((row) => ({ ...row, id: makeId() }));
+      setContactImport({ listId: activeList.id, rows });
+    } catch (error) {
+      setContactImportMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to read contact file.' });
+    }
+  };
+
+  const handleContactImport = async () => {
+    if (!contactImport || contactImportLock.current || !user || !canManageActiveList || !isContactListActive || contactImport.listId !== activeList.id) return;
+    contactImportLock.current = true;
+    setContactImportBusy(true);
+    const targetListId = activeList.id;
+    const ownerUid = user.uid;
+    const rows = selectNewContacts(contactImport.rows, activeList.items);
+    try {
+      const items: PipelineItem[] = [];
+      for (const [index, row] of rows.entries()) {
+        setContactImportMessage({ type: 'info', text: `Preparing ${index + 1} of ${rows.length}: ${row.title}` });
+        const { photo, id, ...fields } = row;
+        let image = {};
+        if (photo) {
+          const bytes = Uint8Array.from(atob(photo.dataUrl.split(',')[1]), (character) => character.charCodeAt(0));
+          const imageRef = storageRef(simpBudgetStorage, `pipelists-images/${ownerUid}/${targetListId}/${id}/${safeAttachmentFileName(photo.name)}`);
+          const upload = uploadBytesResumable(imageRef, bytes, { contentType: photo.contentType, customMetadata: { listId: targetListId, itemId: id, uploadedBy: user.email || ownerUid } });
+          await new Promise<void>((resolve, reject) => {
+            const timeout = window.setTimeout(() => {
+              upload.cancel();
+              reject(new Error('Photo upload timed out. Check storage access or use a hosted image link.'));
+            }, 30000);
+            upload.then(() => { window.clearTimeout(timeout); resolve(); }, (error) => { window.clearTimeout(timeout); reject(error); });
+          });
+          image = { imageUrl: await getDownloadURL(imageRef), imageName: photo.name, imageContentType: photo.contentType, imageSize: bytes.length };
+        }
+        const item = createItem({ ...defaultDraft(activeList.stages[0]?.id), ...fields, ...image }, id);
+        item.weeklyLogs = [createSystemLog(item, 'item-created', `Imported ${item.title} into ${activeList.name}.`)];
+        items.push(item);
+      }
+      if (simpBudgetAuth.currentUser?.uid !== ownerUid) throw new Error('Account changed. Sign in again before importing.');
+      setLists((current) => current.map((list) => list.id === targetListId
+        ? { ...list, items: [...selectNewContacts(items, list.items), ...list.items] } : list));
+      setContactImport(null);
+      setContactImportMessage({ type: 'success', text: `${items.length} contacts added. ${contactImport.rows.length - rows.length} duplicates skipped.` });
+      setQuery(''); setStageFilters([]); setPriorityFilters([]);
+    } catch (error) {
+      setContactImportMessage({ type: 'error', text: readFirestoreError(error, 'Import failed. Your contact file is ready to retry.') });
+    } finally {
+      contactImportLock.current = false;
+      setContactImportBusy(false);
+    }
+  };
+
   const handleUploadLeadImage = async (files: FileList | null) => {
     if (!canModify) return;
     const file = Array.from(files || [])[0];
@@ -7879,6 +7972,7 @@ Rules:
   const openListProfileModal = () => {
     if (!canModify) return;
     setListProfileDraft({
+      templateKey: activeList.templateKey,
       name: activeList.name,
       description: activeList.description || templateCatalog[activeList.templateKey].description,
       objective: activeList.objective || defaultListObjective(activeList.templateKey, activeList.name),
@@ -7892,15 +7986,17 @@ Rules:
     event.preventDefault();
     if (!canModify) return;
 
+    const templateKey = canManageActiveList && activeList.items.length === 0 ? listProfileDraft.templateKey : activeList.templateKey;
     const name = listProfileDraft.name.trim();
     if (!name) return;
-    const description = listProfileDraft.description.trim() || templateCatalog[activeList.templateKey].description;
-    const objective = listProfileDraft.objective.trim() || defaultListObjective(activeList.templateKey, activeList.name);
-    const leadDefinition = listProfileDraft.leadDefinition.trim() || defaultLeadDefinition(activeList.templateKey);
+    const description = listProfileDraft.description.trim() || templateCatalog[templateKey].description;
+    const objective = listProfileDraft.objective.trim() || defaultListObjective(templateKey, activeList.name);
+    const leadDefinition = listProfileDraft.leadDefinition.trim() || defaultLeadDefinition(templateKey);
     const researchBrief =
       listProfileDraft.researchBrief.trim() ||
       defaultResearchBriefForList({
         ...activeList,
+        templateKey,
         description,
         objective,
         leadDefinition,
@@ -7911,6 +8007,8 @@ Rules:
         list.id === activeList.id
           ? {
               ...list,
+              templateKey: list.items.length === 0 ? templateKey : list.templateKey,
+              stages: list.items.length === 0 ? templateCatalog[templateKey].stages : list.stages,
               name,
               description,
               objective,
@@ -8093,7 +8191,7 @@ Rules:
   const handleEditItem = (item: PipelineItem) => {
     if (!canModify) return;
     setItemSaveError('');
-    const { id, createdAt, updatedAt, weeklyLogs, deletedAt, deletedByLogId, restorableUntil, movedToListId, ...editableItem } = item;
+    const { id, createdAt, updatedAt, weeklyLogs, deletedAt, deletedByLogId, restorableUntil, movedToListId, linkedLeadIds, ...editableItem } = item;
     void id;
     void createdAt;
     void updatedAt;
@@ -8102,6 +8200,7 @@ Rules:
     void deletedByLogId;
     void restorableUntil;
     void movedToListId;
+    void linkedLeadIds;
     setDraft({
       ...editableItem,
       contactEmails: normalizeContactEmails(editableItem.contactEmails),
@@ -10100,6 +10199,13 @@ Rules:
             )}
           </div>
         </div>
+        <label className="mt-3 block" htmlFor="pipe-lead-image-url">
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Photo URL</span>
+          <input id="pipe-lead-image-url" type="url" value={draft.imageUrl}
+            placeholder="https://example.com/photo.jpg"
+            onChange={(event) => setDraft((current) => ({ ...current, imageUrl: event.target.value.trim(), imageName: '', imageContentType: '', imageSize: 0 }))}
+            className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none focus:border-stone-400 focus:bg-white" />
+        </label>
         <MessageBanner message={leadImageMessage} />
       </section>
 
@@ -11262,6 +11368,13 @@ Rules:
 
                     {canModify && (
                       <>
+                        {isContactListActive && canManageActiveList && (
+                          <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 hover:border-stone-300">
+                            <ListPlus className="h-4 w-4" /> Import contact file
+                            <input aria-label="Import contact file" type="file" accept=".json,application/json" className="sr-only" disabled={contactImportBusy}
+                              onChange={(event) => { void readContactImport(event.target.files?.[0]); event.target.value = ''; }} />
+                          </label>
+                        )}
                         {activeList.templateKey === 'vc' && missingVcSourceItems.length > 0 && (
                           <button
                             type="button"
@@ -11323,6 +11436,7 @@ Rules:
                 {isInvestorUpdateContactsList && <MessageBanner message={friendsImportMessage} />}
                 {activeList.templateKey === 'vc' && <MessageBanner message={vcSourceEnrichmentMessage} />}
                 <MessageBanner message={bulkActionMessage} />
+                <MessageBanner message={contactImportMessage} />
 
                 {isBulkSelectionMode && (
                   <div className="mb-4 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
@@ -11558,6 +11672,12 @@ Rules:
                                     }`}
                                     title={easeOfContactLabel(item.priority)}
                                   />
+                                  <GoodSoilPriorityBadge notes={item.notes} />
+                                  {getLinkedLeads(activeList.items, item.id).length > 0 && (
+                                    <span className="inline-flex shrink-0 items-center gap-1 text-xs text-stone-600" title={`${getLinkedLeads(activeList.items, item.id).length} linked leads`} aria-label={`${getLinkedLeads(activeList.items, item.id).length} linked leads`}>
+                                      <Link2 className="h-3.5 w-3.5" />{getLinkedLeads(activeList.items, item.id).length}
+                                    </span>
+                                  )}
                                   <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
@@ -11916,7 +12036,13 @@ Rules:
                                               }`}
                                               title={easeOfContactLabel(item.priority)}
                                             />
-                                            <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
+                                            <GoodSoilPriorityBadge notes={item.notes} />
+                                  {getLinkedLeads(activeList.items, item.id).length > 0 && (
+                                    <span className="inline-flex shrink-0 items-center gap-1 text-xs text-stone-600" title={`${getLinkedLeads(activeList.items, item.id).length} linked leads`} aria-label={`${getLinkedLeads(activeList.items, item.id).length} linked leads`}>
+                                      <Link2 className="h-3.5 w-3.5" />{getLinkedLeads(activeList.items, item.id).length}
+                                    </span>
+                                  )}
+                                  <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
                                           </div>
                                           {item.organization && (
                                             <p className="mt-1 truncate text-xs font-medium text-stone-500">{item.organization}</p>
@@ -12896,6 +13022,24 @@ Rules:
         </div>
       )}
 
+      {contactImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <section role="dialog" aria-modal="true" aria-labelledby="contact-import-title" className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+            <h3 id="contact-import-title" className="text-lg font-semibold text-stone-950">Import contacts</h3>
+            <p className="mt-2 text-sm text-stone-600">Add {selectNewContacts(contactImport.rows, activeList.items).length} new contacts to {lists.find((list) => list.id === contactImport.listId)?.name || 'the selected list'}. Matching names and organizations or email addresses are skipped.</p>
+            <p className="mt-2 text-sm text-stone-600">{contactImport.rows.filter((row) => row.photo || row.imageUrl).length} photos included. Contacts start at the first stage in this list.</p>
+            <ul className="my-4 max-h-64 overflow-y-auto divide-y divide-stone-100 text-sm">
+              {contactImport.rows.map((row) => <li key={row.id} className="py-2"><strong>{row.title}</strong><span className="ml-2 text-stone-500">{row.organization}</span></li>)}
+            </ul>
+            <MessageBanner message={contactImportMessage} />
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" disabled={contactImportBusy} onClick={() => setContactImport(null)} className="rounded-md border border-stone-200 px-4 py-2 text-sm disabled:opacity-50">Cancel</button>
+              <button type="button" disabled={contactImportBusy || contactImport.listId !== activeList.id} onClick={() => void handleContactImport()} className="rounded-md bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{contactImportBusy ? 'Importing...' : 'Import contacts'}</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {isListProfileModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
@@ -12942,6 +13086,22 @@ Rules:
                   className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none focus:border-stone-400 focus:bg-white"
                 />
               </label>
+              {canManageActiveList && activeList.items.length === 0 && (
+                <label className="block" htmlFor="pipe-list-profile-template">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">List template</span>
+                  <select id="pipe-list-profile-template" value={listProfileDraft.templateKey}
+                    onChange={(event) => {
+                      const templateKey = event.target.value as TemplateKey;
+                      setListProfileDraft((current) => ({ ...current, templateKey,
+                        description: templateCatalog[templateKey].description,
+                        objective: defaultListObjective(templateKey, current.name),
+                        leadDefinition: defaultLeadDefinition(templateKey), researchBrief: '' }));
+                    }}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm">
+                    {Object.entries(templateCatalog).map(([key, template]) => <option key={key} value={key}>{template.label}</option>)}
+                  </select>
+                </label>
+              )}
               <label className="block" htmlFor="pipe-list-profile-description">
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Short description</span>
                 <textarea
@@ -13946,6 +14106,7 @@ Rules:
                         {selectedDetailStage.label}
                       </span>
                     )}
+                    <GoodSoilPriorityBadge notes={selectedDetailItem.notes} />
                     {isUniversitySuccessList && <EmailTrackingBadge status={selectedDetailItem.emailStatus || selectedDetailItem.lastEmailEvent} sentAt={selectedDetailItem.lastEmailSentAt} />}
                     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityStyles[selectedDetailItem.priority]}`}>
                       {easeOfContactLabel(selectedDetailItem.priority)}
@@ -14727,6 +14888,32 @@ Rules:
               </div>
             ) : (
               <div className="space-y-5 px-5 py-5">
+                {!isLeadSharedView && (
+                  <section className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
+                    <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-stone-950"><Link2 className="h-4 w-4" />Linked leads</h4>
+                    {selectedLinkedLeads.length === 0 && <p className="mb-3 text-sm text-stone-500">No linked leads yet.</p>}
+                    <div className="space-y-2">
+                      {selectedLinkedLeads.map(lead => (
+                        <div key={lead.id} className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-3 py-2">
+                          <button type="button" onClick={() => { setSelectedDetailItemId(lead.id); setDetailModalMode('details'); }} className="min-w-0 text-left text-sm font-semibold text-stone-800 hover:underline" aria-label={`Open linked lead ${lead.title}`}>
+                            {lead.title}{lead.organization && <span className="block text-xs font-normal text-stone-500">{lead.organization}</span>}
+                          </button>
+                          {canModify && <button type="button" onClick={() => handleLeadLink(lead.id, false)} aria-label={`Unlink ${lead.title}`} className="shrink-0 rounded-full p-2 text-stone-500 hover:bg-stone-100 hover:text-stone-900"><X className="h-4 w-4" /></button>}
+                        </div>
+                      ))}
+                    </div>
+                    {canModify && (
+                      <label className="mt-3 block">
+                        <span className="sr-only">Link another lead</span>
+                        <select value="" onChange={event => handleLeadLink(event.target.value, true)} className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700">
+                          <option value="">Link another lead…</option>
+                          {activeListItems.filter(lead => lead.id !== selectedDetailItem.id && !selectedLinkedLeads.some(link => link.id === lead.id)).sort((a, b) => a.title.localeCompare(b.title)).map(lead => <option key={lead.id} value={lead.id}>{lead.title}{lead.organization ? ` · ${lead.organization}` : ''}</option>)}
+                        </select>
+                      </label>
+                    )}
+                  </section>
+                )}
+
                 {selectedDetailItem.imageUrl && (
                   <a
                     href={selectedDetailItem.imageUrl}
