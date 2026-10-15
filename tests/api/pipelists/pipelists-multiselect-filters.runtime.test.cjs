@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '../../..');
-const pageSource = fs.readFileSync(path.join(repoRoot, 'src/pages/PipeLists.tsx'), 'utf8');
+const pageSource = fs.readFileSync(path.join(repoRoot, 'src/features/PipeListsWorkspace.tsx'), 'utf8');
 
 test('stage and priority summary cards use additive multi-select state', () => {
   assert.match(pageSource, /useState<string\[\]>\(\[\]\)/);

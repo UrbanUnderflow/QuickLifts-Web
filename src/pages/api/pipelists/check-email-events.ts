@@ -1,3 +1,4 @@
+import { guardPipeListsApiRequest } from '../../../utils/pipelistsRuntime';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 type CheckEmailEventsRequest = {
@@ -138,6 +139,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<{ success: true; summary: BrevoEventSummary | null; eventCount: number } | { success: false; error: string }>,
 ) {
+  if (!guardPipeListsApiRequest(req, res)) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method Not Allowed' });
   }

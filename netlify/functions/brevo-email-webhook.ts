@@ -1,6 +1,6 @@
 import type { Handler } from '@netlify/functions';
-import { admin } from './config/firebase';
-import { getSimpBudgetFirestore } from './utils/getSimpBudgetServiceAccount';
+import type * as FirebaseAdmin from 'firebase-admin';
+import { isPipeListsProductionRuntime, PIPELISTS_RUNTIME_BLOCK_CODE } from '../../src/utils/pipelistsRuntime';
 import { applyBrevoEmailEvent, getEquityEmailDelivery, isEquityEmailRequest, normalizeBrevoMessageId } from '../../src/lib/equityEmailDelivery';
 
 const {
@@ -8,7 +8,9 @@ const {
   safeTrackMacraWebOfferEvent,
 } = require('./utils/mixpanelAnalytics');
 
-const db = admin.firestore();
+// Initialize shared product services only after the PipeLists batch preflight.
+let admin: typeof FirebaseAdmin;
+let db: FirebaseAdmin.firestore.Firestore;
 const PILOT_ATHLETE_COMMUNICATIONS_COLLECTION = 'pulsecheck-pilot-athlete-communications';
 const MACRA_WEB_OFFER_CAMPAIGN_ID = 'macra-web-offer-24h-v1';
 const EMAIL_LOG_COLLECTION = 'email-logs';
@@ -170,6 +172,36 @@ const readWebhookCustomPayload = (webhookEvent: BrevoWebhookEvent): Record<strin
     eventRecord.headers?.['x-mailin-custom'];
 
   return parseCustomPayload(direct);
+};
+
+// Recognize PipeLists without a datastore lookup. Reject the whole mixed batch
+// before any shared Firebase initialization or generic email-log writes.
+const isPipeListsWebhookEvent = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, any>;
+  const customValues = [
+    record, record.custom, record['X-Mailin-custom'], record['x-mailin-custom'],
+    record['X-Mailin-Custom'], record['x-mailin-customs'],
+    record.headers?.['X-Mailin-custom'], record.headers?.['x-mailin-custom'],
+  ];
+  if (customValues.some(custom => {
+    if (typeof custom === 'string') return /pipelists|school-outreach/i.test(custom);
+    return custom && typeof custom === 'object' && Object.keys(custom).some(key => /^pipelists/i.test(key));
+  })) return true;
+  const tags = [record.tag, record.tags].flatMap(tag => Array.isArray(tag) ? tag : [tag]);
+  return tags.some(tag => typeof tag === 'string' && tag.toLowerCase().split(/[\s,;]+/).some(value => value === 'pipelists' || value === 'school-outreach'));
+};
+
+// A bare provider message ID cannot establish product ownership without reading
+// production logs. Outside production, allow only explicit unrelated routes.
+const isKnownUnrelatedWebhookEvent = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') return false;
+  const custom = readWebhookCustomPayload(value as BrevoWebhookEvent);
+  if (['friendId', 'pilotAthleteCommunicationId', 'signingRequestId'].some(key =>
+    typeof custom[key] === 'string' && custom[key].trim().length > 0,
+  )) return true;
+  return custom.product === 'macra' && typeof custom.userId === 'string' && custom.userId.trim().length > 0
+    && [custom.emailSequenceId, custom.campaignId].some(id => typeof id === 'string' && Boolean(MACRA_RETARGETING_SEQUENCE_STATE_KEYS[id]));
 };
 
 const readStoredBrevoCustomPayload = async (messageId?: string): Promise<Record<string, any>> => {
@@ -431,12 +463,14 @@ const updatePipeListsContactEmailStatus = async (args: {
   link?: string;
   now: Date;
 }) => {
+  if (!isPipeListsProductionRuntime()) return;
   const ownerUid = String(args.ownerUid || '').trim();
   const listId = String(args.listId || '').trim();
   const targetItemIds = new Set(args.itemIds.map((itemId) => String(itemId || '').trim()).filter(Boolean));
   const targetEmail = String(args.email || '').trim().toLowerCase();
   if (!ownerUid || !listId || (!targetItemIds.size && !targetEmail)) return;
 
+  const { getSimpBudgetFirestore } = await import('./utils/getSimpBudgetServiceAccount');
   const simpBudgetDb = await getSimpBudgetFirestore();
   const stateRef = simpBudgetDb
     .collection(SIMPBUDGET_USERS_COLLECTION)
@@ -817,6 +851,19 @@ export const handler: Handler = async (event) => {
 
     // Brevo can send single events or batches
     const events: BrevoWebhookEvent[] = Array.isArray(body) ? body : [body];
+    if (!isPipeListsProductionRuntime()) {
+      if (events.some(isPipeListsWebhookEvent)) {
+        return { statusCode: 503, body: JSON.stringify({ success: false, code: PIPELISTS_RUNTIME_BLOCK_CODE }) };
+      }
+      if (events.some(event => !isKnownUnrelatedWebhookEvent(event))) {
+        return { statusCode: 503, body: JSON.stringify({ success: false, code: 'WEBHOOK_NON_PRODUCTION_UNCLASSIFIED' }) };
+      }
+    }
+    if (!db) {
+      const firebase = await import('./config/firebase');
+      admin = firebase.admin;
+      db = admin.firestore();
+    }
     
     console.log(`[brevo-webhook] Received ${events.length} event(s)`);
 
@@ -995,11 +1042,12 @@ export const handler: Handler = async (event) => {
         await outreachRef.set(outreachUpdate, { merge: true });
       }
 
-      if (pipeListsEmailType === 'school-outreach' && pipeListsOwnerUid && pipeListsListId) {
+      if (isPipeListsProductionRuntime() && pipeListsEmailType === 'school-outreach' && pipeListsOwnerUid && pipeListsListId) {
+        const { getSimpBudgetFirestore } = await import('./utils/getSimpBudgetServiceAccount');
         const { trackSequenceEvent } = require('./lib/pipelistsEmailSequenceTracking');
         const eventAt = getWebhookEventTime(webhookEvent, new Date(NaN));
         await trackSequenceEvent(await getSimpBudgetFirestore(), { sequenceId: custom.pipeListsSequenceId || '', stepId: custom.pipeListsSequenceStepId || '', ownerUid: pipeListsOwnerUid, listId: pipeListsListId, itemIds: pipeListsItemIds, email, messageId: messageId || '', event: eventType, eventAt: Number.isNaN(eventAt.getTime()) ? '' : eventAt.toISOString(), eventId: webhookEvent.id, link, authenticated: authenticatedWebhook });
-      } else if (pipeListsOwnerUid && pipeListsListId) {
+      } else if (isPipeListsProductionRuntime() && pipeListsOwnerUid && pipeListsListId) {
         await updatePipeListsContactEmailStatus({
           ownerUid: pipeListsOwnerUid,
           listId: pipeListsListId,

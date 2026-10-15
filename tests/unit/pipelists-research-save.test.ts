@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
 
-const source = fs.readFileSync(new URL('../../src/pages/PipeLists.tsx', import.meta.url), 'utf8');
+const source = fs.readFileSync(new URL('../../src/features/PipeListsWorkspace.tsx', import.meta.url), 'utf8');
 const handler = source.slice(source.indexOf('  const handleApplyItemResearch ='), source.indexOf('  const openEmailActivityForItem ='));
 
 test('applying research commits the editor draft and findings together and closes the stale editor', () => {

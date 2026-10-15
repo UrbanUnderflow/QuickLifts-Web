@@ -84,7 +84,7 @@ test('PipeLists deadline reminders read from the SimpBudget Firebase project', (
 
   assert.match(
     reminderFunction,
-    /import \{ getSimpBudgetAuth, getSimpBudgetFirestore \} from '\.\/utils\/getSimpBudgetServiceAccount'/,
+    /const \{ getSimpBudgetFirestore \} = await import\('\.\/utils\/getSimpBudgetServiceAccount'\)/,
     'the scheduled reminder should use the same Firebase project as the PipeLists browser app',
   );
   assert.match(
@@ -119,7 +119,7 @@ test('PipeLists Brevo webhook writes contact email events to SimpBudget', () => 
 
   assert.match(
     brevoWebhook,
-    /import \{ getSimpBudgetFirestore \} from '\.\/utils\/getSimpBudgetServiceAccount'/,
+    /const \{ getSimpBudgetFirestore \} = await import\('\.\/utils\/getSimpBudgetServiceAccount'\)/,
     'PipeLists webhook updates should use the standalone SimpBudget Firebase helper',
   );
   assert.match(

@@ -38,6 +38,7 @@ function setup(options = {}) {
     process: {env: options.withoutSecret ? {} : {BREVO_WEBHOOK_SECRET: 'verified-secret'}},
     console: {log() {}, warn() {}, error() {}},
     require: name => {
+      if (name === '../../src/utils/pipelistsRuntime') return { isPipeListsProductionRuntime: () => false };
       if (name === './config/firebase') return {admin: {firestore}};
       if (name === './utils/getSimpBudgetServiceAccount') return {getSimpBudgetFirestore: async () => db};
       if (name === './utils/mixpanelAnalytics') return {MACRA_MIXPANEL_EVENTS: {}, safeTrackMacraWebOfferEvent: async () => {}};

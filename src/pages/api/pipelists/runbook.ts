@@ -1,3 +1,4 @@
+import { guardPipeListsApiRequest } from '../../../utils/pipelistsRuntime';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { FieldValue } from 'firebase-admin/firestore';
 import {
@@ -492,6 +493,7 @@ async function saveRunbook(db: Firestore, actor: RunbookActor, body: unknown) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (!guardPipeListsApiRequest(req, res)) return;
   res.setHeader('Cache-Control', 'no-store');
 
   if (req.method !== 'GET' && req.method !== 'PUT') {

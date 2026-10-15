@@ -1,3 +1,4 @@
+import { guardPipeListsApiRequest } from '../../../utils/pipelistsRuntime';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { JSDOM } from 'jsdom';
 import { getLeadSourceCandidates } from '../../../utils/pipelistsLeadSources';
@@ -288,6 +289,7 @@ const normalizeExtractedItem = (
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (!guardPipeListsApiRequest(req, res)) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

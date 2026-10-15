@@ -1,9 +1,6 @@
+import { isPipeListsProductionRuntime, PIPELISTS_RUNTIME_BLOCK_CODE } from '../../src/utils/pipelistsRuntime';
 import type { Handler } from '@netlify/functions';
 import type { firestore } from 'firebase-admin';
-
-import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from './utils/emailSequenceHelpers';
-import { initAdmin } from './utils/getServiceAccount';
-import { getSimpBudgetAuth, getSimpBudgetFirestore } from './utils/getSimpBudgetServiceAccount';
 
 const APP_URL = 'https://fitwithpulse.ai/PipeLists';
 const SENDER = { email: 'info@fitwithpulse.ai', name: 'Pulse PipeLists' };
@@ -262,6 +259,7 @@ async function getOwnerIdentity(
   if (email) return { email, name };
 
   try {
+    const { getSimpBudgetAuth } = await import('./utils/getSimpBudgetServiceAccount');
     const auth = await getSimpBudgetAuth();
     const user = await auth.getUser(ownerUid);
     return { email: user.email?.trim().toLowerCase(), name: user.displayName || name };
@@ -283,6 +281,7 @@ async function createOrUpdateLeadShare(args: {
   const shareId = `${args.ownerUid}-${args.list.id}-${itemId}`;
   const origin = (process.env.NEXT_PUBLIC_SITE_URL || process.env.URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
   const leadUrl = `${origin}/PipeLists?leadShare=${encodeURIComponent(shareId)}`;
+  const { initAdmin } = await import('./utils/getServiceAccount');
   const admin = initAdmin();
   const publicItem = { ...args.item };
   delete publicItem.customerSuccess;
@@ -332,6 +331,11 @@ function latestOpenActionLogForToday(item: Record<string, any>, today: string): 
 }
 
 export const handler: Handler = async () => {
+  if (!isPipeListsProductionRuntime()) {
+    return { statusCode: 503, body: JSON.stringify({ success: false, code: PIPELISTS_RUNTIME_BLOCK_CODE }) };
+  }
+  const { getSimpBudgetFirestore } = await import('./utils/getSimpBudgetServiceAccount');
+  const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = await import('./utils/emailSequenceHelpers');
   const db = await getSimpBudgetFirestore();
   const today = dateKeyInEasternTime(new Date());
   const stats = { states: 0, reminders: 0, actionReminders: 0, sent: 0, skipped: 0, failed: 0 };

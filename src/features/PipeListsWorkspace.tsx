@@ -1,0 +1,15338 @@
+import { preserveStoredUniversityList } from '../utils/pipelistsPersistence';
+import { getLinkedLeads, normalizeLinkedLeadIds, setLeadLink } from '../utils/pipelistsLinkedLeads';
+import { reconcilePipeListStages } from '../utils/pipelistsStages';
+import { parseContactImport, selectNewContacts, type ImportedContact } from '../utils/pipelistsContactImport';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { NextPage } from 'next';
+import PipeListsSaveStatus, { saveFailureDetails, type SaveFailure } from '../components/pipelists/PipeListsSaveStatus';
+import { runPipeListSaveWithRetry } from '../utils/pipelistsAutosave';
+import PipeListsEmailSequence from '../components/pipelists/PipeListsEmailSequence';
+import PipeListsEmailTracking, { EmailTrackingBadge } from '../components/pipelists/PipeListsEmailTracking';
+import Link from 'next/link';
+import {
+  GoogleAuthProvider,
+  User,
+  getRedirectResult,
+  isSignInWithEmailLink,
+  onAuthStateChanged,
+  sendSignInLinkToEmail,
+  signInWithEmailLink,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  browserPopupRedirectResolver,
+} from 'firebase/auth';
+import {
+  FieldPath,
+  collection,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query as firestoreQuery,
+  runTransaction,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
+import { getDownloadURL, ref as storageRef, uploadBytes, uploadBytesResumable } from 'firebase/storage';
+import {
+  Activity,
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  BookOpen,
+  Building2,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  CheckCircle2,
+  CheckSquare,
+  ClipboardList,
+  Clock,
+  Copy,
+  DollarSign,
+  Download,
+  Edit,
+  ExternalLink,
+  FileText,
+  Filter,
+  HeartPulse,
+  Kanban,
+  Layers,
+  LayoutList,
+  Link2,
+  ListPlus,
+  LogOut,
+  Mail,
+  MessageCircle,
+  Paperclip,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Share2,
+  Square,
+  Target,
+  Trash2,
+  TrendingUp,
+  UploadCloud,
+  Users,
+  X,
+} from 'lucide-react';
+import PageHead from '../components/PageHead';
+import { auth as quickLiftsAuth, db as quickLiftsDb } from '../api/firebase/config';
+import { simpBudgetAuth, simpBudgetDb, simpBudgetStorage } from '../api/firebase/simpBudgetConfig';
+import {
+  buildSyncedEmailEventLog,
+  emailStatusRank,
+  normalizeSyncedEmailStatus,
+  type SyncedEmailEventSummary,
+} from '../utils/pipelistsEmailEventSync';
+import PipeListsRunbook from '../components/pipelists/PipeListsRunbook';
+import PipeListsCustomerSuccess, {
+  PipeListsSuccessPlanEditor,
+  type PipeListsSuccessAccount,
+} from '../components/pipelists/PipeListsCustomerSuccess';
+import {
+  isUniversityCustomerSuccessStage,
+  normalizeUniversityCustomerSuccess,
+  type UniversityCustomerSuccess,
+} from '../utils/pipelistsCustomerSuccess';
+import {
+  addPipeListMemberAccess,
+  mergePipeListSnapshotsThreeWay,
+  pipeListSnapshotsEqual,
+  planPipeListAccessAdditions,
+} from '../utils/pipelistsCollaboration';
+import { matchesPipelineFilters, toggleFilterSelection } from '../utils/pipelistsFilters';
+
+type PipelinePriority = 'high' | 'medium' | 'low';
+
+type SortColumn = 'item' | 'organization' | 'stage' | 'value' | 'dueDate' | 'createdAt' | 'nextStep';
+type ViewMode = 'pipeline' | 'success' | 'metrics' | 'logs' | 'runbook';
+type PipelineDisplayMode = 'list' | 'kanban';
+type MetricsScope = 'selected-list' | 'workspace';
+type MetricsPeriod = '30' | '90' | 'all';
+type DetailModalMode = 'details' | 'logs' | 'email' | 'research' | 'ask';
+type MessageTone = 'success' | 'error' | 'info';
+type ShareAccess = 'read' | 'edit';
+type InviteStatus = {
+  email: string;
+  access: ShareAccess;
+  status: 'sent' | 'accepted';
+  inviteId?: string;
+  sentAt?: unknown;
+  acceptedAt?: unknown;
+};
+type InviteHistoryEntry = {
+  email: string;
+  displayName: string;
+  photoURL: string;
+  access: ShareAccess;
+  status: 'sent' | 'accepted';
+  sentAt?: unknown;
+  acceptedAt?: unknown;
+  listNames: string[];
+  listAccess: Array<{
+    listId: string;
+    listName: string;
+    accent: string;
+    access: ShareAccess;
+    status: 'sent' | 'accepted';
+    shareId: string;
+    inviteUrl: string;
+    sentAt?: unknown;
+    acceptedAt?: unknown;
+  }>;
+  inviteUrl: string;
+};
+type ActivityLogType =
+  | 'update'
+  | 'cold-outreach'
+  | 'follow-up-first'
+  | 'follow-up-second'
+  | 'follow-up-third'
+  | 'closed-no-response'
+  | 'closed-response-no-interest'
+  | 'application'
+  | 'meeting'
+  | 'follow-up'
+  | 'decision'
+  | 'risk'
+  | 'document'
+  | 'metrics';
+type ContactEmailType = 'metrics-update' | 'general-update';
+type LogEmailFilter = 'all' | 'investor-update' | 'general-update';
+type ContactEmailAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  content: string;
+};
+type NextStepTooltip = {
+  text: string;
+  left: number;
+  top: number;
+  width: number;
+  placement: 'above' | 'below';
+};
+type TemplateKey =
+  | 'vc'
+  | 'grant'
+  | 'pitch'
+  | 'university-pilot'
+  | 'contract'
+  | 'partner'
+  | 'investor-metrics'
+  | 'contacts'
+  | 'task';
+
+type StageTrack = 'build' | 'run' | 'capital' | 'general';
+type StageOutcome = 'open' | 'won' | 'lost';
+
+const LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH = 20000;
+const LEAD_SEARCH_DEFAULT_COUNT = 6;
+const LEAD_SEARCH_MAX_COUNT = 30;
+const LEAD_SEARCH_BATCH_SIZE = 1;
+const DEFAULT_LEAD_RESEARCH_PROMPT =
+  'For each lead, research strategic fit, relevant department or buyer, likely first outreach path, useful source-backed notes, official source URL, and a concrete next step.';
+
+const extractPastedLeadEntries = (prompt: string) => {
+  const instructionPattern =
+    /\b(?:take|use|analy[sz]e|research|find|add|details?|list|leads?|prompt|entered|box|through|from|entire|weird|issue)\b/i;
+
+  const entries = prompt
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        .replace(/^\s*(?:[-*\u2022]|\d+[\).])\s*/, '')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    )
+    .filter((line) => {
+      if (line.length < 2 || line.length > 120) return false;
+      if (/https?:\/\//i.test(line) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(line)) return true;
+      if (line.includes(':')) return false;
+      const wordCount = line.split(/\s+/).length;
+      if (wordCount > 8) return false;
+      if (/[.!?]$/.test(line)) return false;
+      if (instructionPattern.test(line) && wordCount > 5) return false;
+      return /[A-Za-z]/.test(line);
+    });
+
+  return Array.from(new Set(entries)).slice(0, LEAD_SEARCH_MAX_COUNT);
+};
+
+const chunkLeadSearchEntries = (entries: string[]) => {
+  const chunks: string[][] = [];
+  for (let index = 0; index < entries.length; index += LEAD_SEARCH_BATCH_SIZE) {
+    chunks.push(entries.slice(index, index + LEAD_SEARCH_BATCH_SIZE));
+  }
+  return chunks;
+};
+
+const estimateLeadCountFromPrompt = (prompt: string, pastedEntries = extractPastedLeadEntries(prompt)) => {
+  const explicitCount = Array.from(
+    prompt.matchAll(
+      /\b(\d{1,2})\s+(?:new\s+)?(?:early[- ]stage\s+)?(?:vc\s+)?(?:funds?|leads?|contacts?|investors?|organizations?|universities|schools?|programs?)\b/gi,
+    ),
+  ).reduce((largest, match) => Math.max(largest, Number(match[1]) || 0), 0);
+  const structuredCounts = [
+    /^\s*AUM\s*:/gim,
+    /^\s*Stage\s*:/gim,
+    /^\s*GEO\s*:/gim,
+    /^\s*Check size\s*:/gim,
+    /^\s*Fund type\s*:/gim,
+  ].map((pattern) => prompt.match(pattern)?.length || 0);
+  const estimatedCount = Math.max(explicitCount, pastedEntries.length, ...structuredCounts);
+
+  return Math.min(LEAD_SEARCH_MAX_COUNT, Math.max(LEAD_SEARCH_DEFAULT_COUNT, estimatedCount));
+};
+
+type StageConfig = {
+  id: string;
+  label: string;
+  probability: number;
+  track: StageTrack;
+  tone: string;
+  outcome?: StageOutcome;
+};
+
+type ActivityLog = {
+  id: string;
+  type: ActivityLogType;
+  weekOf: string;
+  summary: string;
+  nextStep: string;
+  followUpDate: string;
+  rosteredAthletes: string;
+  completedCheckIns: string;
+  checkInRate: string;
+  biometricSyncRate: string;
+  signalEvents: string;
+  noraEngagementRate: string;
+  noraSessions: string;
+  escalations: string;
+  staffFeedbackScore: string;
+  reportingPeriodStart?: string;
+  reportingPeriodEnd?: string;
+  metricSource?: string;
+  notes: string;
+  createdAt: string;
+  systemAction?: 'item-created' | 'item-deleted' | 'item-restored' | 'item-moved' | 'email-sent';
+  relatedItemId?: string;
+  restorableUntil?: string;
+};
+
+type LeadAttachment = {
+  id: string;
+  type: 'file' | 'link';
+  name: string;
+  url: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  createdAt: string;
+  createdBy: string;
+};
+
+type PipelineItem = {
+  id: string;
+  linkedLeadIds?: string[];
+  needsResearch?: boolean;
+  title: string;
+  organization: string;
+  description: string;
+  owner: string;
+  contactEmails: string[];
+  contactPhone: string;
+  linkedinUrl: string;
+  emailStatus: string;
+  lastEmailType: string;
+  lastEmailEvent: string;
+  lastEmailMessageId: string;
+  lastEmailSentAt: string;
+  lastEmailDeliveredAt: string;
+  lastEmailOpenedAt: string;
+  lastEmailClickedAt: string;
+  emailOpenCount: number;
+  emailClickCount: number;
+  lastEmailClickedLink: string;
+  stage: string;
+  priority: PipelinePriority;
+  amount: string;
+  dueDate: string;
+  deadlineSource: string;
+  deadlineEmailNotificationsEnabled: boolean;
+  nextStep: string;
+  notes: string;
+  sourceUrl: string;
+  segment: string;
+  decisionMaker: string;
+  acv: string;
+  expectedCloseDate: string;
+  contractTerm: string;
+  pilotScope: string;
+  athleteCount: string;
+  pilotStart: string;
+  pilotEnd: string;
+  conversionLikelihood: string;
+  grossMargin: string;
+  partnerCost: string;
+  hardwareCost: string;
+  lossReason: string;
+  expansionPath: string;
+  imageUrl: string;
+  imageName: string;
+  imageContentType: string;
+  imageSize: number;
+  attachments: LeadAttachment[];
+  weeklyLogs: ActivityLog[];
+  customerSuccess?: UniversityCustomerSuccess;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+  deletedByLogId?: string;
+  restorableUntil?: string;
+  movedToListId?: string;
+};
+
+type PipeList = {
+  id: string;
+  name: string;
+  description: string;
+  objective: string;
+  leadDefinition: string;
+  researchBrief: string;
+  accent: string;
+  templateKey: TemplateKey;
+  stages: StageConfig[];
+  items: PipelineItem[];
+  createdAt: string;
+};
+
+type PipeListShare = {
+  id: string;
+  ownerUid: string;
+  ownerEmail: string;
+  list: PipeList;
+  access: ShareAccess;
+  publicRead: boolean;
+  protectedDetails: boolean;
+  viewerEmails: string[];
+  editorEmails: string[];
+  inviteStatuses: Record<string, InviteStatus>;
+  lastEditedBy?: {
+    uid: string;
+    email: string;
+    displayName: string;
+    photoURL: string;
+  };
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+type PipeListProtectedShare = {
+  id: string;
+  ownerUid: string;
+  ownerEmail: string;
+  listId: string;
+  list: PipeList;
+  lastEditedBy?: PipeListShare['lastEditedBy'];
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+type PipeLeadShare = {
+  id: string;
+  ownerUid: string;
+  ownerEmail: string;
+  listId: string;
+  itemId: string;
+  list: PipeList;
+  publicRead: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+type PipeListProfile = {
+  displayName: string;
+  photoURL: string;
+  email: string;
+  updatedAt?: unknown;
+};
+
+type SearchablePipeListProfile = PipeListProfile & {
+  uid: string;
+};
+
+type FriendOfBusinessContact = {
+  id?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  titleOrCompany?: string;
+  notes?: string;
+  emailStatus?: string;
+  lastEmailEvent?: string;
+  emailOpenCount?: number;
+  emailClickCount?: number;
+  lastEmailClickedLink?: string;
+};
+
+type ItemDraft = Omit<
+  PipelineItem,
+  'id' | 'createdAt' | 'updatedAt' | 'weeklyLogs' | 'deletedAt' | 'deletedByLogId' | 'restorableUntil' | 'movedToListId' | 'linkedLeadIds'
+>;
+type ActivityLogDraft = Omit<ActivityLog, 'id' | 'createdAt' | 'systemAction' | 'relatedItemId' | 'restorableUntil'>;
+type GeneratedLead = ItemDraft & {
+  rationale: string;
+  sourceEvidence: string;
+  deadlineStatus: string;
+  sourceVerified?: boolean;
+  sourceVerificationReason?: string;
+};
+type ManualLeadDraft = {
+  title: string;
+  organization: string;
+  email: string;
+  phone: string;
+  sourceUrl: string;
+  stage: string;
+  notes: string;
+};
+
+type SourceVerificationResult = {
+  url: string;
+  valid: boolean;
+  status: number;
+  finalUrl: string;
+  title: string;
+  reason?: string;
+};
+
+const STORAGE_KEY = 'pulse-pipe-lists-v2';
+const PITCH_COMPETITIONS_LIST_ID = 'pitch-competitions';
+const SIMPBUDGET_USERS_COLLECTION = 'simpbudget-users';
+const PIPELISTS_SUBCOLLECTION = 'pipeLists';
+const PIPELISTS_STATE_DOCUMENT_ID = 'state';
+const PIPELIST_SHARES_COLLECTION = 'pipeListShares';
+const PIPELIST_PROTECTED_SHARES_COLLECTION = 'pipeListProtectedShares';
+const PIPELEAD_SHARES_COLLECTION = 'pipeLeadShares';
+const PIPELIST_PROFILES_COLLECTION = 'pipeListProfiles';
+const PIPELISTS_LEAD_SEARCH_FEATURE_ID = 'pipeListsLeadGeneration';
+const FRIENDS_OF_BUSINESS_COLLECTION = 'friends-of-business';
+const PIPELISTS_LEAD_SEARCH_MODEL = 'gpt-4o-mini';
+const PIPELISTS_REMOTE_BRIDGE_ORIGIN = 'https://fitwithpulse.ai';
+const TREMAINE_OWNER_EMAIL = 'tremaine.grant@gmail.com';
+const CONTACT_EMAIL_SENDERS = ['hello@fitwithpulse.ai', 'info@fitwithpulse.ai', 'tre@fitwithpulse.ai'] as const;
+type ContactEmailSender = (typeof CONTACT_EMAIL_SENDERS)[number];
+const DEFAULT_CONTACT_EMAIL_SENDER: ContactEmailSender = 'tre@fitwithpulse.ai';
+const MAGIC_LINK_EMAIL_STORAGE_KEY = 'pipelists.web.pendingMagicEmail';
+const SOFT_DELETE_RESTORE_DAYS = 30;
+const PIPELISTS_INITIAL_LOAD_TIMEOUT_MS = 6000;
+
+const accentClasses = [
+  'bg-emerald-500',
+  'bg-sky-500',
+  'bg-amber-500',
+  'bg-indigo-500',
+  'bg-rose-500',
+  'bg-teal-500',
+];
+
+const priorityStyles: Record<PipelinePriority, string> = {
+  high: 'bg-rose-50 text-rose-700 border-rose-100',
+  medium: 'bg-amber-50 text-amber-700 border-amber-100',
+  low: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+};
+
+// Preserve stored priority keys so existing lists and shared records remain compatible.
+const easeOfContactLabels: Record<PipelinePriority, string> = {
+  low: 'Easy',
+  medium: 'Medium',
+  high: 'Hard',
+};
+
+const easeOfContactLabel = (priority: PipelinePriority) =>
+  `Ease of Contact: ${easeOfContactLabels[priority]}`;
+
+const logTypeLabels: Record<ActivityLogType, string> = {
+  update: 'General Update',
+  'cold-outreach': 'Cold Outreach',
+  'follow-up-first': 'Follow Up 1st Attempt',
+  'follow-up-second': 'Follow Up 2nd Attempt',
+  'follow-up-third': 'Follow Up 3rd Attempt',
+  'closed-no-response': 'Closed No Response',
+  'closed-response-no-interest': 'Closed Response No Interest',
+  application: 'Application',
+  meeting: 'Meeting',
+  'follow-up': 'Follow-Up',
+  decision: 'Decision',
+  risk: 'Risk',
+  document: 'Document Sent',
+  metrics: 'Metrics Update',
+};
+
+const contactEmailTypeLabels: Record<ContactEmailType, string> = {
+  'metrics-update': 'Investor Update',
+  'general-update': 'General Update',
+};
+
+const logEmailFilterLabels: Record<LogEmailFilter, string> = {
+  all: 'All email activity',
+  'investor-update': 'Investor Update emails',
+  'general-update': 'General Update emails',
+};
+
+const contactEmailTypeLogType: Record<ContactEmailType, ActivityLogType> = {
+  'metrics-update': 'metrics',
+  'general-update': 'update',
+};
+
+const contactEmailStatusOptions = [
+  { value: 'not_sent', label: 'Not sent' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'opened', label: 'Opened' },
+  { value: 'clicked', label: 'Clicked' },
+  { value: 'soft_bounce', label: 'Soft bounce' },
+  { value: 'hard_bounce', label: 'Hard bounce' },
+  { value: 'invalid_email', label: 'Invalid email' },
+  { value: 'unsubscribed', label: 'Unsubscribed' },
+] as const;
+
+const logNextStepOptions: Record<ActivityLogType, string[]> = {
+  update: ['Review status', 'Send update', 'Follow up', 'Wait for response'],
+  'cold-outreach': ['Follow up', 'Wait for response', 'Send supporting materials', 'Schedule meeting'],
+  'follow-up-first': ['Send second follow-up', 'Wait for response', 'Send supporting materials', 'Schedule meeting'],
+  'follow-up-second': ['Send third follow-up', 'Wait for response', 'Send supporting materials', 'Schedule meeting'],
+  'follow-up-third': ['Close no response', 'Close no interest', 'Wait for response'],
+  'closed-no-response': ['Revisit later', 'Archive lead'],
+  'closed-response-no-interest': ['Revisit later', 'Archive lead'],
+  application: ['Prepare application', 'Submit application', 'Send supporting materials', 'Wait for results', 'Follow up'],
+  meeting: ['Schedule meeting', 'Send recap', 'Send materials', 'Follow up', 'Wait for response'],
+  'follow-up': ['Follow up', 'Send reminder', 'Send requested info', 'Schedule meeting', 'Wait for response'],
+  decision: ['Review decision', 'Notify team', 'Send acceptance', 'Plan next action'],
+  risk: ['Escalate risk', 'Assign owner', 'Monitor risk', 'Follow up'],
+  document: ['Send document', 'Send updated document', 'Wait for response', 'Follow up'],
+  metrics: ['Review metrics', 'Send report', 'Follow up', 'Wait for response'],
+};
+
+const updateLogDraftType = (current: ActivityLogDraft, type: ActivityLogType): ActivityLogDraft => {
+  const nextOptions = logNextStepOptions[type];
+
+  return {
+    ...current,
+    type,
+    nextStep: current.nextStep && nextOptions.includes(current.nextStep) ? current.nextStep : '',
+  };
+};
+
+const followUpDateLabel = (_nextStep: string) => 'Next Action Required Date';
+
+const logDisplayLabel = (log: ActivityLog) => {
+  if (log.systemAction === 'item-created') return 'Item Added';
+  if (log.systemAction === 'item-deleted') return 'Item Deleted';
+  if (log.systemAction === 'item-restored') return 'Item Restored';
+  if (log.systemAction === 'item-moved') return 'Item Moved';
+  if (log.systemAction === 'email-sent') return emailLogDisplayLabel(log);
+  return logTypeLabels[log.type];
+};
+
+const displayLogSummary = (log: ActivityLog) => {
+  const summary = log.summary || log.notes || 'Untitled log';
+  if (log.systemAction !== 'email-sent') return summary;
+  return summary.replace(/^Metrics Update sent/i, 'Investor Update sent');
+};
+
+const pipeTimestampToDate = (value: unknown): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value === 'object') {
+    const timestampLike = value as {
+      seconds?: unknown;
+      nanoseconds?: unknown;
+      _seconds?: unknown;
+      _nanoseconds?: unknown;
+      toDate?: unknown;
+    };
+    if (typeof timestampLike.toDate === 'function') {
+      const parsed = timestampLike.toDate();
+      return parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : null;
+    }
+    const seconds = typeof timestampLike.seconds === 'number' ? timestampLike.seconds : timestampLike._seconds;
+    const nanoseconds = typeof timestampLike.nanoseconds === 'number' ? timestampLike.nanoseconds : timestampLike._nanoseconds;
+    if (typeof seconds === 'number') {
+      const parsed = new Date(seconds * 1000 + (typeof nanoseconds === 'number' ? Math.floor(nanoseconds / 1_000_000) : 0));
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+  }
+  return null;
+};
+
+const logTimestampDate = (log: ActivityLog) =>
+  pipeTimestampToDate(log.createdAt) || pipeTimestampToDate(log.weekOf) || (log.weekOf ? pipeTimestampToDate(`${log.weekOf}T00:00:00`) : null);
+
+const logTimestampMs = (log: ActivityLog) => logTimestampDate(log)?.getTime() || 0;
+
+const formatLogTimestamp = (log: ActivityLog) => {
+  const createdAt = logTimestampDate(log);
+  const dateLabel = log.weekOf || (createdAt ? createdAt.toISOString().slice(0, 10) : '');
+  if (!createdAt) return dateLabel;
+
+  const timeLabel = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(createdAt);
+
+  return `${dateLabel} · ${timeLabel}`;
+};
+
+const parseEmailLogNotes = (notes: string) => {
+  const lines = notes.replace(/\r\n/g, '\n').split('\n');
+  const messageIndex = lines.findIndex((line) => line.trim().toLowerCase() === 'message:');
+  const metaLines = messageIndex >= 0 ? lines.slice(0, messageIndex) : lines;
+  const message = messageIndex >= 0 ? lines.slice(messageIndex + 1).join('\n').trim() : '';
+  const readMeta = (label: string) => {
+    const prefix = `${label}:`;
+    const row = metaLines.find((line) => line.trim().toLowerCase().startsWith(prefix.toLowerCase()));
+    return row ? row.trim().slice(prefix.length).trim() : '';
+  };
+
+  return {
+    to: readMeta('To'),
+    cc: readMeta('Cc'),
+    subject: readMeta('Subject'),
+    status: readMeta('Status'),
+    attachments: readMeta('Attachments'),
+    link: readMeta('Link'),
+    messageId: readMeta('Message ID'),
+    message,
+  };
+};
+
+const writeTextToClipboard = async (text: string) => {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  if (typeof document === 'undefined') {
+    throw new Error('Clipboard is not available in this browser.');
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', 'true');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const didCopy = document.execCommand('copy');
+  document.body.removeChild(textarea);
+
+  if (!didCopy) {
+    throw new Error('Clipboard is not available in this browser.');
+  }
+};
+
+const emailLogDisplayLabel = (log: ActivityLog) => {
+  const details = parseEmailLogNotes(log.notes || '');
+  const status = normalizeContactEmailStatusInput(details.status);
+
+  if (status === 'opened') return 'Email Opened';
+  if (status === 'click' || status === 'clicked') return 'Email Clicked';
+  if (status === 'delivered') return 'Email Delivered';
+  if (status === 'sent' || status === 'request') return 'Email Sent';
+  if (status === 'unsubscribed' || status === 'unsubscribe') return 'Email Unsubscribed';
+  if (['soft_bounce', 'hard_bounce', 'blocked', 'deferred', 'spam', 'invalid_email', 'error'].includes(status)) {
+    return 'Email Issue';
+  }
+
+  return 'Email Sent';
+};
+
+const emailFilterForLog = (log: ActivityLog): LogEmailFilter | null => {
+  if (log.systemAction !== 'email-sent') return null;
+  return log.type === 'update' ? 'general-update' : 'investor-update';
+};
+
+const emailStatusHasActivity = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEvent' | 'weeklyLogs'>) => {
+  const status = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
+  return status !== 'not_sent' || item.weeklyLogs.some((log) => log.systemAction === 'email-sent');
+};
+
+const EmailLogDetails: React.FC<{ log: ActivityLog }> = ({ log }) => {
+  const [messageCopyState, setMessageCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const messageCopyResetRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (messageCopyResetRef.current !== null) {
+        window.clearTimeout(messageCopyResetRef.current);
+      }
+    };
+  }, []);
+
+  if (log.systemAction !== 'email-sent' || !log.notes || log.notes === log.summary) return null;
+  const details = parseEmailLogNotes(log.notes);
+
+  if (!details.to && !details.subject && !details.status && !details.link && !details.message) {
+    return <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>;
+  }
+
+  const handleCopyMessage = async () => {
+    if (!details.message) return;
+
+    try {
+      await writeTextToClipboard(details.message);
+      setMessageCopyState('copied');
+    } catch (error) {
+      console.error('[PipeLists] Copy email log message failed:', error);
+      setMessageCopyState('error');
+    }
+
+    if (messageCopyResetRef.current !== null) {
+      window.clearTimeout(messageCopyResetRef.current);
+    }
+    messageCopyResetRef.current = window.setTimeout(() => setMessageCopyState('idle'), 1800);
+  };
+
+  return (
+    <div className="mt-3 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3 text-sm text-stone-600">
+      <div className="grid gap-2 sm:grid-cols-2">
+        {details.to && (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">To</div>
+            <div className="mt-0.5 break-words font-medium text-stone-700">{details.to}</div>
+          </div>
+        )}
+        {details.cc && (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">CC</div>
+            <div className="mt-0.5 break-words font-medium text-stone-700">{details.cc}</div>
+          </div>
+        )}
+        {details.subject && (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Subject</div>
+            <div className="mt-0.5 break-words font-medium text-stone-700">{details.subject}</div>
+          </div>
+        )}
+        {details.status && (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Status</div>
+            <div className="mt-0.5 break-words font-medium text-stone-700">{details.status}</div>
+          </div>
+        )}
+      </div>
+      {details.attachments && (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Attachments</div>
+          <div className="mt-0.5 break-words font-medium text-stone-700">{details.attachments}</div>
+        </div>
+      )}
+      {details.link && (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Clicked Link</div>
+          <div className="mt-0.5 break-words font-medium text-stone-700">{details.link}</div>
+        </div>
+      )}
+      {details.messageId && (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Message ID</div>
+          <div className="mt-0.5 break-words font-medium text-stone-700">{details.messageId}</div>
+        </div>
+      )}
+      {details.message && (
+        <div className="mt-3 border-t border-stone-200 pt-3">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-stone-400">Message</div>
+            <button
+              type="button"
+              onClick={handleCopyMessage}
+              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-stone-200 bg-white px-2.5 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+              title="Copy email message"
+              aria-label="Copy email message"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {messageCopyState === 'copied' ? 'Copied' : messageCopyState === 'error' ? 'Try again' : 'Copy'}
+            </button>
+          </div>
+          <div className="whitespace-pre-wrap break-words rounded-md bg-white px-3 py-3 leading-6 text-stone-700">
+            {details.message}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const generalStages: StageConfig[] = [
+  { id: 'sourced', label: 'Sourced', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'contacted', label: 'Contacted', probability: 20, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'in-review', label: 'In Review', probability: 45, track: 'general', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'negotiating', label: 'Negotiating', probability: 75, track: 'run', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { id: 'won', label: 'Won', probability: 100, track: 'run', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100', outcome: 'won' },
+  { id: 'parked', label: 'Parked', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
+const investorContactStages: StageConfig[] = [
+  { id: 'sourced', label: 'Sourced', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'cold-contact', label: 'Cold Contact', probability: 15, track: 'general', tone: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+  { id: 'contacted', label: 'Contacted', probability: 25, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'engaged', label: 'Engaged', probability: 45, track: 'general', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'update-ready', label: 'Update Ready', probability: 65, track: 'general', tone: 'bg-teal-50 text-teal-700 border-teal-100' },
+  { id: 'sent-update', label: 'Sent Update', probability: 80, track: 'general', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+  { id: 'paused', label: 'Paused', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
+const contactStages: StageConfig[] = [
+  { id: 'sourced', label: 'Sourced', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'cold-contact', label: 'Cold Contact', probability: 15, track: 'general', tone: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+  { id: 'warm-introduction', label: 'Warm Introduction', probability: 20, track: 'general', tone: 'bg-orange-50 text-orange-800 border-orange-100' },
+  { id: 'met-in-person', label: 'Met in person', probability: 20, track: 'general', tone: 'bg-violet-50 text-violet-700 border-violet-100' },
+  { id: 'contacted', label: 'Contacted', probability: 25, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'engaged', label: 'Engaged', probability: 45, track: 'general', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'follow-up-needed', label: 'Follow-Up Needed', probability: 60, track: 'general', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { id: 'active-relationship', label: 'Active Relationship', probability: 80, track: 'general', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+  { id: 'paused', label: 'Paused', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
+const legacyPilotContractStages: StageConfig[] = [
+  { id: 'identified', label: 'Identified', probability: 10, track: 'build', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'outreach-queued', label: 'Outreach Queued', probability: 10, track: 'build', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { id: 'engaged', label: 'Engaged', probability: 25, track: 'build', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'pilot-agreed', label: 'Pilot Agreed', probability: 40, track: 'build', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'pilot-active', label: 'Pilot Active', probability: 55, track: 'build', tone: 'bg-violet-50 text-violet-700 border-violet-100' },
+  { id: 'pilot-complete', label: 'Pilot Complete', probability: 70, track: 'build', tone: 'bg-teal-50 text-teal-700 border-teal-100' },
+  { id: 'proposal-sent', label: 'Proposal Sent', probability: 75, track: 'run', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { id: 'negotiating', label: 'Negotiating', probability: 85, track: 'run', tone: 'bg-orange-50 text-orange-700 border-orange-100' },
+  { id: 'closed-won', label: 'Closed Won', probability: 100, track: 'run', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100', outcome: 'won' },
+  { id: 'closed-lost-paused', label: 'Closed Lost / Paused', probability: 0, track: 'run', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
+const contractStages: StageConfig[] = legacyPilotContractStages.filter((stage) => stage.track === 'run');
+
+const sportsMedicineContractStages: StageConfig[] = [
+  ...['identified', 'outreach-queued']
+    .map((id) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)! })),
+  { id: 'cold-email-sent', label: 'Cold Email Sent', probability: 15, track: 'build', tone: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+  { ...legacyPilotContractStages.find((stage) => stage.id === 'engaged')! },
+  { id: 'meeting-scheduled', label: 'Meeting Scheduled', probability: 30, track: 'build', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  ...['proposal-sent', 'negotiating', 'pilot-agreed']
+    .map((id, index) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: [40, 60, 80][index] })),
+  { id: 'contract-signed', label: 'Contract Signed', probability: 100, track: 'run', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
+  ...['pilot-active', 'pilot-complete', 'closed-lost-paused']
+    .map((id) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: id === 'closed-lost-paused' ? 0 : 100 })),
+];
+
+// Retain the first-email ID so existing cards keep their assignment and history.
+const pilotContractStages: StageConfig[] = sportsMedicineContractStages.flatMap((stage) =>
+  stage.id === 'cold-email-sent' ? [
+    { ...stage, label: 'First Email Sent' },
+    { ...stage, id: 'call-attempted', label: 'Call Attempted' },
+    { ...stage, id: 'follow-up-email-sent', label: 'Follow-Up Email Sent' },
+    { ...stage, id: 'final-outreach-email-sent', label: 'Final Outreach Email Sent' },
+  ] : [{ ...stage }],
+);
+
+// Keep stages saved by newer clients instead of rewriting their items into Identified.
+const reconcileUniversityStages = (savedStages: StageConfig[] = [], canonicalStages = pilotContractStages): StageConfig[] => {
+  const merged = canonicalStages.map(stage => {
+    const saved = savedStages.find(entry => entry.id === stage.id);
+    return { ...stage, ...saved, ...(saved?.id === 'cold-email-sent' && saved.label === 'Cold Email Sent' ? { label: stage.label } : {}) };
+  });
+  savedStages.forEach((stage, index) => {
+    if (!stage.id || stage.id === 'closed-won' || stage.id === 'won' || merged.some((entry) => entry.id === stage.id)) return;
+    const nextKnown = savedStages.slice(index + 1).find((entry) => merged.some((known) => known.id === entry.id));
+    const insertAt = nextKnown ? merged.findIndex((entry) => entry.id === nextKnown.id) : merged.length;
+    merged.splice(insertAt, 0, stage);
+  });
+  return merged;
+};
+
+const isSportsMedicineList = (list: Partial<PipeList>) =>
+  list.templateKey === 'partner' && /\bsports?[\s-]+(?:medicine|performance)\b/i.test(list.name || '');
+
+const sportsMedicineLegacyStages: Record<string, string> = {
+  sourced: 'identified',
+  contacted: 'engaged',
+  'in-review': 'engaged',
+  won: 'pilot-active',
+  'closed-won': 'pilot-active',
+  parked: 'closed-lost-paused',
+};
+
+const reconcileSportsMedicineStages = (stages: StageConfig[] = []) =>
+  reconcileUniversityStages(stages.filter((stage) => !sportsMedicineLegacyStages[stage.id]), sportsMedicineContractStages);
+
+const needsUniversityStageMigration = (lists: Partial<PipeList>[]) => lists.some((list) =>
+  isSportsMedicineList(list) ? (
+    list.stages?.map((stage) => stage.id).join(',') !== reconcileSportsMedicineStages(list.stages).map((stage) => stage.id).join(',') ||
+    list.items?.some((item) => Boolean(sportsMedicineLegacyStages[item.stage]))
+  ) : list.templateKey === 'university-pilot' && (
+    list.stages?.map((stage) => stage.id).join(',') !== reconcileUniversityStages(list.stages).map((stage) => stage.id).join(',') ||
+    list.items?.some((item) => item.stage === 'closed-won' || item.stage === 'won')
+  ),
+);
+
+const vcStages: StageConfig[] = [
+  { id: 'targeted', label: 'Targeted', probability: 5, track: 'capital', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'cold-contact', label: 'Cold Contact', probability: 8, track: 'capital', tone: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
+  { id: 'intro-requested', label: 'Intro Requested', probability: 10, track: 'capital', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'partner-meeting', label: 'Partner Meeting', probability: 25, track: 'capital', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'diligence', label: 'Diligence', probability: 45, track: 'capital', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { id: 'committed', label: 'Committed', probability: 100, track: 'capital', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100', outcome: 'won' },
+  { id: 'passed', label: 'Passed', probability: 0, track: 'capital', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
+const grantStages: StageConfig[] = [
+  { id: 'sourced', label: 'Sourced', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'eligible', label: 'Eligible', probability: 25, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'drafting', label: 'Drafting', probability: 40, track: 'general', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'submitted', label: 'Submitted', probability: 55, track: 'general', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { id: 'finalist', label: 'Finalist', probability: 75, track: 'general', tone: 'bg-orange-50 text-orange-700 border-orange-100' },
+  { id: 'awarded', label: 'Awarded', probability: 100, track: 'general', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100', outcome: 'won' },
+  { id: 'ineligible', label: 'Ineligible', probability: 0, track: 'general', tone: 'bg-rose-50 text-rose-700 border-rose-100', outcome: 'lost' },
+  { id: 'declined', label: 'Declined', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
+const pitchStages: StageConfig[] = [
+  { id: 'identified', label: 'Identified', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'application-in-progress', label: 'Application In Progress', probability: 18, track: 'general', tone: 'bg-teal-50 text-teal-700 border-teal-100' },
+  { id: 'applied', label: 'Applied', probability: 25, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'selected', label: 'Selected', probability: 55, track: 'general', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'prepping', label: 'Prepping', probability: 70, track: 'general', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { id: 'pitched', label: 'Pitched', probability: 80, track: 'general', tone: 'bg-orange-50 text-orange-700 border-orange-100' },
+  { id: 'won', label: 'Won', probability: 100, track: 'general', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100', outcome: 'won' },
+  { id: 'not-selected', label: 'Not Selected', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
+const taskStages: StageConfig[] = [
+  { id: 'backlog', label: 'Backlog', probability: 10, track: 'general', tone: 'bg-stone-100 text-stone-700 border-stone-200' },
+  { id: 'todo', label: 'To Do', probability: 20, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
+  { id: 'in-progress', label: 'In Progress', probability: 55, track: 'run', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'blocked', label: 'Blocked', probability: 35, track: 'run', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
+  { id: 'done', label: 'Done', probability: 100, track: 'run', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100', outcome: 'won' },
+  { id: 'paused', label: 'Paused', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
+];
+
+const templateCatalog: Record<
+  TemplateKey,
+  {
+    label: string;
+    description: string;
+    accent: string;
+    stages: StageConfig[];
+    defaultName: string;
+  }
+> = {
+  vc: {
+    label: 'VC Pipeline',
+    defaultName: 'VCs',
+    description: 'Investors, angels, family offices, and fund intros.',
+    accent: 'bg-emerald-500',
+    stages: vcStages,
+  },
+  grant: {
+    label: 'Grant Pipeline',
+    defaultName: 'Grants',
+    description: 'Non-dilutive funding, health innovation, and research awards.',
+    accent: 'bg-sky-500',
+    stages: grantStages,
+  },
+  pitch: {
+    label: 'Pitch Competitions',
+    defaultName: 'Pitch Competitions',
+    description: 'Demo days, accelerators, university showcases, and prizes.',
+    accent: 'bg-amber-500',
+    stages: pitchStages,
+  },
+  'university-pilot': {
+    label: 'University Pilot Pipeline',
+    defaultName: 'University Pilots',
+    description: 'Pilot agreements, athlete engagement proof, and conversion to paid contracts.',
+    accent: 'bg-indigo-500',
+    stages: pilotContractStages,
+  },
+  contract: {
+    label: 'Contract Negotiations',
+    defaultName: 'Contract Negotiations',
+    description: 'Formal proposals, term negotiation, margin context, and close dates.',
+    accent: 'bg-rose-500',
+    stages: contractStages,
+  },
+  partner: {
+    label: 'Partner / Vendor Pipeline',
+    defaultName: 'Strategic Partners',
+    description: 'Partner talks, integrations, revenue share, and operational dependencies.',
+    accent: 'bg-teal-500',
+    stages: generalStages,
+  },
+  'investor-metrics': {
+    label: 'Investor Update Contacts',
+    defaultName: 'Investor Update Contacts',
+    description: 'People to include in investor updates, with relationship status, notes, and follow-up tracking.',
+    accent: 'bg-stone-700',
+    stages: investorContactStages,
+  },
+  contacts: {
+    label: 'Contacts',
+    defaultName: 'Contacts',
+    description: 'A simple relationship list with contact details, follow-ups, notes, and email tracking.',
+    accent: 'bg-neutral-500',
+    stages: contactStages,
+  },
+  task: {
+    label: 'Task List',
+    defaultName: 'Tasks',
+    description: 'A flexible task list with owners, due dates, notes, and a kanban board.',
+    accent: 'bg-violet-500',
+    stages: taskStages,
+  },
+};
+
+const isFundSizeList = (list: Pick<PipeList, 'templateKey'>) => list.templateKey === 'vc';
+const amountFieldLabelForList = (list: Pick<PipeList, 'templateKey'>) =>
+  isFundSizeList(list) ? 'Fund Size' : 'Amount / Prize';
+const isInvestorUpdateContactList = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
+  list.templateKey === 'investor-metrics' || list.name.trim().toLowerCase() === 'investor update contacts';
+const isContactList = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
+  list.templateKey === 'contacts' || isInvestorUpdateContactList(list);
+const isTaskList = (list: Pick<PipeList, 'templateKey'>) => list.templateKey === 'task';
+const listItemNoun = (list: Pick<PipeList, 'templateKey' | 'name'>) =>
+  isContactList(list) ? 'contact' : isTaskList(list) ? 'task' : 'opportunity';
+const defaultListObjective = (templateKey: TemplateKey, listName: string) => {
+  if (templateKey === 'task') {
+    return `Track tasks for ${listName}, keep ownership clear, and move work from backlog through completion.`;
+  }
+  if (templateKey === 'university-pilot') {
+    return `Identify universities where PulseCheck can earn a pilot conversation, prove athlete engagement, and convert into a paid team or department agreement.`;
+  }
+  if (templateKey === 'vc') return `Track investors and funds that could be a credible fit for PulseCheck fundraising or strategic introductions.`;
+  if (templateKey === 'grant') return `Track non-dilutive funding opportunities that align with PulseCheck's health, sports, safety, research, or youth-wellbeing work.`;
+  if (templateKey === 'pitch') return `Track pitch competitions, showcases, and accelerator opportunities where PulseCheck can gain capital, visibility, pilots, or partner access.`;
+  if (templateKey === 'contacts' || templateKey === 'investor-metrics') return `Maintain a relationship list for timely follow-up, relevant updates, and warm outreach.`;
+  return `Track and qualify opportunities for ${listName}.`;
+};
+const defaultLeadDefinition = (templateKey: TemplateKey) => {
+  if (templateKey === 'task') {
+    return 'A strong task has a clear owner, status, due date when needed, and a concrete next step.';
+  }
+  if (templateKey === 'university-pilot') {
+    return 'A strong university lead has athletics, student wellbeing, sports medicine, counseling, performance, or innovation stakeholders who could sponsor or influence a PulseCheck pilot.';
+  }
+  if (templateKey === 'vc') return 'A strong investor lead has health, sports, AI, youth, mental health, SaaS, enterprise, or university-network relevance and a plausible check size or intro path.';
+  if (templateKey === 'grant') return 'A strong grant lead has eligibility, funding scope, deadline timing, and mission alignment with PulseCheck research, safety, wellbeing, or youth athlete support.';
+  if (templateKey === 'pitch') return 'A strong pitch lead offers capital, pilots, customers, credibility, or investor access and has a realistic application path.';
+  if (templateKey === 'contacts' || templateKey === 'investor-metrics') return 'A strong contact has a clear relationship reason, current role, reachable context, and a useful next step.';
+  return 'A strong lead has a clear fit, a credible source, an identifiable next step, and enough context to decide whether to pursue it.';
+};
+const defaultResearchBriefForList = (list: Pick<PipeList, 'templateKey' | 'name' | 'objective' | 'leadDefinition' | 'description'>) => {
+  const objective = list.objective || defaultListObjective(list.templateKey, list.name);
+  const leadDefinition = list.leadDefinition || defaultLeadDefinition(list.templateKey);
+  if (list.templateKey === 'task') {
+    return [
+      `PipeList objective: ${objective}`,
+      `Ideal task definition: ${leadDefinition}`,
+      'Keep each task concrete, owned, and actionable. Include blockers, source context, and the next useful step when available.',
+    ].join('\n\n');
+  }
+  return [
+    `PipeList objective: ${objective}`,
+    `Ideal lead definition: ${leadDefinition}`,
+    'For each lead, research why it fits this PipeList, the most relevant department or buyer, likely first outreach path, useful source-backed notes, official source URL, and a concrete next step.',
+  ].join('\n\n');
+};
+const itemPrimaryDate = (
+  list: Pick<PipeList, 'templateKey' | 'name'>,
+  item: Pick<PipelineItem, 'dueDate' | 'expectedCloseDate' | 'pilotEnd'>,
+) => {
+  if (list.templateKey === 'university-pilot') return item.dueDate || item.expectedCloseDate || item.pilotEnd;
+  return isContactList(list) || isTaskList(list)
+    ? item.dueDate || item.expectedCloseDate
+    : item.expectedCloseDate || item.dueDate || item.pilotEnd;
+};
+const reminderDateFields = ['expectedCloseDate', 'dueDate', 'pilotEnd'] as const;
+const hasReminderDate = (item: Pick<PipelineItem, (typeof reminderDateFields)[number]>) =>
+  reminderDateFields.some((field) => item[field]?.trim());
+const normalizeDeadlineSourceForSave = (
+  item: Pick<PipelineItem, 'deadlineSource' | (typeof reminderDateFields)[number]>,
+  currentItem?: Pick<PipelineItem, 'deadlineSource'>,
+) => {
+  if (!hasReminderDate(item)) return '';
+  if (currentItem?.deadlineSource === 'explicit' && item.deadlineSource === 'explicit') return 'explicit';
+  if (item.deadlineSource === 'explicit') return 'explicit';
+  return 'manual';
+};
+
+const contactEmailPattern = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+const isValidContactEmail = (value: string) => contactEmailPattern.test(value.trim().toLowerCase());
+const normalizeContactEmails = (value: unknown): string[] => {
+  const rawEmails = Array.isArray(value)
+    ? value.flatMap((entry) => (typeof entry === 'string' ? entry.split(/[\s,;]+/) : []))
+    : typeof value === 'string'
+      ? value.split(/[\s,;]+/)
+      : [];
+
+  return Array.from(
+    new Set(
+      rawEmails
+        .map((email) => email.trim().toLowerCase())
+        .filter((email) => email && isValidContactEmail(email)),
+    ),
+  );
+};
+
+const contactNameFromEmail = (value: string) => {
+  const email = normalizeContactEmails(value)[0];
+  if (!email) return '';
+
+  const localPart = email.split('@')[0]?.split('+')[0] || '';
+  const parts = localPart
+    .split(/[._-]+/)
+    .map((part) => part.replace(/[^a-zA-Z']/g, '').trim())
+    .filter((part) => part.length > 1);
+
+  if (parts.length < 2) return '';
+
+  const genericParts = new Set(['admin', 'billing', 'contact', 'hello', 'info', 'mail', 'support', 'team']);
+  if (parts.some((part) => genericParts.has(part.toLowerCase()))) return '';
+
+  return parts
+    .slice(0, 3)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+};
+
+const normalizeBasicText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+
+const normalizeResearchText = (value: unknown) => {
+  const text = normalizeBasicText(value);
+  return /^(?:n\/?a|not available|not found|unknown|none|null|undefined)$/i.test(text) ? '' : text;
+};
+
+const fullFriendName = (friend: FriendOfBusinessContact) =>
+  [friend.firstName, friend.lastName]
+    .map(normalizeBasicText)
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+const friendContactKey = (friend: FriendOfBusinessContact) => {
+  const email = normalizeContactEmails(friend.email)[0];
+  if (email) return `email:${email}`;
+
+  const name = fullFriendName(friend).toLowerCase();
+  const organization = normalizeBasicText(friend.titleOrCompany).toLowerCase();
+  if (!name && !organization) return '';
+
+  return `name:${name}|org:${organization}`;
+};
+
+const itemContactKey = (item: PipelineItem) => {
+  const email = normalizeContactEmails(item.contactEmails)[0];
+  if (email) return `email:${email}`;
+  return `name:${item.title.trim().toLowerCase()}|org:${item.organization.trim().toLowerCase()}`;
+};
+
+const buildFriendAnalysisNotes = (friend: FriendOfBusinessContact) => {
+  const relationshipContext = normalizeBasicText(friend.titleOrCompany);
+  const notes = normalizeBasicText(friend.notes);
+  const emailStatus = normalizeBasicText(friend.emailStatus || friend.lastEmailEvent);
+  const openCount = Number.isFinite(friend.emailOpenCount) ? Number(friend.emailOpenCount) : 0;
+  const clickCount = Number.isFinite(friend.emailClickCount) ? Number(friend.emailClickCount) : 0;
+  const clickedLink = normalizeBasicText(friend.lastEmailClickedLink);
+  const engagementParts = [
+    emailStatus,
+    openCount > 0 ? `${openCount} opens` : '',
+    clickCount > 0 ? `${clickCount} clicks` : '',
+    clickedLink ? `last clicked ${clickedLink}` : '',
+  ].filter(Boolean);
+
+  return [
+    'Imported from Friends of the Business for investor updates.',
+    relationshipContext ? `Relationship context: ${relationshipContext}.` : '',
+    notes ? `Existing notes: ${notes}` : '',
+    engagementParts.length > 0 ? `Email engagement: ${engagementParts.join(', ')}.` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+};
+
+const normalizeEmailStatus = (value: unknown) => String(value || '').trim().toLowerCase();
+const normalizeContactEmailStatusInput = normalizeSyncedEmailStatus;
+
+const emailStatusLabel = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEvent'>) => {
+  const status = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
+  if (!status || status === 'not_sent') return 'Not sent';
+  if (status === 'request') return 'Sent';
+  if (status === 'opened') return 'Opened';
+  if (status === 'click' || status === 'clicked') return 'Clicked';
+  if (status === 'delivered') return 'Delivered';
+  if (status === 'sent') return 'Sent';
+  if (status === 'soft_bounce') return 'Soft bounce';
+  if (status === 'hard_bounce') return 'Hard bounce';
+  if (status === 'invalid_email') return 'Invalid email';
+  if (status === 'unsubscribed' || status === 'unsubscribe') return 'Unsubscribed';
+  return status
+    .split(/[_-]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const emailStatusTone = (item: Pick<PipelineItem, 'emailStatus' | 'lastEmailEvent'>) => {
+  const status = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
+  if (status === 'opened' || status === 'click' || status === 'clicked') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'delivered') return 'border-sky-200 bg-sky-50 text-sky-700';
+  if (status === 'sent' || status === 'request') return 'border-stone-200 bg-stone-50 text-stone-600';
+  if (['soft_bounce', 'hard_bounce', 'blocked', 'deferred', 'spam', 'unsubscribe', 'unsubscribed', 'invalid_email', 'error'].includes(status)) {
+    return 'border-rose-200 bg-rose-50 text-rose-700';
+  }
+  return 'border-stone-200 bg-white text-stone-400';
+};
+
+const normalizeLeadInputUrl = (value: string) => {
+  const trimmed = value.trim();
+  const candidate = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : /^[\w.-]+\.[a-z]{2,}(?:[/:?#]|$)/i.test(trimmed)
+      ? `https://${trimmed}`
+      : '';
+
+  if (!candidate) return null;
+
+  try {
+    const parsed = new URL(candidate);
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const normalizeLinkedInProfileUrl = (value: string) => {
+  const parsed = normalizeLeadInputUrl(value);
+  if (!parsed) return '';
+
+  const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
+  const path = parsed.pathname.toLowerCase();
+  const isLinkedIn = hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com');
+  const isProfileOrCompany = /^\/(?:in|pub|company)\//.test(path);
+  const slug = path.split('/').filter(Boolean).pop() || '';
+  const trailingSlugToken = slug.split('-').pop() || '';
+  const hasLowVarietyHexTail =
+    /^[a-f0-9]{8,}$/i.test(trailingSlugToken)
+    && new Set(trailingSlugToken.toLowerCase().split('')).size <= 4;
+  const isSyntheticSlug =
+    /(?:^|-)(?:12345678|123456789|00000000|000000000|username|example)(?:-|$)/i.test(slug)
+    || hasLowVarietyHexTail;
+
+  return isLinkedIn && isProfileOrCompany && !isSyntheticSlug ? parsed.toString() : '';
+};
+
+const identityTokens = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length > 1)
+    .filter((token) => !['and', 'at', 'the', 'of', 'for', 'inc', 'llc', 'university', 'college'].includes(token));
+
+const normalizeLinkedInProfileUrlForLead = (value: string, title: string, organization: string) => {
+  const normalizedUrl = normalizeLinkedInProfileUrl(value);
+  if (!normalizedUrl) return '';
+
+  const parsed = normalizeLeadInputUrl(normalizedUrl);
+  if (!parsed) return '';
+
+  const slugTokens = identityTokens(parsed.pathname.split('/').filter(Boolean).pop() || '');
+  const titleTokens = identityTokens(title);
+  const organizationTokens = identityTokens(organization);
+  const titleMatches = titleTokens.length >= 2 && titleTokens.every((token) => slugTokens.includes(token));
+  const organizationMatches = organizationTokens.length >= 2 && organizationTokens.every((token) => slugTokens.includes(token));
+
+  return titleMatches || organizationMatches ? normalizedUrl : '';
+};
+
+const verifyLinkedInProfileUrlForLead = async ({
+  url,
+  title,
+  organization,
+  idToken,
+}: {
+  url: string;
+  title: string;
+  organization: string;
+  idToken: string;
+}) => {
+  const normalizedUrl = normalizeLinkedInProfileUrlForLead(url, title, organization);
+  if (!normalizedUrl) return '';
+
+  try {
+    const response = await fetch('/api/pipelists/verify-linkedin-url', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ url: normalizedUrl }),
+    });
+    const payload = await response.json().catch(() => null);
+    return response.ok && payload?.verified === true && typeof payload.url === 'string' ? payload.url : '';
+  } catch {
+    return '';
+  }
+};
+
+const displayProfileUrl = (value: string) => value.replace(/^https?:\/\/(?:www\.)?/i, '').replace(/\/$/, '');
+
+const fallbackLeadTitleFromInput = (value: string) => {
+  const parsedUrl = normalizeLeadInputUrl(value);
+  if (parsedUrl) return parsedUrl.hostname.replace(/^www\./, '');
+  return value.trim();
+};
+
+const makeId = () => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+const shareDocumentIdForList = (ownerUid: string, listId: string) => `${ownerUid}-${listId}`;
+const shareDocumentIdForLead = (ownerUid: string, listId: string, itemId: string) =>
+  `${ownerUid}-${listId}-${itemId}`;
+
+const shouldUseRedirectSignIn = () => {
+  if (typeof window === 'undefined') return false;
+
+  const userAgent = window.navigator.userAgent || '';
+  const isMobileUserAgent = /Android|iPhone|iPad|iPod|CriOS|FxiOS|Mobile/i.test(userAgent);
+  const isTouchFirst = window.matchMedia?.('(pointer: coarse)').matches || false;
+
+  return isMobileUserAgent || isTouchFirst;
+};
+
+const shouldRetryGoogleSignInWithRedirect = (error: unknown) => {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code || '')
+      : '';
+
+  return (
+    code === 'auth/popup-blocked'
+  );
+};
+
+const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
+  title: '',
+  organization: '',
+  description: '',
+  owner: '',
+  contactEmails: [],
+  contactPhone: '',
+  linkedinUrl: '',
+  emailStatus: '',
+  lastEmailType: '',
+  lastEmailEvent: '',
+  lastEmailMessageId: '',
+  lastEmailSentAt: '',
+  lastEmailDeliveredAt: '',
+  lastEmailOpenedAt: '',
+  lastEmailClickedAt: '',
+  emailOpenCount: 0,
+  emailClickCount: 0,
+  lastEmailClickedLink: '',
+  stage,
+  priority: 'medium',
+  amount: '',
+  dueDate: '',
+  deadlineSource: '',
+  deadlineEmailNotificationsEnabled: false,
+  nextStep: '',
+  notes: '',
+  sourceUrl: '',
+  segment: '',
+  decisionMaker: '',
+  acv: '',
+  expectedCloseDate: '',
+  contractTerm: '',
+  pilotScope: '',
+  athleteCount: '',
+  pilotStart: '',
+  pilotEnd: '',
+  conversionLikelihood: '',
+  grossMargin: '',
+  partnerCost: '',
+  hardwareCost: '',
+  lossReason: '',
+  expansionPath: '',
+  imageUrl: '',
+  imageName: '',
+  imageContentType: '',
+  imageSize: 0,
+  attachments: [],
+});
+
+const defaultManualLeadDraft = (stage = generalStages[0].id): ManualLeadDraft => ({
+  title: '',
+  organization: '',
+  email: '',
+  phone: '',
+  sourceUrl: '',
+  stage,
+  notes: '',
+});
+
+const defaultLogDraft = (templateKey: TemplateKey = 'partner'): ActivityLogDraft => ({
+  type: templateKey === 'university-pilot' ? 'metrics' : 'update',
+  weekOf: new Date().toISOString().slice(0, 10),
+  summary: '',
+  nextStep: '',
+  followUpDate: '',
+  rosteredAthletes: '',
+  completedCheckIns: '',
+  checkInRate: '',
+  biometricSyncRate: '',
+  signalEvents: '',
+  noraEngagementRate: '',
+  noraSessions: '',
+  escalations: '',
+  staffFeedbackScore: '',
+  reportingPeriodStart: '',
+  reportingPeriodEnd: '',
+  metricSource: '',
+  notes: '',
+});
+
+const metricLogFields = [
+  ['rosteredAthletes', 'Rostered athletes', 'count', undefined],
+  ['completedCheckIns', 'Completed check-in events', 'count', undefined],
+  ['checkInRate', 'Verified check-in rate', '%', 100],
+  ['biometricSyncRate', 'Biometric sync rate', '%', 100],
+  ['signalEvents', 'Signal events', 'count', undefined],
+  ['noraEngagementRate', 'Verified Nora engagement rate', '%', 100],
+  ['noraSessions', 'Nora sessions', 'count', undefined],
+  ['escalations', 'Escalations', 'count', undefined],
+  ['staffFeedbackScore', 'Staff feedback score', 'score /10', 10],
+] as const;
+
+const MetricLogFields = ({
+  draft,
+  onChange,
+  idPrefix,
+}: {
+  draft: ActivityLogDraft;
+  onChange: (nextDraft: ActivityLogDraft) => void;
+  idPrefix: string;
+}) => {
+  if (draft.type !== 'metrics') return null;
+
+  return (
+    <section className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-4">
+      <div className="mb-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Aggregate success evidence</p>
+        <p className="mt-1 text-sm leading-6 text-stone-500">
+          Blank means missing. Enter 0 when the measured result is zero. Enter rates only when the denominator is known and documented in the source or notes. Keep athlete identities and private details out of logs.
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <label className="block" htmlFor={`${idPrefix}-period-start`}>
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Period start</span>
+          <input
+            id={`${idPrefix}-period-start`}
+            type="date"
+            value={draft.reportingPeriodStart}
+            onChange={(event) => onChange({ ...draft, reportingPeriodStart: event.target.value })}
+            className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none transition focus:border-stone-400"
+          />
+        </label>
+        <label className="block" htmlFor={`${idPrefix}-period-end`}>
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Period end</span>
+          <input
+            id={`${idPrefix}-period-end`}
+            type="date"
+            value={draft.reportingPeriodEnd}
+            onChange={(event) => onChange({ ...draft, reportingPeriodEnd: event.target.value })}
+            className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none transition focus:border-stone-400"
+          />
+        </label>
+        <label className="block md:col-span-2" htmlFor={`${idPrefix}-metric-source`}>
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Evidence source</span>
+          <input
+            id={`${idPrefix}-metric-source`}
+            value={draft.metricSource}
+            onChange={(event) => onChange({ ...draft, metricSource: event.target.value })}
+            className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400"
+            placeholder="Customer report, roster export, or manual aggregate"
+          />
+        </label>
+        {metricLogFields.map(([key, label, unit, maximum]) => (
+          <label key={key} className="block" htmlFor={`${idPrefix}-${key}`}>
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
+            <div className="relative">
+              <input
+                id={`${idPrefix}-${key}`}
+                type="number"
+                min="0"
+                max={maximum}
+                step="any"
+                value={draft[key]}
+                onChange={(event) => onChange({ ...draft, [key]: event.target.value })}
+                className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 pr-14 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400"
+                placeholder="Missing"
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-stone-400">
+                {unit}
+              </span>
+            </div>
+          </label>
+        ))}
+      </div>
+    </section>
+  );
+};
+
+const MetricLogSummary = ({ log }: { log: ActivityLog }) => {
+  if (log.type !== 'metrics') return null;
+  const populatedMetrics = metricLogFields.filter(([key]) => String(log[key] || '').trim() !== '');
+  const period = [log.reportingPeriodStart, log.reportingPeriodEnd].filter(Boolean).join(' to ');
+
+  if (populatedMetrics.length === 0 && !period && !log.metricSource) return null;
+
+  return (
+    <div className="mt-3 rounded-md border border-stone-200 bg-stone-50 p-3">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500">
+        {period && <span>Reporting period: {period}</span>}
+        {log.metricSource && <span>Source: {log.metricSource}</span>}
+      </div>
+      {populatedMetrics.length > 0 && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {populatedMetrics.map(([key, label, unit]) => (
+            <div key={key} className="rounded-md bg-white px-3 py-2 text-xs ring-1 ring-stone-100">
+              <p className="font-medium text-stone-500">{label}</p>
+              <p className="mt-0.5 font-semibold text-stone-900">{log[key]}{unit === '%' ? '%' : ''}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const stripAiConfidenceNote = (value?: string) =>
+  String(value || '')
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*AI confidence:\s*\d+(?:\.\d+)?%?\s*$/i.test(line.trim()))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+const emailMessageUrlRegex = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+const escapeComposerHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const linkifyComposerText = (value: string) =>
+  escapeComposerHtml(value).replace(emailMessageUrlRegex, (url) => {
+    const href = url.toLowerCase().startsWith('http') ? url : `https://${url}`;
+    return `<a href="${href}" target="_blank" rel="noreferrer" style="color:#2563eb;text-decoration:underline;text-underline-offset:3px;">${url}</a>`;
+  });
+
+const linkifyComposerBodyHtml = (value: string) => linkifyComposerText(value).replace(/\n/g, '<br>');
+
+const sanitizeComposerBodyHtml = (value: string) =>
+  value
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\sstyle=(?:"[^"]*"|'[^']*')/gi, '');
+
+const composerHtmlHasBreakMarkup = (value: string) => /<br\s*\/?>|<\/?(div|p)\b/i.test(value);
+
+const normalizeComposerBodyHtml = (html: string, textFallback = '') => {
+  const sanitized = sanitizeComposerBodyHtml(html);
+  if (!sanitized.trim()) return textFallback ? linkifyComposerBodyHtml(textFallback) : '';
+  const normalized = sanitized.replace(/\r?\n/g, '<br>');
+  if (!composerHtmlHasBreakMarkup(normalized) && textFallback.includes('\n') && !/<a\b/i.test(normalized)) {
+    return linkifyComposerBodyHtml(textFallback);
+  }
+  return normalized
+    .replace(/<div><br><\/div>/gi, '<br>')
+    .replace(/<\/div><div>/gi, '<br>')
+    .replace(/^<div>/i, '')
+    .replace(/<\/div>$/i, '')
+    .replace(/<p><br><\/p>/gi, '<br>')
+    .replace(/<\/p><p>/gi, '<br><br>')
+    .replace(/^<p>/i, '')
+    .replace(/<\/p>$/i, '');
+};
+
+const serializeComposerNodeToHtml = (node: ChildNode, linkifyText = true): string => {
+  if (node.nodeType === 3) {
+    const escaped = escapeComposerHtml(node.textContent || '').replace(/\r?\n/g, '<br>');
+    return linkifyText ? escaped.replace(emailMessageUrlRegex, (url) => {
+      const href = url.toLowerCase().startsWith('http') ? url : `https://${url}`;
+      return `<a href="${escapeComposerHtml(href)}" target="_blank" rel="noreferrer">${url}</a>`;
+    }) : escaped;
+  }
+  if (node.nodeType !== 1) return '';
+
+  const element = node as HTMLElement;
+  const tagName = element.tagName.toLowerCase();
+  if (tagName === 'br') return '<br>';
+
+  const childHtml = Array.from(element.childNodes)
+    .map((child) => serializeComposerNodeToHtml(child, tagName !== 'a'))
+    .join('');
+
+  if (tagName === 'a') {
+    const href = normalizeComposerHref(element.getAttribute('href') || '');
+    return href ? `<a href="${escapeComposerHtml(href)}" target="_blank" rel="noreferrer">${childHtml}</a>` : childHtml;
+  }
+  if (tagName === 'div') return childHtml ? `${childHtml}<br>` : '<br>';
+  if (tagName === 'p') return childHtml ? `${childHtml}<br><br>` : '<br><br>';
+  return childHtml;
+};
+
+const serializeComposerEditorHtml = (editor: HTMLDivElement) =>
+  normalizeComposerBodyHtml(
+    Array.from(editor.childNodes)
+      .map((node) => serializeComposerNodeToHtml(node))
+      .join(''),
+    editor.innerText.replace(/\u00a0/g, ' '),
+  );
+
+const normalizeComposerHref = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const href = /^(https?:\/\/|mailto:)/i.test(trimmed)
+    ? trimmed
+    : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
+      ? `mailto:${trimmed}`
+      : `https://${trimmed}`;
+  try {
+    const parsed = new URL(href);
+    if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return '';
+    return parsed.toString();
+  } catch {
+    return '';
+  }
+};
+
+const readFileAsBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      resolve(result.includes(',') ? result.split(',').pop() || '' : result);
+    };
+    reader.onerror = () => reject(reader.error || new Error('Unable to read attachment.'));
+    reader.readAsDataURL(file);
+  });
+
+const isBackdropClick = (event: React.MouseEvent<HTMLElement>) => event.target === event.currentTarget;
+
+const cleanDealNotes = (value?: string) => {
+  const cleaned = stripAiConfidenceNote(value);
+  if (!cleaned) return '';
+
+  const genericPageSummaryPatterns = [
+    /^\s*(this|the)\s+page\s+(serves|appears|is|provides|showcases|contains|describes|highlights)\b/i,
+    /^\s*(this|the)\s+(website|site)\s+(serves|appears|is|provides|showcases|contains|describes|highlights)\b/i,
+    /\bmay be relevant for partnerships? or sponsorships?\b/i,
+    /\bcould be relevant for partnerships? or sponsorships?\b/i,
+    /\bshowcasing various\b/i,
+    /\bofficial athletics website\b/i,
+  ];
+
+  const paragraphs = cleaned
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .filter((paragraph) => !genericPageSummaryPatterns.some((pattern) => pattern.test(paragraph)));
+
+  return paragraphs.join('\n\n').trim();
+};
+
+const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
+  const now = new Date().toISOString();
+  return {
+    ...draft,
+    description: draft.description.trim(),
+    contactEmails: normalizeContactEmails(draft.contactEmails),
+    contactPhone: draft.contactPhone.trim(),
+    linkedinUrl: normalizeLinkedInProfileUrlForLead(draft.linkedinUrl, draft.title, draft.organization),
+    notes: cleanDealNotes(draft.notes),
+    id,
+    weeklyLogs: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+};
+
+const pitchCompetitionRecommendations: { id: string; draft: ItemDraft }[] = [
+  {
+    id: 'philadelphia-regional-startup-world-cup-2026',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'Philadelphia Regional Startup World Cup Pitch Competition',
+      organization: 'City of Philadelphia / Startup World Cup',
+      owner: 'Tre',
+      priority: 'high',
+      amount: '$20k first / $10k second / $5k third',
+      dueDate: '2026-07-15',
+      expectedCloseDate: '2026-08-14',
+      pilotStart: '2026-09-18',
+      sourceUrl: 'https://www.phila.gov/2026-06-11-tech-startups-can-apply-to-compete-at-the-2026-philadelphia-regional-startup-world-cup-pitch-competition/',
+      segment: 'Tech startup / Startup World Cup',
+      decisionMaker: 'Selection committee',
+      nextStep: 'Confirm Sept. 18 onsite availability in Philadelphia and submit application by 11:59 p.m.',
+      expansionPath: 'First place advances toward Startup World Cup for a chance at the $1M investment prize.',
+      notes: [
+        'Analysis: Strong visibility play if travel works; the deadline is urgent.',
+        'Fit: Tech startup pitch with clear regional prizes and a global Startup World Cup path.',
+        'Prep: Emphasize PulseCheck as mental-readiness and performance-support technology with pilot traction, clear buyer, and a concise go-to-market story.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'sent-ventures-pitch-competition-2026',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'SENT Ventures Pitch Competition',
+      organization: 'SENT Ventures',
+      owner: 'Tre',
+      priority: 'medium',
+      amount: '$10k cash prize + $50k+ in-kind prizes',
+      dueDate: '2026-07-24',
+      expectedCloseDate: '2026-08-15',
+      sourceUrl: 'https://www.sentventures.com/pitch-2026',
+      segment: 'Angel / pre-seed / seed',
+      decisionMaker: 'SENT Summit investor judges',
+      nextStep: 'Verify values alignment and submit before the July 24 deadline.',
+      notes: [
+        'Analysis: Good investor-room opportunity if the values-aligned community is a real fit.',
+        'Fit: Seeking angel, pre-seed, and seed teams to pitch at SENT Summit in Denver.',
+        'Prep: Keep the application grounded in mission, founder conviction, and why mental-performance health technology can create durable impact.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'alibaba-cocreate-pitch-los-angeles-2026',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'Alibaba CoCreate Pitch - Los Angeles',
+      organization: 'Alibaba CoCreate',
+      owner: 'Tre',
+      priority: 'medium',
+      amount: '$1M+ prize pool',
+      dueDate: '2026-07-25',
+      expectedCloseDate: '2026-08-10',
+      pilotStart: '2026-09-09',
+      pilotEnd: '2026-09-10',
+      sourceUrl: 'https://www.alibabacocreate.com/pitch',
+      segment: 'Global tech / product growth',
+      decisionMaker: 'CoCreate judges',
+      nextStep: 'Confirm the Los Angeles track is the right fit and submit the product story before July 25.',
+      notes: [
+        'Analysis: Broader tech exposure rather than health-specific; worth adding because the LA deadline is still open and the prize pool is meaningful.',
+        'Fit: Best positioned around AI-enabled product, scalable operations, and how PulseCheck can grow beyond one sports vertical.',
+        'Prep: Lead with product clarity, customer workflow, market size, and why now.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'agetech-august-open-mic-pitch-challenge-2026',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'AgeTech August Open Mic Pitch Challenge',
+      organization: 'AgeTech Collaborative from AARP',
+      owner: 'Tre',
+      priority: 'medium',
+      amount: 'Accelerator mentorship / AgeTech exposure',
+      dueDate: '2026-07-31',
+      expectedCloseDate: '2026-08-18',
+      pilotStart: '2026-08-27',
+      sourceUrl: 'https://agetechcollaborative.org/custom_events/august-open-mic-pitch-challenge/',
+      segment: 'AgeTech / healthspan / wellness',
+      decisionMaker: 'AgeTech selection committee',
+      nextStep: 'Frame PulseCheck around healthspan, recovery habits, and helping people stay in the game as they age.',
+      notes: [
+        'Analysis: Not a pure athlete pipeline, but it can fit if positioned around healthspan, wellness, independence, and long-term performance.',
+        'Fit: MVP-stage solutions in AgeTech, healthspan, or wellness; online pitch is 3 minutes plus 5 minutes of Q&A.',
+        'Prep: Avoid youth-sports language here; focus on recovery, daily behavior, confidence, and durable participation for the 50+ audience.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'pitch-and-pour-medtech-conference-2026',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'Pitch & Pour: Start-Up Pitch Competition',
+      organization: 'The MedTech Conference / MTEC',
+      owner: 'Tre',
+      priority: 'medium',
+      amount: '$7.5k cash prize + 2027 conference pass and presentation slot',
+      dueDate: '2026-08-06',
+      expectedCloseDate: '2026-08-24',
+      pilotStart: '2026-10-18',
+      sourceUrl: 'https://themedtechconference.com/start-up-pitch-competition/',
+      segment: 'Medtech / military health',
+      decisionMaker: 'Pitch & Pour judges',
+      nextStep: 'Decide the military-health angle before applying; build a 5-minute pitch around readiness, recovery, and performance.',
+      notes: [
+        'Analysis: Strong healthcare conference exposure, but eligibility depends on having a credible military-focused application.',
+        'Fit: Companies must have raised less than $10M, offer a military-focused medtech, diagnostics, digital health, or imaging application, and pitch in person in Boston on Oct. 18 if selected.',
+        'Prep: Use a practical readiness/wellness use case and be clear about current product status, data, market, IP, milestones, and path to market.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'venture-atlanta-2026-pitch',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'Venture Atlanta 2026 Pitch',
+      organization: 'Venture Atlanta',
+      owner: 'Tre',
+      priority: 'high',
+      amount: 'Investor exposure + two complimentary tickets if selected',
+      dueDate: '2026-08-07',
+      expectedCloseDate: '2026-08-21',
+      pilotStart: '2026-08-27',
+      pilotEnd: '2026-10-15',
+      sourceUrl: 'https://www.ventureatlanta.org/pitch/',
+      segment: 'Southeast digital health / investor pitch',
+      decisionMaker: 'Venture Atlanta committee',
+      nextStep: 'Apply as digital health/software with Southeast fit, pilot traction, and an 18-month raise plan.',
+      notes: [
+        'Analysis: High-priority investor exposure if PulseCheck qualifies as Southeast-based and is raising or planning to raise within 18 months.',
+        'Fit: Venture Atlanta accepts digital health and tech-enabled Southeast companies; it does not accept bio, pharma, life sciences, or medtech.',
+        'Prep: Emphasize buyer urgency, pilots, retention/engagement signals, revenue path, and what capital unlocks.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'sxsw-edu-launch-startup-competition-2027',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'SXSW EDU Launch Startup Competition',
+      organization: 'SXSW EDU',
+      owner: 'Tre',
+      priority: 'medium',
+      amount: 'Startup exposure, credentials, coaching, and awards',
+      dueDate: '2026-09-11',
+      expectedCloseDate: '2026-11-01',
+      pilotStart: '2027-03-13',
+      pilotEnd: '2027-03-16',
+      sourceUrl: 'https://sxswedu.com/competitions/',
+      segment: 'Education / athlete development',
+      decisionMaker: 'SXSW EDU Launch judges',
+      nextStep: 'Choose whether the education positioning is strong enough before the Sept. 11 early deadline; final deadline is Nov. 1.',
+      notes: [
+        'Analysis: Good only if the application leads with schools, teams, coaching education, or athlete-development learning outcomes.',
+        'Fit: Early-stage education startups need a management team, public website, sustainable business model, and traction/adoption metrics; companies over $8M raised are ineligible.',
+        'Prep: Frame PulseCheck as a learning and behavior-change platform for athlete mental readiness, not just a health app.',
+      ].join('\n\n'),
+    },
+  },
+  {
+    id: 'sxsw-pitch-2027',
+    draft: {
+      ...defaultDraft('identified'),
+      title: 'SXSW Pitch 2027',
+      organization: 'SXSW',
+      owner: 'Tre',
+      priority: 'high',
+      amount: 'Global startup exposure; investor, press, and early-adopter audience',
+      dueDate: '2026-09-13',
+      expectedCloseDate: '2026-11-13',
+      pilotStart: '2027-03-15',
+      pilotEnd: '2027-03-21',
+      sourceUrl: 'https://sxsw.com/news/2026/2027-pitch-applications/',
+      segment: 'Healthcare / sports digital platform',
+      decisionMaker: 'SXSW Pitch judges',
+      nextStep: 'Confirm launch-date eligibility and pick the strongest category before the Sept. 13 early-bird deadline.',
+      notes: [
+        'Analysis: High-upside awareness and investor opportunity if eligibility checks out.',
+        'Fit: Relevant categories include Life Sciences, Healthcare & Assistive Tech and Entertainment, Media, Sports & Digital Platforms.',
+        'Eligibility to verify: product/service launched before Jan. 1, 2024, company has not raised over $10M, and founders retain ownership.',
+        'Prep: Position the story around why mental-performance infrastructure for athletes and health teams belongs at a cross-industry innovation event.',
+      ].join('\n\n'),
+    },
+  },
+];
+
+const createPitchCompetitionRecommendationItems = () =>
+  pitchCompetitionRecommendations.map(({ id, draft }) => createItem(draft, id));
+
+const normalizeOpportunityKey = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+const generatedLeadKey = (lead: Pick<ItemDraft, 'title' | 'organization' | 'sourceUrl'>) =>
+  lead.sourceUrl
+    ? normalizeOpportunityKey(lead.sourceUrl)
+    : normalizeOpportunityKey(`${lead.title} ${lead.organization}`);
+
+const leadSearchDuplicateKeysForItem = (item: Pick<ItemDraft, 'title' | 'organization' | 'sourceUrl'>) =>
+  [
+    item.title,
+    item.organization,
+    `${item.title} ${item.organization}`,
+    item.sourceUrl,
+  ]
+    .map((value) => normalizeOpportunityKey(value || ''))
+    .filter(Boolean);
+
+const leadSearchStringFields = [
+  'title',
+  'organization',
+  'description',
+  'owner',
+  'contactPhone',
+  'linkedinUrl',
+  'stage',
+  'amount',
+  'dueDate',
+  'nextStep',
+  'notes',
+  'sourceUrl',
+  'segment',
+  'decisionMaker',
+  'acv',
+  'expectedCloseDate',
+  'contractTerm',
+  'pilotScope',
+  'athleteCount',
+  'pilotStart',
+  'pilotEnd',
+  'conversionLikelihood',
+  'grossMargin',
+  'partnerCost',
+  'hardwareCost',
+  'lossReason',
+  'expansionPath',
+  'rationale',
+  'sourceEvidence',
+  'deadlineStatus',
+] as const;
+
+const leadSearchResponseSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    leads: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          ...leadSearchStringFields.reduce<Record<string, { type: 'string' }>>(
+            (properties, field) => ({ ...properties, [field]: { type: 'string' } }),
+            { priority: { type: 'string' } },
+          ),
+          contactEmails: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+        },
+        required: ['priority', ...leadSearchStringFields, 'contactEmails'],
+      },
+    },
+  },
+  required: ['leads'],
+};
+
+const parseJsonSafe = (raw: string) => {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(raw.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+};
+
+const getResponsesApiText = (value: unknown) => {
+  if (!value || typeof value !== 'object') return '';
+  const record = value as Record<string, unknown>;
+  if (typeof record.output_text === 'string') return record.output_text;
+
+  const output = Array.isArray(record.output) ? record.output : [];
+  return output
+    .flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const content = (item as Record<string, unknown>).content;
+      if (!Array.isArray(content)) return [];
+      return content
+        .map((part) => {
+          if (!part || typeof part !== 'object') return '';
+          const partRecord = part as Record<string, unknown>;
+          return typeof partRecord.text === 'string' ? partRecord.text : '';
+        })
+        .filter(Boolean);
+    })
+    .join('\n');
+};
+
+const getApiErrorMessage = (payload: unknown, fallbackMessage: string) => {
+  if (!payload || typeof payload !== 'object') return fallbackMessage;
+  const record = payload as Record<string, unknown>;
+  const error = record.error;
+  if (error && typeof error === 'object') {
+    const message = (error as Record<string, unknown>).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  if (typeof error === 'string' && error.trim()) return error;
+  if (typeof record.message === 'string' && record.message.trim()) return record.message;
+  return fallbackMessage;
+};
+
+const getLeadSearchBridgeUrl = () => {
+  if (typeof window === 'undefined') return '/api/openai/v1/responses';
+
+  const host = window.location.hostname;
+  const isLocalHost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  return isLocalHost ? `${PIPELISTS_REMOTE_BRIDGE_ORIGIN}/api/openai/v1/responses` : '/api/openai/v1/responses';
+};
+
+const isPitchCompetitionList = (list: PipeList) =>
+  list.id === PITCH_COMPETITIONS_LIST_ID ||
+  list.templateKey === 'pitch' ||
+  normalizeOpportunityKey(list.name) === PITCH_COMPETITIONS_LIST_ID;
+
+const mergeRecommendedPitchCompetitions = (lists: PipeList[]) => {
+  const recommendedItems = createPitchCompetitionRecommendationItems();
+  let mergedIntoPitchList = false;
+
+  return lists.map((list) => {
+    if (mergedIntoPitchList || !isPitchCompetitionList(list)) return list;
+    mergedIntoPitchList = true;
+
+    const existingKeys = new Set(
+      list.items.flatMap((item) => [
+        item.id,
+        normalizeOpportunityKey(item.title),
+        item.sourceUrl ? normalizeOpportunityKey(item.sourceUrl) : '',
+      ]),
+    );
+    const missingItems = recommendedItems.filter(
+      (item) =>
+        !existingKeys.has(item.id) &&
+        !existingKeys.has(normalizeOpportunityKey(item.title)) &&
+        (!item.sourceUrl || !existingKeys.has(normalizeOpportunityKey(item.sourceUrl))),
+    );
+
+    if (missingItems.length === 0) return list;
+    return { ...list, items: [...missingItems, ...list.items] };
+  });
+};
+
+const addDays = (date: Date, days: number) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+const isItemDeleted = (item: Pick<PipelineItem, 'deletedAt'>) => Boolean(item.deletedAt);
+const canRestoreDeletedItem = (item: Pick<PipelineItem, 'deletedAt' | 'restorableUntil' | 'movedToListId'>) =>
+  Boolean(
+    item.deletedAt &&
+      !item.movedToListId &&
+      item.restorableUntil &&
+      new Date(item.restorableUntil).getTime() >= Date.now(),
+  );
+
+const createSystemLog = (
+  item: Pick<PipelineItem, 'id' | 'title' | 'organization'>,
+  action: NonNullable<ActivityLog['systemAction']>,
+  summary: string,
+  restorableUntil = '',
+): ActivityLog => {
+  const now = new Date();
+  return {
+    ...defaultLogDraft(),
+    id: makeId(),
+    type: 'decision',
+    weekOf: now.toISOString().slice(0, 10),
+    summary,
+    nextStep: '',
+    notes: item.organization ? `Organization: ${item.organization}` : '',
+    createdAt: now.toISOString(),
+    systemAction: action,
+    relatedItemId: item.id,
+    restorableUntil,
+  };
+};
+
+const purgeExpiredDeletedItems = (lists: PipeList[]) =>
+  lists.map((list) => ({
+    ...list,
+    items: list.items.filter(
+      (item) => !item.deletedAt || !item.restorableUntil || new Date(item.restorableUntil).getTime() >= Date.now(),
+    ),
+  }));
+
+const stripUndefined = <T,>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefined(item)) as T;
+  }
+
+  if (value && typeof value === 'object') {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return value;
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entryValue]) => entryValue !== undefined)
+        .map(([key, entryValue]) => [key, stripUndefined(entryValue)]),
+    ) as T;
+  }
+
+  return value;
+};
+
+const collaboratorSafePipeListSnapshot = (list: PipeList): PipeList => ({
+  ...list,
+  items: list.items.map((item) =>
+    item.customerSuccess
+      ? {
+          ...item,
+          customerSuccess: {
+            ...item.customerSuccess,
+            linkage: {
+              organizationId: '',
+              teamId: '',
+              pilotId: '',
+              customerAccountId: '',
+            },
+          },
+        }
+      : item,
+  ),
+});
+
+const publicSafePipeListSnapshot = (list: PipeList): PipeList => {
+  const snapshot = collaboratorSafePipeListSnapshot(list);
+  return {
+    ...snapshot,
+    items: snapshot.items.map((item) => {
+      if (list.templateKey !== 'university-pilot' && !item.customerSuccess) return item;
+      const publicItem = { ...item };
+      delete publicItem.customerSuccess;
+      if (Array.isArray(publicItem.weeklyLogs)) publicItem.weeklyLogs = publicItem.weeklyLogs.filter((log) => log.type !== 'metrics');
+      return publicItem;
+    }),
+  };
+};
+
+const pipeListRequiresAccountAccess = (list: PipeList) =>
+  list.templateKey === 'university-pilot' || list.items.some((item) => Boolean(item.customerSuccess));
+
+const pipeListShareRequiresAccountAccess = (share: Pick<PipeListShare, 'list' | 'protectedDetails'>) =>
+  share.protectedDetails || pipeListRequiresAccountAccess(share.list);
+
+const createList = (
+  templateKey: TemplateKey,
+  name = templateCatalog[templateKey].defaultName,
+  index = 0,
+  items: PipelineItem[] = [],
+): PipeList => {
+  const template = templateCatalog[templateKey];
+  const list: PipeList = {
+    id: makeId(),
+    name,
+    description: template.description,
+    objective: defaultListObjective(templateKey, name),
+    leadDefinition: defaultLeadDefinition(templateKey),
+    researchBrief: defaultResearchBriefForList({
+      templateKey,
+      name,
+      description: template.description,
+      objective: defaultListObjective(templateKey, name),
+      leadDefinition: defaultLeadDefinition(templateKey),
+    }),
+    accent: template.accent || accentClasses[index % accentClasses.length],
+    templateKey,
+    stages: isSportsMedicineList({ templateKey, name }) ? sportsMedicineContractStages : template.stages,
+    items,
+    createdAt: new Date().toISOString(),
+  };
+  return list;
+};
+
+const initialLists: PipeList[] = [
+  {
+    ...createList('vc', 'VCs', 0),
+    id: 'venture-capital',
+    createdAt: '2026-07-03T00:00:00.000Z',
+    items: [
+      createItem(
+        {
+          ...defaultDraft('partner-meeting'),
+          title: 'Seed fund partner intro',
+          organization: 'Signal Ridge Ventures',
+          owner: 'Tre',
+          priority: 'high',
+          amount: '$250k-$500k',
+          expectedCloseDate: '2026-07-24',
+          nextStep: 'Send updated traction note and pilot summary.',
+          notes: 'Warm intro. Interested in athlete performance and wearable data.',
+        },
+        'seed-fund-partner-intro',
+      ),
+      createItem(
+        {
+          ...defaultDraft('diligence'),
+          title: 'Sports tech scout meeting',
+          organization: 'Northstar Capital',
+          owner: 'Tre',
+          priority: 'medium',
+          amount: '$100k+',
+          expectedCloseDate: '2026-08-05',
+          nextStep: 'Share research site and PulseCheck demo.',
+        },
+        'sports-tech-scout-meeting',
+      ),
+    ],
+  },
+  {
+    ...createList('grant', 'Grants', 1),
+    id: 'grants',
+    createdAt: '2026-07-03T00:00:00.000Z',
+    items: [
+      createItem(
+        {
+          ...defaultDraft('eligible'),
+          title: 'Digital health innovation grant',
+          organization: 'State Health Innovation Office',
+          owner: 'Tre',
+          amount: '$75k',
+          expectedCloseDate: '2026-08-30',
+          nextStep: 'Confirm eligibility and required partners.',
+        },
+        'digital-health-innovation-grant',
+      ),
+    ],
+  },
+  {
+    ...createList('pitch', 'Pitch Competitions', 2),
+    id: PITCH_COMPETITIONS_LIST_ID,
+    createdAt: '2026-07-03T00:00:00.000Z',
+    items: [
+      ...createPitchCompetitionRecommendationItems(),
+      createItem(
+        {
+          ...defaultDraft('prepping'),
+          title: 'Health AI showcase',
+          organization: 'Southeast Founder Forum',
+          owner: 'Tre',
+          priority: 'high',
+          amount: '$25k prize',
+          dueDate: '2026-07-20',
+          nextStep: 'Finalize 3 minute pitch and product screenshots.',
+          notes: 'Need crisp mental performance positioning.',
+        },
+        'health-ai-showcase',
+      ),
+    ],
+  },
+  {
+    ...createList('university-pilot', 'University Pilots', 3),
+    id: 'university-pilots',
+    createdAt: '2026-07-03T00:00:00.000Z',
+    items: [
+      {
+        ...createItem(
+          {
+            ...defaultDraft('pilot-active'),
+            title: 'Athlete readiness pilot',
+            organization: 'Coastal State University',
+            owner: 'Tre',
+            priority: 'high',
+            segment: 'D3',
+            decisionMaker: 'Sports Performance Director',
+            acv: '$18k',
+            amount: '$18k pilot',
+            expectedCloseDate: '2026-08-15',
+            pilotScope: 'Fall readiness cohort with check-ins, biometrics, and Nora support.',
+            athleteCount: '42',
+            pilotStart: '2026-07-01',
+            pilotEnd: '2026-08-08',
+            conversionLikelihood: '70%',
+            nextStep: 'Send procurement packet and pilot scope.',
+            notes: 'Sports performance staff wants a fall cohort.',
+          },
+          'athlete-readiness-pilot',
+        ),
+        weeklyLogs: [
+          {
+            id: 'coastal-week-1',
+            type: 'metrics',
+            weekOf: '2026-07-03',
+            summary: 'First week of readiness pilot showed strong check-in behavior.',
+            nextStep: 'Send staff a weekly summary and confirm procurement packet timing.',
+            followUpDate: '2026-07-10',
+            rosteredAthletes: '42',
+            completedCheckIns: '34',
+            checkInRate: '81%',
+            biometricSyncRate: '74%',
+            signalEvents: '5',
+            noraEngagementRate: '62%',
+            noraSessions: '9',
+            escalations: '1',
+            staffFeedbackScore: '8',
+            reportingPeriodStart: '2026-06-27',
+            reportingPeriodEnd: '2026-07-03',
+            metricSource: 'Manual pilot summary',
+            notes: 'Early adherence is above the AuntEDNA floor. Staff asked for a weekly summary.',
+            createdAt: '2026-07-03T00:00:00.000Z',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    ...createList('contract', 'Contract Negotiations', 4),
+    id: 'contract-negotiations',
+    createdAt: '2026-07-03T00:00:00.000Z',
+    items: [
+      createItem(
+        {
+          ...defaultDraft('proposal-sent'),
+          title: 'Readiness platform first ARR',
+          organization: 'Mid-Atlantic Athletics',
+          owner: 'Tre',
+          priority: 'high',
+          segment: 'Mid-major',
+          decisionMaker: 'Associate AD',
+          acv: '$48k',
+          amount: '$48k ARR',
+          expectedCloseDate: '2026-07-31',
+          contractTerm: '12 months',
+          grossMargin: '72%',
+          partnerCost: '$8k AuntEDNA routing reserve',
+          hardwareCost: '$5k Polar bundle',
+          expansionPath: 'Start with one sport, expand to full department after fall season.',
+          nextStep: 'Confirm purchasing path and final data-processing language.',
+        },
+        'readiness-platform-first-arr',
+      ),
+    ],
+  },
+];
+
+const getStage = (list: PipeList, stageId: string) =>
+  list.stages.find((stage) => stage.id === stageId) || list.stages[0] || generalStages[0];
+
+const isClosedStage = (list: PipeList, stageId: string) => getStage(list, stageId).outcome === 'won' || getStage(list, stageId).outcome === 'lost';
+const isWonStage = (list: PipeList, stageId: string) => getStage(list, stageId).outcome === 'won';
+const isLostStage = (list: PipeList, stageId: string) => getStage(list, stageId).outcome === 'lost';
+const isIdentifiedStage = (stage: StageConfig) =>
+  normalizeOpportunityKey(stage.id) === 'identified' || normalizeOpportunityKey(stage.label) === 'identified';
+
+const normalizeStageId = (stage: string, listStages: StageConfig[], preserveUnknown = false) => {
+  if ((stage === 'closed-won' || stage === 'won') && listStages.some((stageConfig) => stageConfig.id === 'contract-signed')) return 'pilot-active';
+  if (listStages.some((stageConfig) => stageConfig.id === stage)) return stage;
+  const legacyMap: Record<string, string> = {
+    sourced: listStages.find((stageConfig) => stageConfig.id === 'sourced')?.id || listStages[0]?.id || 'sourced',
+    'cold-contact': listStages.find((stageConfig) => stageConfig.id === 'cold-contact')?.id || listStages[1]?.id || listStages[0]?.id || 'cold-contact',
+    contacted: listStages.find((stageConfig) => stageConfig.id === 'contacted')?.id || listStages[1]?.id || listStages[0]?.id || 'contacted',
+    'in-review': listStages.find((stageConfig) => stageConfig.id === 'in-review')?.id || listStages.find((stageConfig) => stageConfig.id === 'engaged')?.id || listStages[2]?.id || listStages[0]?.id || 'in-review',
+    negotiating: listStages.find((stageConfig) => stageConfig.id === 'negotiating')?.id || listStages.find((stageConfig) => stageConfig.id === 'update-ready')?.id || listStages[0]?.id || 'negotiating',
+    won: listStages.find((stageConfig) => stageConfig.outcome === 'won')?.id || listStages.find((stageConfig) => stageConfig.id === 'sent-update')?.id || listStages[0]?.id || 'won',
+    parked: listStages.find((stageConfig) => stageConfig.outcome === 'lost')?.id || listStages.find((stageConfig) => stageConfig.id === 'paused')?.id || listStages[0]?.id || 'parked',
+  };
+  return legacyMap[stage] || (preserveUnknown && stage ? stage : listStages[0]?.id || stage);
+};
+
+const normalizeActivityLog = (log: Partial<ActivityLog>, stableDisplay?: { id: string; timestamp: string }): ActivityLog => {
+  const now = stableDisplay?.timestamp || new Date().toISOString();
+  const createdAt = pipeTimestampToDate(log.createdAt)?.toISOString() || (log.weekOf ? `${log.weekOf}T00:00:00.000Z` : now);
+  const hasMetrics =
+    log.rosteredAthletes ||
+    log.completedCheckIns ||
+    log.checkInRate ||
+    log.biometricSyncRate ||
+    log.signalEvents ||
+    log.noraEngagementRate ||
+    log.noraSessions ||
+    log.escalations ||
+    log.staffFeedbackScore;
+  const cleanType = log.type && logTypeLabels[log.type] ? log.type : hasMetrics ? 'metrics' : 'update';
+
+  return {
+    id: log.id || stableDisplay?.id || makeId(),
+    type: cleanType,
+    weekOf: log.weekOf || now.slice(0, 10),
+    summary: log.summary || '',
+    nextStep: log.nextStep || '',
+    followUpDate: log.followUpDate || '',
+    rosteredAthletes: log.rosteredAthletes || '',
+    completedCheckIns: log.completedCheckIns || '',
+    checkInRate: log.checkInRate || '',
+    biometricSyncRate: log.biometricSyncRate || '',
+    signalEvents: log.signalEvents || '',
+    noraEngagementRate: log.noraEngagementRate || '',
+    noraSessions: log.noraSessions || '',
+    escalations: log.escalations || '',
+    staffFeedbackScore: log.staffFeedbackScore || '',
+    reportingPeriodStart: log.reportingPeriodStart || '',
+    reportingPeriodEnd: log.reportingPeriodEnd || '',
+    metricSource: log.metricSource || '',
+    notes: log.notes || '',
+    createdAt,
+    ...(log.systemAction ? { systemAction: log.systemAction } : {}),
+    relatedItemId: log.relatedItemId || '',
+    restorableUntil: log.restorableUntil || '',
+  };
+};
+
+const normalizeAttachment = (attachment: Partial<LeadAttachment>, stableDisplay?: { id: string; timestamp: string }): LeadAttachment | null => {
+  const name = attachment.name?.trim() || attachment.fileName?.trim() || 'Attachment';
+  const url = attachment.url?.trim() || '';
+  if (!url) return null;
+
+  return {
+    id: attachment.id || stableDisplay?.id || makeId(),
+    type: attachment.type === 'file' ? 'file' : 'link',
+    name,
+    url,
+    fileName: attachment.fileName || '',
+    contentType: attachment.contentType || '',
+    size: typeof attachment.size === 'number' && Number.isFinite(attachment.size) ? attachment.size : 0,
+    createdAt: attachment.createdAt || stableDisplay?.timestamp || new Date().toISOString(),
+    createdBy: attachment.createdBy || '',
+  };
+};
+
+const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[], stableTimestamp?: string): PipelineItem => {
+  const now = stableTimestamp || new Date().toISOString();
+  const stage = normalizeStageId(item.stage || listStages[0]?.id || 'sourced', listStages, true);
+  const title = item.title || 'Untitled opportunity';
+  const organization = item.organization || '';
+  return {
+    ...createItem(defaultDraft(stage), item.id || makeId()),
+    ...item,
+    title,
+    organization,
+    description: item.description || '',
+    owner: item.owner || '',
+    contactEmails: normalizeContactEmails(item.contactEmails),
+    contactPhone: item.contactPhone || '',
+    linkedLeadIds: normalizeLinkedLeadIds(item.linkedLeadIds, item.id || ''),
+    linkedinUrl: normalizeLinkedInProfileUrlForLead(item.linkedinUrl || '', title, organization),
+    emailStatus: item.emailStatus || '',
+    lastEmailType: item.lastEmailType || '',
+    lastEmailEvent: item.lastEmailEvent || item.emailStatus || '',
+    lastEmailMessageId: item.lastEmailMessageId || '',
+    lastEmailSentAt: item.lastEmailSentAt || '',
+    lastEmailDeliveredAt: item.lastEmailDeliveredAt || '',
+    lastEmailOpenedAt: item.lastEmailOpenedAt || '',
+    lastEmailClickedAt: item.lastEmailClickedAt || '',
+    emailOpenCount: Number.isFinite(item.emailOpenCount) ? Number(item.emailOpenCount) : 0,
+    emailClickCount: Number.isFinite(item.emailClickCount) ? Number(item.emailClickCount) : 0,
+    lastEmailClickedLink: item.lastEmailClickedLink || '',
+    stage,
+    priority: item.priority || 'medium',
+    amount: item.amount || '',
+    dueDate: item.dueDate || '',
+    deadlineSource: item.deadlineSource || '',
+    deadlineEmailNotificationsEnabled: item.deadlineEmailNotificationsEnabled === true,
+    nextStep: item.nextStep || '',
+    notes: cleanDealNotes(item.notes),
+    sourceUrl: item.sourceUrl || '',
+    segment: item.segment || '',
+    decisionMaker: item.decisionMaker || '',
+    acv: item.acv || '',
+    expectedCloseDate: item.expectedCloseDate || '',
+    contractTerm: item.contractTerm || '',
+    pilotScope: item.pilotScope || '',
+    athleteCount: item.athleteCount || '',
+    pilotStart: item.pilotStart || '',
+    pilotEnd: item.pilotEnd || '',
+    conversionLikelihood: item.conversionLikelihood || '',
+    grossMargin: item.grossMargin || '',
+    partnerCost: item.partnerCost || '',
+    hardwareCost: item.hardwareCost || '',
+    lossReason: item.lossReason || '',
+    expansionPath: item.expansionPath || '',
+    imageUrl: item.imageUrl || '',
+    imageName: item.imageName || '',
+    imageContentType: item.imageContentType || '',
+    imageSize: Number.isFinite(item.imageSize) ? Number(item.imageSize) : 0,
+    attachments: Array.isArray(item.attachments)
+      ? item.attachments
+          .map((attachment, index) => normalizeAttachment(attachment, stableTimestamp ? { id: `display-attachment-${item.id}-${index}`, timestamp: stableTimestamp } : undefined))
+          .filter((attachment): attachment is LeadAttachment => Boolean(attachment))
+      : [],
+    weeklyLogs: Array.isArray(item.weeklyLogs) ? item.weeklyLogs.map((log, index) => normalizeActivityLog(log, stableTimestamp ? { id: `display-log-${item.id}-${index}`, timestamp: stableTimestamp } : undefined)) : [],
+    ...(item.customerSuccess
+      ? {
+          customerSuccess: normalizeUniversityCustomerSuccess(item.customerSuccess, {
+            stage,
+            owner: item.owner,
+            nextStep: item.nextStep,
+            dueDate: item.dueDate,
+            pilotStart: item.pilotStart,
+            pilotEnd: item.pilotEnd,
+          }),
+        }
+      : {}),
+    createdAt: item.createdAt || now,
+    updatedAt: item.updatedAt || now,
+    deletedAt: item.deletedAt || '',
+    deletedByLogId: item.deletedByLogId || '',
+    restorableUntil: item.restorableUntil || '',
+    movedToListId: item.movedToListId || '',
+  };
+};
+
+const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
+  const templateKey = (list.templateKey && templateCatalog[list.templateKey] ? list.templateKey : 'partner') as TemplateKey;
+  const template = templateCatalog[templateKey];
+  const savedStages = Array.isArray(list.stages) && list.stages.length > 0 ? list.stages : template.stages;
+  const sportsMedicine = isSportsMedicineList({ ...list, templateKey });
+  const stages =
+    sportsMedicine
+      ? reconcileSportsMedicineStages(savedStages)
+      : templateKey === 'university-pilot'
+      ? reconcileUniversityStages(savedStages)
+      : templateKey === 'investor-metrics' || templateKey === 'contacts'
+      ? reconcilePipeListStages(savedStages, template.stages)
+      : templateKey === 'vc'
+      ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
+          if (mergedStages.some((stage) => stage.id === templateStage.id)) return mergedStages;
+          const insertAfterIndex = templateStage.id === 'cold-contact'
+            ? mergedStages.findIndex((stage) => stage.id === 'targeted')
+            : -1;
+          if (insertAfterIndex >= 0) {
+            return [
+              ...mergedStages.slice(0, insertAfterIndex + 1),
+              templateStage,
+              ...mergedStages.slice(insertAfterIndex + 1),
+            ];
+          }
+          return [...mergedStages, templateStage];
+        }, savedStages)
+      : templateKey === 'pitch'
+      ? template.stages.reduce<StageConfig[]>((mergedStages, templateStage) => {
+          if (mergedStages.some((stage) => stage.id === templateStage.id)) return mergedStages;
+          const insertAfterIndex = templateStage.id === 'application-in-progress' || templateStage.id === 'outreach-queued'
+            ? mergedStages.findIndex((stage) => stage.id === 'identified')
+            : -1;
+          if (insertAfterIndex >= 0) {
+            return [
+              ...mergedStages.slice(0, insertAfterIndex + 1),
+              templateStage,
+              ...mergedStages.slice(insertAfterIndex + 1),
+            ];
+          }
+          return [...mergedStages, templateStage];
+        }, savedStages)
+      : savedStages;
+  const normalizedList: PipeList = {
+    ...list,
+    id: list.id || (templateKey === 'university-pilot' ? `display-university-list-${index}` : makeId()),
+    name: list.name || template.defaultName,
+    description: list.description || template.description,
+    objective: list.objective || defaultListObjective(templateKey, list.name || template.defaultName),
+    leadDefinition: list.leadDefinition || defaultLeadDefinition(templateKey),
+    researchBrief:
+      list.researchBrief ||
+      defaultResearchBriefForList({
+        templateKey,
+        name: list.name || template.defaultName,
+        description: list.description || template.description,
+        objective: list.objective || defaultListObjective(templateKey, list.name || template.defaultName),
+        leadDefinition: list.leadDefinition || defaultLeadDefinition(templateKey),
+      }),
+    accent: list.accent || template.accent || accentClasses[index % accentClasses.length],
+    templateKey,
+    stages,
+    items: Array.isArray(list.items) ? list.items.map((item, itemIndex) => normalizeItem(
+      sportsMedicine ? { ...item, stage: sportsMedicineLegacyStages[item.stage] || item.stage } : templateKey === 'university-pilot' ? { ...item, id: item.id || `display-item-${list.id || index}-${itemIndex}` } : item, stages,
+      templateKey === 'university-pilot' ? list.createdAt || '1970-01-01T00:00:00.000Z' : undefined,
+    )) : [],
+    createdAt: list.createdAt || (templateKey === 'university-pilot' ? '1970-01-01T00:00:00.000Z' : new Date().toISOString()),
+  };
+  return normalizedList;
+};
+
+const normalizeShareEmails = (emails: unknown) =>
+  Array.isArray(emails)
+    ? emails
+        .filter((email): email is string => typeof email === 'string')
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean)
+    : [];
+
+const normalizeInviteStatuses = (
+  inviteStatuses: unknown,
+  viewerEmails: string[],
+  editorEmails: string[],
+): Record<string, InviteStatus> => {
+  const normalized: Record<string, InviteStatus> = {};
+
+  if (inviteStatuses && typeof inviteStatuses === 'object' && !Array.isArray(inviteStatuses)) {
+    Object.entries(inviteStatuses as Record<string, Partial<InviteStatus>>).forEach(([key, status]) => {
+      const email = (typeof status.email === 'string' ? status.email : key).trim().toLowerCase();
+      if (!email) return;
+      const access: ShareAccess = status.access === 'edit' || editorEmails.includes(email) ? 'edit' : 'read';
+      normalized[email] = {
+        email,
+        access,
+        status: status.status === 'accepted' ? 'accepted' : 'sent',
+        inviteId: typeof status.inviteId === 'string' ? status.inviteId : undefined,
+        sentAt: status.sentAt,
+        acceptedAt: status.acceptedAt,
+      };
+    });
+  }
+
+  viewerEmails.forEach((email) => {
+    if (!normalized[email]) {
+      normalized[email] = { email, access: 'read', status: 'sent' };
+    }
+  });
+
+  editorEmails.forEach((email) => {
+    normalized[email] = {
+      ...(normalized[email] || { email, status: 'sent' as const }),
+      email,
+      access: 'edit',
+    };
+  });
+
+  return normalized;
+};
+
+const normalizePipeListShare = (id: string, data: Partial<PipeListShare>, index = 0): PipeListShare | null => {
+  if (!data.list) return null;
+  const viewerEmails = normalizeShareEmails(data.viewerEmails);
+  const editorEmails = normalizeShareEmails(data.editorEmails);
+
+  const normalizedList = normalizeList(data.list, index);
+  return {
+    id,
+    ownerUid: data.ownerUid || '',
+    ownerEmail: data.ownerEmail || '',
+    list: normalizedList,
+    access: data.access === 'edit' ? 'edit' : 'read',
+    publicRead: data.publicRead === true,
+    protectedDetails:
+      data.protectedDetails === true ||
+      editorEmails.length > 0 ||
+      normalizedList.templateKey === 'university-pilot' ||
+      normalizedList.items.some((item) => Boolean(item.customerSuccess)),
+    viewerEmails,
+    editorEmails,
+    inviteStatuses: normalizeInviteStatuses(data.inviteStatuses, viewerEmails, editorEmails),
+    lastEditedBy: data.lastEditedBy
+      ? {
+          uid: data.lastEditedBy.uid || '',
+          email: data.lastEditedBy.email || '',
+          displayName: data.lastEditedBy.displayName || '',
+          photoURL: data.lastEditedBy.photoURL || '',
+        }
+      : undefined,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+};
+
+const mergeCollaboratorListSnapshot = (personalList: PipeList, sharedList: PipeList): PipeList => {
+  if (personalList.id !== sharedList.id) return personalList;
+
+  const mergedItems = new Map(personalList.items.map((item) => [item.id, item]));
+  sharedList.items.forEach((sharedItem) => {
+    const personalItem = mergedItems.get(sharedItem.id);
+    if (!personalItem) {
+      mergedItems.set(sharedItem.id, sharedItem);
+      return;
+    }
+
+    const personalUpdatedAt = new Date(personalItem.updatedAt || personalItem.createdAt).getTime();
+    const sharedUpdatedAt = new Date(sharedItem.updatedAt || sharedItem.createdAt).getTime();
+    if (Number.isFinite(sharedUpdatedAt) && (!Number.isFinite(personalUpdatedAt) || sharedUpdatedAt > personalUpdatedAt)) {
+      mergedItems.set(sharedItem.id, {
+        ...sharedItem,
+        ...(personalItem.customerSuccess
+          ? {
+              customerSuccess: sharedItem.customerSuccess
+                ? {
+                    ...sharedItem.customerSuccess,
+                    linkage: personalItem.customerSuccess.linkage,
+                  }
+                : personalItem.customerSuccess,
+            }
+          : {}),
+      });
+    }
+  });
+
+  const itemOrder = Array.from(new Set([...sharedList.items.map((item) => item.id), ...personalList.items.map((item) => item.id)]));
+  return {
+    ...personalList,
+    ...sharedList,
+    id: personalList.id,
+    items: itemOrder.flatMap((itemId) => {
+      const item = mergedItems.get(itemId);
+      return item ? [item] : [];
+    }),
+  };
+};
+
+const reconcilePipeListSnapshotsForWrite = (
+  remoteList: PipeList,
+  localList: PipeList,
+  baseList?: PipeList,
+): PipeList => {
+  if (remoteList.id !== localList.id) return localList;
+  if (baseList?.id === localList.id) {
+    return mergePipeListSnapshotsThreeWay(baseList, remoteList, localList);
+  }
+
+  const mergedItems = new Map(remoteList.items.map((item) => [item.id, item]));
+  localList.items.forEach((localItem) => {
+    const remoteItem = mergedItems.get(localItem.id);
+    if (!remoteItem) {
+      mergedItems.set(localItem.id, localItem);
+      return;
+    }
+    const remoteUpdatedAt = new Date(remoteItem.updatedAt || remoteItem.createdAt).getTime();
+    const localUpdatedAt = new Date(localItem.updatedAt || localItem.createdAt).getTime();
+    if (!Number.isFinite(remoteUpdatedAt) || localUpdatedAt > remoteUpdatedAt) {
+      mergedItems.set(localItem.id, localItem);
+    }
+  });
+
+  const itemOrder = Array.from(new Set([...localList.items.map((item) => item.id), ...remoteList.items.map((item) => item.id)]));
+  return {
+    ...remoteList,
+    ...localList,
+    id: localList.id,
+    items: itemOrder.flatMap((itemId) => {
+      const item = mergedItems.get(itemId);
+      return item ? [item] : [];
+    }),
+  };
+};
+
+type PipeListShareActor = NonNullable<PipeListShare['lastEditedBy']>;
+
+const persistCollaborativePipeList = async ({
+  shareId,
+  ownerUid,
+  ownerEmail,
+  list,
+  actor,
+  protectedDetails,
+  baseList,
+  publicSharePatch,
+  isCurrent = () => true,
+}: {
+  shareId: string;
+  ownerUid: string;
+  ownerEmail: string;
+  list: PipeList;
+  actor: PipeListShareActor;
+  protectedDetails?: boolean;
+  baseList?: PipeList;
+  publicSharePatch?: Partial<PipeListShare>;
+  isCurrent?: () => boolean;
+}) => {
+  const isProtected = protectedDetails === true || pipeListRequiresAccountAccess(list);
+  const canonicalRef = doc(
+    simpBudgetDb,
+    isProtected ? PIPELIST_PROTECTED_SHARES_COLLECTION : PIPELIST_SHARES_COLLECTION,
+    shareId,
+  );
+  const publicShareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
+  const localSnapshot = collaboratorSafePipeListSnapshot(normalizeList(list, 0));
+  let mergedList = localSnapshot;
+
+  await runPipeListSaveWithRetry(() => runTransaction(simpBudgetDb, async (transaction) => {
+    if (!isCurrent()) return;
+    const snapshot = await transaction.get(canonicalRef);
+    if (!isCurrent()) return;
+    if (!snapshot.exists() && !isProtected) throw new Error('This shared PipeList is no longer available.');
+
+    if (snapshot.exists()) {
+      const data = snapshot.data() as Partial<PipeListShare & PipeListProtectedShare>;
+      if (!data.list) throw new Error('This shared PipeList is no longer available.');
+      const remoteList = collaboratorSafePipeListSnapshot(purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0]);
+      mergedList = collaboratorSafePipeListSnapshot(normalizeList(
+        reconcilePipeListSnapshotsForWrite(remoteList, localSnapshot, baseList ? normalizeList(baseList, 0) : undefined), 0,
+      ));
+      if (pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch && data.protectedDetails === protectedDetails && !isProtected) return;
+      if (isProtected && pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch) return;
+      mergedList = preserveStoredUniversityList(data.list as PipeList, remoteList, mergedList);
+    }
+
+    transaction.set(
+      canonicalRef,
+      stripUndefined(
+        isProtected
+          ? {
+              ownerUid,
+              ownerEmail,
+              listId: mergedList.id,
+              list: mergedList,
+              lastEditedBy: actor,
+              ...(!snapshot.exists() ? { createdAt: serverTimestamp() } : {}),
+              updatedAt: serverTimestamp(),
+            }
+          : {
+              list: mergedList,
+              lastEditedBy: actor,
+              updatedAt: serverTimestamp(),
+            },
+      ),
+      { merge: true },
+    );
+    if (isProtected && actor.uid === ownerUid) {
+      transaction.set(
+        publicShareRef,
+        {
+          ...publicSharePatch,
+          list: publicSafePipeListSnapshot(mergedList),
+          protectedDetails: true,
+          lastEditedBy: deleteField(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+  }), isCurrent);
+
+  return normalizeList(mergedList, 0);
+};
+
+const persistPipeListMemberAccessAddition = async ({
+  shareId,
+  ownerUid,
+  ownerEmail,
+  list,
+  actor,
+  memberEmail,
+  access,
+  inviteStatus,
+  baseList,
+}: {
+  shareId: string;
+  ownerUid: string;
+  ownerEmail: string;
+  list: PipeList;
+  actor: PipeListShareActor;
+  memberEmail: string;
+  access: ShareAccess;
+  inviteStatus: InviteStatus;
+  baseList?: PipeList;
+}): Promise<{ added: boolean; list: PipeList; share: PipeListShare }> => {
+  const publicShareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
+  const protectedShareRef = doc(simpBudgetDb, PIPELIST_PROTECTED_SHARES_COLLECTION, shareId);
+  const normalizedMemberEmail = memberEmail.trim().toLowerCase();
+  let added = false;
+  let mergedList = collaboratorSafePipeListSnapshot(list);
+  let resolvedShare: PipeListShare | null = null;
+
+  await runTransaction(simpBudgetDb, async (transaction) => {
+    const publicSnapshot = await transaction.get(publicShareRef);
+    const publicData = publicSnapshot.exists() ? publicSnapshot.data() as Partial<PipeListShare> : {};
+
+    if (publicSnapshot.exists() && publicData.ownerUid && publicData.ownerUid !== ownerUid) {
+      throw new Error('This PipeList belongs to a different workspace owner.');
+    }
+
+    const currentViewerEmails = normalizeShareEmails(publicData.viewerEmails);
+    const currentEditorEmails = normalizeShareEmails(publicData.editorEmails);
+    const accessMerge = addPipeListMemberAccess({
+      viewerEmails: currentViewerEmails,
+      editorEmails: currentEditorEmails,
+      memberEmail: normalizedMemberEmail,
+      access,
+    });
+    const protectedDetails =
+      publicData.protectedDetails === true ||
+      currentEditorEmails.length > 0 ||
+      access === 'edit' ||
+      pipeListRequiresAccountAccess(list);
+    const protectedSnapshot = protectedDetails ? await transaction.get(protectedShareRef) : null;
+    const canonicalData = protectedSnapshot?.exists()
+      ? protectedSnapshot.data() as Partial<PipeListProtectedShare>
+      : publicData;
+
+    if (canonicalData.list) {
+      const remoteList = collaboratorSafePipeListSnapshot(purgeExpiredDeletedItems([normalizeList(canonicalData.list, 0)])[0]);
+      mergedList = collaboratorSafePipeListSnapshot(
+        reconcilePipeListSnapshotsForWrite(remoteList, mergedList, baseList),
+      );
+      mergedList = preserveStoredUniversityList(canonicalData.list as PipeList, remoteList, mergedList);
+    } else if (publicSnapshot.exists()) {
+      throw new Error('This shared PipeList is no longer available.');
+    }
+
+    if (!accessMerge.added) {
+      const currentShare = normalizePipeListShare(shareId, publicData, 0);
+      if (!currentShare) throw new Error('This shared PipeList is no longer available.');
+      resolvedShare = { ...currentShare, list: mergedList };
+      return;
+    }
+
+    added = true;
+    const { viewerEmails, editorEmails } = accessMerge;
+    const inviteStatuses = {
+      ...normalizeInviteStatuses(publicData.inviteStatuses, currentViewerEmails, currentEditorEmails),
+      [normalizedMemberEmail]: {
+        ...inviteStatus,
+        email: normalizedMemberEmail,
+        access,
+      },
+    };
+    const createdAt = publicData.createdAt || serverTimestamp();
+    const updatedAt = serverTimestamp();
+    const nextShare: PipeListShare = {
+      id: shareId,
+      ownerUid: publicData.ownerUid || ownerUid,
+      ownerEmail: publicData.ownerEmail || ownerEmail,
+      list: mergedList,
+      access: editorEmails.length > 0 ? 'edit' : 'read',
+      publicRead: publicSnapshot.exists() ? publicData.publicRead === true : true,
+      protectedDetails,
+      viewerEmails,
+      editorEmails,
+      inviteStatuses,
+      lastEditedBy: actor,
+      createdAt,
+      updatedAt,
+    };
+
+    transaction.set(
+      publicShareRef,
+      stripUndefined({
+        ...nextShare,
+        list: publicSafePipeListSnapshot(mergedList),
+        lastEditedBy: protectedDetails ? deleteField() : actor,
+      }),
+      { merge: true },
+    );
+
+    if (protectedDetails) {
+      transaction.set(
+        protectedShareRef,
+        stripUndefined({
+          ownerUid: nextShare.ownerUid,
+          ownerEmail: nextShare.ownerEmail,
+          listId: mergedList.id,
+          list: mergedList,
+          lastEditedBy: actor,
+          ...(!protectedSnapshot?.exists() ? { createdAt } : {}),
+          updatedAt,
+        }),
+        { merge: true },
+      );
+    }
+
+    resolvedShare = nextShare;
+  });
+
+  if (!resolvedShare) throw new Error('Unable to update PipeList access.');
+  const displayedList = normalizeList(mergedList, 0);
+  return { added, list: displayedList, share: { ...(resolvedShare as PipeListShare), list: displayedList } };
+};
+
+const formatCount = (count: number, singular: string) => {
+  if (count === 1) return `${count} ${singular}`;
+  const plural = singular.endsWith('y') ? `${singular.slice(0, -1)}ies` : `${singular}s`;
+  return `${count} ${plural}`;
+};
+
+const escapeCsv = (value: string) => `"${String(value).replace(/"/g, '""')}"`;
+
+const parseMoney = (value: string) => {
+  if (!value) return 0;
+  const matches = value
+    .toLowerCase()
+    .replace(/,/g, '')
+    .match(/\d+(?:\.\d+)?\s*[km]?/g);
+
+  if (!matches || matches.length === 0) return 0;
+
+  const values = matches.map((match) => {
+    const trimmed = match.trim();
+    const number = Number.parseFloat(trimmed);
+    if (Number.isNaN(number)) return 0;
+    if (trimmed.endsWith('m')) return number * 1000000;
+    if (trimmed.endsWith('k')) return number * 1000;
+    return number;
+  });
+
+  return values.reduce((sum, item) => sum + item, 0) / values.length;
+};
+
+const parseOptionalNumber = (value: unknown): number | null => {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  const parsed = Number.parseFloat(text.replace(/[$,%\s,]/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const derivedMeasuredCheckInRate = (log: ActivityLog): number | null => {
+  return parseOptionalNumber(log.checkInRate);
+};
+
+const itemValue = (item: PipelineItem) => {
+  const acvValue = parseMoney(item.acv);
+  return acvValue > 0 ? acvValue : parseMoney(item.amount);
+};
+
+const formatMoney = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return '$0';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const formatMeasuredMetric = (value: number | null, suffix = '') =>
+  value === null ? 'Missing' : `${Math.round(value)}${suffix}`;
+
+const itemAmountDisplay = (list: Pick<PipeList, 'templateKey'>, item: PipelineItem) => {
+  if (isFundSizeList(list)) return item.amount || '';
+  const computedValue = itemValue(item);
+  return computedValue > 0 ? formatMoney(computedValue) : '';
+};
+
+const formatFileSize = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const average = (values: number[]) => {
+  const valid = values.filter((value) => Number.isFinite(value) && value > 0);
+  if (valid.length === 0) return 0;
+  return valid.reduce((sum, value) => sum + value, 0) / valid.length;
+};
+
+const logHasMetrics = (log: ActivityLog) =>
+  Boolean(
+    log.rosteredAthletes ||
+      log.completedCheckIns ||
+      log.checkInRate ||
+      log.biometricSyncRate ||
+      log.signalEvents ||
+      log.noraEngagementRate ||
+      log.noraSessions ||
+      log.escalations ||
+      log.staffFeedbackScore,
+  );
+
+const successEvidenceAtForLog = (log: ActivityLog) =>
+  log.reportingPeriodEnd || log.weekOf || log.createdAt;
+
+const successEvidenceTimestamp = (log: ActivityLog) => {
+  const evidenceAt = successEvidenceAtForLog(log);
+  const parsed = new Date(evidenceAt.length === 10 ? `${evidenceAt}T23:59:59.999Z` : evidenceAt).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const latestCurrentSuccessEvidenceAt = (
+  success: UniversityCustomerSuccess,
+  logs: ActivityLog[],
+  options: { includeStored?: boolean; today?: string } = {},
+) => {
+  const today = options.today || new Date().toISOString().slice(0, 10);
+  const candidates = [
+    ...(options.includeStored === false ? [] : [success.lastSuccessUpdateAt]),
+    ...success.successMeasures.map((measure) =>
+      measure.latestResult.state === 'measured' ? measure.latestResult.asOf : '',
+    ),
+    ...logs.filter((log) => log.type === 'metrics').map(successEvidenceAtForLog),
+  ]
+    .filter(Boolean)
+    .filter((value) => value.slice(0, 10) <= today)
+    .sort((left, right) => {
+      const leftTime = new Date(left.length === 10 ? `${left}T23:59:59.999Z` : left).getTime();
+      const rightTime = new Date(right.length === 10 ? `${right}T23:59:59.999Z` : right).getTime();
+      return leftTime - rightTime;
+    });
+
+  return candidates.at(-1) || '';
+};
+
+const customerSuccessForItem = (item: PipelineItem) => {
+  const normalized = normalizeUniversityCustomerSuccess(item.customerSuccess, {
+    stage: item.stage,
+    owner: item.owner,
+    nextStep: item.nextStep,
+    dueDate: item.dueDate,
+    pilotStart: item.pilotStart,
+    pilotEnd: item.pilotEnd,
+  });
+  return {
+    ...normalized,
+    lastSuccessUpdateAt: latestCurrentSuccessEvidenceAt(normalized, item.weeklyLogs),
+  };
+};
+
+const readAuthError = (error: unknown, fallbackMessage: string) => {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code || '')
+      : '';
+
+  if (code === 'auth/unauthorized-domain') {
+    const host =
+      typeof window !== 'undefined' && window.location.hostname
+        ? window.location.hostname
+        : 'this site';
+
+    return `Firebase Auth is not allowing ${host}. Add ${host} in the SimpBudget Firebase project under Authentication > Settings > Authorized domains, then try again.`;
+  }
+
+  return error instanceof Error ? error.message : fallbackMessage;
+};
+
+const readFirestoreError = (error: unknown, fallbackMessage: string) => {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String((error as { code?: unknown }).code || '')
+      : '';
+
+  if (code === 'permission-denied') {
+    return 'We could not load your PipeLists. Refresh the page or sign in again.';
+  }
+
+  return error instanceof Error ? error.message : fallbackMessage;
+};
+
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string) =>
+  new Promise<T>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+
+const readApiJson = async (response: Response, fallbackMessage: string) => {
+  const raw = await response.text();
+  const trimmed = raw.trim();
+
+  if (!trimmed) return null;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const contentType = response.headers.get('content-type') || 'unknown';
+    const lowerPreview = trimmed.slice(0, 400).toLowerCase();
+    console.error('[PipeLists] Expected JSON API response but received something else:', {
+      status: response.status,
+      contentType,
+      preview: trimmed.slice(0, 160),
+    });
+
+    if (response.status === 500 && lowerPreview.includes('task timed out')) {
+      throw new Error('Lead search took too long for the local bridge. Refresh and try again.');
+    }
+
+    if (response.status === 504 || lowerPreview.includes('timeout') || lowerPreview.includes('timed out')) {
+      throw new Error('Lead search timed out. Try a smaller lead count or narrower search brief.');
+    }
+
+    if (contentType.includes('text/html') || lowerPreview.startsWith('<!doctype') || lowerPreview.startsWith('<html')) {
+      throw new Error('Lead search returned a server page instead of JSON. Refresh and try again.');
+    }
+
+    throw new Error(fallbackMessage);
+  }
+};
+
+const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | null }> = ({ message }) => {
+  if (!message) return null;
+
+  const className =
+    message.type === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+      : message.type === 'error'
+        ? 'border-rose-200 bg-rose-50 text-rose-800'
+        : 'border-sky-200 bg-sky-50 text-sky-800';
+
+  return (
+    <div
+      role={message.type === 'error' ? 'alert' : 'status'}
+      aria-live={message.type === 'error' ? 'assertive' : 'polite'}
+      className={`rounded-lg border px-4 py-3 text-sm ${className}`}
+    >
+      {message.text}
+    </div>
+  );
+};
+
+interface PipeListsLoginProps {
+  canAttemptAuth: boolean;
+  authMessage: { type: MessageTone; text: string } | null;
+  magicEmail: string;
+  sendingMagicLink: boolean;
+  onMagicEmailChange: (email: string) => void;
+  onGoogleSignIn: () => void;
+  onSendMagicLink: () => void;
+}
+
+const PipeListsLogin: React.FC<PipeListsLoginProps> = ({
+  canAttemptAuth,
+  authMessage,
+  magicEmail,
+  sendingMagicLink,
+  onMagicEmailChange,
+  onGoogleSignIn,
+  onSendMagicLink,
+}) => (
+  <main className="min-h-screen bg-[#FAFAF7] text-stone-900">
+    <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+      <nav className="flex h-14 items-center justify-between">
+        <Link href="/" className="flex items-center gap-3" aria-label="Pulse home">
+          <img src="/pulse-logo.svg" alt="Pulse" className="h-8" />
+          <span className="hidden text-sm font-medium text-stone-500 sm:inline">PipeLists</span>
+        </Link>
+        <span className="rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-500 shadow-sm">
+          Private RevOps
+        </span>
+      </nav>
+
+      <section className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[minmax(0,1fr)_420px]">
+        <div>
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold uppercase text-stone-500 shadow-sm">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            Pulse Intelligence Labs
+          </div>
+          <h1 className="max-w-3xl text-4xl font-bold tracking-normal text-stone-950 sm:text-5xl lg:text-6xl">
+            Your pipeline command center.
+          </h1>
+          <p className="mt-5 max-w-2xl text-base leading-7 text-stone-500 sm:text-lg">
+            Sign in to manage your PipeLists or open the lists someone shared with your account.
+          </p>
+
+          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            {[
+              ['Flexible Lists', 'Track investors, grants, partners, contracts, or custom lists.'],
+              ['Focused Details', 'Open each lead to review notes, next steps, dates, and context.'],
+              ['Metrics View', 'Simple list totals, logs, due dates, and status signals.'],
+            ].map(([title, body]) => (
+              <div key={title} className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                <p className="text-sm font-semibold text-stone-950">{title}</p>
+                <p className="mt-2 text-sm leading-6 text-stone-500">{body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+          <div className="mb-5">
+            <h2 className="text-xl font-semibold text-stone-950">Sign in to PipeLists</h2>
+            <p className="mt-1 text-sm leading-6 text-stone-500">
+              Data is stored in the same Firebase project as SimpBudget under your account.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={onGoogleSignIn}
+              disabled={!canAttemptAuth}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Continue with Google
+            </button>
+
+            <div className="flex items-center gap-3 py-1">
+              <div className="h-px flex-1 bg-stone-100" />
+              <span className="text-xs font-semibold uppercase text-stone-400">or</span>
+              <div className="h-px flex-1 bg-stone-100" />
+            </div>
+
+            <label className="block" htmlFor="pipelists-magic-email">
+              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email magic link</span>
+              <input
+                id="pipelists-magic-email"
+                type="email"
+                value={magicEmail}
+                onChange={(event) => onMagicEmailChange(event.target.value)}
+                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                placeholder={TREMAINE_OWNER_EMAIL}
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={onSendMagicLink}
+              disabled={!canAttemptAuth || sendingMagicLink}
+              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Mail className="h-4 w-4" />
+              {sendingMagicLink ? 'Sending...' : 'Send Magic Link'}
+            </button>
+
+            <MessageBanner message={authMessage} />
+
+            <p className="text-xs leading-5 text-stone-400">
+              Owners see their full workspace. Collaborators only see the PipeLists shared with their email.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+);
+
+interface ProfileSetupProps {
+  user: User;
+  profileName: string;
+  profilePhotoFile: File | null;
+  saving: boolean;
+  message: { type: MessageTone; text: string } | null;
+  onProfileNameChange: (name: string) => void;
+  onProfilePhotoFileChange: (file: File | null) => void;
+  onSave: () => void;
+  onSignOut: () => void;
+}
+
+const ProfileSetup: React.FC<ProfileSetupProps> = ({
+  user,
+  profileName,
+  profilePhotoFile,
+  saving,
+  message,
+  onProfileNameChange,
+  onProfilePhotoFileChange,
+  onSave,
+  onSignOut,
+}) => (
+  <main className="flex min-h-screen items-center justify-center bg-[#FAFAF7] px-4 py-8 text-stone-900">
+    <div className="w-full max-w-lg rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+      <div className="mb-5">
+        <Link href="/" className="mb-6 flex items-center gap-3" aria-label="Pulse home">
+          <img src="/pulse-logo.svg" alt="Pulse" className="h-8" />
+          <span className="text-sm font-medium text-stone-500">PipeLists</span>
+        </Link>
+        <h1 className="text-2xl font-bold text-stone-950">Finish your editor profile</h1>
+        <p className="mt-2 text-sm leading-6 text-stone-500">
+          You are signed in as {user.email}. Add a name so shared-list edits have a human attached.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <label className="block" htmlFor="pipelists-profile-name">
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Name</span>
+          <input
+            id="pipelists-profile-name"
+            value={profileName}
+            onChange={(event) => onProfileNameChange(event.target.value)}
+            className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+            placeholder="Your name"
+          />
+        </label>
+
+        <label className="block" htmlFor="pipelists-profile-photo">
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Profile image</span>
+          <input
+            id="pipelists-profile-photo"
+            type="file"
+            accept="image/*"
+            onChange={(event) => onProfilePhotoFileChange(event.target.files?.[0] || null)}
+            className="block w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm text-stone-600 file:mr-3 file:rounded-full file:border-0 file:bg-stone-900 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
+          />
+          {profilePhotoFile && <p className="mt-2 text-xs text-stone-400">{profilePhotoFile.name}</p>}
+        </label>
+
+        <MessageBanner message={message} />
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="inline-flex h-11 flex-1 items-center justify-center rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save Profile'}
+          </button>
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="inline-flex h-11 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+);
+
+const GoodSoilPriorityBadge = ({ notes }: { notes: string }) => {
+  if (!notes.includes('Good Soil Forum 2026 - PulseCheck Speaker Brief With Photos')) return null;
+  const match = notes.match(/source priority rank (\d{1,2})\/50\b/i);
+  const rank = match ? Number(match[1]) : 0;
+  if (rank < 1 || rank > 10) return null;
+  return (
+    <span
+      className="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-amber-100 px-1.5 text-xs font-bold tabular-nums text-amber-950"
+      title={`Good Soil top 10: priority #${rank}`}
+      aria-label={`Good Soil top 10: priority #${rank}`}
+    >
+      #{rank}
+    </span>
+  );
+};
+
+const PipelinePage: NextPage = () => {
+  const [lists, setLists] = useState<PipeList[]>(initialLists);
+  const liveListsRef = useRef<PipeList[]>(initialLists);
+  const personalListsRef = useRef<PipeList[]>(initialLists);
+  const personalSnapshotBaselineRef = useRef<PipeList[]>([]);
+  const personalSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const [pendingPersonalSaves, setPendingPersonalSaves] = useState(0);
+  const [personalSaveError, setPersonalSaveError] = useState(false);
+  const personalSaveFailureRef = useRef<SaveFailure | null>(null);
+  const [personalSyncConflict, setPersonalSyncConflict] = useState(false);
+  const directShareBaselineRef = useRef('');
+  const protectedShareBaselinesRef = useRef<Record<string, PipeList>>({});
+  const [activeListId, setActiveListId] = useState(initialLists[0].id);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [viewMode, setViewModeState] = useState<ViewMode>('pipeline');
+  const [pipelineDisplayMode, setPipelineDisplayMode] = useState<PipelineDisplayMode>('list');
+  const [draggedKanbanItem, setDraggedKanbanItem] = useState<{ listId: string; itemId: string } | null>(null);
+  const [kanbanDropStageId, setKanbanDropStageId] = useState<string | null>(null);
+  const [metricsScope, setMetricsScope] = useState<MetricsScope>('selected-list');
+  const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>('90');
+  const [runbookHasUnsavedChanges, setRunbookHasUnsavedChanges] = useState(false);
+  const [query, setQuery] = useState('');
+  const [stageFilters, setStageFilters] = useState<string[]>([]);
+  const [priorityFilters, setPriorityFilters] = useState<PipelinePriority[]>([]);
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [newListName, setNewListName] = useState('');
+  const [newListTemplateKey, setNewListTemplateKey] = useState<TemplateKey>('university-pilot');
+  const [isDeleteListModalOpen, setIsDeleteListModalOpen] = useState(false);
+  const [isListProfileModalOpen, setIsListProfileModalOpen] = useState(false);
+  const [contactImport, setContactImport] = useState<{ listId: string; rows: (ImportedContact & { id: string })[] } | null>(null);
+  const [contactImportBusy, setContactImportBusy] = useState(false);
+  const [contactImportMessage, setContactImportMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const contactImportLock = useRef(false);
+  const [listProfileDraft, setListProfileDraft] = useState({
+    templateKey: 'contacts' as TemplateKey,
+    name: '',
+    description: '',
+    objective: '',
+    leadDefinition: '',
+    researchBrief: '',
+  });
+  const [draft, setDraft] = useState<ItemDraft>(defaultDraft(initialLists[0].stages[0].id));
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [itemSaveError, setItemSaveError] = useState('');
+  const [isNewListModalOpen, setIsNewListModalOpen] = useState(false);
+  const [isLeadUrlModalOpen, setIsLeadUrlModalOpen] = useState(false);
+  const [leadUrl, setLeadUrl] = useState('');
+  const [isManualLeadEntry, setIsManualLeadEntry] = useState(false);
+  const [manualLeadDraft, setManualLeadDraft] = useState<ManualLeadDraft>(() =>
+    defaultManualLeadDraft(initialLists[0].stages[0].id),
+  );
+  const [isAnalyzingLead, setIsAnalyzingLead] = useState(false);
+  const [leadExtractMessage, setLeadExtractMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isLeadGenModalOpen, setIsLeadGenModalOpen] = useState(false);
+  const [leadSearchPrompt, setLeadSearchPrompt] = useState('');
+  const [leadResearchPrompt, setLeadResearchPrompt] = useState(DEFAULT_LEAD_RESEARCH_PROMPT);
+  const [isGeneratingLeads, setIsGeneratingLeads] = useState(false);
+  const [generatedLeads, setGeneratedLeads] = useState<GeneratedLead[]>([]);
+  const [addedGeneratedLeadKeys, setAddedGeneratedLeadKeys] = useState<string[]>([]);
+  const [openedGeneratedLeadSourceKeys, setOpenedGeneratedLeadSourceKeys] = useState<string[]>([]);
+  const [isBulkSelectionMode, setIsBulkSelectionMode] = useState(false);
+  const [selectedBulkItemIds, setSelectedBulkItemIds] = useState<string[]>([]);
+  const [bulkMoveTargetListId, setBulkMoveTargetListId] = useState('');
+  const [bulkActionMessage, setBulkActionMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [leadGenMessage, setLeadGenMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isPastedLeadListModalOpen, setIsPastedLeadListModalOpen] = useState(false);
+  const [pastedLeadList, setPastedLeadList] = useState('');
+  const [isAnalyzingPastedLeadList, setIsAnalyzingPastedLeadList] = useState(false);
+  const [analyzedPastedLeads, setAnalyzedPastedLeads] = useState<GeneratedLead[]>([]);
+  const [addedPastedLeadKeys, setAddedPastedLeadKeys] = useState<string[]>([]);
+  const [pastedLeadListMessage, setPastedLeadListMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isImportingFriends, setIsImportingFriends] = useState(false);
+  const [friendsImportMessage, setFriendsImportMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isContactEmailModalOpen, setIsContactEmailModalOpen] = useState(false);
+  const [contactEmailType, setContactEmailType] = useState<ContactEmailType>('metrics-update');
+  const [contactEmailSender, setContactEmailSender] = useState<ContactEmailSender>(DEFAULT_CONTACT_EMAIL_SENDER);
+  const [contactEmailRecipients, setContactEmailRecipients] = useState('');
+  const [contactEmailSubject, setContactEmailSubject] = useState('');
+  const [contactEmailBody, setContactEmailBody] = useState('');
+  const [contactEmailBodyHtml, setContactEmailBodyHtml] = useState('');
+  const [contactEmailAttachments, setContactEmailAttachments] = useState<ContactEmailAttachment[]>([]);
+  const [contactEmailSendMessage, setContactEmailSendMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isSendingContactEmail, setIsSendingContactEmail] = useState(false);
+  const [composerLinkPopover, setComposerLinkPopover] = useState<{ left: number; top: number; url: string; error: string } | null>(null);
+  const contactEmailBodyEditorRef = useRef<HTMLDivElement | null>(null);
+  const contactEmailSelectionRef = useRef<Range | null>(null);
+  const emailStatusSyncCheckedAtRef = useRef<Map<string, number>>(new Map());
+  const autoImportedFriendsListIds = useRef<Set<string>>(new Set());
+  const [isEnrichingVcSources, setIsEnrichingVcSources] = useState(false);
+  const [vcSourceEnrichmentMessage, setVcSourceEnrichmentMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [leadCopyMessage, setLeadCopyMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [attachmentLinkName, setAttachmentLinkName] = useState('');
+  const [attachmentLinkUrl, setAttachmentLinkUrl] = useState('');
+  const [attachmentMessage, setAttachmentMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [leadImageMessage, setLeadImageMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [uploadingLeadImage, setUploadingLeadImage] = useState(false);
+  const [leadShareMessage, setLeadShareMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [leadShareUrl, setLeadShareUrl] = useState('');
+  const [leadMoveMessage, setLeadMoveMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [moveTargetListId, setMoveTargetListId] = useState('');
+  const [contactEmailInput, setContactEmailInput] = useState('');
+  const [contactEmailError, setContactEmailError] = useState('');
+  const [selectedDetailItemId, setSelectedDetailItemId] = useState<string>('');
+  const detailSnapshotRef = useRef<{ item: PipelineItem; list: PipeList } | null>(null);
+  const closeLeadDetails = () => {
+    detailSnapshotRef.current = null;
+    setSelectedDetailItemId('');
+  };
+  const [detailModalMode, setDetailModalMode] = useState<DetailModalMode>('details');
+  const [itemResearchPrompt, setItemResearchPrompt] = useState('');
+  const [isResearchingItem, setIsResearchingItem] = useState(false);
+  const [itemResearchResult, setItemResearchResult] = useState<GeneratedLead | null>(null);
+  const [itemResearchMessage, setItemResearchMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [itemAskPrompt, setItemAskPrompt] = useState('');
+  const [itemAskResponse, setItemAskResponse] = useState('');
+  const [isAskingItem, setIsAskingItem] = useState(false);
+  const [itemAskMessage, setItemAskMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [selectedLogItemId, setSelectedLogItemId] = useState<string>('');
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(() => new Set());
+  const [logListFilter, setLogListFilter] = useState<string>(initialLists[0].id);
+  const [logEmailFilter, setLogEmailFilter] = useState<LogEmailFilter>('all');
+  const [logRecipientFilter, setLogRecipientFilter] = useState<string>('');
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [logTargetListId, setLogTargetListId] = useState<string>(initialLists[0].id);
+  const [logTargetItemId, setLogTargetItemId] = useState<string>(initialLists[0].items[0]?.id || '');
+  const [logDraft, setLogDraft] = useState<ActivityLogDraft>(defaultLogDraft(initialLists[0].templateKey));
+  const [nextStepTooltip, setNextStepTooltip] = useState<NextStepTooltip | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authReadyTimedOut, setAuthReadyTimedOut] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [dataReady, setDataReady] = useState(false);
+  const [personalStateReady, setPersonalStateReady] = useState(false);
+  const [authMessage, setAuthMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [isGoogleSignInStarting, setIsGoogleSignInStarting] = useState(false);
+  const googleSignInInFlightRef = useRef(false);
+  const googleRedirectCompletionStartedRef = useRef(false);
+  const [appMessage, setAppMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [magicEmail, setMagicEmail] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const invitedEmail = params.get('inviteEmail')?.trim().toLowerCase() || '';
+      if (invitedEmail) return invitedEmail;
+      if (params.get('share') || params.get('leadShare')) return '';
+    }
+    return TREMAINE_OWNER_EMAIL;
+  });
+  const [sendingMagicLink, setSendingMagicLink] = useState(false);
+  const [savingToCloud, setSavingToCloud] = useState(false);
+  useEffect(() => {
+    if (pendingPersonalSaves === 0 && !personalSaveError && !personalSyncConflict) return;
+    const protectPendingSave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', protectPendingSave);
+    return () => window.removeEventListener('beforeunload', protectPendingSave);
+  }, [pendingPersonalSaves, personalSaveError, personalSyncConflict]);
+  const [shareId] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('share') || '';
+  });
+  const [inviteId] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('invite') || '';
+  });
+  const [inviteEmail] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('inviteEmail')?.trim().toLowerCase() || '';
+  });
+  const [leadShareId] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('leadShare') || '';
+  });
+  const [shareDoc, setShareDoc] = useState<PipeListShare | null>(null);
+  const [ownerShareDocs, setOwnerShareDocs] = useState<PipeListShare[]>([]);
+  const [baseAccessibleShareDocs, setAccessibleShareDocs] = useState<PipeListShare[]>([]);
+  const [protectedShareLists, setProtectedShareLists] = useState<Record<string, PipeList>>({});
+  const [protectedDirectShareUid, setProtectedDirectShareUid] = useState('');
+  const [leadShareDoc, setLeadShareDoc] = useState<PipeLeadShare | null>(null);
+  const [shareMessage, setShareMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [shareAccess, setShareAccess] = useState<ShareAccess>('read');
+  const [shareEditorEmails, setShareEditorEmails] = useState('');
+  const [selectedCollaboratorAccountEmails, setSelectedCollaboratorAccountEmails] = useState<string[]>([]);
+  const [shareSelectedListIds, setShareSelectedListIds] = useState<string[]>([]);
+  const [collaboratorSearch, setCollaboratorSearch] = useState('');
+  const [profileSearchMessage, setProfileSearchMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [searchableProfiles, setSearchableProfiles] = useState<SearchablePipeListProfile[]>([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [loadingOwnerShares, setLoadingOwnerShares] = useState(false);
+  const [ownerSharesReady, setOwnerSharesReady] = useState(false);
+  const [resendingInviteEmails, setResendingInviteEmails] = useState<string[]>([]);
+  const [removingAccessEmails, setRemovingAccessEmails] = useState<string[]>([]);
+  const [addingListsForEmail, setAddingListsForEmail] = useState('');
+  const [savingListAccess, setSavingListAccess] = useState('');
+  const [additionalListIds, setAdditionalListIds] = useState<string[]>([]);
+  const [additionalListAccess, setAdditionalListAccess] = useState<ShareAccess>('read');
+  const [savingAdditionalListsForEmail, setSavingAdditionalListsForEmail] = useState('');
+  const [isSharePanelOpen, setIsSharePanelOpen] = useState(false);
+  const [isInviteFormOpen, setIsInviteFormOpen] = useState(false);
+  const [profile, setProfile] = useState<PipeListProfile | null>(null);
+  const [profileName, setProfileName] = useState('');
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [profileMessage, setProfileMessage] = useState<{ type: MessageTone; text: string } | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    liveListsRef.current = lists;
+  }, [lists]);
+  const normalizedUserEmail = user?.email?.toLowerCase() || '';
+  const hasInviteAccountMismatch = Boolean(inviteEmail && normalizedUserEmail && inviteEmail !== normalizedUserEmail);
+  const isLeadSharedView = Boolean(leadShareId);
+  const isSharedView = Boolean(shareId || leadShareId);
+  const isOwner = normalizedUserEmail === TREMAINE_OWNER_EMAIL;
+  const activeList = useMemo(
+    () => (selectedDetailItemId
+      ? lists.find((list) => list.items.some((item) => item.id === selectedDetailItemId)) ||
+        (detailSnapshotRef.current?.item.id === selectedDetailItemId ? detailSnapshotRef.current.list : null)
+      : null) || lists.find((list) => list.id === activeListId) || lists[0] || initialLists[0],
+    [activeListId, lists, selectedDetailItemId],
+  );
+  const accessibleShareDocs = useMemo(
+    () =>
+      baseAccessibleShareDocs.map((share) =>
+        protectedShareLists[share.id] ? { ...share, list: protectedShareLists[share.id] } : share,
+      ),
+    [baseAccessibleShareDocs, protectedShareLists],
+  );
+  const editableListIds = useMemo(() => {
+    if (!normalizedUserEmail) return new Set<string>();
+    return new Set(
+      accessibleShareDocs
+        .filter((share) => share.editorEmails.includes(normalizedUserEmail) || share.ownerEmail.toLowerCase() === normalizedUserEmail)
+        .map((share) => share.list.id),
+    );
+  }, [accessibleShareDocs, normalizedUserEmail]);
+  const sharedListIds = useMemo(
+    () => new Set(accessibleShareDocs.map((share) => share.list.id)),
+    [accessibleShareDocs],
+  );
+  const activeDashboardShare = !isSharedView && !isOwner
+    ? accessibleShareDocs.find((share) => share.list.id === activeList.id) || null
+    : null;
+  const canEditShared =
+    Boolean(shareId) &&
+    !!user &&
+    !!shareDoc &&
+    (shareDoc.ownerUid === user.uid ||
+      shareDoc.ownerEmail.toLowerCase() === normalizedUserEmail ||
+      shareDoc.editorEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail));
+  const canReadShared =
+    Boolean(shareId) &&
+    !!user &&
+    !!shareDoc &&
+    (shareDoc.ownerUid === user.uid ||
+      shareDoc.ownerEmail.toLowerCase() === normalizedUserEmail ||
+      shareDoc.viewerEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail) ||
+      shareDoc.editorEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail));
+  const canModify = isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id);
+  const canManageWorkspace = !isSharedView && Boolean(user);
+  const runbookAvailable = !isSharedView && Boolean(user) && (isOwner || editableListIds.size > 0);
+  const canManageActiveList = canManageWorkspace && !sharedListIds.has(activeList.id);
+  const isContactListActive = isContactList(activeList);
+  const isInvestorUpdateContactsList = isInvestorUpdateContactList(activeList);
+  const isTaskListActive = isTaskList(activeList);
+  const isUniversitySuccessList = activeList.templateKey === 'university-pilot';
+  const successWorkspaceAvailable =
+    isUniversitySuccessList &&
+    Boolean(user) &&
+    (isSharedView ? !isLeadSharedView && canReadShared : true);
+  const canAttemptAuth = authReady || authReadyTimedOut;
+
+  const setViewMode = (nextViewMode: ViewMode) => {
+    if (
+      viewMode === 'runbook' &&
+      nextViewMode !== 'runbook' &&
+      runbookHasUnsavedChanges &&
+      typeof window !== 'undefined' &&
+      !window.confirm('Discard your unsaved runbook changes?')
+    ) {
+      return;
+    }
+
+    if (nextViewMode !== 'runbook') setRunbookHasUnsavedChanges(false);
+    setViewModeState(nextViewMode);
+  };
+
+  useEffect(() => {
+    if (viewMode === 'runbook' && !runbookAvailable) {
+      setRunbookHasUnsavedChanges(false);
+      setViewModeState('pipeline');
+    }
+  }, [runbookAvailable, viewMode]);
+
+  useEffect(() => {
+    if (viewMode === 'success' && !successWorkspaceAvailable) {
+      setViewModeState('pipeline');
+    }
+  }, [successWorkspaceAvailable, viewMode]);
+
+  useEffect(() => {
+    setLogListFilter(activeList.id);
+  }, [activeList.id]);
+
+  useEffect(() => {
+    setStageFilters([]);
+    setPriorityFilters([]);
+  }, [activeList.id, user?.uid]);
+
+  useEffect(() => {
+    if (!toastMessage) return undefined;
+
+    const timeout = window.setTimeout(() => setToastMessage(null), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [toastMessage]);
+
+  useEffect(() => {
+    if (authReady) {
+      setAuthReadyTimedOut(false);
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => setAuthReadyTimedOut(true), 2500);
+    return () => window.clearTimeout(timeout);
+  }, [authReady]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(
+      simpBudgetAuth,
+      async (currentUser) => {
+        setAuthReady(true);
+        setUser(currentUser);
+
+      if (shareId || leadShareId) {
+        if (!currentUser) {
+          setProfile(null);
+          setProfileName('');
+          return;
+        }
+
+        if (leadShareId) return;
+
+        try {
+          const profileRef = doc(simpBudgetDb, PIPELIST_PROFILES_COLLECTION, currentUser.uid);
+          const profileSnapshot = await getDoc(profileRef);
+          if (profileSnapshot.exists()) {
+            const nextProfile = profileSnapshot.data() as PipeListProfile;
+            setProfile(nextProfile);
+            setProfileName(nextProfile.displayName || currentUser.displayName || '');
+          } else {
+            setProfile(null);
+            setProfileName(currentUser.displayName || '');
+          }
+        } catch (error) {
+          console.error('Unable to load PipeLists profile:', error);
+          setProfile(null);
+          setProfileName(currentUser.displayName || '');
+        }
+        return;
+      }
+
+      if (!currentUser) {
+        setDataReady(false);
+        setPersonalStateReady(false);
+        personalListsRef.current = [];
+        personalSnapshotBaselineRef.current = [];
+        setAccessibleShareDocs([]);
+        setProtectedShareLists({});
+        protectedShareBaselinesRef.current = {};
+        return;
+      }
+
+      const email = currentUser.email?.toLowerCase() || '';
+      const currentUserIsOwner = email === TREMAINE_OWNER_EMAIL;
+      setDataReady(false);
+      setPersonalStateReady(false);
+
+      try {
+        void Promise.all([
+          setDoc(
+            doc(simpBudgetDb, SIMPBUDGET_USERS_COLLECTION, currentUser.uid),
+            {
+              email: currentUser.email || '',
+              displayName: currentUser.displayName || '',
+              lastSeenAt: serverTimestamp(),
+            },
+            { merge: true },
+          ),
+          setDoc(
+            doc(simpBudgetDb, PIPELIST_PROFILES_COLLECTION, currentUser.uid),
+            stripUndefined({
+              email: currentUser.email || '',
+              displayName: currentUser.displayName || '',
+              photoURL: currentUser.photoURL || '',
+              updatedAt: serverTimestamp(),
+            }),
+            { merge: true },
+          ),
+        ]).catch((error) => {
+          console.warn('[PipeLists] Unable to refresh the signed-in account profile:', error);
+        });
+
+        const stateRef = doc(
+          simpBudgetDb,
+          SIMPBUDGET_USERS_COLLECTION,
+          currentUser.uid,
+          PIPELISTS_SUBCOLLECTION,
+          PIPELISTS_STATE_DOCUMENT_ID,
+        );
+        const snapshot = await withTimeout(
+          getDoc(stateRef),
+          PIPELISTS_INITIAL_LOAD_TIMEOUT_MS,
+          'PipeLists took too long to connect. Your workspace will refresh automatically.',
+        );
+        let privateLists: PipeList[] = currentUserIsOwner ? initialLists : [];
+
+        if (snapshot.exists()) {
+          const data = snapshot.data() as { lists?: Partial<PipeList>[] };
+          if (Array.isArray(data.lists)) {
+            privateLists = purgeExpiredDeletedItems(data.lists.map(normalizeList));
+          }
+        } else if (currentUserIsOwner && typeof window !== 'undefined') {
+          const stored = window.localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored) as Partial<PipeList>[];
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                privateLists = purgeExpiredDeletedItems(parsed.map(normalizeList));
+              }
+            } catch (error) {
+              console.warn('[PipeLists] Unable to parse stored local pipeline data:', error);
+            }
+          }
+        }
+
+        if (currentUserIsOwner) {
+          privateLists = mergeRecommendedPitchCompetitions(privateLists);
+        }
+        let nextLists = privateLists;
+
+        if (nextLists.length === 0 && currentUserIsOwner) {
+          nextLists = [{ ...createList('vc', 'My PipeList', 0), items: [] }];
+        }
+
+        personalListsRef.current = nextLists;
+        personalSnapshotBaselineRef.current = snapshot.exists() && Array.isArray(snapshot.data().lists)
+          ? purgeExpiredDeletedItems(snapshot.data().lists.map(normalizeList))
+          : [];
+        setAccessibleShareDocs([]);
+        setProtectedShareLists({});
+        protectedShareBaselinesRef.current = {};
+        setLists(nextLists);
+        setActiveListId(nextLists[0]?.id || initialLists[0].id);
+        setDraft(defaultDraft(nextLists[0]?.stages[0]?.id || initialLists[0].stages[0].id));
+        setSelectedLogItemId('');
+        setLogDraft(defaultLogDraft(nextLists[0]?.templateKey || initialLists[0].templateKey));
+        setPersonalStateReady(true);
+        setDataReady(true);
+        setAppMessage(null);
+      } catch (error) {
+        console.error('Unable to initialize PipeLists:', error);
+        const fallbackLists = currentUserIsOwner ? initialLists : [];
+        personalListsRef.current = fallbackLists;
+        personalSnapshotBaselineRef.current = [];
+        setAccessibleShareDocs([]);
+        setProtectedShareLists({});
+        protectedShareBaselinesRef.current = {};
+        setLists(fallbackLists);
+        setActiveListId(initialLists[0].id);
+        setDataReady(true);
+        setAppMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to initialize PipeLists.'),
+        });
+      }
+      },
+      (error) => {
+        console.error('PipeLists auth listener failed:', error);
+        setAuthReady(true);
+        setUser(null);
+        setAuthMessage({
+          type: 'error',
+          text: readAuthError(error, 'Unable to check the current PipeLists session. You can still try signing in.'),
+        });
+      },
+    );
+
+    return unsubscribe;
+  }, [leadShareId, shareId]);
+
+  useEffect(() => {
+    if (isSharedView || isOwner || !user || !dataReady || !normalizedUserEmail) return undefined;
+
+    const sharesRef = collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION);
+    let viewerShares = new Map<string, PipeListShare>();
+    let editorShares = new Map<string, PipeListShare>();
+    let viewerReady = false;
+    let editorReady = false;
+
+    const applyAccessibleShares = () => {
+      if (!viewerReady || !editorReady) return;
+
+      const sharesById = new Map<string, PipeListShare>([
+        ...Array.from(viewerShares.entries()),
+        ...Array.from(editorShares.entries()),
+      ]);
+      const nextShares = Array.from(sharesById.values());
+      setAccessibleShareDocs(nextShares);
+    };
+
+    const unsubscribeViewerShares = onSnapshot(
+      firestoreQuery(sharesRef, where('viewerEmails', 'array-contains', normalizedUserEmail)),
+      (snapshot) => {
+        viewerShares = new Map(
+          snapshot.docs
+            .map((shareSnapshot, index) =>
+              normalizePipeListShare(shareSnapshot.id, shareSnapshot.data() as Partial<PipeListShare>, index),
+            )
+            .filter((share): share is PipeListShare => Boolean(share))
+            .map((share) => [share.id, share]),
+        );
+        viewerReady = true;
+        applyAccessibleShares();
+      },
+      (error) => {
+        console.error('Unable to watch read-only PipeLists access:', error);
+        setAppMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to refresh shared PipeLists access.'),
+        });
+      },
+    );
+
+    const unsubscribeEditorShares = onSnapshot(
+      firestoreQuery(sharesRef, where('editorEmails', 'array-contains', normalizedUserEmail)),
+      (snapshot) => {
+        editorShares = new Map(
+          snapshot.docs
+            .map((shareSnapshot, index) =>
+              normalizePipeListShare(shareSnapshot.id, shareSnapshot.data() as Partial<PipeListShare>, index),
+            )
+            .filter((share): share is PipeListShare => Boolean(share))
+            .map((share) => [share.id, share]),
+        );
+        editorReady = true;
+        applyAccessibleShares();
+      },
+      (error) => {
+        console.error('Unable to watch editable PipeLists access:', error);
+        setAppMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to refresh shared PipeLists access.'),
+        });
+      },
+    );
+
+    return () => {
+      unsubscribeViewerShares();
+      unsubscribeEditorShares();
+    };
+  }, [dataReady, isOwner, isSharedView, normalizedUserEmail, user]);
+
+  useEffect(() => {
+    if (isSharedView || isOwner || !user || !dataReady) return undefined;
+
+    const protectedShares = baseAccessibleShareDocs.filter(pipeListShareRequiresAccountAccess);
+    const activeShareIds = new Set(protectedShares.map((share) => share.id));
+    setProtectedShareLists((current) =>
+      Object.fromEntries(Object.entries(current).filter(([shareId]) => activeShareIds.has(shareId))),
+    );
+
+    const unsubscribes = protectedShares.map((share) =>
+      onSnapshot(
+        doc(simpBudgetDb, PIPELIST_PROTECTED_SHARES_COLLECTION, share.id),
+        (snapshot) => {
+          setProtectedShareLists((current) => {
+            if (!snapshot.exists()) {
+              if (!current[share.id]) return current;
+              const next = { ...current };
+              delete next[share.id];
+              return next;
+            }
+            const data = snapshot.data() as Partial<PipeListProtectedShare>;
+            if (!data.list) return current;
+            const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
+            const localList = liveListsRef.current.find((list) => list.id === remoteList.id);
+            const previousBase = protectedShareBaselinesRef.current[share.id];
+            const nextList = localList
+              ? reconcilePipeListSnapshotsForWrite(remoteList, localList, previousBase)
+              : remoteList;
+            protectedShareBaselinesRef.current[share.id] = remoteList;
+            if (JSON.stringify(current[share.id]) === JSON.stringify(nextList)) return current;
+            return { ...current, [share.id]: nextList };
+          });
+        },
+        (error) => {
+          console.error('Unable to load protected PipeList success data:', error);
+          setAppMessage({
+            type: 'error',
+            text: readFirestoreError(error, 'Unable to load protected customer success data.'),
+          });
+        },
+      ),
+    );
+
+    return () => unsubscribes.forEach((unsubscribe) => unsubscribe());
+  }, [baseAccessibleShareDocs, dataReady, isOwner, isSharedView, user]);
+
+  useEffect(() => {
+    if (isSharedView || isOwner || !user || !dataReady) return;
+    const nextLists = [
+      ...personalListsRef.current,
+      ...accessibleShareDocs
+        .filter((share) => !personalListsRef.current.some((personalList) => personalList.id === share.list.id))
+        .map((share) => share.list),
+    ];
+    setLists((current) => (JSON.stringify(current) === JSON.stringify(nextLists) ? current : nextLists));
+    setActiveListId((currentId) =>
+      nextLists.some((list) => list.id === currentId) ? currentId : nextLists[0]?.id || initialLists[0].id,
+    );
+  }, [accessibleShareDocs, dataReady, isOwner, isSharedView, user]);
+
+  useEffect(() => {
+    if (isSharedView || shareId || leadShareId || !user || !dataReady) return undefined;
+
+    const stateRef = doc(
+      simpBudgetDb,
+      SIMPBUDGET_USERS_COLLECTION,
+      user.uid,
+      PIPELISTS_SUBCOLLECTION,
+      PIPELISTS_STATE_DOCUMENT_ID,
+    );
+
+    return onSnapshot(
+      stateRef,
+      (snapshot) => {
+        setPersonalStateReady(true);
+        if (!snapshot.exists()) return;
+        const data = snapshot.data() as { lists?: Partial<PipeList>[] };
+        if (!Array.isArray(data.lists)) return;
+
+        const nextPersonalLists = isOwner
+          ? mergeRecommendedPitchCompetitions(purgeExpiredDeletedItems(data.lists.map(normalizeList)))
+          : purgeExpiredDeletedItems(data.lists.map(normalizeList));
+        const nextLists = [
+          ...nextPersonalLists,
+          ...accessibleShareDocs
+            .filter((share) => !nextPersonalLists.some((personalList) => personalList.id === share.list.id))
+            .map((share) => share.list),
+        ];
+
+        const previousPersonalSnapshot = personalSnapshotBaselineRef.current;
+        const hasOlderLeadRevision = nextPersonalLists.some((list) => {
+          const previousItems = new Map(previousPersonalSnapshot.find((previous) => previous.id === list.id)?.items.map((item) => [item.id, item]) || []);
+          return list.items.some((item) => {
+            const previous = previousItems.get(item.id);
+            return previous && Date.parse(item.updatedAt) < Date.parse(previous.updatedAt);
+          });
+        });
+        if (hasOlderLeadRevision) {
+          setPersonalSyncConflict(true);
+          setAppMessage({ type: 'error', text: 'Another PipeLists session replaced newer saved edits. Your newer edits remain open here. Close older PipeLists tabs, then save your changes again before reloading.' });
+        } else if (pipeListSnapshotsEqual(nextPersonalLists, liveListsRef.current.filter((list) =>
+          isOwner || !accessibleShareDocs.some((share) => share.list.id === list.id)))) {
+          setPersonalSyncConflict(false);
+        }
+        personalSnapshotBaselineRef.current = nextPersonalLists;
+        setLists((currentLists) => {
+          const currentPersonalLists = currentLists.filter((list) =>
+            isOwner || !accessibleShareDocs.some((share) => share.list.id === list.id),
+          );
+          const mergedPersonalLists = mergePipeListSnapshotsThreeWay(
+            previousPersonalSnapshot,
+            nextPersonalLists,
+            currentPersonalLists,
+          );
+          personalListsRef.current = mergedPersonalLists;
+          const mergedLists = [
+            ...mergedPersonalLists,
+            ...nextLists.filter((list) => !nextPersonalLists.some((personalList) => personalList.id === list.id)),
+          ];
+          if (pipeListSnapshotsEqual(currentLists, mergedLists)) return currentLists;
+          return mergedLists;
+        });
+        setActiveListId((currentId) =>
+          nextLists.some((list) => list.id === currentId) ? currentId : nextLists[0]?.id || initialLists[0].id,
+        );
+      },
+      (error) => {
+        console.warn('[PipeLists] Live email status sync failed:', error);
+      },
+    );
+  }, [accessibleShareDocs, dataReady, isOwner, isSharedView, leadShareId, shareId, user]);
+
+  useEffect(() => {
+    if (!shareId || !authReady) return;
+
+    directShareBaselineRef.current = '';
+
+    const loadShare = async () => {
+      setDataReady(false);
+      setShareMessage(null);
+      setProtectedDirectShareUid('');
+      setProtectedShareLists({});
+      protectedShareBaselinesRef.current = {};
+      setShareDoc(null);
+      setLists([]);
+
+      try {
+        const shareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
+        const snapshot = await getDoc(shareRef);
+        if (!snapshot.exists()) {
+          setShareMessage({ type: 'error', text: 'This PipeLists share link was not found.' });
+          setDataReady(true);
+          return;
+        }
+
+        const data = snapshot.data() as Partial<PipeListShare>;
+        if (!data.list) {
+          setShareMessage({ type: 'error', text: 'This PipeLists share link is not available.' });
+          setDataReady(true);
+          return;
+        }
+
+        const signedInEmail = user?.email?.trim().toLowerCase() || '';
+        const accountCanRead = Boolean(
+          user &&
+            (data.ownerUid === user.uid ||
+              data.ownerEmail?.trim().toLowerCase() === signedInEmail ||
+              normalizeShareEmails(data.viewerEmails).includes(signedInEmail) ||
+              normalizeShareEmails(data.editorEmails).includes(signedInEmail)),
+        );
+        if (data.publicRead !== true && !accountCanRead) {
+          setShareMessage({ type: 'error', text: 'Sign in with an invited account to open this PipeLists share.' });
+          setDataReady(true);
+          return;
+        }
+
+        const nextShare = normalizePipeListShare(snapshot.id, data, 0);
+        if (!nextShare) {
+          setShareMessage({ type: 'error', text: 'This PipeLists share link is not available.' });
+          setDataReady(true);
+          return;
+        }
+        const normalizedList = purgeExpiredDeletedItems([nextShare.list])[0];
+
+        directShareBaselineRef.current = JSON.stringify(normalizedList);
+        setShareDoc({ ...nextShare, list: normalizedList });
+        setLists([normalizedList]);
+        setActiveListId(normalizedList.id);
+        setDraft(defaultDraft(normalizedList.stages[0]?.id));
+        setSelectedLogItemId('');
+        setLogDraft(defaultLogDraft(normalizedList.templateKey));
+        setDataReady(true);
+      } catch (error) {
+        console.error('Unable to load shared PipeList:', error);
+        setShareMessage({
+          type: 'error',
+          text:
+            !user && error && typeof error === 'object' && 'code' in error && String(error.code).includes('permission-denied')
+              ? 'Sign in with an invited account to open this PipeLists share.'
+              : readFirestoreError(error, 'Unable to load this shared PipeList.'),
+        });
+        setDataReady(true);
+      }
+    };
+
+    loadShare();
+  }, [authReady, shareId, user?.uid]);
+
+  useEffect(() => {
+    if (!leadShareId) return;
+
+    const loadLeadShare = async () => {
+      setDataReady(false);
+      setShareMessage(null);
+
+      try {
+        const shareRef = doc(simpBudgetDb, PIPELEAD_SHARES_COLLECTION, leadShareId);
+        const snapshot = await getDoc(shareRef);
+        if (!snapshot.exists()) {
+          setShareMessage({ type: 'error', text: 'This lead share link was not found.' });
+          setDataReady(true);
+          return;
+        }
+
+        const data = snapshot.data() as Partial<PipeLeadShare>;
+        if (!data.publicRead || !data.list) {
+          setShareMessage({ type: 'error', text: 'This lead share link is not available.' });
+          setDataReady(true);
+          return;
+        }
+
+        const normalizedList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
+        const normalizedItem =
+          normalizedList.items.find((item) => item.id === data.itemId) || normalizedList.items[0] || null;
+        if (!normalizedItem) {
+          setShareMessage({ type: 'error', text: 'This lead share does not include a readable lead.' });
+          setDataReady(true);
+          return;
+        }
+
+        const nextShare: PipeLeadShare = {
+          id: snapshot.id,
+          ownerUid: data.ownerUid || '',
+          ownerEmail: data.ownerEmail || '',
+          listId: data.listId || normalizedList.id,
+          itemId: normalizedItem.id,
+          list: normalizedList,
+          publicRead: data.publicRead === true,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        };
+
+        setLeadShareDoc(nextShare);
+        setLists([normalizedList]);
+        setActiveListId(normalizedList.id);
+        setDraft(defaultDraft(normalizedList.stages[0]?.id));
+        setSelectedLogItemId(normalizedItem.id);
+        setLogDraft(defaultLogDraft(normalizedList.templateKey));
+        setSelectedDetailItemId(normalizedItem.id);
+        setDetailModalMode('details');
+        setDataReady(true);
+      } catch (error) {
+        console.error('Unable to load shared PipeList lead:', error);
+        setShareMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to load this shared lead.'),
+        });
+        setDataReady(true);
+      }
+    };
+
+    loadLeadShare();
+  }, [leadShareId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (googleRedirectCompletionStartedRef.current) return;
+    googleRedirectCompletionStartedRef.current = true;
+    const completeGoogleRedirectSignIn = async () => {
+      try {
+        const result = await withTimeout(getRedirectResult(simpBudgetAuth, browserPopupRedirectResolver), 30000, 'Google sign-in took too long to finish. Please try again.');
+        if (!result?.user) return;
+
+        const email = result.user.email?.toLowerCase() || '';
+        if (
+          isSharedView &&
+          shareDoc?.access === 'edit' &&
+          email !== shareDoc.ownerEmail.toLowerCase() &&
+          !shareDoc.editorEmails.map((editorEmail) => editorEmail.toLowerCase()).includes(email)
+        ) {
+          setAuthMessage({
+            type: 'info',
+            text: 'You are signed in and can view this list, but this email was not granted edit access.',
+          });
+        }
+      } catch (error) {
+        console.error('PipeLists Google redirect sign-in failed:', error);
+        setAuthMessage({
+          type: 'error',
+          text: readAuthError(error, 'Unable to finish Google sign-in.'),
+        });
+      }
+    };
+
+    completeGoogleRedirectSignIn();
+  }, [isSharedView, shareDoc]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isSignInWithEmailLink(simpBudgetAuth, window.location.href)) return;
+
+    const completeEmailLinkSignIn = async () => {
+      const storedEmail = window.localStorage.getItem(MAGIC_LINK_EMAIL_STORAGE_KEY);
+      const urlParams = new URLSearchParams(window.location.search);
+      const inviteEmail = urlParams.get('inviteEmail')?.trim().toLowerCase() || '';
+      const email = storedEmail || inviteEmail || window.prompt('Confirm your email for PipeLists sign-in') || '';
+      if (!email) return;
+
+      try {
+        await signInWithEmailLink(simpBudgetAuth, email, window.location.href);
+        window.localStorage.removeItem(MAGIC_LINK_EMAIL_STORAGE_KEY);
+        setAuthMessage({ type: 'success', text: 'Signed in with magic link.' });
+      } catch (error) {
+        console.error('PipeLists magic link sign-in failed:', error);
+        setAuthMessage({
+          type: 'error',
+          text: readAuthError(error, 'Unable to finish magic link sign-in.'),
+        });
+      }
+    };
+
+    completeEmailLinkSignIn();
+  }, []);
+
+  useEffect(() => {
+    if (!user || (!inviteId && !inviteEmail)) return;
+
+    let cancelled = false;
+
+    const markInviteAccepted = async () => {
+      if (hasInviteAccountMismatch) {
+        setAuthMessage({
+          type: 'error',
+          text: `This invite was sent to ${inviteEmail}. Sign in with that email to open the shared PipeLists.`,
+        });
+        return;
+      }
+
+      const acceptedEmail = normalizedUserEmail;
+      if (!acceptedEmail) return;
+
+      try {
+        const inviteSnapshot = inviteId ? await getDoc(doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, inviteId)) : null;
+        const inviteOwnerUid = inviteSnapshot?.exists() ? (inviteSnapshot.data() as Partial<PipeListShare>).ownerUid || '' : '';
+        const [viewerSnapshots, editorSnapshots] = await Promise.all([
+          getDocs(
+            firestoreQuery(collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION), where('viewerEmails', 'array-contains', acceptedEmail)),
+          ),
+          getDocs(
+            firestoreQuery(collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION), where('editorEmails', 'array-contains', acceptedEmail)),
+          ),
+        ]);
+        const shareSnapshots = new Map(
+          [...viewerSnapshots.docs, ...editorSnapshots.docs]
+            .filter((snapshot) => !inviteOwnerUid || (snapshot.data() as Partial<PipeListShare>).ownerUid === inviteOwnerUid)
+            .map((snapshot) => [snapshot.id, snapshot]),
+        );
+
+        await Promise.all(
+          Array.from(shareSnapshots.values()).map((shareSnapshot) =>
+            setDoc(
+              doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareSnapshot.id),
+              stripUndefined({
+                inviteStatuses: {
+                  [acceptedEmail]: {
+                    email: acceptedEmail,
+                    access: normalizeShareEmails(shareSnapshot.data().editorEmails).includes(acceptedEmail) ? 'edit' : 'read',
+                    status: 'accepted',
+                    inviteId: inviteId || undefined,
+                    acceptedAt: serverTimestamp(),
+                  },
+                },
+                updatedAt: serverTimestamp(),
+              }),
+              { merge: true },
+            ),
+          ),
+        );
+
+        if (!cancelled && shareSnapshots.size > 0) {
+          setAuthMessage({ type: 'success', text: 'Invite accepted. Your shared PipeLists are ready.' });
+        }
+      } catch (error) {
+        console.error('Unable to mark PipeLists invite accepted:', error);
+      }
+    };
+
+    markInviteAccepted();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasInviteAccountMismatch, inviteEmail, inviteId, normalizedUserEmail, user]);
+
+  useEffect(() => {
+    if (isSharedView) return;
+    if (!user || !dataReady || !personalStateReady) return;
+
+    let cancelled = false;
+
+    const isCurrentSave = () => !cancelled && simpBudgetAuth.currentUser?.uid === user.uid;
+    const saveLists = async () => {
+      if (!isCurrentSave()) return;
+      const listsToPersist = purgeExpiredDeletedItems(lists.filter((list) => !sharedListIds.has(list.id)).map(normalizeList));
+      const baseLists = personalSnapshotBaselineRef.current;
+      if (pipeListSnapshotsEqual(listsToPersist, baseLists)) return;
+      let savedLists = listsToPersist;
+      const previousSave = personalSaveQueueRef.current;
+      let releaseSave: () => void = () => {};
+      personalSaveQueueRef.current = new Promise<void>((resolve) => { releaseSave = resolve; });
+
+      try {
+        await previousSave;
+        if (!isCurrentSave()) return;
+        const stateRef = doc(
+          simpBudgetDb,
+          SIMPBUDGET_USERS_COLLECTION,
+          user.uid,
+          PIPELISTS_SUBCOLLECTION,
+          PIPELISTS_STATE_DOCUMENT_ID,
+        );
+        await runPipeListSaveWithRetry(() => runTransaction(simpBudgetDb, async (transaction) => {
+          if (!isCurrentSave()) return;
+          const snapshot = await transaction.get(stateRef);
+          if (!isCurrentSave()) return;
+          const storedLists = snapshot.data()?.lists;
+          const remoteLists = Array.isArray(storedLists)
+            ? purgeExpiredDeletedItems(storedLists.map(normalizeList))
+            : [];
+          const mergedLists = mergePipeListSnapshotsThreeWay(baseLists, remoteLists, listsToPersist).map(normalizeList);
+          if (pipeListSnapshotsEqual(remoteLists, mergedLists)) { savedLists = Array.isArray(storedLists) ? storedLists : []; return; }
+          const persistedLists = mergedLists.map(list => {
+            const raw = Array.isArray(storedLists) ? storedLists.find((stored: PipeList) => stored.id === list.id) : undefined;
+            const displayed = remoteLists.find(remote => remote.id === list.id);
+            return raw && displayed ? preserveStoredUniversityList(raw, displayed, list) : list;
+          });
+          savedLists = persistedLists;
+          transaction.set(stateRef, stripUndefined({
+            ownerEmail: user.email || '',
+            lists: persistedLists,
+            updatedAt: serverTimestamp(),
+          }), { merge: true });
+        }), isCurrentSave);
+        if (!isCurrentSave()) return;
+
+        if (isOwner && typeof window !== 'undefined') {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(savedLists));
+        }
+
+        if (!cancelled) {
+          personalSaveFailureRef.current = null;
+          setPersonalSaveError(false);
+          setAppMessage(null);
+        }
+      } catch (error) {
+        console.error('Unable to save PipeLists:', error);
+        if (isCurrentSave()) {
+          personalSaveFailureRef.current = saveFailureDetails(error);
+          setPersonalSaveError(true);
+          setAppMessage({
+            type: 'error',
+            text: readFirestoreError(error, 'Unable to save PipeLists.'),
+          });
+        }
+      } finally {
+        releaseSave();
+      }
+    };
+
+    let saveStarted = false;
+    setPendingPersonalSaves((count) => count + 1);
+    const saveTimer = setTimeout(() => {
+      saveStarted = true;
+      void saveLists().finally(() => setPendingPersonalSaves((count) => Math.max(0, count - 1)));
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(saveTimer);
+      if (!saveStarted) setPendingPersonalSaves((count) => Math.max(0, count - 1));
+    };
+  }, [dataReady, isOwner, isSharedView, lists, personalStateReady, sharedListIds, user]);
+
+  useEffect(() => {
+    if (!shareId || !shareDoc || !dataReady || !canEditShared) return;
+
+    let cancelled = false;
+
+    const saveSharedList = async () => {
+      if (cancelled) return;
+      try {
+        const nextList = purgeExpiredDeletedItems(lists)[0];
+        if (!nextList) return;
+        const nextSnapshot = collaboratorSafePipeListSnapshot(nextList);
+        const serializedSnapshot = JSON.stringify(nextSnapshot);
+        if (serializedSnapshot === directShareBaselineRef.current) return;
+
+        setSavingToCloud(true);
+        const actor: PipeListShareActor = {
+          uid: user?.uid || '',
+          email: user?.email || '',
+          displayName: profile?.displayName || user?.displayName || '',
+          photoURL: profile?.photoURL || user?.photoURL || '',
+        };
+        const baseList = directShareBaselineRef.current
+          ? normalizeList(JSON.parse(directShareBaselineRef.current) as Partial<PipeList>, 0)
+          : undefined;
+        const mergedList = await persistCollaborativePipeList({
+          shareId,
+          ownerUid: shareDoc.ownerUid,
+          ownerEmail: shareDoc.ownerEmail,
+          list: nextSnapshot,
+          actor,
+          isCurrent: () => !cancelled,
+          protectedDetails: shareDoc.protectedDetails,
+          baseList,
+        });
+        if (cancelled) return;
+        directShareBaselineRef.current = JSON.stringify(mergedList);
+        if (shareDoc.protectedDetails) protectedShareBaselinesRef.current[shareId] = mergedList;
+
+        if (!cancelled) {
+          setLists([mergedList]);
+          setShareDoc((current) => (current ? { ...current, list: mergedList } : current));
+          setShareMessage(null);
+        }
+      } catch (error) {
+        console.error('Unable to save shared PipeList:', error);
+        if (!cancelled) {
+          setShareMessage({
+            type: 'error',
+            text: readFirestoreError(error, 'Unable to save shared PipeList.'),
+          });
+        }
+      } finally {
+        if (!cancelled) setSavingToCloud(false);
+      }
+    };
+
+    const saveTimer = setTimeout(() => { void saveSharedList(); }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(saveTimer);
+    };
+  }, [canEditShared, dataReady, lists, profile, shareDoc?.id, shareId, user]);
+
+  useEffect(() => {
+    if (isSharedView || isOwner || !user || !dataReady || accessibleShareDocs.length === 0) return;
+
+    const editableShares = accessibleShareDocs.filter((share) => share.editorEmails.includes(normalizedUserEmail));
+    if (editableShares.length === 0) return;
+    const changedShares = editableShares.filter((share) => {
+      const nextList = lists.find((list) => list.id === share.list.id);
+      return Boolean(nextList && JSON.stringify(nextList) !== JSON.stringify(share.list));
+    });
+    if (changedShares.length === 0) return;
+
+    let cancelled = false;
+
+    const saveAccessibleSharedLists = async () => {
+      if (cancelled) return;
+      setSavingToCloud(true);
+
+      try {
+        const actor: PipeListShareActor = {
+          uid: user.uid,
+          email: user.email || '',
+          displayName: profile?.displayName || user.displayName || '',
+          photoURL: profile?.photoURL || user.photoURL || '',
+        };
+        const savedShares = await Promise.all(
+          changedShares.map(async (share) => {
+            const nextList = lists.find((list) => list.id === share.list.id);
+            if (!nextList) return null;
+            const mergedList = await persistCollaborativePipeList({
+              shareId: share.id,
+              ownerUid: share.ownerUid,
+              ownerEmail: share.ownerEmail,
+              list: nextList,
+              actor,
+              isCurrent: () => !cancelled,
+              protectedDetails: share.protectedDetails,
+              baseList: protectedShareBaselinesRef.current[share.id] || share.list,
+            });
+            if (cancelled) return null;
+            if (share.protectedDetails) protectedShareBaselinesRef.current[share.id] = mergedList;
+            return { shareId: share.id, list: mergedList, protectedDetails: share.protectedDetails };
+          }),
+        );
+
+        if (cancelled) return;
+        setProtectedShareLists((current) => {
+          const next = { ...current };
+          savedShares.forEach((saved) => {
+            if (saved && (saved.protectedDetails || pipeListRequiresAccountAccess(saved.list))) {
+              next[saved.shareId] = saved.list;
+            }
+          });
+          return next;
+        });
+
+        if (!cancelled) setAppMessage(null);
+      } catch (error) {
+        console.error('Unable to save collaborator PipeLists:', error);
+        if (!cancelled) {
+          setAppMessage({
+            type: 'error',
+            text: readFirestoreError(error, 'Unable to save shared PipeList changes.'),
+          });
+        }
+      } finally {
+        if (!cancelled) setSavingToCloud(false);
+      }
+    };
+
+    const saveTimer = setTimeout(() => { void saveAccessibleSharedLists(); }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(saveTimer);
+    };
+  }, [accessibleShareDocs, dataReady, isOwner, isSharedView, lists, normalizedUserEmail, profile, user]);
+
+  const ownerShareId = !isSharedView && user ? shareDocumentIdForList(user.uid, activeList.id) : '';
+
+  useEffect(() => {
+    if (isSharedView || !user || !isOwner || !dataReady || !activeList?.id) return;
+
+    const nextShareId = shareDocumentIdForList(user.uid, activeList.id);
+    setShareMessage(null);
+
+    return onSnapshot(
+      doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, nextShareId),
+      (shareSnapshot) => {
+        if (!shareSnapshot.exists()) {
+          setShareDoc(null);
+          setShareAccess('read');
+          setShareEditorEmails('');
+          return;
+        }
+
+        const data = shareSnapshot.data() as Partial<PipeListShare>;
+        const normalizedShare = normalizePipeListShare(shareSnapshot.id, data, 0);
+        const fallbackViewerEmails = normalizeShareEmails(data.viewerEmails);
+        const fallbackEditorEmails = normalizeShareEmails(data.editorEmails);
+        const nextShare =
+          normalizedShare || {
+            id: shareSnapshot.id,
+            ownerUid: data.ownerUid || user.uid,
+            ownerEmail: data.ownerEmail || user.email || TREMAINE_OWNER_EMAIL,
+            list: collaboratorSafePipeListSnapshot(activeList),
+            access: data.access === 'edit' ? 'edit' : 'read',
+            publicRead: data.publicRead === true,
+            protectedDetails: fallbackEditorEmails.length > 0 || pipeListRequiresAccountAccess(activeList),
+            viewerEmails: fallbackViewerEmails,
+            editorEmails: fallbackEditorEmails,
+            inviteStatuses: normalizeInviteStatuses(data.inviteStatuses, fallbackViewerEmails, fallbackEditorEmails),
+            lastEditedBy: data.lastEditedBy,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+          };
+        setShareDoc(nextShare);
+        setShareAccess(data.access === 'edit' ? 'edit' : 'read');
+        const accountEmails = data.access === 'edit' ? fallbackEditorEmails : fallbackViewerEmails;
+        setShareEditorEmails(accountEmails.join(', '));
+
+        if (
+          nextShare.lastEditedBy?.uid &&
+          nextShare.lastEditedBy.uid !== user.uid &&
+          !pipeListShareRequiresAccountAccess(nextShare)
+        ) {
+          setLists((currentLists) =>
+            currentLists.map((list) =>
+              list.id === nextShare.list.id ? mergeCollaboratorListSnapshot(list, nextShare.list) : list,
+            ),
+          );
+        }
+      },
+      (error) => {
+        console.error('Unable to load PipeList invite:', error);
+        setShareDoc(null);
+        setShareMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to load invite settings for this PipeList.'),
+        });
+      },
+    );
+  }, [activeList.id, dataReady, isOwner, isSharedView, user]);
+
+  useEffect(() => {
+    if (!user || !dataReady || !shareDoc || !pipeListShareRequiresAccountAccess(shareDoc) || isLeadSharedView) {
+      return undefined;
+    }
+    const protectedShareId = isSharedView
+      ? canReadShared
+        ? shareId
+        : ''
+      : isOwner && shareDoc?.id === ownerShareId
+        ? ownerShareId
+        : '';
+    if (!protectedShareId) return undefined;
+
+    return onSnapshot(
+      doc(simpBudgetDb, PIPELIST_PROTECTED_SHARES_COLLECTION, protectedShareId),
+      (snapshot) => {
+        if (!snapshot.exists()) return;
+        const data = snapshot.data() as Partial<PipeListProtectedShare>;
+        if (!data.list) return;
+        const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
+        const currentList = liveListsRef.current.find((list) => list.id === remoteList.id);
+        const storedBase = protectedShareBaselinesRef.current[protectedShareId];
+        const directBase =
+          isSharedView && directShareBaselineRef.current
+            ? normalizeList(JSON.parse(directShareBaselineRef.current) as Partial<PipeList>, 0)
+            : undefined;
+        const baseList = storedBase || directBase;
+        const nextList = currentList
+          ? baseList
+            ? reconcilePipeListSnapshotsForWrite(remoteList, currentList, baseList)
+            : mergeCollaboratorListSnapshot(currentList, remoteList)
+          : remoteList;
+        protectedShareBaselinesRef.current[protectedShareId] = remoteList;
+        setProtectedShareLists((current) => ({ ...current, [protectedShareId]: nextList }));
+
+        if (isSharedView) {
+          directShareBaselineRef.current = JSON.stringify(remoteList);
+          setProtectedDirectShareUid(user.uid);
+          setLists([nextList]);
+          setShareDoc((current) => (current ? { ...current, list: nextList } : current));
+          return;
+        }
+
+        if (data.lastEditedBy?.uid && data.lastEditedBy.uid !== user.uid) {
+          setLists((currentLists) =>
+            currentLists.map((list) => (list.id === nextList.id ? nextList : list)),
+          );
+        }
+      },
+      (error) => {
+        console.error('Unable to load protected PipeList success data:', error);
+        setShareMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to load protected customer success data.'),
+        });
+      },
+    );
+  }, [canReadShared, dataReady, isLeadSharedView, isOwner, isSharedView, ownerShareId, shareDoc?.id, shareDoc?.protectedDetails, shareId, user]);
+
+  useEffect(() => {
+    if (isSharedView || !user || !isOwner || !dataReady || !shareDoc || shareDoc.id !== ownerShareId) return;
+    const sharedBaseline = protectedShareBaselinesRef.current[shareDoc.id];
+    if (sharedBaseline && pipeListSnapshotsEqual(
+      collaboratorSafePipeListSnapshot(normalizeList(activeList, 0)),
+      collaboratorSafePipeListSnapshot(normalizeList(sharedBaseline, 0)),
+    )) return;
+
+    let cancelled = false;
+
+    const syncSharedListSnapshot = async () => {
+      if (cancelled) return;
+      try {
+        const actor: PipeListShareActor = {
+          uid: user.uid,
+          email: user.email || '',
+          displayName: profile?.displayName || user.displayName || '',
+          photoURL: profile?.photoURL || user.photoURL || '',
+        };
+        const mergedList = await persistCollaborativePipeList({
+          shareId: shareDoc.id,
+          ownerUid: shareDoc.ownerUid || user.uid,
+          ownerEmail: shareDoc.ownerEmail || user.email || TREMAINE_OWNER_EMAIL,
+          list: activeList,
+          actor,
+          isCurrent: () => !cancelled,
+          protectedDetails: shareDoc.protectedDetails,
+          baseList: protectedShareBaselinesRef.current[shareDoc.id],
+        });
+        // Only the subscription advances its baseline; overlapping save acknowledgments can arrive out of order.
+
+        if (!cancelled) {
+          setLists((currentLists) => {
+            const currentList = currentLists.find((list) => list.id === mergedList.id);
+            if (!currentList) return currentLists;
+            const reconciledList = reconcilePipeListSnapshotsForWrite(mergedList, currentList, activeList);
+            if (pipeListSnapshotsEqual(currentList, reconciledList)) return currentLists;
+            return currentLists.map((list) => (list.id === mergedList.id ? reconciledList : list));
+          });
+          if (shareDoc.protectedDetails || pipeListRequiresAccountAccess(mergedList)) {
+            setProtectedShareLists((current) => ({ ...current, [shareDoc.id]: mergedList }));
+          }
+          setShareDoc((current) => (current && current.id === shareDoc.id ? { ...current, list: mergedList } : current));
+        }
+      } catch (error) {
+        console.error('Unable to sync PipeList invite:', error);
+      }
+    };
+
+    const saveTimer = setTimeout(() => { void syncSharedListSnapshot(); }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(saveTimer);
+    };
+  }, [activeList, dataReady, isOwner, isSharedView, ownerShareId, profile, shareDoc?.id, user]);
+
+  useEffect(() => {
+    if (isSharedView || !user || !isOwner || !isSharePanelOpen) return;
+
+    setOwnerSharesReady(false);
+    setLoadingOwnerShares(true);
+    const ownerSharesQuery = firestoreQuery(
+      collection(simpBudgetDb, PIPELIST_SHARES_COLLECTION),
+      where('ownerUid', '==', user.uid),
+    );
+
+    return onSnapshot(
+      ownerSharesQuery,
+      { includeMetadataChanges: true },
+      (shareSnapshots) => {
+        const shares = shareSnapshots.docs
+          .map((shareSnapshot, index) => normalizePipeListShare(shareSnapshot.id, shareSnapshot.data() as Partial<PipeListShare>, index))
+          .filter((share): share is PipeListShare => Boolean(share));
+
+        setOwnerShareDocs(shares);
+        const isServerSnapshot = !shareSnapshots.metadata.fromCache;
+        setOwnerSharesReady(isServerSnapshot);
+        setLoadingOwnerShares(!isServerSnapshot);
+      },
+      (error) => {
+        console.error('Unable to load PipeLists invite history:', error);
+        setShareMessage({
+          type: 'error',
+          text: readFirestoreError(error, 'Unable to load invite history.'),
+        });
+        setOwnerSharesReady(false);
+        setLoadingOwnerShares(false);
+      },
+    );
+  }, [isOwner, isSharePanelOpen, isSharedView, user]);
+
+  const allItemRows = useMemo(
+    () => lists.flatMap((list) => list.items.map((item) => ({ list, item }))),
+    [lists],
+  );
+
+  const allRows = useMemo(
+    () => allItemRows.filter(({ item }) => !isItemDeleted(item)),
+    [allItemRows],
+  );
+
+  const activeListItems = useMemo(
+    () => activeList.items.filter((item) => !isItemDeleted(item)),
+    [activeList.items],
+  );
+  const universitySuccessAccounts = useMemo<PipeListsSuccessAccount[]>(
+    () =>
+      activeList.templateKey === 'university-pilot'
+        ? activeListItems
+            .filter((item) => item.stage === 'pilot-active' || item.stage === 'pilot-complete')
+            .map((item) => ({
+              id: item.id,
+              title: item.title,
+              organization: item.organization,
+              commercialStage: getStage(activeList, item.stage).label,
+              value: itemAmountDisplay(activeList, item),
+              success: customerSuccessForItem(item),
+            }))
+        : [],
+    [activeList, activeListItems],
+  );
+  const activeContactEmails = useMemo(
+    () => Array.from(new Set(activeListItems.flatMap((item) => normalizeContactEmails(item.contactEmails)))),
+    [activeListItems],
+  );
+  const missingVcSourceItems = useMemo(
+    () =>
+      activeList.templateKey === 'vc'
+        ? activeListItems.filter((item) => !item.sourceUrl.trim())
+        : [],
+    [activeList.templateKey, activeListItems],
+  );
+  const activeLeadKeys = useMemo(
+    () =>
+      new Set(
+        activeListItems.flatMap((item) =>
+          [
+            normalizeOpportunityKey(`${item.title} ${item.organization}`),
+            item.sourceUrl ? normalizeOpportunityKey(item.sourceUrl) : '',
+          ].filter(Boolean),
+        ),
+      ),
+    [activeListItems],
+  );
+  const activeLeadSearchEntryKeys = useMemo(
+    () => new Set(activeListItems.flatMap((item) => leadSearchDuplicateKeysForItem(item))),
+    [activeListItems],
+  );
+
+  const allLogRows = useMemo(
+    () =>
+      allItemRows
+        .flatMap(({ list, item }) =>
+          item.weeklyLogs.map((log) => ({
+            list,
+            item,
+            log,
+          })),
+        )
+        .sort((left, right) => logTimestampMs(right.log) - logTimestampMs(left.log)),
+    [allItemRows],
+  );
+
+  const filteredLogRows = useMemo(
+    () =>
+      allLogRows.filter(({ list, log }) => {
+        const matchesList = logListFilter === 'all' || list.id === logListFilter;
+        if (!matchesList) return false;
+
+        const matchesEmailType = logEmailFilter === 'all' || emailFilterForLog(log) === logEmailFilter;
+        if (!matchesEmailType) return false;
+
+        const recipient = logRecipientFilter.trim().toLowerCase();
+        if (!recipient) return true;
+        const details = parseEmailLogNotes(log.notes || '');
+        return details.to.toLowerCase() === recipient;
+      }),
+    [allLogRows, logEmailFilter, logListFilter, logRecipientFilter],
+  );
+
+  const logTargetList = lists.find((list) => list.id === logTargetListId) || activeList;
+  const logTargetListItems = logTargetList.items.filter((item) => !isItemDeleted(item));
+  const logTargetItem = logTargetListItems.find((item) => item.id === logTargetItemId) || logTargetListItems[0] || null;
+
+  const filteredItems = useMemo(() => {
+    const search = query.trim().toLowerCase();
+
+    const dueTime = (item: PipelineItem) => {
+      const dateValue = itemPrimaryDate(activeList, item);
+      if (!dateValue) return Number.POSITIVE_INFINITY;
+
+      const parsed = new Date(`${dateValue}T12:00:00`).getTime();
+      return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+    };
+
+    return activeListItems
+      .filter((item) => {
+        const matchesSelectedCategories =
+          isInvestorUpdateContactsList || matchesPipelineFilters(item, stageFilters, priorityFilters);
+        const matchesQuery =
+          search.length === 0 ||
+          [
+            item.title,
+            item.organization,
+            item.description,
+            item.owner,
+            item.nextStep,
+            item.amount,
+            item.acv,
+            item.sourceUrl,
+            item.segment,
+            item.decisionMaker,
+            item.notes,
+          ]
+            .join(' ')
+            .toLowerCase()
+            .includes(search);
+
+        return matchesSelectedCategories && matchesQuery;
+      })
+      .sort((left, right) => {
+        if (sortColumn) {
+          const direction = sortDirection === 'asc' ? 1 : -1;
+          switch (sortColumn) {
+            case 'item':
+              return left.title.localeCompare(right.title) * direction;
+            case 'organization':
+              return (left.organization || '').localeCompare(right.organization || '') * direction;
+            case 'stage': {
+              const stageIndex = (item: PipelineItem) =>
+                activeList.stages.findIndex((stage) => stage.id === item.stage);
+              return (stageIndex(left) - stageIndex(right)) * direction;
+            }
+            case 'value': {
+              const valueFor = (item: PipelineItem) => (isContactListActive ? 0 : itemValue(item));
+              return (valueFor(left) - valueFor(right)) * direction;
+            }
+            case 'createdAt': {
+              const leftDate = pipeTimestampToDate(left.createdAt)?.getTime();
+              const rightDate = pipeTimestampToDate(right.createdAt)?.getTime();
+              if (leftDate === undefined) return rightDate === undefined ? 0 : 1;
+              if (rightDate === undefined) return -1;
+              return (leftDate - rightDate) * direction;
+            }
+            case 'dueDate':
+              return (dueTime(left) - dueTime(right)) * direction;
+            case 'nextStep': {
+              const nextStepFor = (item: PipelineItem) => item.nextStep || item.notes || item.expansionPath || '';
+              return nextStepFor(left).localeCompare(nextStepFor(right)) * direction;
+            }
+            default:
+              return 0;
+          }
+        }
+
+        const stageRank = (item: PipelineItem) => {
+          if (isLostStage(activeList, item.stage)) return 2;
+          return isIdentifiedStage(getStage(activeList, item.stage)) ? 1 : 0;
+        };
+        const stageRankDifference = stageRank(left) - stageRank(right);
+        if (stageRankDifference !== 0) return stageRankDifference;
+
+        const dateDifference = dueTime(left) - dueTime(right);
+        if (dateDifference !== 0) return dateDifference;
+
+        return left.title.localeCompare(right.title);
+      });
+  }, [
+    activeList,
+    activeListItems,
+    isContactListActive,
+    isInvestorUpdateContactsList,
+    priorityFilters,
+    query,
+    sortColumn,
+    sortDirection,
+    stageFilters,
+  ]);
+
+  const filteredItemIds = useMemo(() => filteredItems.map((item) => item.id), [filteredItems]);
+  const visibleKanbanStages = useMemo(
+    () =>
+      !isInvestorUpdateContactsList && stageFilters.length > 0
+        ? activeList.stages.filter((stage) => stageFilters.includes(stage.id))
+        : activeList.stages,
+    [activeList.stages, isInvestorUpdateContactsList, stageFilters],
+  );
+  const kanbanItemsByStage = useMemo(() => {
+    const stageIds = new Set(activeList.stages.map((stage) => stage.id));
+    const fallbackStageId = activeList.stages[0]?.id || 'uncategorized';
+
+    return filteredItems.reduce<Record<string, PipelineItem[]>>((accumulator, item) => {
+      const stageId = stageIds.has(item.stage) ? item.stage : fallbackStageId;
+      accumulator[stageId] = [...(accumulator[stageId] || []), item];
+      return accumulator;
+    }, {});
+  }, [activeList.stages, filteredItems]);
+  const filteredItemIdSet = useMemo(() => new Set(filteredItemIds), [filteredItemIds]);
+  const selectedVisibleItemIds = useMemo(
+    () => selectedBulkItemIds.filter((itemId) => filteredItemIdSet.has(itemId)),
+    [filteredItemIdSet, selectedBulkItemIds],
+  );
+  const selectedBulkItems = useMemo(
+    () => activeListItems.filter((item) => selectedBulkItemIds.includes(item.id)),
+    [activeListItems, selectedBulkItemIds],
+  );
+  const allVisibleItemsSelected = filteredItemIds.length > 0 && selectedVisibleItemIds.length === filteredItemIds.length;
+  const someVisibleItemsSelected = selectedVisibleItemIds.length > 0 && !allVisibleItemsSelected;
+  const bulkMoveTargetOptions = useMemo(
+    () =>
+      lists.filter((list) => {
+        if (list.id === activeList.id) return false;
+        return !sharedListIds.has(list.id) || editableListIds.has(list.id);
+      }),
+    [activeList.id, editableListIds, lists, sharedListIds],
+  );
+
+  const countsByStage = useMemo(
+    () =>
+      activeList.stages.reduce<Record<string, number>>((accumulator, stage) => {
+        accumulator[stage.id] = activeListItems.filter((item) => item.stage === stage.id).length;
+        return accumulator;
+      }, {}),
+    [activeListItems, activeList.stages],
+  );
+
+  const countsByPriority = useMemo(
+    () =>
+      activeListItems.reduce<Record<PipelinePriority, number>>(
+        (accumulator, item) => {
+          accumulator[item.priority] = (accumulator[item.priority] || 0) + 1;
+          return accumulator;
+        },
+        { high: 0, medium: 0, low: 0 },
+      ),
+    [activeListItems],
+  );
+
+  const activeItems = activeListItems.filter((item) => !isClosedStage(activeList, item.stage)).length;
+  const wonItems = activeListItems.filter((item) => isWonStage(activeList, item.stage)).length;
+  const loggedItems = activeListItems.filter((item) => item.weeklyLogs.length > 0).length;
+  const sentEmailItems = activeListItems.filter((item) =>
+    ['request', 'sent', 'delivered', 'opened', 'click', 'clicked'].includes(normalizeEmailStatus(item.emailStatus || item.lastEmailEvent)),
+  ).length;
+  const deliveredEmailItems = activeListItems.filter((item) =>
+    ['delivered', 'opened', 'click', 'clicked'].includes(normalizeEmailStatus(item.emailStatus || item.lastEmailEvent)),
+  ).length;
+  const openedEmailItems = activeListItems.filter((item) =>
+    ['opened', 'click', 'clicked'].includes(normalizeEmailStatus(item.emailStatus || item.lastEmailEvent)),
+  ).length;
+  const dueSoonItems = activeListItems.filter((item) => {
+    const dueDate = itemPrimaryDate(activeList, item);
+    if (!dueDate) return false;
+    const dueTime = new Date(`${dueDate}T12:00:00`).getTime();
+    const now = new Date().getTime();
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    return dueTime >= now - 24 * 60 * 60 * 1000 && dueTime <= now + sevenDays;
+  }).length;
+  const activeOpenValue = activeListItems
+    .filter((item) => !isClosedStage(activeList, item.stage))
+    .reduce((sum, item) => sum + itemValue(item), 0);
+
+  const activeAcv = activeListItems
+    .filter((item) => !isClosedStage(activeList, item.stage))
+    .reduce((sum, item) => sum + parseMoney(item.acv), 0);
+  const showOpportunityMetrics = !isUniversitySuccessList && !isContactListActive && !isTaskListActive && !isInvestorUpdateContactsList;
+
+  const scorecardMetrics = useMemo(() => {
+    const scopedRows = metricsScope === 'workspace' ? allRows : allRows.filter(({ list }) => list.id === activeList.id);
+    const openRows = scopedRows.filter(({ list, item }) => !isClosedStage(list, item.stage));
+    const wonRows = scopedRows.filter(({ list, item }) => isWonStage(list, item.stage));
+    const reportingCutoff =
+      metricsPeriod === 'all'
+        ? ''
+        : new Date(Date.now() - Number(metricsPeriod) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const reportingToday = new Date().toISOString().slice(0, 10);
+    const logs = scopedRows.flatMap(({ item }) => item.weeklyLogs);
+    const metricLogs = scopedRows.flatMap(({ item }) => {
+      const latestEligibleLog = item.weeklyLogs
+        .filter((log) => {
+          if (!logHasMetrics(log)) return false;
+          const logDate = (log.reportingPeriodEnd || log.weekOf || log.createdAt).slice(0, 10);
+          if (!logDate || logDate > reportingToday) return false;
+          return !reportingCutoff || logDate >= reportingCutoff;
+        })
+        .sort((left, right) => successEvidenceTimestamp(right) - successEvidenceTimestamp(left))[0];
+      return latestEligibleLog ? [latestEligibleLog] : [];
+    });
+    const expectedDates = openRows
+      .map(({ list, item }) => itemPrimaryDate(list, item))
+      .filter(Boolean)
+      .sort();
+    const dueSoonRows = openRows.filter(({ list, item }) => {
+      const dueDate = itemPrimaryDate(list, item);
+      if (!dueDate) return false;
+      const dueTime = new Date(`${dueDate}T12:00:00`).getTime();
+      const now = new Date().getTime();
+      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+      return dueTime >= now - 24 * 60 * 60 * 1000 && dueTime <= now + sevenDays;
+    });
+    const loggedRows = scopedRows.filter(({ item }) => item.weeklyLogs.length > 0);
+
+    const singleMetricLog = metricLogs.length === 1 ? metricLogs[0] : null;
+
+    return {
+      totalOpenDeals: openRows.length,
+      totalOpenValue: openRows.reduce((sum, row) => sum + itemValue(row.item), 0),
+      averageContractValue: average(scopedRows.map(({ item }) => itemValue(item))),
+      firstExpectedCloseDate: expectedDates[0] || '',
+      wonRate: scopedRows.length > 0 ? (wonRows.length / scopedRows.length) * 100 : 0,
+      dueSoon: dueSoonRows.length,
+      loggedItems: loggedRows.length,
+      totalLogs: logs.length,
+      metricReports: metricLogs.length,
+      checkInRate: singleMetricLog ? derivedMeasuredCheckInRate(singleMetricLog) : null,
+      biometricSyncRate: singleMetricLog ? parseOptionalNumber(singleMetricLog.biometricSyncRate) : null,
+      signalEvents: singleMetricLog ? parseOptionalNumber(singleMetricLog.signalEvents) : null,
+      noraEngagementRate: singleMetricLog ? parseOptionalNumber(singleMetricLog.noraEngagementRate) : null,
+      escalations: singleMetricLog ? parseOptionalNumber(singleMetricLog.escalations) : null,
+      staffScore: singleMetricLog ? parseOptionalNumber(singleMetricLog.staffFeedbackScore) : null,
+    };
+  }, [activeList.id, allRows, metricsPeriod, metricsScope]);
+
+  const selectedLogItem =
+    activeListItems.find((item) => item.id === selectedLogItemId) ||
+    activeListItems.find((item) => item.weeklyLogs.length > 0 || item.stage.includes('pilot')) ||
+    activeListItems[0];
+
+  const liveDetailItem = activeList.items.find((item) => item.id === selectedDetailItemId);
+  if (liveDetailItem) detailSnapshotRef.current = { item: liveDetailItem, list: activeList };
+  const selectedDetailItem = liveDetailItem ||
+    (detailSnapshotRef.current?.item.id === selectedDetailItemId ? detailSnapshotRef.current.item : null);
+
+
+  useEffect(() => {
+    setSelectedBulkItemIds((currentIds) => currentIds.filter((itemId) => activeListItems.some((item) => item.id === itemId)));
+    setBulkMoveTargetListId('');
+    setBulkActionMessage(null);
+  }, [activeList.id, activeListItems]);
+
+  const selectedLinkedLeads = selectedDetailItem ? getLinkedLeads(activeList.items, selectedDetailItem.id) : [];
+  const handleLeadLink = (targetId: string, linked: boolean) => {
+    if (!canModify || isLeadSharedView || !selectedDetailItem || !targetId) return;
+    const updatedAt = new Date().toISOString();
+    setLists(current => current.map(list => list.id === activeList.id
+      ? { ...list, items: setLeadLink(list.items, selectedDetailItem.id, targetId, linked, updatedAt) }
+      : list));
+  };
+
+  const applySyncedEmailStatus = (args: {
+    listId: string;
+    itemId: string;
+    messageId: string;
+    summary: SyncedEmailEventSummary;
+  }) => {
+    const eventAt = args.summary.eventAt || new Date().toISOString();
+    const normalizedStatus = normalizeContactEmailStatusInput(args.summary.status);
+    if (!normalizedStatus || normalizedStatus === 'sent') return;
+
+    setLists((currentLists) =>
+      currentLists.map((list) => {
+        if (list.id !== args.listId) return list;
+
+        return {
+          ...list,
+          items: list.items.map((item) => {
+            if (item.id !== args.itemId || item.lastEmailMessageId !== args.messageId) return item;
+            const currentStatus = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
+            if (emailStatusRank(normalizedStatus) < emailStatusRank(currentStatus)) return item;
+
+            const eventLog = buildSyncedEmailEventLog({
+              item,
+              status: args.summary.status,
+              messageId: args.messageId,
+              eventAt,
+              link: args.summary.link,
+            });
+            const hasEventLog = item.weeklyLogs.some((log) => log.id === eventLog.id);
+
+            return {
+              ...item,
+              emailStatus: normalizedStatus,
+              lastEmailEvent: normalizedStatus,
+              lastEmailEventAt: eventAt,
+              lastEmailMessageId: args.messageId,
+              lastEmailDeliveredAt:
+                normalizedStatus === 'delivered' || normalizedStatus === 'opened' || normalizedStatus === 'clicked'
+                  ? item.lastEmailDeliveredAt || eventAt
+                  : item.lastEmailDeliveredAt,
+              lastEmailOpenedAt:
+                normalizedStatus === 'opened' || normalizedStatus === 'clicked' ? eventAt : item.lastEmailOpenedAt,
+              lastEmailClickedAt: normalizedStatus === 'clicked' ? eventAt : item.lastEmailClickedAt,
+              emailOpenCount:
+                normalizedStatus === 'opened' && currentStatus !== 'opened' && currentStatus !== 'clicked'
+                  ? Math.max(1, Number(item.emailOpenCount) || 0)
+                  : item.emailOpenCount,
+              emailClickCount:
+                normalizedStatus === 'clicked' && currentStatus !== 'clicked'
+                  ? Math.max(1, Number(item.emailClickCount) || 0)
+                  : item.emailClickCount,
+              lastEmailClickedLink: normalizedStatus === 'clicked' ? args.summary.link || item.lastEmailClickedLink : item.lastEmailClickedLink,
+              updatedAt: eventAt,
+              weeklyLogs: hasEventLog ? item.weeklyLogs : [eventLog, ...item.weeklyLogs],
+            };
+          }),
+        };
+      }),
+    );
+  };
+
+  useEffect(() => {
+    if (!user || !isOwner || isSharedView) return undefined;
+    if (viewMode !== 'logs' && detailModalMode !== 'logs') return undefined;
+
+    const candidates = new Map<string, { listId: string; itemId: string; messageId: string; schoolSequence: boolean }>();
+    const addCandidate = (listId: string, item: PipelineItem) => {
+      const messageId = item.lastEmailMessageId.trim();
+      const status = normalizeContactEmailStatusInput(item.emailStatus || item.lastEmailEvent);
+      const schoolSequence = item.lastEmailType === 'school-outreach';
+      if (!messageId || (!schoolSequence && emailStatusRank(status) >= emailStatusRank('opened'))) return;
+      candidates.set(messageId, { listId, itemId: item.id, messageId, schoolSequence });
+    };
+
+    if (detailModalMode === 'logs' && selectedDetailItem) {
+      addCandidate(activeList.id, selectedDetailItem);
+    }
+    if (viewMode === 'logs') {
+      filteredLogRows.forEach(({ list, item }) => addCandidate(list.id, item));
+    }
+
+    const now = Date.now();
+    const staleAfterMs = 20_000;
+    const pending = Array.from(candidates.values())
+      .filter((candidate) => now - (emailStatusSyncCheckedAtRef.current.get(candidate.messageId) || 0) > staleAfterMs)
+      .slice(0, 8);
+    if (pending.length === 0) return undefined;
+
+    let cancelled = false;
+    pending.forEach((candidate) => {
+      emailStatusSyncCheckedAtRef.current.set(candidate.messageId, now);
+    });
+
+    const syncStatuses = async () => {
+      const idToken = await user.getIdToken();
+      await Promise.all(
+        pending.map(async (candidate) => {
+          try {
+            const response = await fetch(candidate.schoolSequence ? '/api/pipelists/email-sequence' : '/api/pipelists/check-email-events', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${idToken}`,
+              },
+              body: JSON.stringify(candidate.schoolSequence
+                ? { action: 'refresh-tracking', listId: candidate.listId, itemId: candidate.itemId }
+                : { messageId: candidate.messageId }),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (candidate.schoolSequence || cancelled || !response.ok || result?.success === false || !result?.summary) return;
+            applySyncedEmailStatus({
+              ...candidate,
+              summary: result.summary as SyncedEmailEventSummary,
+            });
+          } catch (error) {
+            console.warn('[PipeLists] Unable to sync Brevo email status:', error);
+          }
+        }),
+      );
+    };
+
+    syncStatuses();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeList.id, detailModalMode, filteredLogRows, isOwner, isSharedView, selectedDetailItem, user, viewMode]);
+
+
+  useEffect(() => {
+    setLeadCopyMessage(null);
+    setAttachmentMessage(null);
+    setLeadShareMessage(null);
+    setLeadShareUrl('');
+    setLeadMoveMessage(null);
+    setMoveTargetListId('');
+    setAttachmentLinkName('');
+    setAttachmentLinkUrl('');
+  }, [selectedDetailItemId, detailModalMode]);
+
+  useEffect(() => {
+    const editor = contactEmailBodyEditorRef.current;
+    if (!editor || (typeof document !== 'undefined' && document.activeElement === editor)) return;
+    editor.innerHTML = contactEmailBodyHtml || linkifyComposerBodyHtml(contactEmailBody);
+  }, [detailModalMode, isContactEmailModalOpen, selectedDetailItemId]);
+
+  const syncContactEmailComposerState = (editor: HTMLDivElement) => {
+    const text = editor.innerText.replace(/\u00a0/g, ' ');
+    setContactEmailBody(text);
+    setContactEmailBodyHtml(serializeComposerEditorHtml(editor));
+  };
+
+  const commitContactEmailComposerState = (editor: HTMLDivElement) => {
+    const text = editor.innerText.replace(/\u00a0/g, ' ');
+    const html = serializeComposerEditorHtml(editor);
+    setContactEmailBody(text);
+    setContactEmailBodyHtml(html);
+    editor.innerHTML = html;
+  };
+
+  const saveContactEmailSelection = () => {
+    const editor = contactEmailBodyEditorRef.current;
+    if (!editor || typeof window === 'undefined') return;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    contactEmailSelectionRef.current = range.cloneRange();
+  };
+
+  const openComposerLinkPopover = () => {
+    const editor = contactEmailBodyEditorRef.current;
+    if (!editor || typeof window === 'undefined') return;
+    const selection = window.getSelection();
+    const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : contactEmailSelectionRef.current;
+    if (!range || !editor.contains(range.commonAncestorContainer) || !range.toString().trim()) {
+      setContactEmailSendMessage({ type: 'error', text: 'Highlight text in the message before adding a link.' });
+      return;
+    }
+    contactEmailSelectionRef.current = range.cloneRange();
+    const editorRect = editor.getBoundingClientRect();
+    const rangeRect = range.getBoundingClientRect();
+    const popoverWidth = 300;
+    const left = Math.min(Math.max(rangeRect.left - editorRect.left, 8), Math.max(editorRect.width - popoverWidth - 8, 8));
+    const top = Math.max(rangeRect.bottom - editorRect.top + 8, 8);
+    setComposerLinkPopover({ left, top, url: '', error: '' });
+  };
+
+  const applyComposerLink = () => {
+    const editor = contactEmailBodyEditorRef.current;
+    const range = contactEmailSelectionRef.current;
+    const href = normalizeComposerHref(composerLinkPopover?.url || '');
+    if (!composerLinkPopover || !editor || !range) return;
+    if (!href) {
+      setComposerLinkPopover({ ...composerLinkPopover, error: 'Enter a valid URL or email address.' });
+      return;
+    }
+
+    const selectionText = range.toString();
+    if (!selectionText.trim()) {
+      setComposerLinkPopover({ ...composerLinkPopover, error: 'Highlight text first.' });
+      return;
+    }
+
+    const anchor = document.createElement('a');
+    anchor.href = href;
+    anchor.target = '_blank';
+    anchor.rel = 'noreferrer';
+    anchor.textContent = selectionText;
+    anchor.style.color = '#2563eb';
+    anchor.style.textDecoration = 'underline';
+    anchor.style.textUnderlineOffset = '3px';
+
+    editor.focus();
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    range.deleteContents();
+    range.insertNode(anchor);
+    range.setStartAfter(anchor);
+    range.setEndAfter(anchor);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    syncContactEmailComposerState(editor);
+    setComposerLinkPopover(null);
+  };
+
+  const renderComposerLinkPopover = () =>
+    composerLinkPopover ? (
+      <div
+        className="absolute z-20 w-[300px] rounded-lg border border-stone-200 bg-white p-3 shadow-xl"
+        style={{ left: composerLinkPopover.left, top: composerLinkPopover.top }}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <label className="block">
+          <span className="mb-1 block text-[10px] font-semibold uppercase text-stone-400">Link address</span>
+          <input
+            value={composerLinkPopover.url}
+            onChange={(event) => setComposerLinkPopover({ ...composerLinkPopover, url: event.target.value, error: '' })}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                applyComposerLink();
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setComposerLinkPopover(null);
+              }
+            }}
+            autoFocus
+            className="h-10 w-full rounded-md border border-stone-200 px-3 text-sm outline-none focus:border-stone-400"
+            placeholder="https://example.com"
+          />
+        </label>
+        {composerLinkPopover.error && <p className="mt-2 text-xs text-rose-600">{composerLinkPopover.error}</p>}
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setComposerLinkPopover(null)}
+            className="h-8 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-600"
+          >
+            Cancel
+          </button>
+          <button type="button" onClick={applyComposerLink} className="h-8 rounded-full bg-stone-950 px-3 text-xs font-semibold text-white">
+            OK
+          </button>
+        </div>
+      </div>
+    ) : null;
+
+  const resetEditor = () => {
+    setItemSaveError('');
+    setDraft(defaultDraft(activeList.stages[0]?.id));
+    setContactEmailInput('');
+    setContactEmailError('');
+    setLeadImageMessage(null);
+    setEditingItemId(null);
+    setIsEditorOpen(false);
+  };
+
+  const addContactEmailTokens = (value: string) => {
+    const tokens = value
+      .split(/[\s,;]+/)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (tokens.length === 0) return true;
+    const invalidEmails = tokens.filter((email) => !isValidContactEmail(email));
+    if (invalidEmails.length > 0) {
+      setContactEmailInput(value.trim());
+      setContactEmailError('Enter a valid email address.');
+      return false;
+    }
+
+    const inferredContactName = tokens.map(contactNameFromEmail).find(Boolean) || '';
+    setDraft((current) => ({
+      ...current,
+      title: isContactListActive && !current.title.trim() && inferredContactName ? inferredContactName : current.title,
+      contactEmails: Array.from(new Set([...current.contactEmails, ...tokens])),
+    }));
+    setContactEmailInput('');
+    setContactEmailError('');
+    return true;
+  };
+
+  const removeContactEmail = (email: string) => {
+    setDraft((current) => ({
+      ...current,
+      contactEmails: current.contactEmails.filter((contactEmail) => contactEmail !== email),
+    }));
+  };
+
+  const openLogModal = (listId?: string, itemId?: string) => {
+    if (!canModify) return;
+    const targetList = lists.find((list) => list.id === listId) || (logListFilter !== 'all' ? lists.find((list) => list.id === logListFilter) : null) || activeList;
+    const targetItems = targetList.items.filter((item) => !isItemDeleted(item));
+    const targetItem = targetItems.find((item) => item.id === itemId) || targetItems[0];
+
+    setLogTargetListId(targetList.id);
+    setLogTargetItemId(targetItem?.id || '');
+    setLogDraft(defaultLogDraft(targetList.templateKey));
+    setIsLogModalOpen(true);
+  };
+
+  const closeLogModal = () => {
+    setIsLogModalOpen(false);
+    setLogDraft(defaultLogDraft(logTargetList.templateKey));
+  };
+
+  const showNextStepTooltip = (event: React.MouseEvent<HTMLElement> | React.FocusEvent<HTMLElement>, text: string) => {
+    if (!text || text === 'No next step') return;
+    if (typeof window === 'undefined') return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const tooltipWidth = Math.min(360, window.innerWidth - 32);
+    const left = Math.min(Math.max(rect.left, 16), window.innerWidth - tooltipWidth - 16);
+    const placement = rect.bottom + 160 > window.innerHeight ? 'above' : 'below';
+    const top = placement === 'above' ? rect.top - 8 : rect.bottom + 8;
+
+    setNextStepTooltip({ text, left, top, width: tooltipWidth, placement });
+  };
+
+  const openLeadUrlModal = () => {
+    if (!canModify) return;
+    setLeadUrl('');
+    setIsManualLeadEntry(isTaskListActive);
+    setManualLeadDraft(defaultManualLeadDraft(activeList.stages[0]?.id));
+    setLeadExtractMessage(null);
+    setIsLeadUrlModalOpen(true);
+    setDetailModalMode('details');
+    setViewMode('pipeline');
+  };
+
+  const closeLeadUrlModal = () => {
+    setIsLeadUrlModalOpen(false);
+    setIsManualLeadEntry(false);
+    setLeadUrl('');
+    setManualLeadDraft(defaultManualLeadDraft(activeList.stages[0]?.id));
+    setLeadExtractMessage(null);
+  };
+
+  const openManualLeadEntry = () => {
+    const cleanInput = leadUrl.trim();
+    const normalizedEmail = isValidContactEmail(cleanInput) ? cleanInput.toLowerCase() : '';
+    const normalizedUrl = normalizeLeadInputUrl(cleanInput)?.toString() || '';
+    const title =
+      normalizedEmail
+        ? contactNameFromEmail(normalizedEmail)
+        : normalizedUrl
+          ? ''
+          : cleanInput;
+
+    setManualLeadDraft({
+      ...defaultManualLeadDraft(activeList.stages[0]?.id),
+      title,
+      email: normalizedEmail,
+      sourceUrl: normalizedUrl,
+    });
+    setLeadExtractMessage(null);
+    setIsManualLeadEntry(true);
+  };
+
+  const parseRecipientEmails = (value: string) =>
+    Array.from(
+      new Set(
+        value
+          .split(/[\s,;]+/)
+          .map((email) => email.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+
+  const prepareContactEmailComposer = (emails?: string[], subject = '') => {
+    const nextEmails = emails && emails.length > 0 ? normalizeContactEmails(emails) : activeContactEmails;
+    setContactEmailType('metrics-update');
+    setContactEmailSender(DEFAULT_CONTACT_EMAIL_SENDER);
+    setContactEmailRecipients(nextEmails.join(', '));
+    setContactEmailSubject(subject);
+    setContactEmailBody('');
+    setContactEmailBodyHtml('');
+    setContactEmailAttachments([]);
+    setComposerLinkPopover(null);
+    setContactEmailSendMessage(
+      isOwner
+        ? null
+        : {
+            type: 'info',
+            text: 'Pulse Brevo is only available to tremaine.grant@gmail.com. Collaborators will need their own email provider before sending.',
+          },
+    );
+  };
+
+  const openContactEmailModal = (emails?: string[], subject = '') => {
+    prepareContactEmailComposer(emails, subject);
+    setIsContactEmailModalOpen(true);
+  };
+
+  const openContactEmailComposerForItem = (item: PipelineItem) => {
+    prepareContactEmailComposer(
+      item.contactEmails,
+      item.organization ? `${item.organization} investor update` : `${item.title} investor update`,
+    );
+    setDetailModalMode('email');
+  };
+
+  const openItemResearch = (item: PipelineItem) => {
+    if (!canModify) return;
+    setItemResearchPrompt('');
+    setItemResearchResult(null);
+    setItemResearchMessage(null);
+    setSelectedDetailItemId(item.id);
+    setDetailModalMode('research');
+  };
+
+  const openItemAsk = (item: PipelineItem) => {
+    if (!canModify) return;
+    setItemAskPrompt('');
+    setItemAskResponse('');
+    setItemAskMessage(null);
+    setSelectedDetailItemId(item.id);
+    setDetailModalMode('ask');
+  };
+
+  const handleAskItem = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify || !selectedDetailItem || isAskingItem) return;
+
+    const askRequest = itemAskPrompt.trim();
+    if (!askRequest) {
+      setItemAskMessage({ type: 'error', text: 'Ask a question or describe what you want help with.' });
+      return;
+    }
+
+    if (askRequest.length > 4000) {
+      setItemAskMessage({ type: 'error', text: 'Keep the request under 4,000 characters.' });
+      return;
+    }
+
+    setIsAskingItem(true);
+    setItemAskResponse('');
+    setItemAskMessage(null);
+
+    try {
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before asking about this lead.');
+      }
+
+      const response = await fetch(getLeadSearchBridgeUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          'openai-organization': PIPELISTS_LEAD_SEARCH_FEATURE_ID,
+          'x-pulsecheck-firebase-mode': 'prod',
+        },
+        body: JSON.stringify({
+          model: PIPELISTS_LEAD_SEARCH_MODEL,
+          temperature: 0.3,
+          max_output_tokens: 2200,
+          tools: [{ type: 'web_search' }],
+          input: [
+            {
+              role: 'system',
+              content: `You are the practical AI assistant inside PipeLists. Answer the user's request using the current lead context and current web sources when useful. Be concise and useful. If the user asks for an outreach message, draft a natural message they can copy, tailored to the relationship and platform they named. Do not claim that a message was sent, do not invent facts or contact details, and clearly label assumptions. Return plain text with readable paragraphs and bullets when helpful.`,
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(
+                {
+                  request: askRequest,
+                  list: {
+                    name: activeList.name,
+                    description: activeList.description,
+                  },
+                  lead: {
+                    title: selectedDetailItem.title,
+                    organization: selectedDetailItem.organization,
+                    description: selectedDetailItem.description,
+                    owner: selectedDetailItem.owner,
+                    contactEmails: selectedDetailItem.contactEmails,
+                    contactPhone: selectedDetailItem.contactPhone,
+                    linkedinUrl: selectedDetailItem.linkedinUrl,
+                    stage: getStage(activeList, selectedDetailItem.stage).label,
+                    segment: selectedDetailItem.segment,
+                    relationshipContext: selectedDetailItem.decisionMaker,
+                    nextStep: selectedDetailItem.nextStep,
+                    notes: selectedDetailItem.notes,
+                    sourceUrl: selectedDetailItem.sourceUrl,
+                  },
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }),
+      });
+
+      const payload = await readApiJson(response, 'Ask AI returned an unexpected response. Refresh and try again.');
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Unable to answer this request.'));
+      }
+
+      const answer = getResponsesApiText(payload).trim();
+      if (!answer) {
+        throw new Error('Ask AI returned an empty answer. Try asking in a different way.');
+      }
+
+      setItemAskResponse(answer);
+      setItemAskMessage({ type: 'success', text: 'Answer ready.' });
+    } catch (error) {
+      console.error('[PipeLists] Ask AI failed:', error);
+      setItemAskMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to answer this request.',
+      });
+    } finally {
+      setIsAskingItem(false);
+    }
+  };
+
+  const handleResearchItem = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify || !selectedDetailItem || isResearchingItem) return;
+
+    const researchRequest = itemResearchPrompt.trim();
+    if (!researchRequest) {
+      setItemResearchMessage({ type: 'error', text: 'Describe what you want to learn about this contact or opportunity.' });
+      return;
+    }
+
+    if (researchRequest.length > 4000) {
+      setItemResearchMessage({ type: 'error', text: 'Keep the research request under 4,000 characters.' });
+      return;
+    }
+
+    setIsResearchingItem(true);
+    setItemResearchResult(null);
+    setItemResearchMessage(null);
+
+    try {
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before researching this lead.');
+      }
+
+      const response = await fetch(getLeadSearchBridgeUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          'openai-organization': PIPELISTS_LEAD_SEARCH_FEATURE_ID,
+          'x-pulsecheck-firebase-mode': 'prod',
+        },
+        body: JSON.stringify({
+          model: PIPELISTS_LEAD_SEARCH_MODEL,
+          temperature: 0.1,
+          max_output_tokens: 3200,
+          tools: [{ type: 'web_search' }],
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'pipelists_lead_research',
+              strict: true,
+              schema: leadSearchResponseSchema,
+            },
+          },
+          input: [
+            {
+              role: 'system',
+              content: `You are a meticulous research assistant for PipeLists. Research exactly one existing contact or lead using current web sources and the user's specific request.
+
+Return one enriched result only. Validate every claim against a credible source. Do not stop at the saved source: execute each suggested search query and follow the most likely official/profile result. For linkedinUrl, only return a direct profile or company page URL with a linkedin.com/in/, linkedin.com/pub/, or linkedin.com/company/ path. Do not return a LinkedIn feed, search results page, homepage, or generic directory URL. Prefer a direct official bio, organization profile, staff page, or public LinkedIn profile. Find a published work email, LinkedIn profile, and public business phone number when available, but never infer or fabricate contact data. sourceUrl must be a real, current, reachable page that supports this exact lead. Do not return a 404, dead, placeholder, search-result, directory, or generic homepage URL, and never construct a URL from a name. Use empty strings or an empty contactEmails array for unavailable fields; never return placeholders such as "N/A", "unknown", or "not found".
+
+LinkedIn verification is strict: treat any existing LinkedIn URL as untrusted. Never construct a profile URL from a person's name, never reuse a URL just because its slug looks plausible, and never return a profile unless a web result or the profile page itself confirms the exact person's name and current organization or role. If that exact match cannot be verified, return an empty linkedinUrl.
+
+Preserve the identity of the existing record unless a source corrects it. Populate description with a concise 1-2 sentence source-supported summary of what the entity is. Provide a concise rationale, sourceEvidence, and a concrete nextStep only when supported by the research. Keep notes blank unless there is genuinely useful relationship context. Return JSON only.`,
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(
+                {
+                  listName: activeList.name,
+                  templateLabel: templateCatalog[activeList.templateKey].label,
+                  researchRequest,
+                  existingLead: {
+                    title: selectedDetailItem.title,
+                    organization: selectedDetailItem.organization,
+                    description: selectedDetailItem.description,
+                    contactEmails: selectedDetailItem.contactEmails,
+                    contactPhone: selectedDetailItem.contactPhone,
+                    linkedinUrl: selectedDetailItem.linkedinUrl,
+                    sourceUrl: selectedDetailItem.sourceUrl,
+                    segment: selectedDetailItem.segment,
+                    relationshipContext: selectedDetailItem.decisionMaker,
+                    notes: selectedDetailItem.notes,
+                  },
+                  suggestedSearchQueries: [
+                    `"${selectedDetailItem.title}" "${selectedDetailItem.organization}"`,
+                    `"${selectedDetailItem.title}" "${selectedDetailItem.organization}" site:linkedin.com/in`,
+                    `"${selectedDetailItem.title}" "${selectedDetailItem.organization}" email`,
+                    `"${selectedDetailItem.title}" "${selectedDetailItem.organization}" phone`,
+                  ],
+                  allowedStages: activeList.stages.map((stage) => ({ id: stage.id, label: stage.label })),
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }),
+      });
+
+      const payload = await readApiJson(response, 'Lead research returned an unexpected response. Refresh and try again.');
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Unable to research this lead.'));
+      }
+
+      const parsed = parseJsonSafe(getResponsesApiText(payload) || '{}');
+      const rawResult = parsed && typeof parsed === 'object' && Array.isArray(parsed.leads) ? parsed.leads[0] : null;
+      if (!rawResult || typeof rawResult !== 'object') {
+        throw new Error('Research did not return a usable result. Try a more specific request.');
+      }
+
+      const suggestedResult = sanitizeGeneratedLead(rawResult as Partial<GeneratedLead>);
+      const verifiedLinkedInUrl = await verifyLinkedInProfileUrlForLead({
+        url: suggestedResult.linkedinUrl,
+        title: suggestedResult.title === 'Untitled opportunity' ? selectedDetailItem.title : suggestedResult.title,
+        organization: suggestedResult.organization || selectedDetailItem.organization,
+        idToken,
+      });
+      const result: GeneratedLead = {
+        ...suggestedResult,
+        title: suggestedResult.title === 'Untitled opportunity' ? selectedDetailItem.title : suggestedResult.title,
+        organization: suggestedResult.organization || selectedDetailItem.organization,
+        description: suggestedResult.description || selectedDetailItem.description,
+        owner: suggestedResult.owner || selectedDetailItem.owner,
+        linkedinUrl: verifiedLinkedInUrl,
+        sourceUrl: suggestedResult.sourceUrl || normalizeLeadInputUrl(selectedDetailItem.sourceUrl)?.toString() || '',
+        segment: suggestedResult.segment || selectedDetailItem.segment,
+        decisionMaker: suggestedResult.decisionMaker || selectedDetailItem.decisionMaker,
+      };
+      if (!result.sourceUrl) {
+        throw new Error('Research needs a credible source URL. Add one to this lead first, then try again.');
+      }
+
+      const sourceVerification = await verifySourceUrls([result.sourceUrl], idToken);
+      const normalizedSourceUrl = normalizeLeadInputUrl(result.sourceUrl)?.toString() || result.sourceUrl;
+      const sourceCheck = sourceVerification.get(normalizedSourceUrl);
+      if (!sourceCheck?.valid) {
+        throw new Error('Research returned a source link that could not be verified. Try again or add the correct source URL manually.');
+      }
+      result.sourceUrl = normalizeLeadInputUrl(sourceCheck.finalUrl || result.sourceUrl)?.toString() || result.sourceUrl;
+
+      const foundNewPublicData = [
+        suggestedResult.description,
+        suggestedResult.contactEmails.length,
+        suggestedResult.contactPhone,
+        suggestedResult.linkedinUrl,
+        suggestedResult.rationale,
+        suggestedResult.sourceEvidence,
+        suggestedResult.nextStep,
+        suggestedResult.notes,
+      ].some(Boolean);
+      setItemResearchResult(result);
+      setItemResearchMessage(
+        foundNewPublicData
+          ? {
+              type: 'success',
+              text: suggestedResult.linkedinUrl && !verifiedLinkedInUrl
+                ? 'Research is ready to review. The suggested LinkedIn URL was not verified, so it was removed.'
+                : 'Research is ready to review. Apply it only when the findings look right.',
+            }
+          : { type: 'info', text: 'Research confirmed the current record but did not find new public contact details. You can refine the prompt or keep the record as is.' },
+      );
+    } catch (error) {
+      console.error('[PipeLists] Item research failed:', error);
+      setItemResearchMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to research this lead.',
+      });
+    } finally {
+      setIsResearchingItem(false);
+    }
+  };
+
+  const handleApplyItemResearch = () => {
+    if (!canModify || !selectedDetailItem || !itemResearchResult) return;
+
+    const result = itemResearchResult;
+    // Research can be opened while the lead editor still holds an older draft.
+    // Commit that draft and the findings together, then retire the editor.
+    const editorDraft = isEditorOpen && editingItemId === selectedDetailItem.id ? draft : null;
+    const researchBase = editorDraft || selectedDetailItem;
+    const contactEmails = Array.from(
+      new Set([...normalizeContactEmails(researchBase.contactEmails), ...normalizeContactEmails(contactEmailInput.split(/[\s,;]+/).filter(isValidContactEmail)), ...normalizeContactEmails(result.contactEmails)]),
+    );
+    const researchNotes = cleanDealNotes(result.notes);
+    const emailSearchNote = contactEmails.length === 0 ? 'Contact email could not be found in public sources.' : '';
+    const notes = Array.from(new Set([cleanDealNotes(researchBase.notes), researchNotes, emailSearchNote].filter(Boolean))).join('\n\n');
+    const now = new Date().toISOString();
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: list.items.map((item) =>
+                item.id === selectedDetailItem.id
+                  ? {
+                      ...item,
+                      ...editorDraft,
+                      title: result.title || researchBase.title,
+                      organization: result.organization || researchBase.organization,
+                      description: result.description || researchBase.description,
+                      owner: result.owner || researchBase.owner,
+                      contactEmails,
+                      contactPhone: result.contactPhone || researchBase.contactPhone,
+                      linkedinUrl: result.linkedinUrl || researchBase.linkedinUrl,
+                      sourceUrl: result.sourceUrl || researchBase.sourceUrl,
+                      segment: result.segment || researchBase.segment,
+                      decisionMaker: result.decisionMaker || researchBase.decisionMaker,
+                      nextStep: result.nextStep || researchBase.nextStep,
+                      notes,
+                      updatedAt: now,
+                      weeklyLogs: [
+                        {
+                          ...defaultLogDraft(activeList.templateKey),
+                          id: makeId(),
+                          summary: `Applied research to ${item.title}.`,
+                          notes: `Research request: ${itemResearchPrompt.trim()}`,
+                          createdAt: now,
+                        },
+                        ...item.weeklyLogs,
+                      ],
+                    }
+                  : item,
+              ),
+            }
+          : list,
+      ),
+    );
+    resetEditor();
+    setDetailModalMode('details');
+    setItemResearchResult(null);
+    setToastMessage({ type: 'success', text: `Applied research to ${selectedDetailItem.title}.` });
+  };
+
+  const openEmailActivityForItem = (item: PipelineItem) => {
+    const recipient = normalizeContactEmails(item.contactEmails)[0] || '';
+    const emailFilter: LogEmailFilter = item.lastEmailType === 'general-update' ? 'general-update' : 'investor-update';
+    setActiveListId(activeList.id);
+    setLogListFilter(activeList.id);
+    setLogEmailFilter(emailFilter);
+    setLogRecipientFilter(recipient);
+    setSelectedLogItemId(item.id);
+    setViewMode('logs');
+  };
+
+  const openLogsForItem = (item: PipelineItem) => {
+    setSelectedDetailItemId(item.id);
+    setSelectedLogItemId(item.id);
+    setDetailModalMode('logs');
+  };
+
+  const verifySourceUrls = async (urls: string[], idToken: string) => {
+    const uniqueUrls = Array.from(new Set(urls.map((url) => normalizeLeadInputUrl(url)?.toString() || '').filter(Boolean))).slice(0, 40);
+    if (uniqueUrls.length === 0) return new Map<string, SourceVerificationResult>();
+
+    const response = await fetch('/api/pipelists/verify-source', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ urls: uniqueUrls }),
+    });
+    const payload = await readApiJson(response, 'Source verification returned an unexpected response.');
+    if (!response.ok) {
+      throw new Error(getApiErrorMessage(payload, 'Unable to verify source links.'));
+    }
+
+    const results = payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown }).results)
+      ? (payload as { results: SourceVerificationResult[] }).results
+      : [];
+    return new Map(results.map((result) => [normalizeLeadInputUrl(result.url)?.toString() || result.url, result]));
+  };
+
+  const toggleExpandedLog = (logId: string) => {
+    setExpandedLogIds((current) => {
+      const next = new Set(current);
+      if (next.has(logId)) {
+        next.delete(logId);
+      } else {
+        next.add(logId);
+      }
+      return next;
+    });
+  };
+
+  const closeContactEmailModal = () => {
+    if (isSendingContactEmail) return;
+    setIsContactEmailModalOpen(false);
+    setContactEmailSendMessage(null);
+  };
+
+  const handleContactEmailAttachments = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const nextFiles = Array.from(files).slice(0, Math.max(0, 5 - contactEmailAttachments.length));
+    if (nextFiles.length === 0) {
+      setContactEmailSendMessage({ type: 'error', text: 'You can attach up to 5 files.' });
+      return;
+    }
+
+    const oversizedFile = nextFiles.find((file) => file.size > 7 * 1024 * 1024);
+    if (oversizedFile) {
+      setContactEmailSendMessage({ type: 'error', text: `${oversizedFile.name} is too large. Keep attachments under 7 MB each.` });
+      return;
+    }
+
+    const currentSize = contactEmailAttachments.reduce((total, attachment) => total + attachment.size, 0);
+    const nextSize = nextFiles.reduce((total, file) => total + file.size, 0);
+    if (currentSize + nextSize > 15 * 1024 * 1024) {
+      setContactEmailSendMessage({ type: 'error', text: 'Keep total attachments under 15 MB.' });
+      return;
+    }
+
+    try {
+      const encodedFiles = await Promise.all(
+        nextFiles.map(async (file) => ({
+          id: makeId(),
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          content: await readFileAsBase64(file),
+        })),
+      );
+      setContactEmailAttachments((current) => [...current, ...encodedFiles]);
+      setContactEmailSendMessage(null);
+    } catch (error) {
+      setContactEmailSendMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to attach that file.',
+      });
+    }
+  };
+
+  const removeContactEmailAttachment = (attachmentId: string) => {
+    setContactEmailAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
+  };
+
+  const handleSendContactEmail = async () => {
+    if (!user) {
+      setContactEmailSendMessage({ type: 'error', text: 'Please sign in again.' });
+      return;
+    }
+    if (!isOwner) {
+      setContactEmailSendMessage({
+        type: 'error',
+        text: 'Pulse Brevo sending is only enabled for tremaine.grant@gmail.com.',
+      });
+      return;
+    }
+
+    const toEmails = parseRecipientEmails(contactEmailRecipients);
+    const invalidEmail = toEmails.find((email) => !isValidContactEmail(email));
+    if (toEmails.length === 0) {
+      setContactEmailSendMessage({ type: 'error', text: 'Add at least one recipient.' });
+      return;
+    }
+    if (invalidEmail) {
+      setContactEmailSendMessage({ type: 'error', text: `Invalid recipient: ${invalidEmail}` });
+      return;
+    }
+    const sentSubject = contactEmailSubject.trim();
+    const sentMessage = contactEmailBody.trim();
+    if (!sentSubject) {
+      setContactEmailSendMessage({ type: 'error', text: 'Add a subject.' });
+      return;
+    }
+    if (!sentMessage) {
+      setContactEmailSendMessage({ type: 'error', text: 'Add a message.' });
+      return;
+    }
+
+    setIsSendingContactEmail(true);
+    setContactEmailSendMessage(null);
+    const recipientItems = toEmails.map((email) => ({
+      email,
+      itemIds: activeListItems
+        .filter((item) => normalizeContactEmails(item.contactEmails).includes(email))
+        .map((item) => item.id),
+    }));
+    const batchId = makeId();
+
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/pipelists/send-contact-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          provider: 'pulse-brevo',
+          fromEmail: contactEmailSender,
+          emailType: contactEmailType,
+          toEmails,
+          subject: sentSubject,
+          message: sentMessage,
+          messageHtml: contactEmailBodyHtml || linkifyComposerBodyHtml(sentMessage),
+          attachments: contactEmailAttachments.map((attachment) => ({
+            name: attachment.name,
+            content: attachment.content,
+          })),
+          listId: activeList.id,
+          listName: activeList.name,
+          ownerUid: user.uid,
+          batchId,
+          recipientItems,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result?.success === false) {
+        throw new Error(result?.error || 'Unable to send email.');
+      }
+
+      const resultRows: Array<{ toEmail?: string; messageId?: string; skipped?: boolean; suppressed?: boolean; suppressionReason?: string }> =
+        Array.isArray(result?.results) ? result.results : [];
+      const sentRows = resultRows.filter((row) => row?.toEmail && row.skipped !== true);
+      const skippedRows = resultRows.filter((row) => row?.skipped === true);
+      const sentCount = Number.isFinite(Number(result?.sentCount)) ? Number(result.sentCount) : sentRows.length || toEmails.length;
+      const skippedCount = Number.isFinite(Number(result?.skippedCount)) ? Number(result.skippedCount) : skippedRows.length;
+
+      if (sentCount <= 0) {
+        const skippedReason = skippedRows.find((row) => row.suppressionReason)?.suppressionReason;
+        const skippedText = skippedReason
+          ? `No new email was sent. Brevo skipped the recipient because of ${skippedReason.replace(/[_-]/g, ' ')}.`
+          : 'No new email was sent. Brevo skipped this request, likely because it matched an existing send or recipient suppression.';
+        setContactEmailSendMessage({ type: 'error', text: skippedText });
+        setToastMessage({ type: 'error', text: skippedText });
+        return;
+      }
+
+      const sendSuccessText =
+        skippedCount > 0
+          ? `Sent ${formatCount(sentCount, 'email')} and skipped ${formatCount(skippedCount, 'recipient')}.`
+          : `Sent ${formatCount(sentCount, 'email')}.`;
+      const messageIdsByEmail = new Map<string, string>(
+        resultRows
+          .filter((row) => row.skipped !== true)
+          .map((row): [string, string] => [String(row.toEmail || '').toLowerCase(), String(row.messageId || '')])
+          .filter(([email]) => Boolean(email)),
+      );
+      const sentEmails = new Set(sentRows.map((row) => String(row.toEmail || '').toLowerCase()).filter(Boolean));
+      const sentAt = new Date().toISOString();
+      const emailTypeLabel = contactEmailTypeLabels[contactEmailType];
+      const emailLogType = contactEmailTypeLogType[contactEmailType];
+
+      setLists((currentLists) =>
+        currentLists.map((list) => {
+          if (list.id !== activeList.id) return list;
+
+          return {
+            ...list,
+            items: list.items.map((item) => {
+              const matchingEmail = normalizeContactEmails(item.contactEmails).find((email) => toEmails.includes(email));
+              if (!matchingEmail) return item;
+              if (sentEmails.size > 0 && !sentEmails.has(matchingEmail)) return item;
+
+              const summary = `${emailTypeLabel} sent to ${matchingEmail}.`;
+              const attachmentNames = contactEmailAttachments.map((attachment) => attachment.name).filter(Boolean);
+              const messageId = messageIdsByEmail.get(matchingEmail) || '';
+              const emailLogNotes = [
+                `From: ${contactEmailSender}`,
+                `To: ${matchingEmail}`,
+                `Subject: ${sentSubject}`,
+                ...(attachmentNames.length > 0 ? [`Attachments: ${attachmentNames.join(', ')}`] : []),
+                ...(messageId ? [`Message ID: ${messageId}`] : []),
+                '',
+                'Message:',
+                sentMessage,
+              ].join('\n');
+              const alreadyLogged = item.weeklyLogs.some(
+                (log) =>
+                  log.systemAction === 'email-sent' &&
+                  log.summary === summary &&
+                  log.notes === emailLogNotes &&
+                  log.createdAt.slice(0, 10) === sentAt.slice(0, 10),
+              );
+              const emailLog = createSystemLog(item, 'email-sent', summary);
+              emailLog.type = emailLogType;
+              emailLog.notes = emailLogNotes;
+
+              return {
+                ...item,
+                emailStatus: 'sent',
+                lastEmailType: contactEmailType,
+                lastEmailEvent: 'sent',
+                lastEmailSentAt: sentAt,
+                lastEmailMessageId: messageId || item.lastEmailMessageId,
+                updatedAt: sentAt,
+                weeklyLogs: alreadyLogged ? item.weeklyLogs : [emailLog, ...item.weeklyLogs],
+              };
+            }),
+          };
+        }),
+      );
+      setToastMessage({ type: 'success', text: sendSuccessText });
+      if (detailModalMode === 'email') {
+        setContactEmailSendMessage(null);
+        setDetailModalMode('details');
+      } else {
+        setContactEmailSendMessage({
+          type: 'success',
+          text: sendSuccessText,
+        });
+        if (isContactEmailModalOpen) {
+          setIsContactEmailModalOpen(false);
+        }
+      }
+      setContactEmailSubject('');
+      setContactEmailBody('');
+      setContactEmailBodyHtml('');
+      setComposerLinkPopover(null);
+      setContactEmailAttachments([]);
+    } catch (error) {
+      setContactEmailSendMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to send email.',
+      });
+    } finally {
+      setIsSendingContactEmail(false);
+    }
+  };
+
+  const openLeadGenModal = () => {
+    if (!canModify) return;
+    setLeadSearchPrompt('');
+    setLeadResearchPrompt(activeList.researchBrief || defaultResearchBriefForList(activeList));
+    setGeneratedLeads([]);
+    setAddedGeneratedLeadKeys([]);
+    setOpenedGeneratedLeadSourceKeys([]);
+    setLeadGenMessage(null);
+    setIsLeadGenModalOpen(true);
+    setDetailModalMode('details');
+    setViewMode('pipeline');
+  };
+
+  const closeLeadGenModal = () => {
+    if (isGeneratingLeads) return;
+    setIsLeadGenModalOpen(false);
+    setLeadSearchPrompt('');
+    setLeadResearchPrompt(activeList.researchBrief || defaultResearchBriefForList(activeList));
+  };
+
+  const openPastedLeadListModal = () => {
+    if (!canModify || !isContactListActive) return;
+    setPastedLeadList('');
+    setAnalyzedPastedLeads([]);
+    setAddedPastedLeadKeys([]);
+    setPastedLeadListMessage(null);
+    setIsPastedLeadListModalOpen(true);
+    setDetailModalMode('details');
+    setViewMode('pipeline');
+  };
+
+  const closePastedLeadListModal = () => {
+    if (isAnalyzingPastedLeadList) return;
+    setIsPastedLeadListModalOpen(false);
+  };
+
+  const handleImportFriendsOfBusiness = async () => {
+    if (!isOwner || !canManageActiveList || !isInvestorUpdateContactsList || isImportingFriends) return;
+
+    setIsImportingFriends(true);
+    setFriendsImportMessage(null);
+
+    try {
+      const snapshot = await getDocs(collection(quickLiftsDb, FRIENDS_OF_BUSINESS_COLLECTION));
+      const friends = snapshot.docs.map((documentSnapshot) => ({
+        id: documentSnapshot.id,
+        ...(documentSnapshot.data() as FriendOfBusinessContact),
+      }));
+
+      if (friends.length === 0) {
+        setFriendsImportMessage({ type: 'info', text: 'No Friends of the Business contacts were found to import.' });
+        return;
+      }
+
+      const targetList = lists.find((list) => list.id === activeList.id) || activeList;
+      const firstStage = targetList.stages[0]?.id || 'sourced';
+      const existingKeys = new Set(targetList.items.map(itemContactKey));
+      const importedItems: PipelineItem[] = [];
+      let skippedCount = 0;
+
+      friends.forEach((friend) => {
+        const contactKey = friendContactKey(friend);
+        if (!contactKey || existingKeys.has(contactKey)) {
+          skippedCount += 1;
+          return;
+        }
+
+        const contactEmails = normalizeContactEmails(friend.email);
+        const displayName = fullFriendName(friend);
+        const organization = normalizeBasicText(friend.titleOrCompany);
+        const title = displayName || contactEmails[0] || organization || 'Investor update contact';
+        const friendEmailStatus = normalizeBasicText(friend.emailStatus || friend.lastEmailEvent);
+        const nextItemBase = createItem(
+          {
+            ...defaultDraft(firstStage),
+            title,
+            organization,
+            owner: 'Tre',
+            contactEmails,
+            emailStatus: friendEmailStatus,
+            lastEmailEvent: friendEmailStatus,
+            emailOpenCount: Number.isFinite(friend.emailOpenCount) ? Number(friend.emailOpenCount) : 0,
+            emailClickCount: Number.isFinite(friend.emailClickCount) ? Number(friend.emailClickCount) : 0,
+            lastEmailClickedLink: normalizeBasicText(friend.lastEmailClickedLink),
+            stage: firstStage,
+            priority: 'medium',
+            segment: 'Investor update contact',
+            decisionMaker: displayName || title,
+            nextStep: 'Include in the next investor update and personalize around existing relationship context.',
+            notes: buildFriendAnalysisNotes(friend),
+          },
+          `friend-${friend.id || makeId()}`,
+        );
+        const nextItem = {
+          ...nextItemBase,
+          weeklyLogs: [
+            createSystemLog(
+              nextItemBase,
+              'item-created',
+              `Imported ${nextItemBase.title} from Friends of the Business.`,
+            ),
+          ],
+        };
+
+        importedItems.push(nextItem);
+        existingKeys.add(contactKey);
+      });
+
+      if (importedItems.length > 0) {
+        setLists((currentLists) =>
+          currentLists.map((list) =>
+            list.id === targetList.id
+              ? {
+                  ...list,
+                  items: [...importedItems, ...list.items],
+                }
+              : list,
+          ),
+        );
+      }
+
+      setFriendsImportMessage({
+        type: importedItems.length > 0 ? 'success' : 'info',
+        text:
+          importedItems.length > 0
+            ? `Imported ${formatCount(importedItems.length, 'contact')}${skippedCount > 0 ? ` and skipped ${formatCount(skippedCount, 'duplicate')}` : ''}.`
+            : `No new contacts to import. Skipped ${formatCount(skippedCount, 'duplicate')}.`,
+      });
+
+      if (importedItems.length > 0) {
+        setToastMessage({ type: 'success', text: `Imported ${formatCount(importedItems.length, 'investor update contact')}.` });
+      }
+    } catch (error) {
+      console.error('[PipeLists] Friends of the Business import failed:', error);
+      setFriendsImportMessage({
+        type: 'error',
+        text: readFirestoreError(error, 'Unable to import Friends of the Business contacts.'),
+      });
+    } finally {
+      setIsImportingFriends(false);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      !dataReady ||
+      isImportingFriends ||
+      !isOwner ||
+      !canManageActiveList ||
+      !isInvestorUpdateContactsList ||
+      activeListItems.length > 0 ||
+      autoImportedFriendsListIds.current.has(activeList.id)
+    ) {
+      return;
+    }
+
+    autoImportedFriendsListIds.current.add(activeList.id);
+    void handleImportFriendsOfBusiness();
+  }, [
+    activeList.id,
+    activeListItems.length,
+    canManageActiveList,
+    dataReady,
+    isImportingFriends,
+    isInvestorUpdateContactsList,
+    isOwner,
+  ]);
+
+  const sanitizeGeneratedLead = (lead: Partial<GeneratedLead>): GeneratedLead => {
+    const stage = normalizeStageId(lead.stage || activeList.stages[0]?.id || 'sourced', activeList.stages);
+    const priority = lead.priority === 'high' || lead.priority === 'low' ? lead.priority : 'medium';
+
+    const title = normalizeResearchText(lead.title) || normalizeResearchText(lead.organization) || 'Untitled opportunity';
+    const organization = normalizeResearchText(lead.organization);
+    const deadlineSource = normalizeResearchText(lead.deadlineSource).toLowerCase() === 'explicit' ? 'explicit' : 'none';
+    const dueDate = deadlineSource === 'explicit' ? normalizeResearchText(lead.dueDate) : '';
+
+    return {
+      ...defaultDraft(stage),
+      title,
+      organization,
+      description: normalizeResearchText(lead.description),
+      owner: normalizeResearchText(lead.owner),
+      contactEmails: normalizeContactEmails((lead as { contactEmails?: unknown }).contactEmails),
+      contactPhone: normalizeResearchText(lead.contactPhone),
+      linkedinUrl: normalizeLinkedInProfileUrlForLead(normalizeResearchText(lead.linkedinUrl), title, organization),
+      stage,
+      priority,
+      amount: normalizeResearchText(lead.amount),
+      dueDate,
+      deadlineSource,
+      nextStep: normalizeResearchText(lead.nextStep),
+      notes: cleanDealNotes(normalizeResearchText(lead.notes)),
+      sourceUrl: normalizeLeadInputUrl(normalizeResearchText(lead.sourceUrl))?.toString() || '',
+      segment: normalizeResearchText(lead.segment),
+      decisionMaker: normalizeResearchText(lead.decisionMaker),
+      acv: normalizeResearchText(lead.acv),
+      expectedCloseDate: '',
+      contractTerm: normalizeResearchText(lead.contractTerm),
+      pilotScope: normalizeResearchText(lead.pilotScope),
+      athleteCount: normalizeResearchText(lead.athleteCount),
+      pilotStart: '',
+      pilotEnd: '',
+      conversionLikelihood: normalizeResearchText(lead.conversionLikelihood),
+      grossMargin: normalizeResearchText(lead.grossMargin),
+      partnerCost: normalizeResearchText(lead.partnerCost),
+      hardwareCost: normalizeResearchText(lead.hardwareCost),
+      lossReason: normalizeResearchText(lead.lossReason),
+      expansionPath: normalizeResearchText(lead.expansionPath),
+      rationale: normalizeResearchText(lead.rationale),
+      sourceEvidence: normalizeResearchText(lead.sourceEvidence),
+      deadlineStatus: normalizeResearchText(lead.deadlineStatus),
+    };
+  };
+
+  const handleAnalyzePastedLeadList = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify || !isContactListActive || isAnalyzingPastedLeadList) return;
+
+    const rawList = pastedLeadList.trim();
+    if (!rawList) {
+      setPastedLeadListMessage({ type: 'error', text: 'Paste at least one person, organization, or profile link to analyze.' });
+      return;
+    }
+
+    if (rawList.length > 16000) {
+      setPastedLeadListMessage({ type: 'error', text: 'Keep each pasted batch under 16,000 characters so it can be reviewed reliably.' });
+      return;
+    }
+
+    setIsAnalyzingPastedLeadList(true);
+    setAnalyzedPastedLeads([]);
+    setAddedPastedLeadKeys([]);
+    setPastedLeadListMessage(null);
+
+    try {
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before analyzing this list.');
+      }
+
+      const stageOptions = activeList.stages.map((stage) => ({
+        id: stage.id,
+        label: stage.label,
+        probability: stage.probability,
+      }));
+      const existingItems = activeListItems.map((item) => ({
+        title: item.title,
+        organization: item.organization,
+        sourceUrl: item.sourceUrl,
+        contactEmails: item.contactEmails,
+      }));
+
+      const response = await fetch(getLeadSearchBridgeUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+          'openai-organization': PIPELISTS_LEAD_SEARCH_FEATURE_ID,
+          'x-pulsecheck-firebase-mode': 'prod',
+        },
+        body: JSON.stringify({
+          model: PIPELISTS_LEAD_SEARCH_MODEL,
+          temperature: 0.1,
+          max_output_tokens: 5000,
+          tools: [{ type: 'web_search' }],
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'pipelists_pasted_contact_analysis',
+              strict: true,
+              schema: leadSearchResponseSchema,
+            },
+          },
+          input: [
+            {
+              role: 'system',
+              content: `You are a contact-research analyst for PipeLists, a relationship CRM.
+
+Research the user's pasted list entry by entry using current web sources. The pasted text may contain names, organizations, profile URLs, copied list rows, or short descriptions.
+
+Rules:
+- Return one result for each clear, distinct person or organization you can identify, up to 25 total results.
+- Do not return a directory, article, search result, or list of people as a contact. If an entry is a directory or list, resolve the actual people or organizations named in it instead.
+- Do a real enrichment pass for every person: search the name and organization, then specifically search for their published email, LinkedIn profile, and public business phone number before returning a result.
+- Treat every LinkedIn URL as untrusted until independently verified. Never construct a URL from a name or accept a guessed slug. Only return a direct LinkedIn URL when the search result or profile page confirms the exact person's name and current organization or role. Otherwise return an empty linkedinUrl.
+- Prefer a direct official biography, organization profile, university/team staff page, or verified public profile as sourceUrl. sourceUrl must be a real, current, reachable page supporting that exact contact. Do not return a 404, dead, placeholder, search-result, directory, or generic homepage URL, and never construct a URL from a name. Never use placeholders such as "N/A" or "not found".
+- Never invent roles, organizations, email addresses, dates, relationship history, or source links.
+- Include contactEmails only when a valid email is visibly published by a credible source. Otherwise return an empty array after checking; do not guess email patterns.
+- Include linkedinUrl only for a valid public LinkedIn profile URL. Include contactPhone only for a publicly published business phone number. Leave either field as an empty string when no credible source provides it.
+- For a person, title must be the person's name and organization should identify their current role and organization. For an organization, title and organization may match when no individual is named.
+- description must concisely summarize what the person or organization is in 1-2 source-supported sentences.
+- Use the provided stage ids only. For new contacts, default to the first stage unless the pasted text clearly establishes a stronger relationship status.
+- Keep notes blank unless there is material relationship context, an introduction path, a concrete partnership angle, or a specific constraint.
+- rationale should explain the useful relationship angle in one concise sentence. sourceEvidence should identify the supporting source and what it establishes. deadlineStatus should be "no fixed deadline" for contact research.
+- Omit anything that cannot be identified with enough confidence to give a credible sourceUrl, role/organization, and direct relationship angle.
+- Return JSON only.`,
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(
+                {
+                  listName: activeList.name,
+                  templateLabel: templateCatalog[activeList.templateKey].label,
+                  stageOptions,
+                  existingItems,
+                  pastedList: rawList,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        }),
+      });
+
+      const payload = await readApiJson(response, 'List analysis returned an unexpected response. Refresh and try again.');
+      if (!response.ok) {
+        throw new Error(getApiErrorMessage(payload, 'Unable to analyze this list.'));
+      }
+
+      const parsed = parseJsonSafe(getResponsesApiText(payload) || '{}');
+      const rawLeads = parsed && typeof parsed === 'object' && Array.isArray(parsed.leads) ? parsed.leads : [];
+      const uniqueLeads = new Map<string, GeneratedLead>();
+      let excludedUnverifiedCount = 0;
+
+      const rawLeadRecords = rawLeads as Partial<GeneratedLead>[];
+      const sanitizedCandidates = rawLeadRecords.map((lead) => sanitizeGeneratedLead(lead));
+      const sourceVerification = await verifySourceUrls(
+        sanitizedCandidates.map((lead) => lead.sourceUrl),
+        idToken,
+      );
+
+      rawLeadRecords.forEach((_, index) => {
+        const sanitizedLead = sanitizedCandidates[index];
+        const normalizedSourceUrl = normalizeLeadInputUrl(sanitizedLead.sourceUrl)?.toString() || sanitizedLead.sourceUrl;
+        const sourceCheck = sourceVerification.get(normalizedSourceUrl);
+        if (!sourceCheck?.valid || !sanitizedLead.sourceUrl || !sanitizedLead.organization || !sanitizedLead.rationale) {
+          excludedUnverifiedCount += 1;
+          return;
+        }
+        const verifiedLead = {
+          ...sanitizedLead,
+          sourceUrl: normalizeLeadInputUrl(sourceCheck.finalUrl || sanitizedLead.sourceUrl)?.toString() || sanitizedLead.sourceUrl,
+        };
+        const key = generatedLeadKey(verifiedLead);
+        if (!activeLeadKeys.has(key) && !uniqueLeads.has(key)) {
+          uniqueLeads.set(key, verifiedLead);
+        }
+      });
+
+      const nextLeads = Array.from(uniqueLeads.values()).slice(0, 25);
+      setAnalyzedPastedLeads(nextLeads);
+      setPastedLeadListMessage(
+        nextLeads.length > 0
+          ? {
+              type: 'success',
+              text: `Analyzed ${formatCount(nextLeads.length, 'contact')}. Review each one before adding it.${excludedUnverifiedCount ? ` Excluded ${formatCount(excludedUnverifiedCount, 'unverified result')}.` : ''}`,
+            }
+          : { type: 'info', text: 'No new contacts could be verified from this list. Try including names, organizations, or profile links.' },
+      );
+    } catch (error) {
+      console.error('[PipeLists] Pasted contact analysis failed:', error);
+      setPastedLeadListMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to analyze this list.',
+      });
+    } finally {
+      setIsAnalyzingPastedLeadList(false);
+    }
+  };
+
+  const handleGenerateLeads = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify || isGeneratingLeads) return;
+
+    const searchPrompt = leadSearchPrompt.trim();
+    if (!searchPrompt) {
+      setLeadGenMessage({ type: 'error', text: 'Add the leads or lead type you want to research.' });
+      return;
+    }
+    const researchPrompt = leadResearchPrompt.trim() || DEFAULT_LEAD_RESEARCH_PROMPT;
+
+    const pastedEntries = extractPastedLeadEntries(searchPrompt);
+    const researchablePastedEntries =
+      pastedEntries.length > 0
+        ? pastedEntries.filter((entry) => !activeLeadSearchEntryKeys.has(normalizeOpportunityKey(entry)))
+        : [];
+    const skippedExistingEntryCount = pastedEntries.length - researchablePastedEntries.length;
+    const requestedLeadCount = estimateLeadCountFromPrompt(
+      searchPrompt,
+      researchablePastedEntries.length > 0 ? researchablePastedEntries : pastedEntries,
+    );
+    const isStructuredExtraction = pastedEntries.length > 0 || requestedLeadCount > LEAD_SEARCH_DEFAULT_COUNT;
+
+    if (pastedEntries.length > 0 && researchablePastedEntries.length === 0) {
+      setGeneratedLeads([]);
+      setAddedGeneratedLeadKeys([]);
+      setOpenedGeneratedLeadSourceKeys([]);
+      setLeadGenMessage({
+        type: 'info',
+        text: `All ${formatCount(pastedEntries.length, 'entry')} are already in ${activeList.name}.`,
+      });
+      return;
+    }
+
+    setIsGeneratingLeads(true);
+    setGeneratedLeads([]);
+    setAddedGeneratedLeadKeys([]);
+    setOpenedGeneratedLeadSourceKeys([]);
+    setLeadGenMessage(null);
+
+    try {
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before generating leads.');
+      }
+
+      const stageOptions = activeList.stages.map((stage) => ({
+        id: stage.id,
+        label: stage.label,
+        probability: stage.probability,
+      }));
+      const existingItems = activeListItems.map((item) => ({
+        title: item.title,
+        organization: item.organization,
+        sourceUrl: item.sourceUrl,
+        dueDate: item.dueDate,
+      }));
+
+      const entryBatches = isStructuredExtraction && researchablePastedEntries.length > 0
+        ? chunkLeadSearchEntries(researchablePastedEntries)
+        : [pastedEntries];
+      const rawLeads: Partial<GeneratedLead>[] = [];
+      const batchErrors: string[] = [];
+      let rawLeadCount = 0;
+      let exactRetryUsed = false;
+      let filteredDuplicateCount = 0;
+      let filteredAggregateCount = 0;
+      let filteredInvalidCount = 0;
+
+      for (const entryBatch of entryBatches) {
+        const batchSearchPrompt = entryBatch.length > 0 ? entryBatch.join('\n') : searchPrompt;
+        try {
+          const response = await fetch('/api/pipelists/generate-leads', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              requestedLeadCount: entryBatch.length > 0 ? entryBatch.length : requestedLeadCount,
+              taskMode: isStructuredExtraction ? 'extract_all_named_entries' : 'discover_leads',
+              listName: activeList.name,
+              templateLabel: templateCatalog[activeList.templateKey].label,
+              templateKey: activeList.templateKey,
+              listDescription: activeList.description,
+              listObjective: activeList.objective,
+              leadDefinition: activeList.leadDefinition,
+              searchPrompt: batchSearchPrompt,
+              researchPrompt,
+              inputEntries: entryBatch,
+              stageOptions,
+              existingItems,
+            }),
+          });
+
+          const payload = await readApiJson(response, 'Search leads returned an unexpected response. Refresh and try again.');
+          if (!response.ok) {
+            batchErrors.push(getApiErrorMessage(payload, 'Unable to generate leads.'));
+            continue;
+          }
+
+          const batchLeads = payload && typeof payload === 'object' && Array.isArray((payload as { leads?: unknown }).leads)
+            ? (payload as { leads: Partial<GeneratedLead>[] }).leads
+            : [];
+          const filterStats =
+            payload && typeof payload === 'object' && (payload as { filtered?: unknown }).filtered && typeof (payload as { filtered?: unknown }).filtered === 'object'
+              ? ((payload as { filtered: { duplicate?: unknown; aggregate?: unknown; invalid?: unknown } }).filtered)
+              : null;
+          rawLeadCount += payload && typeof payload === 'object' && typeof (payload as { rawLeadCount?: unknown }).rawLeadCount === 'number'
+            ? (payload as { rawLeadCount: number }).rawLeadCount
+            : batchLeads.length;
+          exactRetryUsed = exactRetryUsed || Boolean(payload && typeof payload === 'object' && (payload as { retryUsed?: unknown }).retryUsed);
+          filteredDuplicateCount += typeof filterStats?.duplicate === 'number' ? filterStats.duplicate : 0;
+          filteredAggregateCount += typeof filterStats?.aggregate === 'number' ? filterStats.aggregate : 0;
+          filteredInvalidCount += typeof filterStats?.invalid === 'number' ? filterStats.invalid : 0;
+          rawLeads.push(...batchLeads);
+        } catch (batchError) {
+          batchErrors.push(batchError instanceof Error ? batchError.message : 'Unable to generate leads.');
+        }
+      }
+
+      if (rawLeads.length === 0 && batchErrors.length > 0) {
+        throw new Error(batchErrors[0]);
+      }
+
+      const sanitizedLeads: GeneratedLead[] = rawLeads.length > 0
+        ? rawLeads.map((lead: Partial<GeneratedLead>) => sanitizeGeneratedLead(lead))
+        : [];
+      const sourceVerification = await verifySourceUrls(
+        sanitizedLeads.map((lead) => lead.sourceUrl),
+        idToken,
+      );
+      const nextLeads = sanitizedLeads.map((lead) => {
+          const normalizedSourceUrl = normalizeLeadInputUrl(lead.sourceUrl)?.toString() || lead.sourceUrl;
+          const sourceCheck = sourceVerification.get(normalizedSourceUrl);
+          const sourceVerified = Boolean(sourceCheck?.valid);
+          return {
+            ...lead,
+            sourceUrl: sourceVerified
+              ? normalizeLeadInputUrl(sourceCheck?.finalUrl || lead.sourceUrl)?.toString() || lead.sourceUrl
+              : lead.sourceUrl,
+            sourceVerified,
+            sourceVerificationReason: sourceVerified ? '' : sourceCheck?.reason || 'The source URL could not be verified.',
+          };
+        });
+      const unverifiedCount = nextLeads.filter((lead) => !lead.sourceVerified).length;
+      const expectedStructuredCount = isStructuredExtraction
+        ? Math.min(requestedLeadCount, researchablePastedEntries.length || requestedLeadCount)
+        : 0;
+      const missingStructuredCount = expectedStructuredCount > nextLeads.length ? expectedStructuredCount - nextLeads.length : 0;
+      const hasAddableGeneratedLead = nextLeads.some((lead) => lead.sourceVerified !== false);
+      const skippedExistingMessage =
+        skippedExistingEntryCount > 0 ? ` Skipped ${formatCount(skippedExistingEntryCount, 'entry')} already in ${activeList.name}.` : '';
+      const filteredDropMessage =
+        filteredDuplicateCount > 0
+          ? ` ${formatCount(filteredDuplicateCount, 'lead')} matched something already in ${activeList.name}.`
+          : filteredAggregateCount > 0
+          ? ` ${formatCount(filteredAggregateCount, 'result')} came back as a list or directory source, so it was held back.`
+          : filteredInvalidCount > 0
+          ? ` ${formatCount(filteredInvalidCount, 'result')} was missing a usable title or source link.`
+          : exactRetryUsed && rawLeadCount === 0
+          ? ' I tried an exact-name retry, but the research service still returned no usable candidate.'
+          : '';
+
+      setGeneratedLeads(nextLeads);
+      setLeadGenMessage(
+        nextLeads.length > 0
+          ? {
+              type: missingStructuredCount > 0 ? 'info' : 'success',
+              text:
+                missingStructuredCount > 0
+                  ? `Found ${formatCount(nextLeads.length, 'lead')} from ${formatCount(expectedStructuredCount, 'entry')} that were not already in ${activeList.name}. ${formatCount(missingStructuredCount, 'entry')} still need another pass.${skippedExistingMessage}`
+                  : batchErrors.length > 0
+                  ? `Found ${formatCount(nextLeads.length, 'lead')}. Some batches still need another pass.${skippedExistingMessage}`
+                  : !hasAddableGeneratedLead
+                  ? `Found ${formatCount(nextLeads.length, 'lead')}, but each one needs source verification before it can be added.${skippedExistingMessage}`
+                  : unverifiedCount > 0
+                  ? `Found ${formatCount(nextLeads.length, 'lead')}. ${formatCount(unverifiedCount, 'lead')} need source verification before they can be added.${skippedExistingMessage}`
+                  : `Found ${formatCount(nextLeads.length, 'lead')}. Review and add the ones you want.${skippedExistingMessage}`,
+            }
+          : {
+              type: 'info',
+              text:
+                sanitizedLeads.length > 0
+                  ? `The search found leads, but their source links could not be verified. Try revising the prompt to request official or direct sources.${skippedExistingMessage}`
+                  : skippedExistingEntryCount > 0
+                  ? `No new leads matched this search. Skipped ${formatCount(skippedExistingEntryCount, 'entry')} already in ${activeList.name}.`
+                  : `No new leads matched this search.${filteredDropMessage || ' Try revising the prompt.'}`,
+            },
+      );
+    } catch (error) {
+      console.error('[PipeLists] Lead generation failed:', error);
+      setLeadGenMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to generate leads.',
+      });
+    } finally {
+      setIsGeneratingLeads(false);
+    }
+  };
+
+  const handleAddGeneratedLead = (lead: GeneratedLead) => {
+    if (!canModify) return;
+    const key = generatedLeadKey(lead);
+    if (activeLeadKeys.has(key) || addedGeneratedLeadKeys.includes(key)) {
+      setLeadGenMessage({ type: 'info', text: `${lead.title} is already in this PipeList.` });
+      return;
+    }
+
+    const stage = normalizeStageId(lead.stage || activeList.stages[0]?.id || 'sourced', activeList.stages);
+    const nextItemBase = createItem(
+      {
+        ...defaultDraft(stage),
+        ...lead,
+        stage,
+        priority: lead.priority || 'medium',
+        notes: [
+          cleanDealNotes(lead.notes),
+          lead.rationale ? `Why this fits: ${lead.rationale}` : '',
+          lead.sourceEvidence ? `Source evidence: ${lead.sourceEvidence}` : '',
+          lead.deadlineStatus ? `Deadline status: ${lead.deadlineStatus}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+      },
+      makeId(),
+    );
+    const nextItem: PipelineItem = {
+      ...nextItemBase,
+      weeklyLogs: [
+        createSystemLog(
+          nextItemBase,
+          'item-created',
+          `Added ${nextItemBase.title} to ${activeList.name}.`,
+        ),
+      ],
+    };
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: [nextItem, ...list.items],
+            }
+          : list,
+      ),
+    );
+    setAddedGeneratedLeadKeys((currentKeys) => [...currentKeys, key]);
+    setSelectedLogItemId(nextItem.id);
+    setStageFilters([]);
+    setPriorityFilters([]);
+    setViewMode('pipeline');
+    setLeadGenMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
+  };
+
+  const handleOpenGeneratedLeadSource = (lead: GeneratedLead) => {
+    const key = generatedLeadKey(lead);
+    setOpenedGeneratedLeadSourceKeys((currentKeys) =>
+      currentKeys.includes(key) ? currentKeys : [...currentKeys, key],
+    );
+    setLeadGenMessage({
+      type: 'info',
+      text: `Source opened for ${lead.title}. Review the page, then add the lead when it looks right.`,
+    });
+  };
+
+  const handleAddAnalyzedPastedLead = (lead: GeneratedLead) => {
+    if (!canModify) return;
+    const key = generatedLeadKey(lead);
+    if (activeLeadKeys.has(key) || addedPastedLeadKeys.includes(key)) {
+      setPastedLeadListMessage({ type: 'info', text: `${lead.title} is already in this PipeList.` });
+      return;
+    }
+
+    const stage = normalizeStageId(lead.stage || activeList.stages[0]?.id || 'sourced', activeList.stages);
+    const nextItemBase = createItem(
+      {
+        ...defaultDraft(stage),
+        ...lead,
+        stage,
+        priority: lead.priority || 'medium',
+        // Keep research rationale in the review card, but make an unsuccessful public-email search explicit.
+        notes:
+          normalizeContactEmails(lead.contactEmails).length > 0
+            ? cleanDealNotes(lead.notes)
+            : 'Contact email could not be found in public sources.',
+      },
+      makeId(),
+    );
+    const nextItem: PipelineItem = {
+      ...nextItemBase,
+      weeklyLogs: [
+        createSystemLog(
+          nextItemBase,
+          'item-created',
+          `Added ${nextItemBase.title} to ${activeList.name}.`,
+        ),
+      ],
+    };
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: [nextItem, ...list.items],
+            }
+          : list,
+      ),
+    );
+    setAddedPastedLeadKeys((currentKeys) => [...currentKeys, key]);
+    setSelectedLogItemId(nextItem.id);
+    setStageFilters([]);
+    setPriorityFilters([]);
+    setViewMode('pipeline');
+    setPastedLeadListMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
+  };
+
+  const formatClipboardSection = (title: string, rows: Array<[string, string | number | undefined]>) => {
+    const body = rows
+      .map(([label, value]) => [label, String(value || '').trim()] as const)
+      .filter(([, value]) => value.length > 0)
+      .map(([label, value]) => `${label}: ${value}`)
+      .join('\n');
+
+    return body ? `${title}\n${body}` : '';
+  };
+
+  const buildLeadDetailsClipboardText = (item: PipelineItem, stage: StageConfig) => {
+    const valueText = itemAmountDisplay(activeList, item);
+    const attachmentsText =
+      item.attachments.length > 0
+        ? item.attachments
+            .map((attachment, index) =>
+              formatClipboardSection(`Attachment ${index + 1}`, [
+                ['Name', attachment.name],
+                ['Type', attachment.type],
+                ['URL', attachment.url],
+                ['File Name', attachment.fileName],
+                ['Content Type', attachment.contentType],
+                ['Size', formatFileSize(attachment.size)],
+                ['Created By', attachment.createdBy],
+                ['Created At', attachment.createdAt],
+              ]),
+            )
+            .filter(Boolean)
+            .join('\n\n')
+        : 'No attachments.';
+    const logsText =
+      item.weeklyLogs.length > 0
+        ? item.weeklyLogs
+            .map((log, index) =>
+              formatClipboardSection(`Log ${index + 1}`, [
+                ['Type', logDisplayLabel(log)],
+                ['Date', log.weekOf],
+                [followUpDateLabel(log.nextStep), log.followUpDate],
+                ['Summary', log.summary],
+                ['Next Step', log.nextStep],
+                ['Rostered Athletes', log.rosteredAthletes],
+                ['Completed Check-Ins', log.completedCheckIns],
+                ['Check-In Rate', log.checkInRate],
+                ['Biometric Sync Rate', log.biometricSyncRate],
+                ['Signal Events', log.signalEvents],
+                ['Nora Engagement Rate', log.noraEngagementRate],
+                ['Nora Sessions', log.noraSessions],
+                ['Escalations', log.escalations],
+                ['Staff Feedback Score', log.staffFeedbackScore],
+                ['Reporting Period Start', log.reportingPeriodStart],
+                ['Reporting Period End', log.reportingPeriodEnd],
+                ['Metric Source', log.metricSource],
+                ['Notes', log.notes],
+                ['Created At', log.createdAt],
+              ]),
+            )
+            .filter(Boolean)
+            .join('\n\n')
+        : 'No logs recorded.';
+    const detailRows: Array<[string, string | number | undefined]> = [
+      ['Title', item.title],
+      ['PipeList', activeList.name],
+      ['Template', templateCatalog[activeList.templateKey].label],
+      [isTaskListActive ? 'Project / Area' : 'Organization', item.organization],
+      ['Description', item.description],
+      isInvestorUpdateContactsList
+        ? ['Email Status', emailStatusLabel(item)]
+        : ['Stage', `${stage.label} (${item.stage})`],
+      ['Ease of Contact', easeOfContactLabel(item.priority)],
+      ...(isContactListActive || isTaskListActive ? [] : [[isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', valueText] as [string, string | number | undefined]]),
+      [isContactListActive ? 'Relationship Owner' : 'Owner', item.owner],
+      ['Contact Emails', item.contactEmails.join(', ')],
+      ...(isContactListActive ? [['Phone', item.contactPhone], ['LinkedIn', item.linkedinUrl]] as [string, string | number | undefined][] : []),
+      [isTaskListActive ? 'Category' : 'Segment', item.segment],
+      [isContactListActive ? 'Relationship Context' : isTaskListActive ? 'Context' : 'Decision Maker', item.decisionMaker],
+      ['Next Step', item.nextStep],
+      [isTaskListActive ? 'Reference URL' : 'Source URL', item.sourceUrl],
+      ['Image URL', item.imageUrl],
+    ];
+    const timelineRows: Array<[string, string | number | undefined]> = isContactListActive
+      ? [
+          [isInvestorUpdateContactsList ? 'Next Update Date' : 'Next Touchpoint', item.expectedCloseDate],
+          ['Follow-Up Date', item.dueDate],
+          ['First Contacted', item.pilotStart],
+          ['Last Contacted', item.pilotEnd],
+          ...(isInvestorUpdateContactsList ? [['Update Cadence', item.athleteCount] as [string, string | number | undefined]] : []),
+        ]
+      : isTaskListActive
+        ? [
+            ['Due Date', item.dueDate],
+            ['Target Date', item.expectedCloseDate],
+            ['Start Date', item.pilotStart],
+            ['Completed Date', item.pilotEnd],
+          ]
+        : [
+          ['ACV', item.acv],
+          [amountFieldLabelForList(activeList), item.amount],
+          ['Expected Close', item.expectedCloseDate],
+          ['Due Date', item.dueDate],
+          ['Contract Term', item.contractTerm],
+          ['Partner Cost', item.partnerCost],
+          ['Hard Cost', item.hardwareCost],
+          ['Margin Notes', item.grossMargin],
+        ];
+
+    return [
+      formatClipboardSection(isContactListActive ? 'Contact Details' : isTaskListActive ? 'Task Details' : 'Lead Details', detailRows),
+      formatClipboardSection(isContactListActive ? 'Relationship Dates' : isTaskListActive ? 'Task Dates' : 'Financials & Dates', timelineRows),
+      formatClipboardSection('Scope & Expansion', [
+        ['Scope', item.pilotScope],
+        ['Count', item.athleteCount],
+        ['Start Date', item.pilotStart],
+        ['End Date', item.pilotEnd],
+        ['Conversion Likelihood', item.conversionLikelihood],
+        ['Expansion Path', item.expansionPath],
+        ['Loss Reason', item.lossReason],
+      ]),
+      formatClipboardSection('Notes', [['Notes', stripAiConfidenceNote(item.notes)]]),
+      `Attachments\n${attachmentsText}`,
+      `Logs\n${logsText}`,
+      formatClipboardSection('Internal Metadata', [
+        ['Lead ID', item.id],
+        ['Created At', item.createdAt],
+        ['Updated At', item.updatedAt],
+        ['Deleted At', item.deletedAt],
+        ['Restorable Until', item.restorableUntil],
+      ]),
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  };
+
+  const writeClipboardText = async (text: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    if (typeof document === 'undefined') {
+      throw new Error('Clipboard is not available in this browser.');
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const didCopy = document.execCommand('copy');
+    document.body.removeChild(textarea);
+
+    if (!didCopy) {
+      throw new Error('Clipboard is not available in this browser.');
+    }
+  };
+
+  const handleCopyLeadDetails = async (item: PipelineItem, stage: StageConfig) => {
+    try {
+      await writeClipboardText(buildLeadDetailsClipboardText(item, stage));
+      setLeadCopyMessage({ type: 'success', text: 'Lead details copied to clipboard.' });
+    } catch (error) {
+      console.error('[PipeLists] Copy lead details failed:', error);
+      setLeadCopyMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to copy lead details.',
+      });
+    }
+  };
+
+  const updateLeadAttachments = (
+    itemId: string,
+    updater: (attachments: LeadAttachment[]) => LeadAttachment[],
+  ) => {
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: list.items.map((item) =>
+                item.id === itemId
+                  ? {
+                      ...item,
+                      attachments: updater(item.attachments || []),
+                      updatedAt: new Date().toISOString(),
+                    }
+                  : item,
+              ),
+            }
+          : list,
+      ),
+    );
+  };
+
+  const safeAttachmentFileName = (value: string) =>
+    value.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'attachment';
+
+  const readContactImport = async (file?: File) => {
+    if (!file || !canManageActiveList || !isContactListActive) return;
+    setContactImportMessage(null);
+    try {
+      if (file.size > 25 * 1024 * 1024) throw new Error('Keep contact files under 25 MB.');
+      const rows = parseContactImport(JSON.parse(await file.text())).map((row) => ({ ...row, id: makeId() }));
+      setContactImport({ listId: activeList.id, rows });
+    } catch (error) {
+      setContactImportMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to read contact file.' });
+    }
+  };
+
+  const handleContactImport = async () => {
+    if (!contactImport || contactImportLock.current || !user || !canManageActiveList || !isContactListActive || contactImport.listId !== activeList.id) return;
+    contactImportLock.current = true;
+    setContactImportBusy(true);
+    const targetListId = activeList.id;
+    const ownerUid = user.uid;
+    const rows = selectNewContacts(contactImport.rows, activeList.items);
+    try {
+      const items: PipelineItem[] = [];
+      for (const [index, row] of rows.entries()) {
+        setContactImportMessage({ type: 'info', text: `Preparing ${index + 1} of ${rows.length}: ${row.title}` });
+        const { photo, id, ...fields } = row;
+        let image = {};
+        if (photo) {
+          const bytes = Uint8Array.from(atob(photo.dataUrl.split(',')[1]), (character) => character.charCodeAt(0));
+          const imageRef = storageRef(simpBudgetStorage, `pipelists-images/${ownerUid}/${targetListId}/${id}/${safeAttachmentFileName(photo.name)}`);
+          const upload = uploadBytesResumable(imageRef, bytes, { contentType: photo.contentType, customMetadata: { listId: targetListId, itemId: id, uploadedBy: user.email || ownerUid } });
+          await new Promise<void>((resolve, reject) => {
+            const timeout = window.setTimeout(() => {
+              upload.cancel();
+              reject(new Error('Photo upload timed out. Check storage access or use a hosted image link.'));
+            }, 30000);
+            upload.then(() => { window.clearTimeout(timeout); resolve(); }, (error) => { window.clearTimeout(timeout); reject(error); });
+          });
+          image = { imageUrl: await getDownloadURL(imageRef), imageName: photo.name, imageContentType: photo.contentType, imageSize: bytes.length };
+        }
+        const item = createItem({ ...defaultDraft(activeList.stages[0]?.id), ...fields, ...image }, id);
+        item.weeklyLogs = [createSystemLog(item, 'item-created', `Imported ${item.title} into ${activeList.name}.`)];
+        items.push(item);
+      }
+      if (simpBudgetAuth.currentUser?.uid !== ownerUid) throw new Error('Account changed. Sign in again before importing.');
+      setLists((current) => current.map((list) => list.id === targetListId
+        ? { ...list, items: [...selectNewContacts(items, list.items), ...list.items] } : list));
+      setContactImport(null);
+      setContactImportMessage({ type: 'success', text: `${items.length} contacts added. ${contactImport.rows.length - rows.length} duplicates skipped.` });
+      setQuery(''); setStageFilters([]); setPriorityFilters([]);
+    } catch (error) {
+      setContactImportMessage({ type: 'error', text: readFirestoreError(error, 'Import failed. Your contact file is ready to retry.') });
+    } finally {
+      contactImportLock.current = false;
+      setContactImportBusy(false);
+    }
+  };
+
+  const handleUploadLeadImage = async (files: FileList | null) => {
+    if (!canModify) return;
+    const file = Array.from(files || [])[0];
+    if (!file) return;
+    if (!editingItemId) {
+      setLeadImageMessage({ type: 'error', text: 'Open a saved lead before uploading an image.' });
+      return;
+    }
+    if (!user) {
+      setLeadImageMessage({ type: 'error', text: 'Sign in before uploading a lead image.' });
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      setLeadImageMessage({ type: 'error', text: 'Upload an image file.' });
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setLeadImageMessage({ type: 'error', text: 'Keep lead images under 8 MB.' });
+      return;
+    }
+
+    setUploadingLeadImage(true);
+    setLeadImageMessage(null);
+
+    try {
+      const ownerUid = shareDoc?.ownerUid || user.uid;
+      const cleanFileName = safeAttachmentFileName(file.name);
+      const imageRef = storageRef(
+        simpBudgetStorage,
+        `pipelists-images/${ownerUid}/${activeList.id}/${editingItemId}/${Date.now()}-${cleanFileName}`,
+      );
+
+      await uploadBytes(imageRef, file, {
+        contentType: file.type,
+        customMetadata: {
+          listId: activeList.id,
+          itemId: editingItemId,
+          uploadedBy: user.email || user.uid,
+        },
+      });
+
+      const url = await getDownloadURL(imageRef);
+      setDraft((current) => ({
+        ...current,
+        imageUrl: url,
+        imageName: file.name,
+        imageContentType: file.type,
+        imageSize: file.size,
+      }));
+      setLeadImageMessage({ type: 'success', text: 'Lead image uploaded. Save to keep it on this lead.' });
+    } catch (error) {
+      console.error('[PipeLists] Lead image upload failed:', error);
+      setLeadImageMessage({
+        type: 'error',
+        text: readFirestoreError(error, 'Unable to upload lead image.'),
+      });
+    } finally {
+      setUploadingLeadImage(false);
+    }
+  };
+
+  const handleRemoveLeadImage = () => {
+    setDraft((current) => ({
+      ...current,
+      imageUrl: '',
+      imageName: '',
+      imageContentType: '',
+      imageSize: 0,
+    }));
+    setLeadImageMessage({ type: 'info', text: 'Lead image removed from the draft. Save to apply.' });
+  };
+
+  const handleUploadLeadAttachments = async (item: PipelineItem, files: FileList | null) => {
+    if (!canModify) return;
+    const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length === 0) return;
+    if (!user) {
+      setAttachmentMessage({ type: 'error', text: 'Sign in before uploading attachments.' });
+      return;
+    }
+
+    setUploadingAttachment(true);
+    setAttachmentMessage(null);
+
+    try {
+      const ownerUid = shareDoc?.ownerUid || user.uid;
+      const nextAttachments: LeadAttachment[] = [];
+
+      for (const file of selectedFiles) {
+        const cleanFileName = safeAttachmentFileName(file.name);
+        const attachmentRef = storageRef(
+          simpBudgetStorage,
+          `pipelists-attachments/${ownerUid}/${activeList.id}/${item.id}/${Date.now()}-${cleanFileName}`,
+        );
+
+        await uploadBytes(attachmentRef, file, {
+          contentType: file.type || 'application/octet-stream',
+          customMetadata: {
+            listId: activeList.id,
+            itemId: item.id,
+            uploadedBy: user.email || user.uid,
+          },
+        });
+
+        const url = await getDownloadURL(attachmentRef);
+        nextAttachments.push({
+          id: makeId(),
+          type: 'file',
+          name: file.name,
+          url,
+          fileName: file.name,
+          contentType: file.type || 'application/octet-stream',
+          size: file.size,
+          createdAt: new Date().toISOString(),
+          createdBy: profile?.displayName || user.email || user.uid,
+        });
+      }
+
+      updateLeadAttachments(item.id, (attachments) => [...nextAttachments, ...attachments]);
+      setAttachmentMessage({ type: 'success', text: `Added ${formatCount(nextAttachments.length, 'attachment')}.` });
+    } catch (error) {
+      console.error('[PipeLists] Attachment upload failed:', error);
+      setAttachmentMessage({
+        type: 'error',
+        text: readFirestoreError(error, 'Unable to upload attachment.'),
+      });
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleAddAttachmentLink = (event: React.FormEvent<HTMLFormElement>, item: PipelineItem) => {
+    event.preventDefault();
+    if (!canModify) return;
+
+    const cleanUrl = attachmentLinkUrl.trim();
+    if (!cleanUrl) {
+      setAttachmentMessage({ type: 'error', text: 'Add an attachment link first.' });
+      return;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(cleanUrl);
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Unsupported URL protocol');
+    } catch {
+      setAttachmentMessage({ type: 'error', text: 'Use a valid http or https attachment link.' });
+      return;
+    }
+
+    const nextAttachment: LeadAttachment = {
+      id: makeId(),
+      type: 'link',
+      name: attachmentLinkName.trim() || parsedUrl.hostname.replace(/^www\./, ''),
+      url: parsedUrl.toString(),
+      fileName: '',
+      contentType: '',
+      size: 0,
+      createdAt: new Date().toISOString(),
+      createdBy: profile?.displayName || user?.email || '',
+    };
+
+    updateLeadAttachments(item.id, (attachments) => [nextAttachment, ...attachments]);
+    setAttachmentLinkName('');
+    setAttachmentLinkUrl('');
+    setAttachmentMessage({ type: 'success', text: 'Attachment link added.' });
+  };
+
+  const handleDeleteAttachment = (itemId: string, attachmentId: string) => {
+    if (!canModify) return;
+    updateLeadAttachments(itemId, (attachments) => attachments.filter((attachment) => attachment.id !== attachmentId));
+    setAttachmentMessage({ type: 'success', text: 'Attachment removed from this lead.' });
+  };
+
+  const buildLeadShareList = (item: PipelineItem): PipeList => ({
+    ...activeList,
+    name: item.title || activeList.name,
+    description: `${activeList.name} read-only lead share`,
+    items: [item],
+  });
+
+  const createOrUpdateLeadShareLink = async (item: PipelineItem) => {
+    if (!canModify || !user || isLeadSharedView) return;
+    setLeadShareMessage(null);
+
+    try {
+      const ownerUid = shareDoc?.ownerUid || user.uid;
+      const ownerEmail = shareDoc?.ownerEmail || user.email || TREMAINE_OWNER_EMAIL;
+      const nextShareId = shareDocumentIdForLead(ownerUid, activeList.id, item.id);
+      const nextShareUrl =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/PipeLists?leadShare=${encodeURIComponent(nextShareId)}`
+          : '';
+      const payload: PipeLeadShare = {
+        id: nextShareId,
+        ownerUid,
+        ownerEmail,
+        listId: activeList.id,
+        itemId: item.id,
+        list: publicSafePipeListSnapshot(buildLeadShareList(item)),
+        publicRead: true,
+      };
+
+      await setDoc(
+        doc(simpBudgetDb, PIPELEAD_SHARES_COLLECTION, nextShareId),
+        stripUndefined({
+          ...payload,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }),
+        { merge: true },
+      );
+
+      setLeadShareUrl(nextShareUrl);
+      setLeadShareMessage({ type: 'success', text: 'Read-only lead share link created and copied.' });
+      if (nextShareUrl) {
+        try {
+          await writeClipboardText(nextShareUrl);
+          setToastMessage({ type: 'success', text: 'Copied share link to clipboard.' });
+        } catch {
+          setToastMessage({ type: 'info', text: 'Share link created. Copy it from the link field.' });
+          setLeadShareMessage({ type: 'info', text: nextShareUrl });
+        }
+      }
+    } catch (error) {
+      console.error('[PipeLists] Lead share link failed:', error);
+      setLeadShareMessage({
+        type: 'error',
+        text: readFirestoreError(error, 'Unable to create this lead share link.'),
+      });
+    }
+  };
+
+  const handleManualLeadSave = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify) return;
+
+    const email = manualLeadDraft.email.trim().toLowerCase();
+    if (email && !isValidContactEmail(email)) {
+      setLeadExtractMessage({ type: 'error', text: 'Enter a valid email address.' });
+      return;
+    }
+
+    const sourceUrl = manualLeadDraft.sourceUrl.trim();
+    const normalizedSourceUrl = sourceUrl ? normalizeLeadInputUrl(sourceUrl)?.toString() || '' : '';
+    if (sourceUrl && !normalizedSourceUrl) {
+      setLeadExtractMessage({ type: 'error', text: 'Enter a valid source URL, including the website address.' });
+      return;
+    }
+
+    const inferredContactName = email ? contactNameFromEmail(email) : '';
+    const title = manualLeadDraft.title.trim() || inferredContactName;
+    const organization = manualLeadDraft.organization.trim();
+    if (!title && !organization) {
+      setLeadExtractMessage({
+        type: 'error',
+        text: isContactListActive
+          ? 'Add a contact name, email, or organization.'
+          : isTaskListActive
+            ? 'Add a task name or project area.'
+            : 'Add a lead name or organization.',
+      });
+      return;
+    }
+
+    if (
+      email
+      && activeList.items.some((item) => !isItemDeleted(item) && normalizeContactEmails(item.contactEmails).includes(email))
+    ) {
+      setLeadExtractMessage({ type: 'error', text: 'A contact with this email is already in this PipeList.' });
+      return;
+    }
+
+    const stage = normalizeStageId(
+      manualLeadDraft.stage || activeList.stages[0]?.id || 'sourced',
+      activeList.stages,
+    );
+    const nextItemBase = createItem(
+      {
+        ...defaultDraft(stage),
+        title: title || organization,
+        organization,
+        contactEmails: email ? [email] : [],
+        contactPhone: manualLeadDraft.phone.trim(),
+        sourceUrl: normalizedSourceUrl,
+        stage,
+        notes: cleanDealNotes(manualLeadDraft.notes),
+      },
+      makeId(),
+    );
+    const nextItem: PipelineItem = {
+      ...nextItemBase,
+      weeklyLogs: [
+        createSystemLog(
+          nextItemBase,
+          'item-created',
+          `Added ${nextItemBase.title} to ${activeList.name}.`,
+        ),
+      ],
+    };
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: [nextItem, ...list.items],
+            }
+          : list,
+      ),
+    );
+    setStageFilters([]);
+    setPriorityFilters([]);
+    setSelectedLogItemId(nextItem.id);
+    setViewMode('pipeline');
+    setToastMessage({
+      type: 'success',
+      text: `${isContactListActive ? 'Contact' : isTaskListActive ? 'Task' : 'Lead'} added to ${activeList.name}.`,
+    });
+    closeLeadUrlModal();
+  };
+
+  const handleExtractLead = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify) return;
+
+    const cleanInput = leadUrl.trim();
+    if (!cleanInput) {
+      setLeadExtractMessage({ type: 'error', text: 'Add a lead URL, person, organization, fund, school, or program name first.' });
+      return;
+    }
+
+    const directContactEmail = isContactListActive ? normalizeContactEmails(cleanInput)[0] : '';
+    if (directContactEmail) {
+      const stage = normalizeStageId(activeList.stages[0]?.id || 'sourced', activeList.stages);
+      const inferredContactName = contactNameFromEmail(directContactEmail);
+      const nextItemBase = createItem(
+        {
+          ...defaultDraft(stage),
+          title: inferredContactName || directContactEmail,
+          organization: '',
+          contactEmails: [directContactEmail],
+          stage,
+        },
+        makeId(),
+      );
+      const nextItem: PipelineItem = {
+        ...nextItemBase,
+        weeklyLogs: [
+          createSystemLog(
+            nextItemBase,
+            'item-created',
+            `Added ${nextItemBase.title} to ${activeList.name}.`,
+          ),
+        ],
+      };
+
+      setLists((currentLists) =>
+        currentLists.map((list) =>
+          list.id === activeList.id
+            ? {
+                ...list,
+                items: [nextItem, ...list.items],
+              }
+            : list,
+        ),
+      );
+    setStageFilters([]);
+    setPriorityFilters([]);
+      setSelectedDetailItemId(nextItem.id);
+      setSelectedLogItemId(nextItem.id);
+      setDetailModalMode('details');
+      setDraft({
+        ...defaultDraft(nextItem.stage),
+        title: nextItem.title,
+        organization: nextItem.organization,
+        description: nextItem.description,
+        owner: nextItem.owner,
+        contactEmails: nextItem.contactEmails,
+        stage: nextItem.stage,
+        priority: nextItem.priority,
+        amount: nextItem.amount,
+        dueDate: nextItem.dueDate,
+        nextStep: nextItem.nextStep,
+        notes: nextItem.notes,
+        sourceUrl: nextItem.sourceUrl,
+        segment: nextItem.segment,
+        decisionMaker: nextItem.decisionMaker,
+        acv: nextItem.acv,
+        expectedCloseDate: nextItem.expectedCloseDate,
+        contractTerm: nextItem.contractTerm,
+        pilotScope: nextItem.pilotScope,
+        athleteCount: nextItem.athleteCount,
+        pilotStart: nextItem.pilotStart,
+        pilotEnd: nextItem.pilotEnd,
+        conversionLikelihood: nextItem.conversionLikelihood,
+        grossMargin: nextItem.grossMargin,
+        partnerCost: nextItem.partnerCost,
+        hardwareCost: nextItem.hardwareCost,
+        lossReason: nextItem.lossReason,
+        expansionPath: nextItem.expansionPath,
+        imageUrl: nextItem.imageUrl,
+        imageName: nextItem.imageName,
+        imageContentType: nextItem.imageContentType,
+        imageSize: nextItem.imageSize,
+        attachments: nextItem.attachments,
+      });
+      setEditingItemId(nextItem.id);
+      setIsEditorOpen(true);
+      setLeadUrl('');
+      setLeadExtractMessage(null);
+      setIsLeadUrlModalOpen(false);
+      setViewMode('pipeline');
+      return;
+    }
+
+    setIsLeadUrlModalOpen(false);
+    setIsAnalyzingLead(true);
+    setLeadExtractMessage(null);
+
+    try {
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before analyzing leads.');
+      }
+
+      const response = await fetch('/api/pipelists/extract-lead', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          input: cleanInput,
+          listName: activeList.name,
+          templateLabel: templateCatalog[activeList.templateKey].label,
+          templateKey: activeList.templateKey,
+          stages: activeList.stages.map((stage) => ({
+            id: stage.id,
+            label: stage.label,
+            probability: stage.probability,
+          })),
+        }),
+      });
+
+      const payload = await readApiJson(response, 'Analyze lead returned an unexpected response. Refresh and try again.');
+      if (!response.ok || !payload?.item) {
+        throw new Error(payload?.error || 'Unable to analyze that lead.');
+      }
+
+      const extracted = payload.item as Partial<PipelineItem> & {
+        confidence?: number;
+        missingFields?: string[];
+      };
+      const stage = normalizeStageId(
+        extracted.stage || activeList.stages[0]?.id || 'sourced',
+        activeList.stages,
+      );
+      const extractedSourceUrl = extracted.sourceUrl?.trim() || normalizeLeadInputUrl(cleanInput)?.toString() || '';
+      const sourceCandidates = Array.from(new Set([
+        extractedSourceUrl,
+        ...(Array.isArray(payload.sourceCandidates) ? payload.sourceCandidates : []),
+      ].filter((url): url is string => typeof url === 'string')
+        .map((url) => normalizeLeadInputUrl(url)?.toString() || '').filter(Boolean))).slice(0, 6);
+      if (sourceCandidates.length === 0) {
+        throw new Error('The lead did not include a source link that can be verified. Add the official page and try again.');
+      }
+      const sourceVerification = await verifySourceUrls(sourceCandidates, idToken);
+      const sourceCheck = sourceCandidates.map((url) => sourceVerification.get(url)).find((result) => result?.valid);
+      if (!sourceCheck) {
+        throw new Error('The source link could not be verified. Check that the page is current and try again.');
+      }
+      const verifiedSourceUrl = normalizeLeadInputUrl(sourceCheck.finalUrl || sourceCheck.url)?.toString() || sourceCheck.url;
+      const nextItemBase = createItem(
+        {
+          ...defaultDraft(stage),
+          ...extracted,
+          stage,
+          priority: extracted.priority || 'medium',
+          title: extracted.title?.trim() || fallbackLeadTitleFromInput(cleanInput),
+          organization: extracted.organization?.trim() || '',
+          contactEmails: normalizeContactEmails(extracted.contactEmails),
+          sourceUrl: verifiedSourceUrl,
+          notes: cleanDealNotes(extracted.notes),
+        },
+        makeId(),
+      );
+      const nextItem: PipelineItem = {
+        ...nextItemBase,
+        weeklyLogs: [
+          createSystemLog(
+            nextItemBase,
+            'item-created',
+            `Added ${nextItemBase.title} to ${activeList.name}.`,
+          ),
+        ],
+      };
+
+      setLists((currentLists) =>
+        currentLists.map((list) =>
+          list.id === activeList.id
+            ? {
+                ...list,
+                items: [nextItem, ...list.items],
+              }
+            : list,
+        ),
+      );
+    setStageFilters([]);
+    setPriorityFilters([]);
+      setSelectedDetailItemId(nextItem.id);
+      setSelectedLogItemId(nextItem.id);
+      setDetailModalMode('details');
+      setDraft({
+        ...defaultDraft(nextItem.stage),
+        title: nextItem.title,
+        organization: nextItem.organization,
+        description: nextItem.description,
+        owner: nextItem.owner,
+        contactEmails: nextItem.contactEmails,
+        stage: nextItem.stage,
+        priority: nextItem.priority,
+        amount: nextItem.amount,
+        dueDate: nextItem.dueDate,
+        nextStep: nextItem.nextStep,
+        notes: nextItem.notes,
+        sourceUrl: nextItem.sourceUrl,
+        segment: nextItem.segment,
+        decisionMaker: nextItem.decisionMaker,
+        acv: nextItem.acv,
+        expectedCloseDate: nextItem.expectedCloseDate,
+        contractTerm: nextItem.contractTerm,
+        pilotScope: nextItem.pilotScope,
+        athleteCount: nextItem.athleteCount,
+        pilotStart: nextItem.pilotStart,
+        pilotEnd: nextItem.pilotEnd,
+        conversionLikelihood: nextItem.conversionLikelihood,
+        grossMargin: nextItem.grossMargin,
+        partnerCost: nextItem.partnerCost,
+        hardwareCost: nextItem.hardwareCost,
+        lossReason: nextItem.lossReason,
+        expansionPath: nextItem.expansionPath,
+        imageUrl: nextItem.imageUrl,
+        imageName: nextItem.imageName,
+        imageContentType: nextItem.imageContentType,
+        imageSize: nextItem.imageSize,
+        attachments: nextItem.attachments,
+      });
+      setEditingItemId(nextItem.id);
+      setIsEditorOpen(true);
+      setLeadUrl('');
+      setViewMode('pipeline');
+    } catch (error) {
+      console.error('[PipeLists] Lead extraction failed:', error);
+      setLeadExtractMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to analyze that lead.',
+      });
+      setIsLeadUrlModalOpen(true);
+    } finally {
+      setIsAnalyzingLead(false);
+    }
+  };
+
+  const handleEnrichMissingVcSources = async () => {
+    if (!canModify || activeList.templateKey !== 'vc' || isEnrichingVcSources) return;
+
+    const targets = missingVcSourceItems;
+    if (targets.length === 0) {
+      setVcSourceEnrichmentMessage({ type: 'info', text: 'Every lead in this VC list already has a source link.' });
+      return;
+    }
+
+    setIsEnrichingVcSources(true);
+    setVcSourceEnrichmentMessage({
+      type: 'info',
+      text: `Analyzing ${formatCount(targets.length, 'VC lead')} with missing source links...`,
+    });
+
+    try {
+      const bridgeAuthUser = simpBudgetAuth.currentUser || quickLiftsAuth.currentUser;
+      const idToken = await bridgeAuthUser?.getIdToken();
+      if (!idToken) {
+        throw new Error('Please sign in again before analyzing VC leads.');
+      }
+
+      const updatesByItemId = new Map<string, Partial<PipelineItem>>();
+      let skippedCount = 0;
+
+      for (const item of targets) {
+        const searchInput = [
+          item.title,
+          item.organization && item.organization !== item.title ? item.organization : '',
+          'venture capital firm official website investment focus',
+        ]
+          .filter(Boolean)
+          .join(' ');
+
+        try {
+          const response = await fetch('/api/pipelists/extract-lead', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              input: searchInput,
+              listName: activeList.name,
+              templateLabel: templateCatalog[activeList.templateKey].label,
+              templateKey: activeList.templateKey,
+              stages: activeList.stages.map((stage) => ({
+                id: stage.id,
+                label: stage.label,
+                probability: stage.probability,
+              })),
+            }),
+          });
+
+          const payload = await readApiJson(response, `Analyze lead returned an unexpected response for ${item.title}.`);
+          if (!response.ok || !payload?.item) {
+            skippedCount += 1;
+            continue;
+          }
+
+          const extracted = payload.item as Partial<PipelineItem> & {
+            contactEmails?: unknown;
+          };
+          const normalizedSourceUrl = normalizeLeadInputUrl(extracted.sourceUrl?.trim() || '')?.toString() || '';
+          if (!normalizedSourceUrl) {
+            skippedCount += 1;
+            continue;
+          }
+          const sourceVerification = await verifySourceUrls([normalizedSourceUrl], idToken);
+          const sourceCheck = sourceVerification.get(normalizedSourceUrl);
+          if (!sourceCheck?.valid) {
+            skippedCount += 1;
+            continue;
+          }
+          const verifiedSourceUrl = normalizeLeadInputUrl(sourceCheck.finalUrl || normalizedSourceUrl)?.toString() || normalizedSourceUrl;
+
+          updatesByItemId.set(item.id, {
+            sourceUrl: verifiedSourceUrl,
+            organization: item.organization.trim() ? item.organization : extracted.organization?.trim() || '',
+            description: item.description.trim() ? item.description : extracted.description?.trim() || '',
+            amount: item.amount.trim() ? item.amount : extracted.amount?.trim() || '',
+            segment: item.segment.trim() ? item.segment : extracted.segment?.trim() || '',
+            decisionMaker: item.decisionMaker.trim() ? item.decisionMaker : extracted.decisionMaker?.trim() || '',
+            nextStep: item.nextStep.trim() ? item.nextStep : extracted.nextStep?.trim() || '',
+            notes: item.notes.trim() ? item.notes : cleanDealNotes(extracted.notes),
+            contactEmails:
+              item.contactEmails.length > 0 ? item.contactEmails : normalizeContactEmails(extracted.contactEmails),
+          });
+        } catch (error) {
+          console.error('[PipeLists] VC source enrichment failed for lead:', item.title, error);
+          skippedCount += 1;
+        }
+      }
+
+      if (updatesByItemId.size > 0) {
+        const now = new Date().toISOString();
+        setLists((currentLists) =>
+          currentLists.map((list) =>
+            list.id === activeList.id
+              ? {
+                  ...list,
+                  items: list.items.map((item) => {
+                    const update = updatesByItemId.get(item.id);
+                    if (!update) return item;
+
+                    const updatedItem = { ...item, ...update, updatedAt: now };
+                    return {
+                      ...updatedItem,
+                      weeklyLogs: [
+                        {
+                          ...defaultLogDraft(),
+                          id: makeId(),
+                          type: 'update',
+                          weekOf: now.slice(0, 10),
+                          summary: `Added source link for ${updatedItem.title}.`,
+                          nextStep: '',
+                          notes: update.sourceUrl ? `Source: ${update.sourceUrl}` : '',
+                          createdAt: now,
+                        },
+                        ...item.weeklyLogs,
+                      ],
+                    };
+                  }),
+                }
+              : list,
+          ),
+        );
+      }
+
+      setVcSourceEnrichmentMessage({
+        type: updatesByItemId.size > 0 ? 'success' : 'info',
+        text:
+          updatesByItemId.size > 0
+            ? `Added source links to ${formatCount(updatesByItemId.size, 'VC lead')}${
+                skippedCount > 0 ? `; ${formatCount(skippedCount, 'lead')} still needs manual review.` : '.'
+              }`
+            : `No source links were found automatically. ${formatCount(skippedCount, 'lead')} need manual review.`,
+      });
+
+      if (updatesByItemId.size > 0) {
+        setToastMessage({ type: 'success', text: `Added ${formatCount(updatesByItemId.size, 'source link')}.` });
+      }
+    } catch (error) {
+      console.error('[PipeLists] VC source enrichment failed:', error);
+      setVcSourceEnrichmentMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Unable to analyze missing VC source links.',
+      });
+    } finally {
+      setIsEnrichingVcSources(false);
+    }
+  };
+
+  const handleCreateList = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canManageWorkspace) return;
+    const template = templateCatalog[newListTemplateKey];
+    const name = newListName.trim() || template.defaultName;
+    const nextList = createList(newListTemplateKey, name, lists.length);
+
+    setLists((currentLists) => [...currentLists, nextList]);
+    setActiveListId(nextList.id);
+    setStageFilters([]);
+    setPriorityFilters([]);
+    setNewListName('');
+    setDraft(defaultDraft(nextList.stages[0]?.id));
+    setSelectedLogItemId('');
+    setLogDraft(defaultLogDraft(nextList.templateKey));
+    setDetailModalMode('details');
+    setIsNewListModalOpen(false);
+    resetEditor();
+  };
+
+  const openListProfileModal = () => {
+    if (!canModify) return;
+    setListProfileDraft({
+      templateKey: activeList.templateKey,
+      name: activeList.name,
+      description: activeList.description || templateCatalog[activeList.templateKey].description,
+      objective: activeList.objective || defaultListObjective(activeList.templateKey, activeList.name),
+      leadDefinition: activeList.leadDefinition || defaultLeadDefinition(activeList.templateKey),
+      researchBrief: activeList.researchBrief || defaultResearchBriefForList(activeList),
+    });
+    setIsListProfileModalOpen(true);
+  };
+
+  const handleSaveListProfile = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canModify) return;
+
+    const templateKey = canManageActiveList && activeList.items.length === 0 ? listProfileDraft.templateKey : activeList.templateKey;
+    const name = listProfileDraft.name.trim();
+    if (!name) return;
+    const description = listProfileDraft.description.trim() || templateCatalog[templateKey].description;
+    const objective = listProfileDraft.objective.trim() || defaultListObjective(templateKey, activeList.name);
+    const leadDefinition = listProfileDraft.leadDefinition.trim() || defaultLeadDefinition(templateKey);
+    const researchBrief =
+      listProfileDraft.researchBrief.trim() ||
+      defaultResearchBriefForList({
+        ...activeList,
+        templateKey,
+        description,
+        objective,
+        leadDefinition,
+      });
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              templateKey: list.items.length === 0 ? templateKey : list.templateKey,
+              stages: list.items.length === 0 ? templateCatalog[templateKey].stages : list.stages,
+              name,
+              description,
+              objective,
+              leadDefinition,
+              researchBrief,
+            }
+          : list,
+      ),
+    );
+    setLeadResearchPrompt(researchBrief);
+    setIsListProfileModalOpen(false);
+    setToastMessage({ type: 'success', text: 'PipeList profile saved.' });
+  };
+
+  const handleSaveItem = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setItemSaveError('');
+    if (!canModify) {
+      setItemSaveError('You no longer have permission to edit this lead. Your draft is still open.');
+      return;
+    }
+    const liveList = lists.find((list) => list.id === activeList.id);
+    const liveItem = liveList?.items.find((item) => item.id === editingItemId);
+    const cachedItem = detailSnapshotRef.current?.list.id === activeList.id &&
+      detailSnapshotRef.current.item.id === editingItemId
+      ? detailSnapshotRef.current.item
+      : undefined;
+    const editingSnapshot = liveItem || cachedItem;
+    if (!liveList || (editingItemId && (!editingSnapshot || editingSnapshot.deletedAt || editingSnapshot.movedToListId))) {
+      setItemSaveError('This lead or list was removed or moved. Your draft is still open; copy your changes before closing it.');
+      return;
+    }
+    if (itemResearchResult && selectedDetailItem?.id === editingItemId) {
+      handleApplyItemResearch();
+      return;
+    }
+    const pendingContactTokens = contactEmailInput
+      .split(/[\s,;]+/)
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+    const invalidPendingContactEmails = pendingContactTokens.filter((email) => !isValidContactEmail(email));
+    if (invalidPendingContactEmails.length > 0) {
+      setContactEmailError('Enter a valid email address.');
+      setItemSaveError('Check Contact Email below. Enter a valid email address or remove the unfinished entry.');
+      return;
+    }
+
+    const normalizedContactEmails = Array.from(new Set([...draft.contactEmails, ...pendingContactTokens]));
+    const inferredContactName = normalizedContactEmails.map(contactNameFromEmail).find(Boolean) || '';
+    const currentEditingItem = editingItemId ? editingSnapshot : undefined;
+    const shouldSaveCustomerSuccess =
+      activeList.templateKey === 'university-pilot' &&
+      (Boolean(draft.customerSuccess) || isUniversityCustomerSuccessStage(draft.stage));
+    const normalizedCustomerSuccess = shouldSaveCustomerSuccess
+      ? normalizeUniversityCustomerSuccess(draft.customerSuccess, {
+          stage: draft.stage,
+          owner: draft.owner,
+          nextStep: draft.nextStep,
+          dueDate: draft.dueDate,
+          pilotStart: draft.pilotStart,
+          pilotEnd: draft.pilotEnd,
+        })
+      : undefined;
+    const customerSuccessToSave = normalizedCustomerSuccess
+      ? (() => {
+          const nextCustomerSuccess: UniversityCustomerSuccess = {
+          ...normalizedCustomerSuccess,
+          ownership: {
+            ...normalizedCustomerSuccess.ownership,
+            accountOwner: draft.owner.trim(),
+          },
+          pilot: {
+            startDate: draft.pilotStart,
+            endDate: draft.pilotEnd,
+          },
+          };
+          return {
+            ...nextCustomerSuccess,
+            lastSuccessUpdateAt: latestCurrentSuccessEvidenceAt(
+              nextCustomerSuccess,
+              currentEditingItem?.weeklyLogs || [],
+              { includeStored: false },
+            ),
+          };
+        })()
+      : undefined;
+    const baseDraftToSave = {
+      ...draft,
+      title: isContactListActive && !draft.title.trim() && inferredContactName ? inferredContactName : draft.title,
+      contactEmails: normalizedContactEmails,
+      notes: cleanDealNotes(draft.notes),
+      ...(customerSuccessToSave
+        ? {
+            customerSuccess: customerSuccessToSave,
+            nextStep: customerSuccessToSave.nextAction.summary,
+            dueDate: customerSuccessToSave.nextAction.dueDate,
+          }
+        : {}),
+    };
+    const draftToSave = {
+      ...baseDraftToSave,
+      deadlineSource: normalizeDeadlineSourceForSave(baseDraftToSave, currentEditingItem),
+    };
+    if (!draftToSave.title.trim() && !draftToSave.organization.trim()) {
+      setItemSaveError('Enter a name or organization before saving.');
+      return;
+    }
+    setContactEmailInput('');
+    setContactEmailError('');
+
+    setLists((currentLists) =>
+      currentLists.map((list) => {
+        if (list.id !== activeList.id) return list;
+
+        if (editingItemId && editingSnapshot) {
+          const currentItem = list.items.find((item) => item.id === editingItemId) || editingSnapshot;
+          const savedItem: PipelineItem = {
+            ...currentItem,
+            ...draftToSave,
+            title: draftToSave.title.trim() || currentItem.title,
+            organization: draftToSave.organization.trim(),
+            updatedAt: new Date().toISOString(),
+          };
+          return {
+            ...list,
+            // Keep an explicitly saved edit when a sync snapshot temporarily omitted its lead.
+            items: list.items.some((item) => item.id === editingItemId)
+              ? list.items.map((item) => item.id === editingItemId ? savedItem : item)
+              : [...list.items, savedItem],
+          };
+        }
+
+        const newItemBase = createItem({
+          ...draftToSave,
+          title: draftToSave.title.trim() || (isTaskListActive ? 'Untitled task' : 'Untitled opportunity'),
+          organization: draftToSave.organization.trim(),
+        });
+        const newItem: PipelineItem = {
+          ...newItemBase,
+          weeklyLogs: [
+            createSystemLog(
+              newItemBase,
+              'item-created',
+              `Added ${newItemBase.title} to ${list.name}.`,
+            ),
+          ],
+        };
+
+        return {
+          ...list,
+          items: [newItem, ...list.items],
+        };
+      }),
+    );
+
+    resetEditor();
+  };
+
+  const clearKanbanDrag = () => {
+    setDraggedKanbanItem(null);
+    setKanbanDropStageId(null);
+  };
+
+  const toggleItemResearchNeeded = (itemId: string) => {
+    if (!canModify || isBulkSelectionMode) return;
+    setLists((currentLists) => currentLists.map((list) => list.id !== activeList.id ? list : {
+      ...list,
+      items: list.items.map((item) => item.id === itemId && !item.deletedAt
+        ? { ...item, needsResearch: !item.needsResearch, updatedAt: new Date().toISOString() }
+        : item),
+    }));
+  };
+
+  const handleKanbanDrop = (event: React.DragEvent<HTMLElement>, stageId: string) => {
+    event.preventDefault();
+    clearKanbanDrag();
+    if (!canModify || isBulkSelectionMode || draggedKanbanItem?.listId !== activeList.id) return;
+    const itemId = draggedKanbanItem.itemId;
+    setLists((currentLists) => currentLists.map((list) => {
+      if (list.id !== activeList.id || !list.stages.some((stage) => stage.id === stageId)) return list;
+      return {
+        ...list,
+        items: list.items.map((item) => item.id === itemId && !item.deletedAt && item.stage !== stageId
+          ? { ...item, stage: stageId, updatedAt: new Date().toISOString() }
+          : item),
+      };
+    }));
+  };
+
+  const handleEditItem = (item: PipelineItem) => {
+    if (!canModify) return;
+    setItemSaveError('');
+    const { id, createdAt, updatedAt, weeklyLogs, deletedAt, deletedByLogId, restorableUntil, movedToListId, linkedLeadIds, ...editableItem } = item;
+    void id;
+    void createdAt;
+    void updatedAt;
+    void weeklyLogs;
+    void deletedAt;
+    void deletedByLogId;
+    void restorableUntil;
+    void movedToListId;
+    void linkedLeadIds;
+    setDraft({
+      ...editableItem,
+      contactEmails: normalizeContactEmails(editableItem.contactEmails),
+      notes: cleanDealNotes(editableItem.notes),
+      ...(activeList.templateKey === 'university-pilot' &&
+      (Boolean(item.customerSuccess) || isUniversityCustomerSuccessStage(item.stage))
+        ? { customerSuccess: customerSuccessForItem(item) }
+        : {}),
+    });
+    setContactEmailInput('');
+    setContactEmailError('');
+    setEditingItemId(item.id);
+    setIsEditorOpen(true);
+    setSelectedDetailItemId(item.id);
+    setDetailModalMode('details');
+  };
+
+  const handleDeleteItem = (itemId: string) => {
+    if (!canModify) return;
+    const now = new Date();
+    const deletedAt = now.toISOString();
+    const restorableUntil = addDays(now, SOFT_DELETE_RESTORE_DAYS).toISOString();
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: list.items.map((item) => {
+                if (item.id !== itemId || isItemDeleted(item)) return item;
+                const deletionLog = createSystemLog(
+                  item,
+                  'item-deleted',
+                  `Deleted ${item.title} from ${list.name}.`,
+                  restorableUntil,
+                );
+                return {
+                  ...item,
+                  deletedAt,
+                  deletedByLogId: deletionLog.id,
+                  restorableUntil,
+                  movedToListId: '',
+                  weeklyLogs: [deletionLog, ...item.weeklyLogs],
+                  updatedAt: deletedAt,
+                };
+              }),
+            }
+          : list,
+      ),
+    );
+
+    if (editingItemId === itemId) resetEditor();
+    if (selectedLogItemId === itemId) setSelectedLogItemId('');
+    if (selectedDetailItemId === itemId) {
+      setDetailModalMode('details');
+    }
+  };
+
+  const toggleBulkSelectionMode = () => {
+    setIsBulkSelectionMode((current) => {
+      const next = !current;
+      if (!next) {
+        setSelectedBulkItemIds([]);
+        setBulkMoveTargetListId('');
+        setBulkActionMessage(null);
+      }
+      return next;
+    });
+  };
+
+  const toggleBulkItemSelection = (itemId: string) => {
+    setSelectedBulkItemIds((currentIds) =>
+      currentIds.includes(itemId)
+        ? currentIds.filter((currentId) => currentId !== itemId)
+        : [...currentIds, itemId],
+    );
+  };
+
+  const toggleSelectVisibleItems = () => {
+    if (filteredItemIds.length === 0) return;
+    setSelectedBulkItemIds((currentIds) => {
+      const currentSet = new Set(currentIds);
+      if (allVisibleItemsSelected) {
+        filteredItemIds.forEach((itemId) => currentSet.delete(itemId));
+      } else {
+        filteredItemIds.forEach((itemId) => currentSet.add(itemId));
+      }
+      return Array.from(currentSet);
+    });
+  };
+
+  const handleRestoreDeletedItem = (listId: string, itemId: string) => {
+    if (!canModify) return;
+    const now = new Date().toISOString();
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === listId
+          ? {
+              ...list,
+              items: list.items.map((item) => {
+                if (item.id !== itemId || !canRestoreDeletedItem(item)) return item;
+                return {
+                  ...item,
+                  deletedAt: '',
+                  deletedByLogId: '',
+                  restorableUntil: '',
+                  movedToListId: '',
+                  weeklyLogs: [
+                    createSystemLog(item, 'item-restored', `Restored ${item.title} to ${list.name}.`),
+                    ...item.weeklyLogs,
+                  ],
+                  updatedAt: now,
+                };
+              }),
+            }
+          : list,
+      ),
+    );
+    setActiveListId(listId);
+    setSelectedDetailItemId(itemId);
+    setDetailModalMode('details');
+  };
+
+  const handleMoveItem = (itemId: string, targetListId: string) => {
+    if (!canModify || !targetListId || targetListId === activeList.id) return;
+    const cannotEditSource = sharedListIds.has(activeList.id) && !editableListIds.has(activeList.id);
+    const cannotEditTarget = sharedListIds.has(targetListId) && !editableListIds.has(targetListId);
+    if (cannotEditSource || cannotEditTarget) {
+      setMoveTargetListId('');
+      setLeadMoveMessage({ type: 'error', text: 'You need edit access on both PipeLists to move this lead.' });
+      return;
+    }
+
+    const sourceList = lists.find((list) => list.id === activeList.id);
+    const targetList = lists.find((list) => list.id === targetListId);
+    const itemToMove = sourceList?.items.find((item) => item.id === itemId);
+
+    if (!sourceList || !targetList || !itemToMove || isItemDeleted(itemToMove)) {
+      setMoveTargetListId('');
+      setLeadMoveMessage({ type: 'error', text: 'Unable to move this lead.' });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const movedTombstoneUntil = addDays(new Date(now), SOFT_DELETE_RESTORE_DAYS).toISOString();
+    const targetStage = normalizeStageId(itemToMove.stage, targetList.stages);
+    const movedItem: PipelineItem = {
+      ...itemToMove,
+      stage: targetStage,
+      deletedAt: '',
+      deletedByLogId: '',
+      restorableUntil: '',
+      movedToListId: '',
+      updatedAt: now,
+      weeklyLogs: [
+        createSystemLog(
+          itemToMove,
+          'item-moved',
+          `Moved ${itemToMove.title} from ${sourceList.name} to ${targetList.name}.`,
+        ),
+        ...itemToMove.weeklyLogs,
+      ],
+    };
+
+    setLists((currentLists) => {
+      return currentLists.map((list) => {
+        if (list.id === sourceList.id) {
+          return {
+            ...list,
+            items: list.items.map((item) =>
+              item.id === itemId
+                ? {
+                    ...item,
+                    deletedAt: now,
+                    deletedByLogId: '',
+                    restorableUntil: movedTombstoneUntil,
+                    movedToListId: targetList.id,
+                    updatedAt: now,
+                  }
+                : item,
+            ),
+          };
+        }
+
+        if (list.id === targetList.id) {
+          const withoutExistingCopy = list.items.filter((item) => item.id !== itemId);
+          return {
+            ...list,
+            items: [movedItem, ...withoutExistingCopy],
+          };
+        }
+
+        return list;
+      });
+    });
+
+    if (editingItemId === itemId) resetEditor();
+    setActiveListId(targetListId);
+    setStageFilters([]);
+    setPriorityFilters([]);
+    setQuery('');
+    setSelectedDetailItemId(itemId);
+    setSelectedLogItemId(itemId);
+    setDetailModalMode('details');
+    setMoveTargetListId('');
+    setLeadMoveMessage({
+      type: 'success',
+      text: `Moved ${movedItem.title} from ${sourceList.name} to ${targetList.name}.`,
+    });
+  };
+
+  const handleBulkDeleteSelected = () => {
+    if (!canModify || selectedBulkItems.length === 0) return;
+    const confirmed = window.confirm(`Delete ${formatCount(selectedBulkItems.length, listItemNoun(activeList))} from ${activeList.name}?`);
+    if (!confirmed) return;
+
+    const selectedIds = new Set(selectedBulkItems.map((item) => item.id));
+    const now = new Date();
+    const deletedAt = now.toISOString();
+    const restorableUntil = addDays(now, SOFT_DELETE_RESTORE_DAYS).toISOString();
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === activeList.id
+          ? {
+              ...list,
+              items: list.items.map((item) => {
+                if (!selectedIds.has(item.id) || isItemDeleted(item)) return item;
+                const deletionLog = createSystemLog(
+                  item,
+                  'item-deleted',
+                  `Deleted ${item.title} from ${list.name}.`,
+                  restorableUntil,
+                );
+                return {
+                  ...item,
+                  deletedAt,
+                  deletedByLogId: deletionLog.id,
+                  restorableUntil,
+                  movedToListId: '',
+                  weeklyLogs: [deletionLog, ...item.weeklyLogs],
+                  updatedAt: deletedAt,
+                };
+              }),
+            }
+          : list,
+      ),
+    );
+
+    setSelectedBulkItemIds([]);
+    setBulkActionMessage({
+      type: 'success',
+      text: `Deleted ${formatCount(selectedBulkItems.length, listItemNoun(activeList))}.`,
+    });
+    if (selectedDetailItemId && selectedIds.has(selectedDetailItemId)) {
+      setDetailModalMode('details');
+    }
+  };
+
+  const handleBulkMoveSelected = () => {
+    if (!canModify || selectedBulkItems.length === 0 || !bulkMoveTargetListId || bulkMoveTargetListId === activeList.id) return;
+    const cannotEditSource = sharedListIds.has(activeList.id) && !editableListIds.has(activeList.id);
+    const cannotEditTarget = sharedListIds.has(bulkMoveTargetListId) && !editableListIds.has(bulkMoveTargetListId);
+    if (cannotEditSource || cannotEditTarget) {
+      setBulkActionMessage({ type: 'error', text: 'You need edit access on both PipeLists to move selected items.' });
+      return;
+    }
+
+    const sourceList = lists.find((list) => list.id === activeList.id);
+    const targetList = lists.find((list) => list.id === bulkMoveTargetListId);
+    if (!sourceList || !targetList) {
+      setBulkActionMessage({ type: 'error', text: 'Choose a PipeList to move selected items into.' });
+      return;
+    }
+
+    const selectedIds = new Set(selectedBulkItems.map((item) => item.id));
+    const now = new Date().toISOString();
+    const movedTombstoneUntil = addDays(new Date(now), SOFT_DELETE_RESTORE_DAYS).toISOString();
+    const movedItems = selectedBulkItems.map((item) => ({
+      ...item,
+      stage: normalizeStageId(item.stage, targetList.stages),
+      deletedAt: '',
+      deletedByLogId: '',
+      restorableUntil: '',
+      movedToListId: '',
+      updatedAt: now,
+      weeklyLogs: [
+        createSystemLog(
+          item,
+          'item-moved',
+          `Moved ${item.title} from ${sourceList.name} to ${targetList.name}.`,
+        ),
+        ...item.weeklyLogs,
+      ],
+    }));
+
+    setLists((currentLists) =>
+      currentLists.map((list) => {
+        if (list.id === sourceList.id) {
+          return {
+            ...list,
+            items: list.items.map((item) =>
+              selectedIds.has(item.id)
+                ? {
+                    ...item,
+                    deletedAt: now,
+                    deletedByLogId: '',
+                    restorableUntil: movedTombstoneUntil,
+                    movedToListId: targetList.id,
+                    updatedAt: now,
+                  }
+                : item,
+            ),
+          };
+        }
+
+        if (list.id === targetList.id) {
+          const withoutExistingCopies = list.items.filter((item) => !selectedIds.has(item.id));
+          return {
+            ...list,
+            items: [...movedItems, ...withoutExistingCopies],
+          };
+        }
+
+        return list;
+      }),
+    );
+
+    setSelectedBulkItemIds([]);
+    setBulkMoveTargetListId('');
+    setBulkActionMessage({
+      type: 'success',
+      text: `Moved ${formatCount(movedItems.length, listItemNoun(activeList))} to ${targetList.name}.`,
+    });
+    if (selectedDetailItemId && selectedIds.has(selectedDetailItemId)) {
+      setDetailModalMode('details');
+    }
+  };
+
+  const handleDeleteList = () => {
+    if (!canManageActiveList) return;
+    if (lists.length <= 1) return;
+
+    const nextLists = lists.filter((list) => list.id !== activeList.id);
+    setLists(nextLists);
+    setActiveListId(nextLists[0].id);
+    setStageFilters([]);
+    setPriorityFilters([]);
+    setSelectedLogItemId('');
+    setLogDraft(defaultLogDraft(nextLists[0].templateKey));
+    setDetailModalMode('details');
+    setIsDeleteListModalOpen(false);
+    resetEditor();
+  };
+
+  const handleSaveLog = (
+    event: React.FormEvent<HTMLFormElement>,
+    options: { listId?: string; itemId?: string; closeOnSave?: boolean } = {},
+  ) => {
+    event.preventDefault();
+    if (!canModify) return;
+    const targetListId = options.listId || activeList.id;
+    const targetList = lists.find((list) => list.id === targetListId);
+    const targetItemId = options.itemId || selectedLogItem?.id || '';
+    if (!targetList || !targetItemId) return;
+    if (
+      logDraft.type === 'metrics' &&
+      logDraft.reportingPeriodStart &&
+      logDraft.reportingPeriodEnd &&
+      logDraft.reportingPeriodStart > logDraft.reportingPeriodEnd
+    ) {
+      setToastMessage({ type: 'error', text: 'Reporting period start must be on or before the end date.' });
+      return;
+    }
+    const invalidMetric = metricLogFields.find(([key, , , maximum]) => {
+      const value = parseOptionalNumber(logDraft[key]);
+      return value !== null && (value < 0 || (maximum !== undefined && value > maximum));
+    });
+    if (logDraft.type === 'metrics' && invalidMetric) {
+      setToastMessage({
+        type: 'error',
+        text:
+          invalidMetric[3] !== undefined
+            ? `${invalidMetric[1]} must be between 0 and ${invalidMetric[3]}.`
+            : `${invalidMetric[1]} cannot be negative.`,
+      });
+      return;
+    }
+    const hasMetricInput = Boolean(
+      logDraft.rosteredAthletes ||
+        logDraft.completedCheckIns ||
+        logDraft.checkInRate ||
+        logDraft.biometricSyncRate ||
+        logDraft.signalEvents ||
+        logDraft.noraEngagementRate ||
+        logDraft.noraSessions ||
+        logDraft.escalations ||
+        logDraft.staffFeedbackScore,
+    );
+    if (!logDraft.summary.trim() && !logDraft.notes.trim() && !logDraft.nextStep.trim() && !hasMetricInput) return;
+
+    const nextLog: ActivityLog = {
+      ...logDraft,
+      summary: logDraft.summary.trim(),
+      nextStep: logDraft.nextStep.trim(),
+      notes: logDraft.notes.trim(),
+      id: makeId(),
+      createdAt: new Date().toISOString(),
+    };
+
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === targetList.id
+          ? {
+              ...list,
+              items: list.items.map((item) =>
+                item.id === targetItemId
+                  ? (() => {
+                      const updatedAt = new Date().toISOString();
+                      const shouldUpdateSuccess =
+                        list.templateKey === 'university-pilot' &&
+                        (Boolean(item.customerSuccess) || isUniversityCustomerSuccessStage(item.stage)) &&
+                        nextLog.type === 'metrics';
+                      const customerSuccess = shouldUpdateSuccess
+                        ? normalizeUniversityCustomerSuccess(item.customerSuccess, {
+                            stage: item.stage,
+                            owner: item.owner,
+                            nextStep: item.nextStep,
+                            dueDate: item.dueDate,
+                            pilotStart: item.pilotStart,
+                            pilotEnd: item.pilotEnd,
+                          })
+                        : undefined;
+                      return {
+                        ...item,
+                        weeklyLogs: [nextLog, ...item.weeklyLogs],
+                        ...(customerSuccess
+                          ? {
+                              customerSuccess: {
+                                ...customerSuccess,
+                                lastSuccessUpdateAt: latestCurrentSuccessEvidenceAt(
+                                  customerSuccess,
+                                  [nextLog, ...item.weeklyLogs],
+                                  { today: updatedAt.slice(0, 10) },
+                                ),
+                              },
+                            }
+                          : {}),
+                        updatedAt,
+                      };
+                    })()
+                  : item,
+              ),
+            }
+          : list,
+      ),
+    );
+    setLogDraft(defaultLogDraft(targetList.templateKey));
+    if (options.closeOnSave) {
+      setIsLogModalOpen(false);
+    }
+  };
+
+  const handleDeleteLog = (itemId: string, logId: string, listId = activeList.id) => {
+    if (!canModify) return;
+    const updatedAt = new Date().toISOString();
+    setLists((currentLists) =>
+      currentLists.map((list) =>
+        list.id === listId
+          ? {
+              ...list,
+              items: list.items.map((item) => {
+                if (item.id !== itemId) return item;
+                const deletedLog = item.weeklyLogs.find((log) => log.id === logId);
+                const remainingLogs = item.weeklyLogs.filter((log) => log.id !== logId);
+                const customerSuccess = item.customerSuccess
+                  ? normalizeUniversityCustomerSuccess(item.customerSuccess, {
+                      stage: item.stage,
+                      owner: item.owner,
+                      nextStep: item.nextStep,
+                      dueDate: item.dueDate,
+                      pilotStart: item.pilotStart,
+                      pilotEnd: item.pilotEnd,
+                    })
+                  : undefined;
+
+                return {
+                  ...item,
+                  weeklyLogs: remainingLogs,
+                  ...(deletedLog?.type === 'metrics' && customerSuccess
+                    ? {
+                        customerSuccess: {
+                          ...customerSuccess,
+                          lastSuccessUpdateAt: latestCurrentSuccessEvidenceAt(customerSuccess, remainingLogs, {
+                            includeStored: false,
+                            today: updatedAt.slice(0, 10),
+                          }),
+                        },
+                      }
+                    : {}),
+                  updatedAt,
+                };
+              }),
+            }
+          : list,
+      ),
+    );
+  };
+
+  const handleExport = () => {
+    if (typeof window === 'undefined') return;
+
+    const rows = [
+      [
+        'List',
+        'Template',
+        'Title',
+        'Organization',
+        'Description',
+        'Stage',
+        'Ease of Contact',
+        'Owner',
+        'Contact Emails',
+        'Segment',
+        'Decision Maker',
+        'ACV',
+        'Amount',
+        'Expected Close Date',
+        'Due Date',
+        'Date Added',
+        'Scope',
+        'Count',
+        'Margin Notes',
+        'Partner Cost',
+        'Hard Cost',
+        'Next Step',
+        'Delivery Phase',
+        'Customer Health',
+        'Health Context',
+        'Customer Success Owner',
+        'Executive Sponsor',
+        'Champion',
+        'Next Review Date',
+        'Contract Start Date',
+        'Contract End Date',
+        'Renewal Decision Date',
+        'Renewal Owner',
+        'Renewal Outcome',
+        'Last Success Update',
+        'Launch Progress',
+        'Success Measures',
+        'Expansion Path',
+        'Loss Reason',
+        'Notes',
+        'Source URL',
+        'Image URL',
+        'Attachments',
+      ],
+      ...activeListItems.map((item) => {
+        const stage = getStage(activeList, item.stage);
+        const success =
+          activeList.templateKey === 'university-pilot' &&
+          (Boolean(item.customerSuccess) || isUniversityCustomerSuccessStage(item.stage))
+            ? customerSuccessForItem(item)
+            : null;
+        const requiredLaunchItems = success?.launchChecklist.filter((entry) => entry.required) || [];
+        const completedLaunchItems = requiredLaunchItems.filter(
+          (entry) => entry.status === 'complete' || entry.status === 'not-applicable',
+        );
+        return [
+          activeList.name,
+          templateCatalog[activeList.templateKey].label,
+          item.title,
+          item.organization,
+          item.description,
+          stage.label,
+          easeOfContactLabels[item.priority],
+          item.owner,
+          item.contactEmails.join('\n'),
+          item.segment,
+          item.decisionMaker,
+          item.acv,
+          item.amount,
+          item.expectedCloseDate,
+          item.dueDate,
+          pipeTimestampToDate(item.createdAt)?.toISOString().slice(0, 10) || '',
+          item.pilotScope,
+          item.athleteCount,
+          item.grossMargin,
+          item.partnerCost,
+          item.hardwareCost,
+          item.nextStep,
+          success?.pilotPhase || '',
+          success?.health.status || '',
+          success?.health.reason || '',
+          success?.ownership.customerSuccessOwner || '',
+          success?.ownership.executiveSponsor || '',
+          success?.ownership.champion || '',
+          success?.nextReviewDate || '',
+          success?.renewal.contractStartDate || '',
+          success?.renewal.contractEndDate || '',
+          success?.renewal.decisionDate || '',
+          success?.renewal.owner || '',
+          success?.renewal.outcome || '',
+          success?.lastSuccessUpdateAt || '',
+          success ? `${completedLaunchItems.length}/${requiredLaunchItems.length}` : '',
+          success?.successMeasures
+            .map((measure) => {
+              const latest = measure.latestResult.state === 'measured' ? measure.latestResult.value : 'missing';
+              return `${measure.label}: ${latest}${measure.unit ? ` ${measure.unit}` : ''} (target ${measure.target.state === 'measured' ? measure.target.value : 'missing'})`;
+            })
+            .join('\n') || '',
+          item.expansionPath,
+          item.lossReason,
+          item.notes,
+          item.sourceUrl,
+          item.imageUrl,
+          item.attachments.map((attachment) => `${attachment.name}: ${attachment.url}`).join('\n'),
+        ];
+      }),
+    ];
+    const csv = rows.map((row) => row.map(escapeCsv).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${activeList.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-pipeline.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const normalizeEmailList = (value: string) =>
+    Array.from(
+      new Set(
+        value
+          .split(/[\n,;]/)
+          .map((email) => email.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+
+  const selectedShareLists = lists.filter((list) => shareSelectedListIds.includes(list.id));
+  const inviteHistory = useMemo(() => {
+    const shareDocsById = new Map<string, PipeListShare>();
+    ownerShareDocs.forEach((share) => shareDocsById.set(share.id, share));
+    if (shareDoc && !shareDocsById.has(shareDoc.id)) shareDocsById.set(shareDoc.id, shareDoc);
+
+    const grouped = new Map<string, InviteHistoryEntry>();
+    const profilesByEmail = new Map(
+      searchableProfiles.map((account) => [account.email.trim().toLowerCase(), account]),
+    );
+
+    Array.from(shareDocsById.values())
+      .forEach((share) => {
+        const accessByEmail = new Map<string, ShareAccess>();
+        share.viewerEmails.forEach((email) => accessByEmail.set(email.trim().toLowerCase(), 'read'));
+        share.editorEmails.forEach((email) => accessByEmail.set(email.trim().toLowerCase(), 'edit'));
+        Object.values(share.inviteStatuses).forEach((invite) => {
+          const email = invite.email.trim().toLowerCase();
+          if (email && invite.status === 'sent' && !accessByEmail.has(email)) {
+            accessByEmail.set(email, invite.access);
+          }
+        });
+
+        accessByEmail.forEach((access, email) => {
+          if (!email) return;
+
+          const invite = share.inviteStatuses[email];
+          const existing = grouped.get(email);
+          const account = profilesByEmail.get(email);
+          const status = invite?.status || 'accepted';
+          const nextAccess: ShareAccess = access === 'edit' || existing?.access === 'edit' ? 'edit' : 'read';
+          const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
+          const inviteUrl =
+            `${origin}/PipeLists?invite=${encodeURIComponent(share.id)}${
+              invite?.inviteId ? `&inviteBatch=${encodeURIComponent(invite.inviteId)}` : ''
+            }&inviteEmail=${encodeURIComponent(email)}`;
+          const listAccess = [
+            ...(existing?.listAccess || []).filter((entry) => entry.listId !== share.list.id),
+            {
+              listId: share.list.id,
+              listName: share.list.name,
+              accent: share.list.accent,
+              access,
+              status,
+              shareId: share.id,
+              inviteUrl,
+              sentAt: invite?.sentAt,
+              acceptedAt: invite?.acceptedAt,
+            },
+          ].sort((left, right) => left.listName.localeCompare(right.listName));
+          const allAccepted = listAccess.every((entry) => entry.status === 'accepted');
+
+          grouped.set(email, {
+            email,
+            displayName: account?.displayName || existing?.displayName || '',
+            photoURL: account?.photoURL || existing?.photoURL || '',
+            access: nextAccess,
+            status: allAccepted ? 'accepted' : 'sent',
+            sentAt: existing?.sentAt || invite?.sentAt,
+            acceptedAt: existing?.acceptedAt || invite?.acceptedAt,
+            listNames: listAccess.map((entry) => entry.listName),
+            listAccess,
+            inviteUrl: existing?.inviteUrl || inviteUrl,
+          });
+        });
+      });
+
+    return Array.from(grouped.values()).sort((left, right) => {
+      if (left.status !== right.status) return left.status === 'sent' ? -1 : 1;
+      return (left.displayName || left.email).localeCompare(right.displayName || right.email);
+    });
+  }, [ownerShareDocs, searchableProfiles, shareDoc]);
+  const moveTargetLists = lists.filter(
+    (list) => list.id !== activeList.id && (!sharedListIds.has(list.id) || editableListIds.has(list.id)),
+  );
+  const collaboratorAccountEmails = Array.from(
+    new Set([...selectedCollaboratorAccountEmails, ...normalizeEmailList(shareEditorEmails)]),
+  );
+  const filteredCollaboratorProfiles = useMemo(() => {
+    const search = collaboratorSearch.trim().toLowerCase();
+    const availableProfiles = searchableProfiles.filter(
+      (account) => !selectedCollaboratorAccountEmails.includes(account.email.trim().toLowerCase()),
+    );
+    if (!search) return availableProfiles.slice(0, 6);
+
+    return availableProfiles
+      .filter((account) =>
+        [account.displayName, account.email]
+          .join(' ')
+          .toLowerCase()
+          .includes(search),
+      )
+      .slice(0, 6);
+  }, [collaboratorSearch, searchableProfiles, selectedCollaboratorAccountEmails]);
+
+  const openSharePanel = () => {
+    setOwnerSharesReady(false);
+    setLoadingOwnerShares(true);
+    setShareSelectedListIds([activeList.id]);
+    setCollaboratorSearch('');
+    setShareEditorEmails('');
+    setSelectedCollaboratorAccountEmails([]);
+    setAddingListsForEmail('');
+    setAdditionalListIds([]);
+    setAdditionalListAccess('read');
+    setSavingAdditionalListsForEmail('');
+    setProfileSearchMessage(null);
+    setIsInviteFormOpen(false);
+    setIsSharePanelOpen(true);
+  };
+
+  const toggleInviteForm = () => {
+    if (isInviteFormOpen) {
+      setIsInviteFormOpen(false);
+      return;
+    }
+
+    closeAdditionalListPicker(addingListsForEmail, false);
+    setShareSelectedListIds([activeList.id]);
+    setCollaboratorSearch('');
+    setShareEditorEmails('');
+    setSelectedCollaboratorAccountEmails([]);
+    setProfileSearchMessage(null);
+    setIsInviteFormOpen(true);
+  };
+
+  const toggleShareListSelection = (listId: string) => {
+    setShareSelectedListIds((currentIds) => {
+      if (currentIds.includes(listId)) {
+        return currentIds.length > 1 ? currentIds.filter((id) => id !== listId) : currentIds;
+      }
+
+      return [...currentIds, listId];
+    });
+  };
+
+  const startAddingListsForCollaborator = (invite: InviteHistoryEntry) => {
+    const assignedListIds = new Set(invite.listAccess.map((entry) => entry.listId));
+    if (!personalListsRef.current.some((list) => !assignedListIds.has(list.id))) return;
+
+    setShareMessage(null);
+    setIsInviteFormOpen(false);
+    setAddingListsForEmail(invite.email);
+    setAdditionalListIds([]);
+    setAdditionalListAccess('read');
+
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        document.getElementById(`add-lists-heading-${invite.email.replace(/[^a-z0-9]+/gi, '-')}`)?.focus();
+      });
+    }
+  };
+
+  const closeAdditionalListPicker = (email = addingListsForEmail, returnFocus = true) => {
+    setAddingListsForEmail('');
+    setAdditionalListIds([]);
+    setAdditionalListAccess('read');
+
+    if (returnFocus && email && typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        const memberControlId = email.replace(/[^a-z0-9]+/gi, '-');
+        const focusTarget =
+          document.getElementById(`add-lists-trigger-${memberControlId}`) ||
+          document.getElementById(`collaborator-member-${memberControlId}`);
+        focusTarget?.focus();
+      });
+    }
+  };
+
+  const toggleAdditionalListSelection = (listId: string) => {
+    setAdditionalListIds((currentIds) =>
+      currentIds.includes(listId)
+        ? currentIds.filter((currentId) => currentId !== listId)
+        : [...currentIds, listId],
+    );
+  };
+
+  const addCollaboratorEmail = (email: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) return;
+
+    setSelectedCollaboratorAccountEmails((currentEmails) => Array.from(new Set([...currentEmails, cleanEmail])));
+    setCollaboratorSearch('');
+  };
+
+  const removeSelectedCollaboratorAccount = (email: string) => {
+    setSelectedCollaboratorAccountEmails((currentEmails) => currentEmails.filter((currentEmail) => currentEmail !== email));
+  };
+
+  const copyInviteUrl = async (inviteUrl: string) => {
+    try {
+      await writeClipboardText(inviteUrl);
+      setToastMessage({ type: 'success', text: 'Copied invite link to clipboard.' });
+    } catch {
+      setToastMessage({ type: 'error', text: 'Unable to copy invite link.' });
+    }
+  };
+
+  const sendCollaboratorInviteEmail = async (args: {
+    email: string;
+    inviteUrl: string;
+    listNames: string[];
+    access: ShareAccess;
+    inviteBatchId: string;
+  }) => {
+    if (!user) throw new Error('Please sign in again.');
+
+    const idToken = await user.getIdToken();
+    const response = await fetch('/api/pipelists/send-invite', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        toEmail: args.email,
+        inviteUrl: args.inviteUrl,
+        listNames: args.listNames,
+        access: args.access,
+        ownerName: profile?.displayName || user.displayName || 'Tremaine Grant',
+        ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
+        inviteBatchId: args.inviteBatchId,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result?.success === false) {
+      throw new Error(result?.error || `Unable to email ${args.email}.`);
+    }
+  };
+
+  const resendInviteEmail = async (invite: InviteHistoryEntry) => {
+    if (!user || !isOwner) return;
+
+    setShareMessage(null);
+    setResendingInviteEmails((currentEmails) => Array.from(new Set([...currentEmails, invite.email])));
+
+    try {
+      const inviteBatchId = makeId();
+      await Promise.all(
+        invite.listAccess.map((entry) => {
+          const existingShare =
+            ownerShareDocs.find((share) => share.id === entry.shareId) ||
+            (shareDoc?.id === entry.shareId ? shareDoc : null);
+          const viewerEmails =
+            entry.access === 'read'
+              ? Array.from(new Set([...(existingShare?.viewerEmails || []), invite.email]))
+              : (existingShare?.viewerEmails || []).filter((email) => email !== invite.email);
+          const editorEmails =
+            entry.access === 'edit'
+              ? Array.from(new Set([...(existingShare?.editorEmails || []), invite.email]))
+              : (existingShare?.editorEmails || []).filter((email) => email !== invite.email);
+
+          return setDoc(
+            doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, entry.shareId),
+            stripUndefined({
+              access: editorEmails.length > 0 ? 'edit' : 'read',
+              viewerEmails,
+              editorEmails,
+              inviteStatuses: {
+                [invite.email]: {
+                  email: invite.email,
+                  access: entry.access,
+                  status: 'sent',
+                  inviteId: inviteBatchId,
+                  sentAt: serverTimestamp(),
+                },
+              },
+              updatedAt: serverTimestamp(),
+            }),
+            { merge: true },
+          );
+        }),
+      );
+
+      setOwnerShareDocs((currentShares) =>
+        currentShares.map((share) => {
+          const entry = invite.listAccess.find((listEntry) => listEntry.shareId === share.id);
+          if (!entry) return share;
+
+          const viewerEmails =
+            entry.access === 'read'
+              ? Array.from(new Set([...share.viewerEmails, invite.email]))
+              : share.viewerEmails.filter((email) => email !== invite.email);
+          const editorEmails =
+            entry.access === 'edit'
+              ? Array.from(new Set([...share.editorEmails, invite.email]))
+              : share.editorEmails.filter((email) => email !== invite.email);
+
+          return {
+            ...share,
+            access: editorEmails.length > 0 ? 'edit' : 'read',
+            viewerEmails,
+            editorEmails,
+            inviteStatuses: {
+              ...share.inviteStatuses,
+              [invite.email]: {
+                ...(share.inviteStatuses[invite.email] || invite),
+                email: invite.email,
+                access: entry.access,
+                status: 'sent',
+                inviteId: inviteBatchId,
+                sentAt: new Date().toISOString(),
+              },
+            },
+          };
+        }),
+      );
+
+      await sendCollaboratorInviteEmail({
+        email: invite.email,
+        inviteUrl: invite.inviteUrl,
+        listNames: invite.listNames,
+        access: invite.access,
+        inviteBatchId,
+      });
+
+      setShareMessage({ type: 'success', text: `Invite resent to ${invite.email}.` });
+    } catch (error) {
+      console.error('Unable to resend PipeLists invite:', error);
+      setShareMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : readFirestoreError(error, 'Unable to resend this invite.'),
+      });
+    } finally {
+      setResendingInviteEmails((currentEmails) => currentEmails.filter((email) => email !== invite.email));
+    }
+  };
+
+  const updateCollaboratorListAccess = async (
+    invite: InviteHistoryEntry,
+    entry: InviteHistoryEntry['listAccess'][number],
+    access: ShareAccess,
+  ) => {
+    if (!user || !isOwner || isSharedView || !ownerSharesReady || savingListAccess) return;
+    if (access === entry.access) return;
+    setSavingListAccess(`${invite.email}:${entry.shareId}`);
+    setShareMessage(null);
+    try {
+      const shareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, entry.shareId);
+      await runTransaction(simpBudgetDb, async (transaction) => {
+        const snapshot = await transaction.get(shareRef);
+        if (!snapshot.exists()) throw new Error('This shared PipeList is no longer available.');
+        const current = snapshot.data();
+        if (current.ownerUid !== user.uid) throw new Error('Only the owner can change access.');
+        const viewers = Array.isArray(current.viewerEmails) ? current.viewerEmails : [];
+        const editors = Array.isArray(current.editorEmails) ? current.editorEmails : [];
+        if (![...viewers, ...editors].includes(invite.email)) {
+          throw new Error('This person no longer has access. Refresh before making changes.');
+        }
+        const viewerEmails = viewers.filter((email: string) => email !== invite.email);
+        const editorEmails = editors.filter((email: string) => email !== invite.email);
+        (access === 'edit' ? editorEmails : viewerEmails).push(invite.email);
+        transaction.update(shareRef, {
+          viewerEmails,
+          editorEmails,
+          access: editorEmails.length > 0 ? 'edit' : 'read',
+          inviteStatuses: {
+            ...(current.inviteStatuses || {}),
+            [invite.email]: {
+              ...(current.inviteStatuses?.[invite.email] || { status: entry.status }),
+              email: invite.email,
+              access,
+            },
+          },
+          updatedAt: serverTimestamp(),
+        });
+      });
+      setShareMessage({ type: 'success', text: `${entry.listName}: ${invite.displayName || invite.email} ${access === 'edit' ? 'can now edit' : 'now has read-only access'}.` });
+    } catch (error) {
+      setShareMessage({ type: 'error', text: readFirestoreError(error, 'Unable to update list access.') });
+    } finally {
+      setSavingListAccess('');
+    }
+  };
+
+  const removeCollaboratorAccess = async (invite: InviteHistoryEntry) => {
+    if (!user || !isOwner) return;
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(`Remove ${invite.email} from ${formatCount(invite.listAccess.length, 'PipeList')}?`)
+    ) {
+      return;
+    }
+
+    setShareMessage(null);
+    setRemovingAccessEmails((currentEmails) => Array.from(new Set([...currentEmails, invite.email])));
+
+    try {
+      await Promise.all(
+        invite.listAccess.map((entry) => {
+          const existingShare =
+            ownerShareDocs.find((share) => share.id === entry.shareId) ||
+            (shareDoc?.id === entry.shareId ? shareDoc : null);
+          const viewerEmails = (existingShare?.viewerEmails || []).filter((email) => email !== invite.email);
+          const editorEmails = (existingShare?.editorEmails || []).filter((email) => email !== invite.email);
+
+          return updateDoc(
+            doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, entry.shareId),
+            'access',
+            editorEmails.length > 0 ? 'edit' : 'read',
+            'viewerEmails',
+            viewerEmails,
+            'editorEmails',
+            editorEmails,
+            new FieldPath('inviteStatuses', invite.email),
+            deleteField(),
+            'updatedAt',
+            serverTimestamp(),
+          );
+        }),
+      );
+
+      setOwnerShareDocs((currentShares) =>
+        currentShares.map((share) => {
+          if (!invite.listAccess.some((entry) => entry.shareId === share.id)) return share;
+
+          const nextInviteStatuses = { ...share.inviteStatuses };
+          delete nextInviteStatuses[invite.email];
+          const viewerEmails = share.viewerEmails.filter((email) => email !== invite.email);
+          const editorEmails = share.editorEmails.filter((email) => email !== invite.email);
+
+          return {
+            ...share,
+            access: editorEmails.length > 0 ? 'edit' : 'read',
+            viewerEmails,
+            editorEmails,
+            inviteStatuses: nextInviteStatuses,
+          };
+        }),
+      );
+      setShareMessage({
+        type: 'success',
+        text: `Removed ${invite.email} from ${formatCount(invite.listAccess.length, 'PipeList')}.`,
+      });
+    } catch (error) {
+      console.error('Unable to remove PipeLists collaborator access:', error);
+      setShareMessage({
+        type: 'error',
+        text: readFirestoreError(error, `Unable to remove access for ${invite.email}.`),
+      });
+    } finally {
+      setRemovingAccessEmails((currentEmails) => currentEmails.filter((email) => email !== invite.email));
+    }
+  };
+
+  useEffect(() => {
+    if (!isSharePanelOpen || !isOwner || !user) return;
+
+    let cancelled = false;
+
+    const loadProfiles = async () => {
+      setLoadingProfiles(true);
+      setProfileSearchMessage(null);
+
+      try {
+        const profileSnapshot = await getDocs(collection(simpBudgetDb, PIPELIST_PROFILES_COLLECTION));
+        const profiles = profileSnapshot.docs
+          .map((profileDoc) => {
+            const data = profileDoc.data() as Partial<PipeListProfile>;
+            return {
+              uid: profileDoc.id,
+              displayName: data.displayName || '',
+              photoURL: data.photoURL || '',
+              email: data.email || '',
+              updatedAt: data.updatedAt,
+            };
+          })
+          .filter((account) => account.email && account.email.toLowerCase() !== normalizedUserEmail)
+          .sort((left, right) => (left.displayName || left.email).localeCompare(right.displayName || right.email));
+
+        if (!cancelled) setSearchableProfiles(profiles);
+      } catch (error) {
+        console.error('Unable to search PipeLists profiles:', error);
+        if (!cancelled) {
+          setSearchableProfiles([]);
+          setProfileSearchMessage({
+            type: 'error',
+            text: readFirestoreError(error, 'Unable to load existing PipeLists accounts.'),
+          });
+        }
+      } finally {
+        if (!cancelled) setLoadingProfiles(false);
+      }
+    };
+
+    loadProfiles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOwner, isSharePanelOpen, normalizedUserEmail, user]);
+
+  const createOrUpdateShareLink = async (addition?: {
+    existingMember: InviteHistoryEntry;
+    selectedListIds: string[];
+    access: ShareAccess;
+  }) => {
+    if (!user || !isOwner || isSharedView) return;
+
+    setShareMessage(null);
+
+    if (!ownerSharesReady) {
+      setShareMessage({
+        type: 'error',
+        text: 'Wait for current collaborator access to finish loading before saving changes.',
+      });
+      return;
+    }
+
+    let targetLists = selectedShareLists;
+    let accountEmails = collaboratorAccountEmails;
+    let accessToGrant = shareAccess;
+    let existingMember: InviteHistoryEntry | undefined;
+
+    if (addition) {
+      const memberEmail = addition.existingMember.email.trim().toLowerCase();
+      existingMember = inviteHistory.find((invite) => invite.email === memberEmail);
+      if (!existingMember) {
+        setShareMessage({ type: 'error', text: 'This person no longer has PipeLists access. Refresh and try again.' });
+        return;
+      }
+      if (!memberEmail || memberEmail === normalizedUserEmail) {
+        setShareMessage({ type: 'error', text: 'Choose another PipeLists member.' });
+        return;
+      }
+
+      const additionPlan = planPipeListAccessAdditions({
+        selectedListIds: addition.selectedListIds,
+        availableListIds: personalListsRef.current.map((list) => list.id),
+        existingListIds: existingMember.listAccess.map((entry) => entry.listId),
+      });
+      const addListIds = new Set(additionPlan.addListIds);
+      targetLists = personalListsRef.current.filter((list) => addListIds.has(list.id));
+      accountEmails = [memberEmail];
+      accessToGrant = addition.access;
+
+      if (targetLists.length === 0) {
+        setShareMessage({
+          type: 'error',
+          text: additionPlan.unavailableListIds.length > 0
+            ? 'Those PipeLists are no longer available. Choose another list.'
+            : 'Choose at least one additional PipeList.',
+        });
+        return;
+      }
+    } else if (targetLists.length === 0) {
+      setShareMessage({ type: 'error', text: 'Choose at least one PipeList.' });
+      return;
+    }
+
+    if (accountEmails.length === 0) {
+      setShareMessage({ type: 'error', text: 'Add at least one collaborator email first.' });
+      return;
+    }
+
+    if (existingMember) {
+      const memberEmail = existingMember.email;
+      const memberLabel = existingMember.displayName || memberEmail;
+      const inviteBatchId = makeId();
+      const hasExistingAccount =
+        existingMember.status === 'accepted' ||
+        searchableProfiles.some((account) => account.email.trim().toLowerCase() === memberEmail);
+      const actor: PipeListShareActor = {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: profile?.displayName || user.displayName || '',
+        photoURL: profile?.photoURL || user.photoURL || '',
+      };
+
+      setSavingAdditionalListsForEmail(memberEmail);
+
+      try {
+        const results = await Promise.all(
+          targetLists.map((list) => {
+            const shareId = shareDocumentIdForList(user.uid, list.id);
+            return persistPipeListMemberAccessAddition({
+              shareId,
+              ownerUid: user.uid,
+              ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
+              list,
+              actor,
+              memberEmail,
+              access: accessToGrant,
+              inviteStatus: {
+                email: memberEmail,
+                access: accessToGrant,
+                status: hasExistingAccount ? 'accepted' : 'sent',
+                inviteId: inviteBatchId,
+                sentAt: serverTimestamp(),
+                acceptedAt: hasExistingAccount ? serverTimestamp() : undefined,
+              },
+              baseList: protectedShareBaselinesRef.current[shareId],
+            });
+          }),
+        );
+        const additions = results.filter((result) => result.added);
+
+        if (additions.length === 0) {
+          closeAdditionalListPicker(memberEmail);
+          setShareMessage({ type: 'info', text: `${memberLabel} already has access to those PipeLists.` });
+          return;
+        }
+
+        setProtectedShareLists((current) => {
+          const next = { ...current };
+          additions.forEach((result) => {
+            if (!result.share.protectedDetails) return;
+            next[result.share.id] = result.list;
+            protectedShareBaselinesRef.current[result.share.id] = result.list;
+          });
+          return next;
+        });
+        setLists((currentLists) =>
+          currentLists.map((currentList) => {
+            const result = additions.find((entry) => entry.list.id === currentList.id);
+            return result ? mergeCollaboratorListSnapshot(currentList, result.list) : currentList;
+          }),
+        );
+        setOwnerShareDocs((currentShares) => {
+          const sharesById = new Map(currentShares.map((share) => [share.id, share]));
+          additions.forEach((result) => sharesById.set(result.share.id, result.share));
+          return Array.from(sharesById.values());
+        });
+        const activeResult = additions.find((result) => result.list.id === activeList.id);
+        if (activeResult) setShareDoc(activeResult.share);
+
+        const addedLists = targetLists.filter((list) =>
+          additions.some((result) => result.list.id === list.id),
+        );
+        let emailFailed = false;
+        if (typeof window !== 'undefined') {
+          const invitePath = `/PipeLists?invite=${encodeURIComponent(additions[0].share.id)}&inviteBatch=${encodeURIComponent(inviteBatchId)}&inviteEmail=${encodeURIComponent(memberEmail)}`;
+          try {
+            await sendCollaboratorInviteEmail({
+              email: memberEmail,
+              inviteUrl: `${window.location.origin}${invitePath}`,
+              listNames: addedLists.map((list) => list.name),
+              access: accessToGrant,
+              inviteBatchId,
+            });
+          } catch (error) {
+            emailFailed = true;
+            console.error('Unable to email added PipeLists access:', error);
+          }
+        }
+
+        closeAdditionalListPicker(memberEmail);
+        setShareMessage(emailFailed
+          ? {
+              type: 'error',
+              text: `Added ${addedLists.map((list) => list.name).join(', ')} for ${memberLabel}, but the email could not be sent. You can copy their dashboard link from the member row.`,
+            }
+          : {
+              type: 'success',
+              text: `Added ${addedLists.map((list) => list.name).join(', ')} for ${memberLabel}. Dashboard link emailed.`,
+            });
+      } catch (error) {
+        console.error('Unable to add PipeLists for existing member:', error);
+        setShareMessage({
+          type: 'error',
+          text: error instanceof Error
+            ? error.message
+            : readFirestoreError(error, `Unable to add PipeLists for ${memberLabel}.`),
+        });
+      } finally {
+        setSavingAdditionalListsForEmail('');
+      }
+      return;
+    }
+
+    try {
+      const inviteBatchId = makeId();
+      const existingAccountEmails = new Set(
+        searchableProfiles.map((account) => account.email.trim().toLowerCase()),
+      );
+      const payloads = targetLists.map((list) => {
+        const id = shareDocumentIdForList(user.uid, list.id);
+        const existingShare = ownerShareDocs.find((share) => share.id === id) || (shareDoc?.id === id ? shareDoc : null);
+        const existingViewerEmails = existingShare?.viewerEmails || [];
+        const existingEditorEmails = existingShare?.editorEmails || [];
+        const invitedEmailSet = new Set(accountEmails);
+        const viewerEmails =
+          accessToGrant === 'read'
+            ? Array.from(new Set([...existingViewerEmails, ...accountEmails])).filter(
+                (email) => !existingEditorEmails.includes(email) || invitedEmailSet.has(email),
+              )
+            : existingViewerEmails.filter((email) => !invitedEmailSet.has(email));
+        const editorEmails =
+          accessToGrant === 'edit'
+            ? Array.from(new Set([...existingEditorEmails, ...accountEmails]))
+            : existingEditorEmails.filter((email) => !invitedEmailSet.has(email));
+        return {
+          id,
+          ownerUid: user.uid,
+          ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
+          list: publicSafePipeListSnapshot(list),
+          access: editorEmails.length > 0 ? 'edit' : 'read',
+          publicRead: existingShare?.publicRead ?? true,
+          protectedDetails:
+            existingShare?.protectedDetails === true ||
+            editorEmails.length > 0 ||
+            pipeListRequiresAccountAccess(list),
+          viewerEmails,
+          editorEmails,
+          inviteStatuses: accountEmails.reduce<Record<string, InviteStatus>>(
+            (statuses, email) => {
+              const hasExistingAccount =
+                existingAccountEmails.has(email) || statuses[email]?.status === 'accepted';
+              statuses[email] = {
+                ...(statuses[email] || {}),
+                email,
+                access: accessToGrant,
+                status: hasExistingAccount ? 'accepted' : 'sent',
+                inviteId: inviteBatchId,
+                sentAt: serverTimestamp(),
+                acceptedAt: hasExistingAccount
+                  ? statuses[email]?.acceptedAt || serverTimestamp()
+                  : undefined,
+              };
+              return statuses;
+            },
+            { ...(existingShare?.inviteStatuses || {}) },
+          ),
+        } satisfies PipeListShare;
+      });
+
+      const actor: PipeListShareActor = {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: profile?.displayName || user.displayName || '',
+        photoURL: profile?.photoURL || user.photoURL || '',
+      };
+      const protectedLists = await Promise.all(
+        payloads.map(async (payload) => {
+          const sourceList = targetLists.find((list) => list.id === payload.list.id);
+          if (!sourceList) return null;
+          const existingShare =
+            ownerShareDocs.find((candidate) => candidate.id === payload.id) ||
+            (payload.id === shareDoc?.id ? shareDoc : null);
+          const publicSharePatch = stripUndefined({
+            ...payload,
+            createdAt: existingShare?.createdAt || serverTimestamp(),
+          });
+          if (!payload.protectedDetails) {
+            await setDoc(
+              doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, payload.id),
+              { ...publicSharePatch, updatedAt: serverTimestamp() },
+              { merge: true },
+            );
+            return null;
+          }
+          const mergedList = await persistCollaborativePipeList({
+            shareId: payload.id,
+            ownerUid: payload.ownerUid,
+            ownerEmail: payload.ownerEmail,
+            list: sourceList,
+            actor,
+            protectedDetails: payload.protectedDetails,
+            baseList: protectedShareBaselinesRef.current[payload.id] || existingShare?.list,
+            publicSharePatch,
+          });
+          return { shareId: payload.id, list: mergedList };
+        }),
+      );
+      setProtectedShareLists((current) => {
+        const next = { ...current };
+        protectedLists.forEach((entry) => {
+          if (entry) {
+            next[entry.shareId] = entry.list;
+            protectedShareBaselinesRef.current[entry.shareId] = entry.list;
+          }
+        });
+        return next;
+      });
+
+      const activePayloadBase = payloads.find((payload) => payload.list.id === activeList.id);
+      const protectedActiveList = activePayloadBase
+        ? protectedLists.find((entry) => entry?.shareId === activePayloadBase.id)?.list
+        : undefined;
+      const activePayload = activePayloadBase
+        ? protectedActiveList
+          ? { ...activePayloadBase, list: protectedActiveList }
+          : activePayloadBase
+        : undefined;
+      if (activePayload) setShareDoc(activePayload);
+      setOwnerShareDocs((currentShares) => {
+        const sharesById = new Map(currentShares.map((share) => [share.id, share]));
+        payloads.forEach((payload) => sharesById.set(payload.id, payload));
+        return Array.from(sharesById.values());
+      });
+
+      const inviteAnchorPayload = activePayload || payloads[0];
+      let failedInviteEmails: string[] = [];
+      if (typeof window !== 'undefined') {
+        const emailResults = await Promise.allSettled(
+          accountEmails.map(async (email) => {
+            const invitePath = `/PipeLists?invite=${encodeURIComponent(inviteAnchorPayload.id)}&inviteBatch=${encodeURIComponent(inviteBatchId)}&inviteEmail=${encodeURIComponent(email)}`;
+            const inviteUrl = `${window.location.origin}${invitePath}`;
+            await sendCollaboratorInviteEmail({
+              email,
+              inviteUrl,
+              listNames: targetLists.map((list) => list.name),
+              access: accessToGrant,
+              inviteBatchId,
+            });
+          }),
+        );
+        failedInviteEmails = emailResults.flatMap((result, index) =>
+          result.status === 'rejected' ? [accountEmails[index]] : [],
+        );
+      }
+
+      if (failedInviteEmails.length > 0) {
+        setShareMessage({
+          type: 'error',
+          text: `Access was saved, but the email could not be sent to ${failedInviteEmails.join(', ')}. You can copy their dashboard link from the member row.`,
+        });
+        return;
+      }
+
+      setShareMessage({
+        type: 'success',
+        text: `Access saved for ${formatCount(accountEmails.length, 'person')} across ${formatCount(targetLists.length, 'PipeList')}. Dashboard link emailed.`,
+      });
+    } catch (error) {
+      console.error('Unable to create PipeLists share link:', error);
+      setShareMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : readFirestoreError(error, 'Unable to create this share link.'),
+      });
+    }
+  };
+
+  const saveProfile = async () => {
+    if (!user) return;
+
+    const cleanName = profileName.trim();
+    if (!cleanName) {
+      setProfileMessage({ type: 'error', text: 'Add your name first.' });
+      return;
+    }
+
+    setSavingProfile(true);
+    setProfileMessage(null);
+
+    try {
+      let photoURL = profile?.photoURL || user.photoURL || '';
+
+      if (profilePhotoFile) {
+        const profileRef = storageRef(simpBudgetStorage, `pipelists-profiles/${user.uid}/avatar-${Date.now()}-${profilePhotoFile.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`);
+        await uploadBytes(profileRef, profilePhotoFile, {
+          contentType: profilePhotoFile.type || 'image/png',
+        });
+        photoURL = await getDownloadURL(profileRef);
+      }
+
+      const nextProfile: PipeListProfile = {
+        displayName: cleanName,
+        photoURL,
+        email: user.email || '',
+      };
+
+      await setDoc(
+        doc(simpBudgetDb, PIPELIST_PROFILES_COLLECTION, user.uid),
+        stripUndefined({
+          ...nextProfile,
+          updatedAt: serverTimestamp(),
+        }),
+        { merge: true },
+      );
+
+      setProfile(nextProfile);
+      setProfilePhotoFile(null);
+      setProfileMessage({ type: 'success', text: 'Profile saved.' });
+    } catch (error) {
+      console.error('Unable to save PipeLists profile:', error);
+      setProfileMessage({
+        type: 'error',
+        text: readFirestoreError(error, 'Unable to save your profile.'),
+      });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (googleSignInInFlightRef.current) return;
+    googleSignInInFlightRef.current = true;
+    setIsGoogleSignInStarting(true);
+    setAuthMessage(null);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    try {
+      if (shouldUseRedirectSignIn()) {
+        setAuthMessage({ type: 'info', text: 'Opening Google sign-in...' });
+        await withTimeout(signInWithRedirect(simpBudgetAuth, provider, browserPopupRedirectResolver), 15000, 'Google sign-in did not open. Try again or use an email magic link.');
+        return;
+      }
+
+      setAuthMessage({ type: 'info', text: 'Complete sign-in in the Google window.' });
+      const result = await withTimeout(signInWithPopup(simpBudgetAuth, provider, browserPopupRedirectResolver), 45000, 'Google sign-in took too long. Close any unfinished Google sign-in window, then try again or use an email magic link.');
+      const email = result.user.email?.toLowerCase() || '';
+      if (
+        isSharedView &&
+        shareDoc?.access === 'edit' &&
+        email !== shareDoc.ownerEmail.toLowerCase() &&
+        !shareDoc.editorEmails.map((editorEmail) => editorEmail.toLowerCase()).includes(email)
+      ) {
+        setAuthMessage({
+          type: 'info',
+          text: 'You are signed in and can view this list, but this email was not granted edit access.',
+        });
+      }
+    } catch (error) {
+      if (shouldRetryGoogleSignInWithRedirect(error)) {
+        try {
+          setAuthMessage({ type: 'info', text: 'Opening Google sign-in...' });
+          await withTimeout(signInWithRedirect(simpBudgetAuth, provider, browserPopupRedirectResolver), 15000, 'Google sign-in did not open. Try again or use an email magic link.');
+          return;
+        } catch (redirectError) {
+          console.error('PipeLists Google redirect fallback failed:', redirectError);
+          setAuthMessage({
+            type: 'error',
+            text: readAuthError(redirectError, 'Unable to open Google sign-in.'),
+          });
+          return;
+        }
+      }
+
+      console.error('PipeLists Google sign-in failed:', error);
+      setAuthMessage({
+        type: 'error',
+        text: readAuthError(error, 'Unable to sign in with Google.'),
+      });
+    } finally {
+      googleSignInInFlightRef.current = false;
+      setIsGoogleSignInStarting(false);
+    }
+  };
+
+  const sendMagicLink = async () => {
+    const email = magicEmail.trim().toLowerCase();
+    if (!email) {
+      setAuthMessage({ type: 'error', text: 'Enter an email address first.' });
+      return;
+    }
+
+    if (
+      isSharedView &&
+      shareDoc?.access === 'edit' &&
+      email !== shareDoc.ownerEmail.toLowerCase() &&
+      !shareDoc.editorEmails.map((editorEmail) => editorEmail.toLowerCase()).includes(email)
+    ) {
+      setAuthMessage({ type: 'error', text: 'This email was not granted edit access for this shared list.' });
+      return;
+    }
+
+    setSendingMagicLink(true);
+    setAuthMessage(null);
+
+    try {
+      const path = shareId
+        ? `/PipeLists?share=${encodeURIComponent(shareId)}`
+        : inviteId || inviteEmail
+        ? `/PipeLists?${inviteId ? `invite=${encodeURIComponent(inviteId)}&` : ''}${
+            inviteEmail ? `inviteEmail=${encodeURIComponent(inviteEmail)}` : ''
+          }`
+        : '/PipeLists';
+      const actionCodeSettings = {
+        url: typeof window !== 'undefined' ? window.location.origin + path : `https://fitwithpulse.ai${path}`,
+        handleCodeInApp: true,
+      };
+
+      await sendSignInLinkToEmail(simpBudgetAuth, email, actionCodeSettings);
+      window.localStorage.setItem(MAGIC_LINK_EMAIL_STORAGE_KEY, email);
+      setAuthMessage({ type: 'success', text: 'Magic link sent. Open it on this device to finish sign-in.' });
+    } catch (error) {
+      console.error('Unable to send PipeLists magic link:', error);
+      setAuthMessage({
+        type: 'error',
+        text: readAuthError(error, 'Unable to send magic link.'),
+      });
+    } finally {
+      setSendingMagicLink(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (
+      runbookHasUnsavedChanges &&
+      typeof window !== 'undefined' &&
+      !window.confirm('Discard your unsaved runbook changes and sign out?')
+    ) {
+      return;
+    }
+    await signOut(simpBudgetAuth);
+    setUser(null);
+    setDataReady(false);
+    setMagicEmail(inviteEmail || TREMAINE_OWNER_EMAIL);
+    setAuthMessage(null);
+  };
+
+  const renderMetricCard = (
+    label: string,
+    value: string,
+    helper: string,
+    icon: React.ReactNode,
+    tone = 'bg-stone-100 text-stone-600',
+  ) => (
+    <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+      <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-full ${tone}`}>{icon}</div>
+      <p className="text-2xl font-semibold text-stone-950">{value}</p>
+      <p className="mt-1 text-sm font-medium text-stone-600">{label}</p>
+      <p className="mt-1 text-xs leading-5 text-stone-400">{helper}</p>
+    </div>
+  );
+
+  const handleSortColumnClick = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection((currentDirection) => (currentDirection === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const renderSortableHeader = (label: string, column: SortColumn) => (
+    <button
+      type="button"
+      onClick={() => handleSortColumnClick(column)}
+      className="inline-flex items-center gap-1 uppercase tracking-wide text-stone-400 transition hover:text-stone-700"
+    >
+      <span>{label}</span>
+      {sortColumn === column ? (
+        sortDirection === 'asc' ? (
+          <ArrowUp className="h-3 w-3" />
+        ) : (
+          <ArrowDown className="h-3 w-3" />
+        )
+      ) : (
+        <ChevronsUpDown className="h-3 w-3 text-stone-300" />
+      )}
+    </button>
+  );
+
+  const selectedDetailStage = selectedDetailItem ? getStage(activeList, selectedDetailItem.stage) : null;
+  const selectedDetailIsEditing = Boolean(selectedDetailItem && isEditorOpen && editingItemId === selectedDetailItem.id);
+  const shouldBlockEditShare = Boolean(shareId && shareDoc && !shareDoc.publicRead && !canReadShared);
+  const protectedDirectShareIdentityChanged = Boolean(
+    shareId && protectedDirectShareUid && protectedDirectShareUid !== (user?.uid || ''),
+  );
+
+  const isEmptyDetailValue = (value: React.ReactNode) =>
+    value === null || value === undefined || value === false || (typeof value === 'string' && value.trim() === '');
+
+  const renderDetailField = (label: string, value: React.ReactNode, wide = false, showWhenEmpty = false) => {
+    const isEmpty = isEmptyDetailValue(value);
+    if (isEmpty && !showWhenEmpty) return null;
+
+    return (
+      <div key={label} className={`rounded-md border border-stone-100 bg-[#FAFAF7] px-3 py-2 ${wide ? 'md:col-span-2' : ''}`}>
+        <p className="text-xs font-semibold uppercase text-stone-400">{label}</p>
+        <div className="mt-1 break-words text-sm leading-6 text-stone-700">{isEmpty ? 'Not set' : value}</div>
+      </div>
+    );
+  };
+
+  const renderDetailGrid = (
+    className: string,
+    fields: { label: string; value: React.ReactNode; wide?: boolean; showWhenEmpty?: boolean }[],
+  ) => {
+    const renderedFields = fields
+      .map((field) => renderDetailField(field.label, field.value, field.wide, field.showWhenEmpty))
+      .filter((field): field is React.ReactElement => Boolean(field));
+
+    if (renderedFields.length === 0) return null;
+
+    return <div className={className}>{renderedFields}</div>;
+  };
+
+  const renderDetailSection = (
+    title: string,
+    fields: { label: string; value: React.ReactNode; wide?: boolean; showWhenEmpty?: boolean }[],
+    gridClassName = 'grid gap-3 md:grid-cols-2',
+  ) => {
+    const grid = renderDetailGrid(gridClassName, fields);
+    if (!grid) return null;
+
+    return (
+      <div>
+        <h4 className="mb-3 text-sm font-semibold text-stone-950">{title}</h4>
+        {grid}
+      </div>
+    );
+  };
+
+  const showCustomerSuccessEditor =
+    isUniversitySuccessList && (Boolean(draft.customerSuccess) || isUniversityCustomerSuccessStage(draft.stage));
+  const draftCustomerSuccess = showCustomerSuccessEditor
+    ? normalizeUniversityCustomerSuccess(draft.customerSuccess, {
+        stage: draft.stage,
+        owner: draft.owner,
+        nextStep: draft.nextStep,
+        dueDate: draft.dueDate,
+        pilotStart: draft.pilotStart,
+        pilotEnd: draft.pilotEnd,
+      })
+    : null;
+
+  const renderItemEditor = () => (
+    <form
+      id="pipe-item-editor-form"
+      onSubmit={handleSaveItem}
+      onInvalid={(event) => {
+        const input = event.target as HTMLInputElement;
+        const label = input.labels?.[0]?.textContent?.trim() || 'the highlighted field';
+        setItemSaveError(`Check ${label}: ${input.validationMessage}`);
+      }}
+      onChange={() => setItemSaveError('')}
+      className="space-y-4"
+    >
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {(isContactListActive
+          ? [
+              ['title', 'Contact Name', 'Name'],
+              ['organization', 'Role / Organization', 'Partner, investor, advisor'],
+              ['owner', 'Relationship Owner', 'Owner'],
+              ['segment', 'Segment', 'Investor, operator, advisor'],
+              ['decisionMaker', 'Relationship Context', 'How they know us or why they matter'],
+              ['expectedCloseDate', isInvestorUpdateContactsList ? 'Next Update Date' : 'Next Touchpoint', 'date'],
+              ['pilotStart', 'First Contacted', 'date'],
+              ['pilotEnd', 'Last Contacted', 'date'],
+              ...(isInvestorUpdateContactsList ? [['athleteCount', 'Update Cadence', 'Monthly, quarterly']] : []),
+              ['contactPhone', 'Phone', 'Public business phone'],
+              ['linkedinUrl', 'LinkedIn URL', 'https://linkedin.com/in/...'],
+              ['sourceUrl', 'Source URL', 'https://example.com'],
+            ]
+          : isTaskListActive
+            ? [
+                ['title', 'Task Name', 'Task name'],
+                ['organization', 'Project / Area', 'PipeLists, onboarding, customer success'],
+                ['owner', 'Owner', 'Owner'],
+                ['segment', 'Category', 'Product, sales, ops'],
+                ['decisionMaker', 'Context', 'Why this matters'],
+                ['expectedCloseDate', 'Target Date', 'date'],
+                ['pilotStart', 'Start Date', 'date'],
+                ['pilotEnd', 'Completed Date', 'date'],
+                ['sourceUrl', 'Reference URL', 'https://example.com'],
+              ]
+          : [
+              ['title', 'Opportunity Name', 'Opportunity name'],
+              ['organization', 'Organization', 'Company, school, fund'],
+              ['owner', 'Owner', 'Owner'],
+              ['segment', 'Segment', 'Category, fit, or type'],
+              ['decisionMaker', 'Decision Maker', 'Role or name'],
+              ['acv', 'ACV', '$'],
+              ['amount', amountFieldLabelForList(activeList), '$'],
+              ['expectedCloseDate', 'Expected Close', 'date'],
+              ['contractTerm', 'Contract Term', '12 months'],
+              ['pilotStart', isUniversitySuccessList ? 'Pilot Start' : 'Start Date', 'date'],
+              ['pilotEnd', isUniversitySuccessList ? 'Pilot End' : 'End Date', 'date'],
+              ['athleteCount', 'Count', '42'],
+              ['sourceUrl', 'Source URL', 'https://example.com'],
+            ]).map(([key, label, placeholder]) => (
+          <label key={key} className={key === 'sourceUrl' || key === 'linkedinUrl' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
+            <input
+              id={`pipe-${key}`}
+              type={placeholder === 'date' ? 'date' : key === 'sourceUrl' || key === 'linkedinUrl' ? 'url' : 'text'}
+              value={String(draft[key as keyof ItemDraft] || '')}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  [key]: event.target.value,
+                }))
+              }
+              className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+              placeholder={placeholder === 'date' ? undefined : placeholder}
+            />
+          </label>
+        ))}
+
+        {isInvestorUpdateContactsList ? (
+          <label className="block" htmlFor="pipe-email-status">
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email Status</span>
+            <select
+              id="pipe-email-status"
+              value={normalizeContactEmailStatusInput(draft.emailStatus || draft.lastEmailEvent)}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  emailStatus: event.target.value,
+                }))
+              }
+              className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+            >
+              {contactEmailStatusOptions.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <label className="block" htmlFor="pipe-stage">
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Stage</span>
+            <select
+              id="pipe-stage"
+              value={draft.stage}
+              onChange={(event) => setDraft((current) => ({ ...current, stage: event.target.value }))}
+              className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+            >
+              {activeList.stages.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {isContactListActive && !isInvestorUpdateContactsList && (
+          <label className="block" htmlFor="pipe-email-status">
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email Status</span>
+            <select
+              id="pipe-email-status"
+              value={normalizeContactEmailStatusInput(draft.emailStatus || draft.lastEmailEvent)}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  emailStatus: event.target.value,
+                }))
+              }
+              className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+            >
+              {contactEmailStatusOptions.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <label className="block" htmlFor="pipe-priority">
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Ease of Contact</span>
+          <select
+            id="pipe-priority"
+            value={draft.priority}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, priority: event.target.value as PipelinePriority }))
+            }
+            className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm capitalize outline-none transition focus:border-stone-400 focus:bg-white"
+          >
+            <option value="low">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="high">Hard</option>
+          </select>
+        </label>
+
+        {!showCustomerSuccessEditor && (
+          <label className="block" htmlFor="pipe-dueDate">
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isContactListActive ? 'Follow-Up Date' : 'Due Date'}</span>
+            <input
+              id="pipe-dueDate"
+              type="date"
+              value={draft.dueDate}
+              onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))}
+              className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+            />
+          </label>
+        )}
+
+        <label className="flex h-11 items-center gap-3 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700">
+          <input
+            type="checkbox"
+            checked={draft.deadlineEmailNotificationsEnabled}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                deadlineEmailNotificationsEnabled: event.target.checked,
+              }))
+            }
+            className="h-4 w-4 rounded border-stone-300 text-stone-950 focus:ring-stone-400"
+          />
+          <span>Email deadline notifications</span>
+        </label>
+      </div>
+
+      {draftCustomerSuccess && (
+        <PipeListsSuccessPlanEditor
+          value={draftCustomerSuccess}
+          editorName={profile?.displayName || user?.displayName || user?.email || ''}
+          onChange={(customerSuccess) =>
+            setDraft((current) => ({
+              ...current,
+              customerSuccess,
+              nextStep: customerSuccess.nextAction.summary,
+              dueDate: customerSuccess.nextAction.dueDate,
+            }))
+          }
+        />
+      )}
+
+      <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            {draft.imageUrl ? (
+              <img
+                src={draft.imageUrl}
+                alt={draft.imageName || `${draft.title || 'Lead'} image`}
+                className="h-16 w-16 shrink-0 rounded-md border border-stone-200 object-cover"
+              />
+            ) : (
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-md border border-dashed border-stone-300 bg-[#FAFAF7] text-stone-400">
+                <UploadCloud className="h-5 w-5" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-stone-950">Lead image</p>
+              <p className="mt-1 truncate text-xs text-stone-400">
+                {draft.imageName || 'Upload a thumbnail for this lead.'}
+                {draft.imageSize > 0 ? ` · ${formatFileSize(draft.imageSize)}` : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <label
+              htmlFor="pipe-lead-image-upload"
+              className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+            >
+              <UploadCloud className="h-4 w-4" />
+              {uploadingLeadImage ? 'Uploading...' : draft.imageUrl ? 'Replace image' : 'Upload image'}
+              <input
+                id="pipe-lead-image-upload"
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                disabled={uploadingLeadImage}
+                onChange={async (event) => {
+                  await handleUploadLeadImage(event.target.files);
+                  event.target.value = '';
+                }}
+              />
+            </label>
+            {draft.imageUrl && (
+              <button
+                type="button"
+                onClick={handleRemoveLeadImage}
+                className="inline-flex h-9 items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:border-rose-200 hover:text-rose-600"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+        <label className="mt-3 block" htmlFor="pipe-lead-image-url">
+          <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Photo URL</span>
+          <input id="pipe-lead-image-url" type="url" value={draft.imageUrl}
+            placeholder="https://example.com/photo.jpg"
+            onChange={(event) => setDraft((current) => ({ ...current, imageUrl: event.target.value.trim(), imageName: '', imageContentType: '', imageSize: 0 }))}
+            className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none focus:border-stone-400 focus:bg-white" />
+        </label>
+        <MessageBanner message={leadImageMessage} />
+      </section>
+
+      <label className="block" htmlFor="pipe-contact-emails">
+        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Contact Email</span>
+        <div
+          className={`flex min-h-11 flex-wrap items-center gap-2 rounded-md border bg-[#FAFAF7] px-2 py-2 transition focus-within:bg-white ${
+            contactEmailError ? 'border-rose-300' : 'border-stone-200 focus-within:border-stone-400'
+          }`}
+        >
+          {draft.contactEmails.map((email) => (
+            <span
+              key={email}
+              className="inline-flex h-7 items-center gap-1 rounded-full bg-white px-2.5 text-xs font-semibold text-stone-700 ring-1 ring-stone-200"
+            >
+              {email}
+              <button
+                type="button"
+                onClick={() => removeContactEmail(email)}
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-950"
+                aria-label={`Remove ${email}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          <input
+            id="pipe-contact-emails"
+            type="text"
+            inputMode="email"
+            value={contactEmailInput}
+            onChange={(event) => {
+              setContactEmailInput(event.target.value);
+              if (contactEmailError) setContactEmailError('');
+            }}
+            onKeyDown={(event) => {
+              if (event.key === ',' || event.key === ' ' || event.key === 'Enter') {
+                event.preventDefault();
+                addContactEmailTokens(contactEmailInput);
+              }
+            }}
+            onPaste={(event) => {
+              const pastedText = event.clipboardData.getData('text');
+              if (/[\s,;]/.test(pastedText)) {
+                event.preventDefault();
+                addContactEmailTokens(`${contactEmailInput} ${pastedText}`);
+              }
+            }}
+            onBlur={() => {
+              if (contactEmailInput.trim()) addContactEmailTokens(contactEmailInput);
+            }}
+            className="h-7 min-w-44 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-stone-400"
+            placeholder={draft.contactEmails.length > 0 ? 'Add another email' : 'name@example.com'}
+          />
+        </div>
+        {contactEmailError ? (
+          <span className="mt-1.5 block text-xs font-medium text-rose-600">{contactEmailError}</span>
+        ) : (
+          <span className="mt-1.5 block text-xs text-stone-400">Use comma or space to add each email.</span>
+        )}
+      </label>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {[
+          ['description', 'Description', 'What this entity is and why it matters'],
+          ['pilotScope', 'Scope', 'Timeline, scope, requirements, and commitments'],
+          ...(showCustomerSuccessEditor
+            ? []
+            : [['nextStep', 'Next Step', 'The next action that moves this forward']]),
+          ['grossMargin', 'Margin Notes', 'Revenue, costs, or margin context'],
+          ['partnerCost', 'Partner Cost', 'Partner, implementation, or service share'],
+          ['hardwareCost', 'Hard Cost', 'Hardware, fulfillment, or delivery costs'],
+          ['expansionPath', 'Expansion Path', 'Renewal, upsell, or next relationship path'],
+          ['lossReason', 'Loss Reason', 'Only if paused or closed lost'],
+          ['notes', 'Notes', 'Context'],
+        ].map(([key, label, placeholder]) => (
+          <label key={key} className={key === 'description' || key === 'notes' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
+            <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
+            <textarea
+              id={`pipe-${key}`}
+              value={String(draft[key as keyof ItemDraft] || '')}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  [key]: event.target.value,
+                }))
+              }
+              className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+              placeholder={placeholder}
+            />
+          </label>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-stone-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+        {editingItemId ? (
+          <button
+            type="button"
+            onClick={() => handleDeleteItem(editingItemId)}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-rose-200 bg-white px-4 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Item
+          </button>
+        ) : (
+          <span />
+        )}
+      </div>
+    </form>
+  );
+
+  if (isSharedView && (!dataReady || protectedDirectShareIdentityChanged)) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'pipe-lists-shared-loading',
+            pageTitle: 'Shared PipeList - Pulse',
+            metaDescription: 'Loading shared PipeList.',
+            ogTitle: 'Shared PipeList - Pulse',
+            ogDescription: 'Loading shared PipeList.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://fitwithpulse.ai/PipeLists"
+          pageOgImage="/pil-og.png"
+        />
+        <main className="flex min-h-screen items-center justify-center bg-[#FAFAF7] px-6 text-stone-900">
+          <div className="text-center">
+            <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-stone-900" />
+            <p className="text-base font-semibold text-stone-950">
+              {isLeadSharedView ? 'Loading shared lead' : 'Loading shared PipeList'}
+            </p>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (isSharedView && shareMessage?.type === 'error' && !shareDoc && !leadShareDoc) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'pipe-lists-share-error',
+            pageTitle: 'Shared PipeList - Pulse',
+            metaDescription: 'Shared PipeList unavailable.',
+            ogTitle: 'Shared PipeList - Pulse',
+            ogDescription: 'Shared PipeList unavailable.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://fitwithpulse.ai/PipeLists"
+          pageOgImage="/pil-og.png"
+        />
+        <main className="flex min-h-screen items-center justify-center bg-[#FAFAF7] px-6 text-stone-900">
+          <div className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 text-center shadow-sm">
+            <p className="text-base font-semibold text-stone-950">Share link unavailable</p>
+            <p className="mt-2 text-sm leading-6 text-stone-500">{shareMessage.text}</p>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (isSharedView && shareDoc?.access === 'edit' && user && canEditShared && !profile?.displayName) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'pipe-lists-profile',
+            pageTitle: 'PipeLists Profile - Pulse',
+            metaDescription: 'Complete your PipeLists editor profile.',
+            ogTitle: 'PipeLists Profile - Pulse',
+            ogDescription: 'Complete your PipeLists editor profile.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://fitwithpulse.ai/PipeLists"
+          pageOgImage="/pil-og.png"
+        />
+        <ProfileSetup
+          user={user}
+          profileName={profileName}
+          profilePhotoFile={profilePhotoFile}
+          saving={savingProfile}
+          message={profileMessage}
+          onProfileNameChange={setProfileName}
+          onProfilePhotoFileChange={setProfilePhotoFile}
+          onSave={saveProfile}
+          onSignOut={handleSignOut}
+        />
+      </>
+    );
+  }
+
+  if (!isSharedView && (!authReady || !user)) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'pipe-lists-login',
+            pageTitle: 'PipeLists Login - Pulse',
+            metaDescription: 'Private PipeLists login for Pulse Intelligence Labs RevOps.',
+            ogTitle: 'PipeLists Login - Pulse',
+            ogDescription: 'Private PipeLists login for Pulse Intelligence Labs RevOps.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://fitwithpulse.ai/PipeLists"
+          pageOgImage="/pil-og.png"
+        />
+        <PipeListsLogin
+          canAttemptAuth={canAttemptAuth && !isGoogleSignInStarting}
+          authMessage={authMessage}
+          magicEmail={magicEmail}
+          sendingMagicLink={sendingMagicLink}
+          onMagicEmailChange={setMagicEmail}
+          onGoogleSignIn={handleGoogleSignIn}
+          onSendMagicLink={sendMagicLink}
+        />
+      </>
+    );
+  }
+
+  if (!isSharedView && user && hasInviteAccountMismatch) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'pipe-lists-invite-account',
+            pageTitle: 'PipeLists Invite - Pulse',
+            metaDescription: 'Sign in with the account invited to PipeLists.',
+            ogTitle: 'PipeLists Invite - Pulse',
+            ogDescription: 'Sign in with the account invited to PipeLists.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://fitwithpulse.ai/PipeLists"
+          pageOgImage="/pil-og.png"
+        />
+        <main className="flex min-h-screen items-center justify-center bg-[#FAFAF7] px-6 text-stone-900">
+          <div className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-6 text-center shadow-sm">
+            <div className="mx-auto mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+              <Mail className="h-4 w-4" />
+            </div>
+            <h1 className="text-xl font-bold text-stone-950">Use the invited account</h1>
+            <p className="mt-2 text-sm leading-6 text-stone-500">
+              This invite was sent to <span className="font-semibold text-stone-700">{inviteEmail}</span>. You are
+              signed in as <span className="font-semibold text-stone-700">{normalizedUserEmail}</span>.
+            </p>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="mt-5 inline-flex h-10 items-center justify-center rounded-full bg-stone-900 px-5 text-sm font-semibold text-white transition hover:bg-stone-700"
+            >
+              Sign in as {inviteEmail}
+            </button>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (!isSharedView && !dataReady) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'pipe-lists-loading',
+            pageTitle: 'PipeLists - Pulse',
+            metaDescription: 'Loading your private PipeLists workspace.',
+            ogTitle: 'PipeLists - Pulse',
+            ogDescription: 'Loading your private PipeLists workspace.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://fitwithpulse.ai/PipeLists"
+          pageOgImage="/pil-og.png"
+        />
+        <main className="flex min-h-screen items-center justify-center bg-[#FAFAF7] px-6 text-stone-900">
+          <div className="text-center">
+            <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-stone-900" />
+            <p className="text-base font-semibold text-stone-950">Loading PipeLists</p>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  if (!isSharedView && dataReady && user && lists.length === 0) {
+    return (
+      <>
+        <PageHead
+          metaData={{
+            pageId: 'pipe-lists-empty',
+            pageTitle: 'PipeLists - Pulse',
+            metaDescription: 'Your PipeLists dashboard.',
+            ogTitle: 'PipeLists - Pulse',
+            ogDescription: 'Your PipeLists dashboard.',
+            lastUpdated: new Date().toISOString(),
+          }}
+          pageOgUrl="https://fitwithpulse.ai/PipeLists"
+          pageOgImage="/pil-og.png"
+        />
+        <main className="min-h-screen bg-[#FAFAF7] text-stone-900">
+          <nav className="sticky top-0 z-40 border-b border-stone-200/70 bg-[#FAFAF7]/90 backdrop-blur-md">
+            <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+              <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="Pulse home">
+                <img src="/pulse-logo.svg" alt="Pulse" className="h-8 shrink-0" />
+                <span className="hidden text-sm font-medium text-stone-500 sm:inline">PipeLists</span>
+              </Link>
+
+              <div className="flex items-center gap-2">
+                <PipeListsSaveStatus failure={personalSaveError ? personalSaveFailureRef.current : personalSyncConflict ? { message: 'Another PipeLists session replaced newer saved edits. Your newer edits remain open here.', code: 'pipelists/save-conflict' } : null}>
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span>Ready</span>
+                  <span className="text-stone-300">·</span>
+                  <span>{user.email}</span>
+                </PipeListsSaveStatus>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-900"
+                  title="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </nav>
+
+          <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:px-8">
+            <aside className="lg:sticky lg:top-24 lg:self-start">
+              <div className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm">
+                <div className="flex items-center justify-between px-1">
+                  <h1 className="text-base font-semibold text-stone-900">PipeLists</h1>
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500">
+                    0 lists
+                  </span>
+                </div>
+                <div className="mt-3 rounded-md border border-dashed border-stone-200 px-3 py-8 text-center">
+                  <p className="text-sm text-stone-400">No lists yet</p>
+                </div>
+              </div>
+            </aside>
+
+            <section className="min-w-0">
+              <MessageBanner message={appMessage} />
+              <div className="flex min-h-[420px] items-center justify-center rounded-lg border border-dashed border-stone-200 bg-white px-6 py-12 text-center shadow-sm">
+                <div className="w-full max-w-md">
+                  <div className="mx-auto mb-4 inline-flex h-11 w-11 items-center justify-center rounded-full bg-stone-100 text-stone-600">
+                    <Layers className="h-5 w-5" />
+                  </div>
+                  <h2 className="text-xl font-bold text-stone-950">No lists yet</h2>
+                  <p className="mt-2 text-sm leading-6 text-stone-500">
+                    Your dashboard is ready. Create your first list whenever you are ready.
+                  </p>
+                  <form onSubmit={handleCreateList} className="mt-6 space-y-3 text-left">
+                    <label className="block" htmlFor="empty-new-list-template">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Template</span>
+                      <select
+                        id="empty-new-list-template"
+                        value={newListTemplateKey}
+                        onChange={(event) => setNewListTemplateKey(event.target.value as TemplateKey)}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
+                      >
+                        {(Object.keys(templateCatalog) as TemplateKey[]).map((key) => (
+                          <option key={key} value={key}>
+                            {templateCatalog[key].label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="block" htmlFor="empty-new-list-name">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">List name</span>
+                      <input
+                        id="empty-new-list-name"
+                        value={newListName}
+                        onChange={(event) => setNewListName(event.target.value)}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                        placeholder={templateCatalog[newListTemplateKey].defaultName}
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                    >
+                      <ListPlus className="h-4 w-4" />
+                      Create first list
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </section>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PageHead
+        metaData={{
+          pageId: 'pipe-lists',
+          pageTitle: 'PipeLists - Pulse',
+          metaDescription: 'A clean RevOps pipeline management surface for Pulse opportunities.',
+          ogTitle: 'PipeLists - Pulse',
+          ogDescription: 'A clean RevOps pipeline management surface for Pulse opportunities.',
+          lastUpdated: new Date().toISOString(),
+        }}
+        pageOgUrl="https://fitwithpulse.ai/PipeLists"
+        pageOgImage="/pil-og.png"
+      />
+
+      <main className="min-h-screen bg-[#FAFAF7] text-stone-900">
+        <nav className="sticky top-0 z-40 border-b border-stone-200/70 bg-[#FAFAF7]/90 backdrop-blur-md">
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+            <Link href="/" className="flex min-w-0 items-center gap-3" aria-label="Pulse home">
+              <img src="/pulse-logo.svg" alt="Pulse" className="h-8 shrink-0" />
+              <span className="hidden text-sm font-medium text-stone-500 sm:inline">PipeLists</span>
+            </Link>
+
+            <div className="flex items-center gap-2">
+              <div className="hidden items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-500 shadow-sm md:flex">
+                <span className={`h-2 w-2 rounded-full ${personalSaveError || personalSyncConflict ? 'bg-rose-500' : savingToCloud || pendingPersonalSaves > 0 ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                <span>
+                  {isSharedView
+                    ? canEditShared
+                      ? 'Shared editor'
+                      : isLeadSharedView
+                        ? 'Read-only lead'
+                        : 'Read-only share'
+                    : activeDashboardShare
+                      ? activeDashboardShare.editorEmails.includes(normalizedUserEmail)
+                        ? 'Editor access'
+                        : 'Read-only access'
+                    : personalSyncConflict
+                      ? 'Save conflict'
+                    : personalSaveError
+                      ? 'Save failed'
+                    : savingToCloud || pendingPersonalSaves > 0
+                      ? 'Saving'
+                      : 'Saved'}
+                </span>
+                {user?.email && (
+                  <>
+                    <span className="text-stone-300">·</span>
+                    <span>{user.email}</span>
+                  </>
+                )}
+              </div>
+              {viewMode !== 'runbook' && (
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-900"
+                  title="Export current list"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+              )}
+              {isOwner && !isSharedView && (
+                <button
+                  type="button"
+                  onClick={openSharePanel}
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-950"
+                >
+                  <Users className="h-4 w-4" />
+                  <span className="hidden sm:inline">Invite</span>
+                </button>
+              )}
+              {canManageWorkspace && (
+                <button
+                  type="button"
+                  data-testid="pipe-new-list"
+                  onClick={() => setIsNewListModalOpen(true)}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-700"
+                >
+                  <ListPlus className="h-4 w-4" />
+                  Add new list
+                </button>
+              )}
+              {user && (
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-900"
+                  title="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        </nav>
+
+        <div
+          className={`mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:px-8 ${
+            isSidebarCollapsed ? 'lg:grid-cols-[64px_minmax(0,1fr)]' : 'lg:grid-cols-[300px_minmax(0,1fr)]'
+          }`}
+        >
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <div className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm">
+              <div className={`flex items-center px-1 ${isSidebarCollapsed ? 'justify-center' : 'mb-3 justify-between'}`}>
+                {!isSidebarCollapsed && (
+                  <>
+                    <h1 className="text-base font-semibold text-stone-900">PipeLists</h1>
+                    <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500">
+                      {formatCount(lists.length, 'list')}
+                    </span>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-stone-400 transition hover:bg-stone-100 hover:text-stone-900"
+                  title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                >
+                  {isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                </button>
+              </div>
+
+              {!isSidebarCollapsed && (
+                <>
+                  <div className="space-y-1.5">
+                    {lists.map((list) => (
+                      <button
+                        key={list.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveListId(list.id);
+                          setViewMode('pipeline');
+                          setStageFilters([]);
+                          setPriorityFilters([]);
+                          setSelectedLogItemId('');
+                          setLogDraft(defaultLogDraft(list.templateKey));
+                          setDraft(defaultDraft(list.stages[0]?.id));
+                          resetEditor();
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left transition ${
+                          activeListId === list.id ? 'bg-stone-900 text-white' : 'text-stone-600 hover:bg-stone-100'
+                        }`}
+                      >
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${list.accent}`} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">{list.name}</span>
+                          <span
+                            className={`block truncate text-xs ${
+                              activeListId === list.id ? 'text-stone-300' : 'text-stone-400'
+                            }`}
+                          >
+                            {formatCount(list.items.filter((item) => !isItemDeleted(item)).length, listItemNoun(list))} · {templateCatalog[list.templateKey].label}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {isSharedView && (
+                    <div className="mt-4 border-t border-stone-100 pt-4">
+                      <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                        <p className="text-sm font-semibold text-stone-950">
+                          {canEditShared ? 'Editor access' : isLeadSharedView ? 'Read-only lead' : 'Read-only share'}
+                        </p>
+                        <p className="mt-1 text-xs leading-5 text-stone-500">
+                          {canEditShared
+                            ? 'Your changes save back to this shared list.'
+                            : isLeadSharedView
+                              ? 'Anyone with this link can read this lead and open its attachments.'
+                              : 'Anyone with this link can read this list. Sign in only if you were granted edit access.'}
+                        </p>
+
+                        {shareDoc?.access === 'edit' && !canEditShared && (
+                          <div className="mt-3 space-y-2">
+                            <button
+                              type="button"
+                              onClick={handleGoogleSignIn}
+                              disabled={isGoogleSignInStarting}
+                              className="inline-flex h-9 w-full items-center justify-center rounded-full bg-stone-900 px-3 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Sign in with Google
+                            </button>
+                            <input
+                              value={magicEmail}
+                              onChange={(event) => setMagicEmail(event.target.value)}
+                              className="h-9 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none"
+                              placeholder="email@example.com"
+                            />
+                            <button
+                              type="button"
+                              onClick={sendMagicLink}
+                              disabled={sendingMagicLink}
+                              className="inline-flex h-9 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:opacity-50"
+                            >
+                              {sendingMagicLink ? 'Sending...' : 'Send Magic Link'}
+                            </button>
+                            <MessageBanner message={authMessage} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </aside>
+
+          <section className="min-w-0">
+            <MessageBanner message={appMessage} />
+
+            <div className="mb-5 flex flex-col gap-4 border-b border-stone-200 pb-5 md:flex-row md:items-end md:justify-between">
+              <div className="min-w-0">
+                <div className="mb-2 flex items-center gap-2">
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      viewMode === 'runbook' ? 'bg-sky-500' : activeList.accent
+                    }`}
+                  />
+                  <span className="text-xs font-semibold uppercase text-stone-400">
+                    {viewMode === 'runbook' ? 'Shared workspace' : templateCatalog[activeList.templateKey].label}
+                  </span>
+                </div>
+                <h2 className="truncate text-3xl font-bold tracking-normal text-stone-950 md:text-4xl">
+                  {viewMode === 'runbook' ? 'Sales Runbook' : activeList.name}
+                </h2>
+                {viewMode === 'runbook' ? (
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">
+                    The team's editable source for sales strategy, messaging, resources, and operating cadence.
+                  </p>
+                ) : (
+                  activeList.description && (
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">{activeList.description}</p>
+                  )
+                )}
+              </div>
+
+              {canModify && viewMode !== 'runbook' && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openListProfileModal}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-600 shadow-sm transition hover:border-stone-300 hover:text-stone-950"
+                  >
+                    <Target className="h-4 w-4" />
+                    PipeList Profile
+                  </button>
+                  {canManageActiveList && (
+                    <button
+                      type="button"
+                      onClick={() => setIsDeleteListModalOpen(true)}
+                      disabled={lists.length <= 1}
+                      title={lists.length <= 1 ? 'Create another PipeList before deleting this one' : 'Delete this PipeList'}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 shadow-sm transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete List
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="mb-5 flex flex-wrap gap-2">
+              {[
+                { id: 'pipeline' as const, label: 'Pipeline', icon: <Layers className="h-4 w-4" /> },
+                ...(successWorkspaceAvailable
+                  ? [{ id: 'success' as const, label: 'Success', icon: <HeartPulse className="h-4 w-4" /> }]
+                  : []),
+                { id: 'metrics' as const, label: 'Metrics', icon: <BarChart3 className="h-4 w-4" /> },
+                { id: 'logs' as const, label: 'Logs', icon: <ClipboardList className="h-4 w-4" /> },
+                ...(runbookAvailable
+                  ? [{ id: 'runbook' as const, label: 'Runbook', icon: <BookOpen className="h-4 w-4" /> }]
+                  : []),
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setViewMode(tab.id)}
+                  className={`inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-semibold transition ${
+                    viewMode === tab.id
+                      ? 'border-stone-900 bg-stone-900 text-white'
+                      : 'border-stone-200 bg-white text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {viewMode === 'runbook' && user && (
+              <PipeListsRunbook user={user} onDirtyChange={setRunbookHasUnsavedChanges} />
+            )}
+
+            {viewMode === 'success' && successWorkspaceAvailable && (
+              <PipeListsCustomerSuccess
+                accounts={universitySuccessAccounts}
+                canModify={canModify}
+                onEdit={(itemId) => {
+                  const item = activeListItems.find((candidate) => candidate.id === itemId);
+                  if (item) handleEditItem(item);
+                }}
+                onAddUpdate={(itemId) => openLogModal(activeList.id, itemId)}
+                onOpenLogs={(itemId) => {
+                  setSelectedLogItemId(itemId);
+                  setSelectedDetailItemId(itemId);
+                  setLogDraft(defaultLogDraft(activeList.templateKey));
+                  setDetailModalMode('logs');
+                }}
+              />
+            )}
+
+            {viewMode === 'metrics' && (
+              <div className="space-y-5">
+                <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-stone-950">
+                      {metricsScope === 'selected-list' ? `Selected list: ${activeList.name}` : 'Workspace: all lists'}
+                    </p>
+                    <p className="mt-1 text-xs text-stone-500">
+                      Current pipeline snapshot. Success evidence uses the latest metric update per item in the reporting period.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <label className="sr-only" htmlFor="metrics-scope">Metrics scope</label>
+                    <select
+                      id="metrics-scope"
+                      value={metricsScope}
+                      onChange={(event) => setMetricsScope(event.target.value as MetricsScope)}
+                      className="h-10 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700 outline-none focus:border-stone-400"
+                    >
+                      <option value="selected-list">Selected list</option>
+                      <option value="workspace">Workspace: all lists</option>
+                    </select>
+                    <label className="sr-only" htmlFor="metrics-period">Reporting period</label>
+                    <select
+                      id="metrics-period"
+                      value={metricsPeriod}
+                      onChange={(event) => setMetricsPeriod(event.target.value as MetricsPeriod)}
+                      className="h-10 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700 outline-none focus:border-stone-400"
+                    >
+                      <option value="30">Success evidence: last 30 days</option>
+                      <option value="90">Success evidence: last 90 days</option>
+                      <option value="all">Success evidence: all history</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {renderMetricCard(
+                    'Open Pipeline',
+                    formatMoney(scorecardMetrics.totalOpenValue),
+                    `${scorecardMetrics.totalOpenDeals} open opportunities in this scope`,
+                    <DollarSign className="h-4 w-4" />,
+                  )}
+                  {renderMetricCard(
+                    'Average Value',
+                    formatMoney(scorecardMetrics.averageContractValue),
+                    'Blended across items with ACV or amount',
+                    <TrendingUp className="h-4 w-4" />,
+                    'bg-sky-50 text-sky-700',
+                  )}
+                  {renderMetricCard(
+                    'Next Date',
+                    scorecardMetrics.firstExpectedCloseDate || 'Not set',
+                    'Earliest expected close, due date, or end date',
+                    <Calendar className="h-4 w-4" />,
+                    'bg-amber-50 text-amber-700',
+                  )}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {renderMetricCard(
+                    'Won Rate',
+                    `${Math.round(scorecardMetrics.wonRate)}%`,
+                    'Won items divided by all tracked items',
+                    <Users className="h-4 w-4" />,
+                    'bg-indigo-50 text-indigo-700',
+                  )}
+                  {renderMetricCard(
+                    'Due Soon',
+                    String(scorecardMetrics.dueSoon),
+                    'Open items with a date inside the next week',
+                    <Target className="h-4 w-4" />,
+                    'bg-emerald-50 text-emerald-700',
+                  )}
+                  {renderMetricCard(
+                    'Logged Items',
+                    String(scorecardMetrics.loggedItems),
+                    `${scorecardMetrics.totalLogs} total logs across tracked items`,
+                    <Activity className="h-4 w-4" />,
+                    'bg-teal-50 text-teal-700',
+                  )}
+                  {renderMetricCard(
+                    'Success Reports',
+                    String(scorecardMetrics.metricReports),
+                    scorecardMetrics.metricReports === 0
+                      ? 'No metric updates in this reporting period'
+                      : scorecardMetrics.metricReports === 1
+                        ? `${formatMeasuredMetric(scorecardMetrics.checkInRate, '%')} check-in rate · ${formatMeasuredMetric(scorecardMetrics.signalEvents)} signal events`
+                        : 'Separate account reports; rates are kept unblended',
+                    <CheckCircle2 className="h-4 w-4" />,
+                    'bg-rose-50 text-rose-700',
+                  )}
+                </div>
+
+                <div className="rounded-lg border border-stone-200 bg-white shadow-sm">
+                  <div className="border-b border-stone-100 px-4 py-3">
+                    <h3 className="text-sm font-semibold text-stone-950">Scoreboard</h3>
+                  </div>
+                  <div className="divide-y divide-stone-100">
+                    {[
+                      ['How much is open?', `${scorecardMetrics.totalOpenDeals} open opportunities, ${formatMoney(scorecardMetrics.totalOpenValue)} total listed value.`],
+                      ['What needs attention soon?', scorecardMetrics.firstExpectedCloseDate || 'Add expected close or due dates to important items.'],
+                      ['How much is documented?', `${scorecardMetrics.loggedItems} items have logs, with ${scorecardMetrics.totalLogs} total records.`],
+                      ['What proof signals exist?', scorecardMetrics.metricReports === 0
+                        ? 'No metric update is recorded inside this reporting period.'
+                        : scorecardMetrics.metricReports === 1
+                          ? `${formatMeasuredMetric(scorecardMetrics.checkInRate, '%')} check-in rate, ${formatMeasuredMetric(scorecardMetrics.signalEvents)} signal events, ${formatMeasuredMetric(scorecardMetrics.staffScore, '/10')} staff score from the current report.`
+                          : `${scorecardMetrics.metricReports} current account reports are available. Open the logs to compare them without blending differently defined rates.`],
+                      ['Where do costs need attention?', 'Track margin notes, partner costs, and hard costs when those fields apply.'],
+                    ].map(([question, answer]) => (
+                      <div key={question} className="grid gap-2 px-4 py-3 md:grid-cols-[minmax(220px,0.8fr)_1fr]">
+                        <p className="text-sm font-semibold text-stone-800">{question}</p>
+                        <p className="text-sm leading-6 text-stone-500">{answer}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {viewMode === 'logs' && (
+              <div className="space-y-5">
+                <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <label className="sr-only" htmlFor="log-list-filter">
+                      Filter logs by PipeList
+                    </label>
+                    <select
+                      id="log-list-filter"
+                      value={logListFilter}
+                      onChange={(event) => setLogListFilter(event.target.value)}
+                      className="h-11 min-w-[220px] rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
+                    >
+                      <option value="all">Workspace: all PipeLists</option>
+                      {lists.map((list) => (
+                        <option key={list.id} value={list.id}>
+                          {list.name}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="sr-only" htmlFor="log-email-filter">
+                      Filter logs by email type
+                    </label>
+                    <select
+                      id="log-email-filter"
+                      value={logEmailFilter}
+                      onChange={(event) => setLogEmailFilter(event.target.value as LogEmailFilter)}
+                      className="h-11 min-w-[210px] rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-medium text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
+                    >
+                      {(Object.keys(logEmailFilterLabels) as LogEmailFilter[]).map((filter) => (
+                        <option key={filter} value={filter}>
+                          {logEmailFilterLabels[filter]}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-sm text-stone-400">
+                      {formatCount(filteredLogRows.length, 'log')}
+                    </span>
+                  </div>
+
+                  {canModify && (
+                    <button
+                      type="button"
+                      onClick={() => openLogModal()}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Log
+                    </button>
+                  )}
+                </div>
+
+                {logRecipientFilter && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-500 shadow-sm">
+                    <span>
+                      Showing {logEmailFilterLabels[logEmailFilter]} for <strong className="text-stone-800">{logRecipientFilter}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setLogRecipientFilter('')}
+                      className="inline-flex h-8 items-center rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+                    >
+                      Clear recipient
+                    </button>
+                  </div>
+                )}
+
+                <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+                  <div className="border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400">
+                    Timeline
+                  </div>
+                  {filteredLogRows.length > 0 ? (
+                    <div className="divide-y divide-stone-100">
+                      {filteredLogRows.map(({ list, item, log }) => {
+                        const logRowId = `${list.id}-${item.id}-${log.id}`;
+                        const isExpanded = expandedLogIds.has(logRowId);
+
+                        return (
+                        <article key={logRowId} className="px-4 py-4">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
+                                  {logDisplayLabel(log)}
+                                </span>
+                                <span className="text-xs text-stone-400">{formatLogTimestamp(log)}</span>
+                                {isExpanded && <span className="text-xs text-stone-400">{list.name}</span>}
+                                {isExpanded && log.followUpDate && (
+                                  <span className="text-xs text-stone-400">
+                                    {followUpDateLabel(log.nextStep)} {log.followUpDate}
+                                  </span>
+                                )}
+                              </div>
+                              <h4 className="mt-2 text-sm font-semibold text-stone-950">{displayLogSummary(log)}</h4>
+                              {isExpanded && (
+                                <>
+                                  <p className="mt-1 text-sm text-stone-500">
+                                    {item.title}
+                                    {item.organization ? ` · ${item.organization}` : ''}
+                                  </p>
+                                  {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
+                                  {log.systemAction === 'email-sent' ? (
+                                    <EmailLogDetails log={log} />
+                                  ) : (
+                                    log.notes && log.notes !== log.summary && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>
+                                  )}
+                                  <MetricLogSummary log={log} />
+                                </>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 self-start">
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandedLog(logRowId)}
+                                aria-expanded={isExpanded}
+                                className="inline-flex h-9 items-center gap-1 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                              >
+                                {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                {isExpanded ? 'Collapse' : 'Expand'}
+                              </button>
+                              {log.systemAction === 'item-deleted' && canRestoreDeletedItem(item) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRestoreDeletedItem(list.id, item.id)}
+                                  className="inline-flex h-9 items-center justify-center rounded-full bg-stone-900 px-3 text-xs font-semibold text-white transition hover:bg-stone-700"
+                                >
+                                  Undo Delete
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveListId(list.id);
+                                  setSelectedDetailItemId(item.id);
+                                  setSelectedLogItemId(item.id);
+                                  setDetailModalMode('logs');
+                                }}
+                                className="inline-flex h-9 items-center justify-center rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                              >
+                                Open
+                              </button>
+                              {canModify && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteLog(item.id, log.id, list.id)}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
+                                  title="Delete log"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-16 text-center">
+                      <p className="text-sm font-semibold text-stone-900">No logs yet</p>
+                      <p className="mt-1 text-sm text-stone-500">Add updates from here or from any lead details modal.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {viewMode === 'pipeline' && (
+              <>
+                <div className={`grid gap-2 sm:grid-cols-2 ${showOpportunityMetrics ? 'xl:grid-cols-5' : 'xl:grid-cols-4'} ${isUniversitySuccessList ? 'mb-3' : 'mb-5 gap-3'}`}>
+                  {isUniversitySuccessList ? (
+                    <>
+                      {[
+                        ['Total', activeListItems.length],
+                        ['Active pipeline', activeItems],
+                        ['Pilots active', activeListItems.filter((item) => item.stage === 'pilot-active').length],
+                        ['Due soon', dueSoonItems],
+                      ].map(([label, value]) => (
+                        <div key={String(label)} className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-3 py-2 shadow-sm">
+                          <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">{label}</span>
+                          <span className="text-lg font-bold text-stone-950">{value}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : isInvestorUpdateContactsList ? (
+                    <>
+                      {renderMetricCard('Contacts', String(activeListItems.length), 'People in this update list', <Users className="h-4 w-4" />)}
+                      {renderMetricCard('Sent', String(sentEmailItems), 'Contacts with an email sent', <Mail className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
+                      {renderMetricCard('Delivered', String(deliveredEmailItems), 'Emails delivered by Brevo', <CheckCircle2 className="h-4 w-4" />, 'bg-indigo-50 text-indigo-700')}
+                      {renderMetricCard('Opened', String(openedEmailItems), 'Contacts who opened an email', <ClipboardList className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
+                    </>
+                  ) : isContactListActive ? (
+                    <>
+                      {renderMetricCard('Contacts', String(activeListItems.length), 'People in this list', <Users className="h-4 w-4" />)}
+                      {renderMetricCard('Active', String(activeItems), 'Contacts not paused', <Clock className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
+                      {renderMetricCard('Follow-Ups', String(dueSoonItems), 'Contacts due soon', <ClipboardList className="h-4 w-4" />, 'bg-amber-50 text-amber-700')}
+                      {renderMetricCard('Emailed', String(sentEmailItems), 'Contacts with an email sent', <Mail className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
+                    </>
+                  ) : isTaskListActive ? (
+                    <>
+                      {renderMetricCard('Tasks', String(activeListItems.length), 'All tasks in this list', <ClipboardList className="h-4 w-4" />)}
+                      {renderMetricCard('Active', String(activeItems), 'Tasks not done or paused', <Clock className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
+                      {renderMetricCard('Done', String(wonItems), 'Completed tasks', <CheckCircle2 className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
+                      {renderMetricCard('Due Soon', String(dueSoonItems), 'Tasks due in the next week', <Calendar className="h-4 w-4" />, 'bg-amber-50 text-amber-700')}
+                    </>
+                  ) : (
+                    <>
+                      {renderMetricCard('Total', String(activeListItems.length), 'All opportunities in this list', <FileText className="h-4 w-4" />)}
+                      {renderMetricCard('Active', String(activeItems), 'Not closed won or lost', <Clock className="h-4 w-4" />, 'bg-sky-50 text-sky-700')}
+                      {renderMetricCard('Won', String(wonItems), 'Closed or awarded opportunities', <CheckCircle2 className="h-4 w-4" />, 'bg-emerald-50 text-emerald-700')}
+                      {renderMetricCard(
+                        isFundSizeList(activeList) ? 'Fund Size' : 'Open Value',
+                        formatMoney(activeOpenValue),
+                        isFundSizeList(activeList) ? 'Fund sizes for active items' : 'ACV or amount for active items',
+                        <DollarSign className="h-4 w-4" />,
+                        'bg-amber-50 text-amber-700',
+                      )}
+                      {renderMetricCard(
+                        'ACV',
+                        formatMoney(activeAcv),
+                        'Total annual contract value for active items',
+                        <TrendingUp className="h-4 w-4" />,
+                        'bg-indigo-50 text-indigo-700',
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm xl:flex-row xl:flex-wrap xl:items-center">
+                  <div className="relative min-w-[220px] flex-[1_1_260px] xl:max-w-xs">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] pl-9 pr-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="Search"
+                    />
+                  </div>
+
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    {!isInvestorUpdateContactsList && (
+                      <div className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-stone-500">
+                        <Filter className="h-4 w-4" />
+                        <select
+                          value=""
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            if (value === '__clear') {
+                              setStageFilters([]);
+                              return;
+                            }
+                            if (value) {
+                              setStageFilters((current) => toggleFilterSelection(current, value));
+                            }
+                          }}
+                          className="bg-transparent text-sm text-stone-700 outline-none"
+                          aria-label="Add or remove stage filters"
+                        >
+                          <option value="" disabled>
+                            {stageFilters.length === 0
+                              ? 'All stages'
+                              : `${stageFilters.length} ${stageFilters.length === 1 ? 'stage' : 'stages'} selected`}
+                          </option>
+                          {stageFilters.length > 0 && <option value="__clear">Clear stage filters</option>}
+                          {activeList.stages.map((stage) => (
+                            <option key={stage.id} value={stage.id}>
+                              {stageFilters.includes(stage.id) ? `Remove ${stage.label}` : `Add ${stage.label}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuery('');
+                        setStageFilters([]);
+                        setPriorityFilters([]);
+                        setSortColumn(null);
+                        setSortDirection('asc');
+                      }}
+                      className="inline-flex h-11 items-center justify-center rounded-md border border-stone-200 bg-white px-3 text-sm font-medium text-stone-500 transition hover:text-stone-900"
+                    >
+                      Clear
+                    </button>
+
+                    <div className="inline-flex h-11 items-center rounded-md border border-stone-200 bg-[#FAFAF7] p-1" aria-label="Pipeline display">
+                      {[
+                        { id: 'list' as const, label: 'List', icon: <LayoutList className="h-4 w-4" /> },
+                        { id: 'kanban' as const, label: 'Kanban', icon: <Kanban className="h-4 w-4" /> },
+                      ].map((displayOption) => (
+                        <button
+                          key={displayOption.id}
+                          type="button"
+                          onClick={() => setPipelineDisplayMode(displayOption.id)}
+                          className={`inline-flex h-9 items-center gap-2 rounded px-3 text-sm font-semibold transition ${
+                            pipelineDisplayMode === displayOption.id
+                              ? 'bg-white text-stone-950 shadow-sm'
+                              : 'text-stone-500 hover:text-stone-900'
+                          }`}
+                          aria-pressed={pipelineDisplayMode === displayOption.id}
+                        >
+                          {displayOption.icon}
+                          {displayOption.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {isContactListActive && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openContactEmailModal()}
+                          className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                        >
+                          <Mail className="h-4 w-4" />
+                          Send email
+                        </button>
+                        {isInvestorUpdateContactsList && isOwner && canManageActiveList && (
+                          <button
+                            type="button"
+                            onClick={handleImportFriendsOfBusiness}
+                            disabled={isImportingFriends}
+                            className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Users className="h-4 w-4" />
+                          {isImportingFriends ? 'Importing...' : 'Import contacts'}
+                          </button>
+                        )}
+                      </>
+                    )}
+
+                    {canModify && (
+                      <>
+                        {isContactListActive && canManageActiveList && (
+                          <label className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 hover:border-stone-300">
+                            <ListPlus className="h-4 w-4" /> Import contact file
+                            <input aria-label="Import contact file" type="file" accept=".json,application/json" className="sr-only" disabled={contactImportBusy}
+                              onChange={(event) => { void readContactImport(event.target.files?.[0]); event.target.value = ''; }} />
+                          </label>
+                        )}
+                        {activeList.templateKey === 'vc' && missingVcSourceItems.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleEnrichMissingVcSources}
+                            disabled={isEnrichingVcSources}
+                            className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            {isEnrichingVcSources ? 'Analyzing...' : 'Analyze sources'}
+                          </button>
+                        )}
+                        {filteredItems.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={toggleBulkSelectionMode}
+                            className={`inline-flex h-11 items-center gap-2 rounded-md border px-4 text-sm font-semibold transition ${
+                              isBulkSelectionMode
+                                ? 'border-stone-900 bg-stone-900 text-white hover:bg-stone-700'
+                                : 'border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:text-stone-950'
+                            }`}
+                          >
+                            {isBulkSelectionMode ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                            {isBulkSelectionMode ? 'Done' : 'Select'}
+                          </button>
+                        )}
+                        {!isTaskListActive && (
+                          <button
+                            type="button"
+                            onClick={openLeadGenModal}
+                            className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                          >
+                            <Search className="h-4 w-4" />
+                            Find leads
+                          </button>
+                        )}
+                        {isContactListActive && (
+                          <button
+                            type="button"
+                            onClick={openPastedLeadListModal}
+                            className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                          >
+                            <ListPlus className="h-4 w-4" />
+                            Analyze list
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={openLeadUrlModal}
+                          className="inline-flex h-11 items-center gap-2 rounded-md bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                        >
+                          <Plus className="h-4 w-4" />
+                          {isContactListActive ? 'Add contact' : isTaskListActive ? 'Add task' : 'Add new lead'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {isInvestorUpdateContactsList && <MessageBanner message={friendsImportMessage} />}
+                {activeList.templateKey === 'vc' && <MessageBanner message={vcSourceEnrichmentMessage} />}
+                <MessageBanner message={bulkActionMessage} />
+                <MessageBanner message={contactImportMessage} />
+
+                {isBulkSelectionMode && (
+                  <div className="mb-4 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={toggleSelectVisibleItems}
+                        className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                      >
+                        {allVisibleItemsSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                        {allVisibleItemsSelected ? 'Unselect visible' : someVisibleItemsSelected ? 'Select remaining' : 'Select visible'}
+                      </button>
+                      <span className="text-sm font-medium text-stone-500">
+                        {formatCount(selectedBulkItems.length, listItemNoun(activeList))} selected
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={bulkMoveTargetListId}
+                        onChange={(event) => setBulkMoveTargetListId(event.target.value)}
+                        className="h-10 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm font-semibold text-stone-700 outline-none transition focus:border-stone-400"
+                        aria-label="Move selected items to PipeList"
+                      >
+                        <option value="">Move selected to...</option>
+                        {bulkMoveTargetOptions.map((list) => (
+                          <option key={list.id} value={list.id}>
+                            {list.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleBulkMoveSelected}
+                        disabled={selectedBulkItems.length === 0 || !bulkMoveTargetListId}
+                        className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Layers className="h-4 w-4" />
+                        Move
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleBulkDeleteSelected}
+                        disabled={selectedBulkItems.length === 0}
+                        className="inline-flex h-10 items-center gap-2 rounded-md border border-rose-200 bg-white px-3 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!isInvestorUpdateContactsList && (!isUniversitySuccessList || pipelineDisplayMode === 'list') && (
+                  <div className="mb-4 grid gap-2 md:grid-cols-3 xl:grid-cols-5">
+                    {activeList.stages.map((stage) => {
+                      const isSelected = stageFilters.includes(stage.id);
+                      return (
+                        <button
+                          key={stage.id}
+                          type="button"
+                          onClick={() => setStageFilters((current) => toggleFilterSelection(current, stage.id))}
+                          className={`rounded-lg border px-3 py-3 text-left transition ${
+                            isSelected
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
+                          }`}
+                          aria-pressed={isSelected}
+                        >
+                          <span className="block truncate text-sm font-semibold">{stage.label}</span>
+                          <span className={isSelected ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
+                            {formatCount(countsByStage[stage.id] || 0, 'item')}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {!isInvestorUpdateContactsList && (
+                  <div className="mb-4 grid grid-cols-3 gap-2">
+                    {(['low', 'medium', 'high'] as PipelinePriority[]).map((priorityKey) => {
+                      const isSelected = priorityFilters.includes(priorityKey);
+                      return (
+                        <button
+                          key={priorityKey}
+                          type="button"
+                          onClick={() =>
+                            setPriorityFilters((current) => toggleFilterSelection(current, priorityKey))
+                          }
+                          className={`flex items-center gap-2 rounded-lg border px-3 py-3 text-left transition ${
+                            isSelected
+                              ? 'border-stone-900 bg-stone-900 text-white'
+                              : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
+                          }`}
+                          aria-pressed={isSelected}
+                          aria-label={easeOfContactLabel(priorityKey)}
+                        >
+                          <span
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                              priorityKey === 'high' ? 'bg-rose-500' : priorityKey === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold capitalize">{easeOfContactLabels[priorityKey]}</span>
+                            <span className={isSelected ? 'text-xs text-stone-300' : 'text-xs text-stone-400'}>
+                              {formatCount(countsByPriority[priorityKey] || 0, 'item')}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {pipelineDisplayMode === 'list' ? (
+                <div className="overflow-x-auto overflow-y-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+                  <div
+                    className={`hidden gap-4 border-b border-stone-100 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase text-stone-400 lg:grid ${
+                      isInvestorUpdateContactsList
+                        ? 'min-w-[1336px] grid-cols-[280px_240px_160px_140px_140px_280px_104px]'
+                        : isContactListActive
+                          ? 'min-w-[1476px] grid-cols-[260px_220px_140px_150px_140px_140px_280px_104px]'
+                          : 'min-w-[1436px] grid-cols-[260px_210px_128px_120px_140px_140px_280px_104px]'
+                    }`}
+                  >
+                    {renderSortableHeader(isContactListActive ? 'Contact' : isTaskListActive ? 'Task' : 'Item', 'item')}
+                    {renderSortableHeader(isTaskListActive ? 'Project / Area' : 'Organization', 'organization')}
+                    {isInvestorUpdateContactsList ? (
+                      <span>Email Status</span>
+                    ) : isContactListActive ? (
+                      <>
+                        {renderSortableHeader('Stage', 'stage')}
+                        <span>Log Status</span>
+                      </>
+                    ) : (
+                      <>
+                        {renderSortableHeader('Stage', 'stage')}
+                        {isTaskListActive ? <span>Ease of Contact</span> : renderSortableHeader(isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value', 'value')}
+                      </>
+                    )}
+                    {renderSortableHeader(isContactListActive ? 'Follow-Up' : 'Due Date', 'dueDate')}
+                    {renderSortableHeader('Date Added', 'createdAt')}
+                    {renderSortableHeader('Next Step', 'nextStep')}
+                    <span className="text-right">Actions</span>
+                  </div>
+
+                  {filteredItems.length > 0 ? (
+                    <div className={`divide-y divide-stone-100 ${isInvestorUpdateContactsList ? 'lg:min-w-[1336px]' : isContactListActive ? 'lg:min-w-[1476px]' : 'lg:min-w-[1436px]'}`}>
+                      {filteredItems.map((item, itemIndex) => {
+                        const stage = getStage(activeList, item.stage);
+                        const itemValueText = itemAmountDisplay(activeList, item);
+                        const tableValueText = isContactListActive ? item.contactEmails[0] || '' : isTaskListActive ? easeOfContactLabel(item.priority) : itemValueText;
+                        const hasItemValue = Boolean(tableValueText);
+                        const dueDate = itemPrimaryDate(activeList, item);
+                        const nextStepText = item.nextStep || item.notes || item.expansionPath;
+                        const isSelectedForBulkAction = selectedBulkItemIds.includes(item.id);
+                        const visibleRowNumber = itemIndex + 1;
+
+                        return (
+                          <article
+                            key={item.id}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={isBulkSelectionMode ? `Select ${item.title}` : `Open details for ${item.title}`}
+                            onClick={() => {
+                              if (isBulkSelectionMode) {
+                                toggleBulkItemSelection(item.id);
+                              } else {
+                                setSelectedDetailItemId(item.id);
+                                setDetailModalMode('details');
+                              }
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                if (isBulkSelectionMode) {
+                                  toggleBulkItemSelection(item.id);
+                                } else {
+                                  setSelectedDetailItemId(item.id);
+                                  setDetailModalMode('details');
+                                }
+                              }
+                            }}
+                            className={`grid cursor-pointer gap-3 px-4 py-4 transition hover:bg-stone-50/80 focus:bg-stone-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-stone-300 lg:items-center lg:gap-4 ${
+                              isSelectedForBulkAction ? 'bg-stone-50 ring-1 ring-inset ring-stone-300' : ''
+                            } ${
+                              isInvestorUpdateContactsList
+                                ? 'lg:grid-cols-[280px_240px_160px_140px_140px_280px_104px]'
+                                : isContactListActive
+                                  ? 'lg:grid-cols-[260px_220px_140px_150px_140px_140px_280px_104px]'
+                                  : 'lg:grid-cols-[260px_210px_128px_120px_140px_140px_280px_104px]'
+                            }`}
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-stone-100 text-xs font-semibold text-stone-500">
+                                {visibleRowNumber}
+                              </span>
+                              {isBulkSelectionMode && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleBulkItemSelection(item.id);
+                                  }}
+                                  className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition ${
+                                    isSelectedForBulkAction
+                                      ? 'border-stone-900 bg-stone-900 text-white'
+                                      : 'border-stone-200 bg-white text-stone-500 hover:border-stone-300 hover:text-stone-900'
+                                  }`}
+                                  title={isSelectedForBulkAction ? 'Unselect item' : 'Select item'}
+                                  aria-pressed={isSelectedForBulkAction}
+                                >
+                                  {isSelectedForBulkAction ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                                </button>
+                              )}
+                              {item.imageUrl && (
+                                <img
+                                  src={item.imageUrl}
+                                  alt={item.imageName || `${item.title} image`}
+                                  className="h-12 w-12 shrink-0 rounded-md border border-stone-200 object-cover"
+                                />
+                              )}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                      item.priority === 'high'
+                                        ? 'bg-rose-500'
+                                        : item.priority === 'medium'
+                                          ? 'bg-amber-500'
+                                          : 'bg-emerald-500'
+                                    }`}
+                                    title={easeOfContactLabel(item.priority)}
+                                  />
+                                  <GoodSoilPriorityBadge notes={item.notes} />
+                                  {getLinkedLeads(activeList.items, item.id).length > 0 && (
+                                    <span className="inline-flex shrink-0 items-center gap-1 text-xs text-stone-600" title={`${getLinkedLeads(activeList.items, item.id).length} linked leads`} aria-label={`${getLinkedLeads(activeList.items, item.id).length} linked leads`}>
+                                      <Link2 className="h-3.5 w-3.5" />{getLinkedLeads(activeList.items, item.id).length}
+                                    </span>
+                                  )}
+                                  <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
+                                </div>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                  {item.owner && <span>{item.owner}</span>}
+                                  {item.segment && <span>{item.segment}</span>}
+                                  {dueDate && (
+                                    <span className="inline-flex items-center gap-1 lg:hidden">
+                                      <Calendar className="h-3 w-3" />
+                                      {dueDate}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className={`min-w-0 items-center gap-2 text-sm text-stone-600 ${item.organization ? 'flex' : 'hidden lg:flex'}`}>
+                              <Building2 className="h-4 w-4 shrink-0 text-stone-400" />
+                              <span className="truncate">{item.organization}</span>
+                            </div>
+
+                            {isInvestorUpdateContactsList ? (
+                              <div className="min-w-0">
+                                {emailStatusHasActivity(item) ? (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openEmailActivityForItem(item);
+                                    }}
+                                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold transition hover:shadow-sm ${emailStatusTone(item)}`}
+                                    title={`View email activity for ${item.title}`}
+                                  >
+                                    View
+                                  </button>
+                                ) : (
+                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${emailStatusTone(item)}`}>
+                                    Not sent
+                                  </span>
+                                )}
+                                {emailStatusHasActivity(item) && (
+                                  <p className="mt-1 truncate text-xs font-medium text-stone-500">{emailStatusLabel(item)}</p>
+                                )}
+                                {item.contactEmails[0] && <p className="mt-1 truncate text-xs text-stone-500">{item.contactEmails[0]}</p>}
+                                {(item.emailOpenCount > 0 || item.emailClickCount > 0) && (
+                                  <p className="mt-1 truncate text-xs text-stone-400">
+                                    {item.emailOpenCount > 0 ? `${item.emailOpenCount} opens` : ''}
+                                    {item.emailOpenCount > 0 && item.emailClickCount > 0 ? ' · ' : ''}
+                                    {item.emailClickCount > 0 ? `${item.emailClickCount} clicks` : ''}
+                                  </p>
+                                )}
+                              </div>
+                            ) : isContactListActive ? (
+                              <>
+                                <div>
+                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${stage.tone}`}>
+                                    {stage.label}
+                                  </span>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="inline-flex rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-semibold text-stone-600">
+                                      {item.weeklyLogs.length > 0 ? formatCount(item.weeklyLogs.length, 'log') : 'No logs'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openLogsForItem(item);
+                                      }}
+                                      className="inline-flex rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+                                      title={`View logs for ${item.title}`}
+                                    >
+                                      View
+                                    </button>
+                                  </div>
+                                  {item.contactEmails[0] && <p className="mt-1 truncate text-xs text-stone-500">{item.contactEmails[0]}</p>}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="space-y-2">
+                                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${stage.tone}`}>
+                                    {stage.label}
+                                  </span>
+                                  {isUniversitySuccessList && (
+                                    <button type="button" onClick={(event) => { event.stopPropagation(); openLogsForItem(item); }} className="block text-left" title={`View email activity for ${item.title}`}>
+                                      <EmailTrackingBadge status={item.emailStatus || item.lastEmailEvent} sentAt={item.lastEmailSentAt} />
+                                      {(item.emailOpenCount > 0 || item.emailClickCount > 0) && <span className="mt-1 block text-xs text-stone-500">{item.emailOpenCount} opens · {item.emailClickCount} clicks</span>}
+                                    </button>
+                                  )}
+                                </div>
+
+                                <p className={`text-sm font-semibold text-stone-800 ${hasItemValue ? '' : 'hidden lg:block'}`}>
+                                  {tableValueText}
+                                </p>
+                              </>
+                            )}
+
+                            <div className={`min-w-0 text-sm text-stone-600 ${dueDate ? '' : 'hidden lg:block'}`}>
+                              {dueDate && (
+                                <span className="inline-flex max-w-full items-center gap-1.5 truncate">
+                                  <Calendar className="h-4 w-4 shrink-0 text-stone-400" />
+                                  <span className="truncate">{dueDate}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 text-sm text-stone-600">
+                              <span className="mr-2 text-xs font-semibold text-stone-400 lg:hidden">Date Added</span>
+                              <span className="whitespace-nowrap">{pipeTimestampToDate(item.createdAt)?.toISOString().slice(0, 10) || 'Unknown'}</span>
+                            </div>
+
+                            <div className={`min-w-0 ${nextStepText ? '' : 'hidden lg:block'}`}>
+                              {nextStepText && (
+                                <span
+                                  onMouseEnter={(event) => showNextStepTooltip(event, nextStepText)}
+                                  onMouseLeave={() => setNextStepTooltip(null)}
+                                  className="block max-w-full truncate text-sm leading-5 text-stone-600"
+                                >
+                                  {nextStepText}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSelectedLogItemId(item.id);
+                                  setViewMode('logs');
+                                }}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                                title="Open logs"
+                              >
+                                <ClipboardList className="h-4 w-4" />
+                              </button>
+                              {canModify && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleEditItem(item);
+                                    }}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                                    title={isContactListActive ? 'Edit contact' : isTaskListActive ? 'Edit task' : 'Edit opportunity'}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleDeleteItem(item.id);
+                                    }}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
+                                    title={isContactListActive ? 'Delete contact' : isTaskListActive ? 'Delete task' : 'Delete opportunity'}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-16 text-center">
+                      <p className="text-sm font-semibold text-stone-900">
+                        {isContactListActive ? 'No contacts found' : isTaskListActive ? 'No tasks found' : 'No items found'}
+                      </p>
+                      <p className="mt-1 text-sm text-stone-500">
+                        {isContactListActive
+                          ? 'Adjust the filter or add a new contact.'
+                          : isTaskListActive
+                            ? 'Adjust the filter or add a new task.'
+                            : 'Adjust the filter or add a new item.'}
+                      </p>
+                      {canModify && (
+                        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                          {isInvestorUpdateContactsList && isOwner && canManageActiveList && (
+                            <button
+                              type="button"
+                              onClick={handleImportFriendsOfBusiness}
+                              disabled={isImportingFriends}
+                              className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Users className="h-4 w-4" />
+                              {isImportingFriends ? 'Importing...' : 'Import contacts'}
+                            </button>
+                          )}
+                          {!isTaskListActive && (
+                            <button
+                              type="button"
+                              onClick={openLeadGenModal}
+                              className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                            >
+                              <Search className="h-4 w-4" />
+                              Find leads
+                            </button>
+                          )}
+                          {isContactListActive && (
+                            <button
+                              type="button"
+                              onClick={openPastedLeadListModal}
+                              className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                            >
+                              <ListPlus className="h-4 w-4" />
+                              Analyze list
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={openLeadUrlModal}
+                            className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                          >
+                            <Plus className="h-4 w-4" />
+                            {isContactListActive ? 'Add contact' : isTaskListActive ? 'Add task' : 'Add new lead'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                    <div className="flex min-w-max gap-3">
+                      {visibleKanbanStages.map((stage) => {
+                        const stageItems = kanbanItemsByStage[stage.id] || [];
+
+                        return (
+                          <section
+                            key={stage.id}
+                            onDragOver={(event) => {
+                              if (!canModify || isBulkSelectionMode || draggedKanbanItem?.listId !== activeList.id) return;
+                              event.preventDefault();
+                              event.dataTransfer.dropEffect = 'move';
+                              setKanbanDropStageId(stage.id);
+                            }}
+                            onDragLeave={(event) => {
+                              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                                setKanbanDropStageId(null);
+                              }
+                            }}
+                            onDrop={(event) => handleKanbanDrop(event, stage.id)}
+                            className={`flex w-[280px] shrink-0 flex-col rounded-lg border bg-[#FAFAF7] transition md:w-[304px] ${
+                              kanbanDropStageId === stage.id && draggedKanbanItem?.listId === activeList.id
+                                ? 'border-stone-500 ring-2 ring-stone-300'
+                                : 'border-stone-200'
+                            }`}
+                          >
+                            <header className="border-b border-stone-200 px-3 py-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className={`inline-flex min-w-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${stage.tone}`}>
+                                  <span className="truncate">{stage.label}</span>
+                                </span>
+                                <span className="shrink-0 text-xs font-semibold text-stone-400">
+                                  {formatCount(stageItems.length, listItemNoun(activeList))}
+                                </span>
+                              </div>
+                            </header>
+
+                            <div className="flex min-h-[180px] flex-1 flex-col gap-2 p-2">
+                              {stageItems.length > 0 ? (
+                                stageItems.map((item) => {
+                                  const itemValueText = itemAmountDisplay(activeList, item);
+                                  const dueDate = itemPrimaryDate(activeList, item);
+                                  const nextStepText = item.nextStep || item.notes || item.expansionPath;
+                                  const isSelectedForBulkAction = selectedBulkItemIds.includes(item.id);
+                                  const cardDetailText = isContactListActive
+                                    ? item.contactEmails[0] || item.contactPhone
+                                    : isTaskListActive
+                                      ? item.owner || item.segment
+                                      : isUniversitySuccessList
+                                        ? item.owner
+                                        : itemValueText;
+
+                                  return (
+                                    <article
+                                      key={item.id}
+                                      draggable={canModify && !isBulkSelectionMode}
+                                      onDragStart={(event) => {
+                                        if (!canModify || isBulkSelectionMode || (event.target as HTMLElement).closest('button, input, select, textarea, a')) {
+                                          event.preventDefault();
+                                          return;
+                                        }
+                                        event.dataTransfer.effectAllowed = 'move';
+                                        event.dataTransfer.setData('text/plain', item.id);
+                                        setDraggedKanbanItem({ listId: activeList.id, itemId: item.id });
+                                        setNextStepTooltip(null);
+                                      }}
+                                      onDragEnd={clearKanbanDrag}
+                                      role="button"
+                                      tabIndex={0}
+                                      aria-label={isBulkSelectionMode ? `Select ${item.title}` : `Open details for ${item.title}`}
+                                      onClick={() => {
+                                        if (isBulkSelectionMode) {
+                                          toggleBulkItemSelection(item.id);
+                                        } else {
+                                          setSelectedDetailItemId(item.id);
+                                          setDetailModalMode('details');
+                                        }
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                          event.preventDefault();
+                                          if (isBulkSelectionMode) {
+                                            toggleBulkItemSelection(item.id);
+                                          } else {
+                                            setSelectedDetailItemId(item.id);
+                                            setDetailModalMode('details');
+                                          }
+                                        }
+                                      }}
+                                      className={`rounded-md border bg-white p-3 shadow-sm transition hover:border-stone-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-stone-300 ${canModify && !isBulkSelectionMode ? 'cursor-grab active:cursor-grabbing' : ''} ${draggedKanbanItem?.listId === activeList.id && draggedKanbanItem.itemId === item.id ? 'opacity-40' : ''} ${
+                                        isSelectedForBulkAction ? 'border-stone-900 ring-1 ring-inset ring-stone-900' : 'border-stone-200'
+                                      }`}
+                                    >
+                                      <div className="flex items-start gap-2">
+                                        {isBulkSelectionMode && (
+                                          <button
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              toggleBulkItemSelection(item.id);
+                                            }}
+                                            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${
+                                              isSelectedForBulkAction
+                                                ? 'border-stone-900 bg-stone-900 text-white'
+                                                : 'border-stone-200 bg-white text-stone-500 hover:border-stone-300 hover:text-stone-900'
+                                            }`}
+                                            title={isSelectedForBulkAction ? 'Unselect item' : 'Select item'}
+                                            aria-pressed={isSelectedForBulkAction}
+                                          >
+                                            {isSelectedForBulkAction ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                                          </button>
+                                        )}
+                                        {item.imageUrl && (
+                                          <img
+                                            src={item.imageUrl}
+                                            alt={item.imageName || `${item.title} image`}
+                                            className="h-10 w-10 shrink-0 rounded-md border border-stone-200 object-cover"
+                                          />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex items-center gap-1.5">
+                                            <span
+                                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                                item.priority === 'high'
+                                                  ? 'bg-rose-500'
+                                                  : item.priority === 'medium'
+                                                    ? 'bg-amber-500'
+                                                    : 'bg-emerald-500'
+                                              }`}
+                                              title={easeOfContactLabel(item.priority)}
+                                            />
+                                            <GoodSoilPriorityBadge notes={item.notes} />
+                                  {getLinkedLeads(activeList.items, item.id).length > 0 && (
+                                    <span className="inline-flex shrink-0 items-center gap-1 text-xs text-stone-600" title={`${getLinkedLeads(activeList.items, item.id).length} linked leads`} aria-label={`${getLinkedLeads(activeList.items, item.id).length} linked leads`}>
+                                      <Link2 className="h-3.5 w-3.5" />{getLinkedLeads(activeList.items, item.id).length}
+                                    </span>
+                                  )}
+                                  <h3 className="truncate text-sm font-semibold text-stone-950">{item.title}</h3>
+                                          </div>
+                                          {item.organization && (
+                                            <p className="mt-1 truncate text-xs font-medium text-stone-500">{item.organization}</p>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                        {cardDetailText && (
+                                          <span className="max-w-full truncate rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 font-semibold text-stone-600">
+                                            {cardDetailText}
+                                          </span>
+                                        )}
+                                        {dueDate && (
+                                          <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-stone-200 bg-white px-2.5 py-1 font-semibold text-stone-600">
+                                            <Calendar className="h-3.5 w-3.5 shrink-0 text-stone-400" />
+                                            <span className="truncate">{dueDate}</span>
+                                          </span>
+                                        )}
+                                        {isUniversitySuccessList && <button type="button" onClick={(event) => { event.stopPropagation(); openLogsForItem(item); }} title={`View email activity for ${item.title}`}><EmailTrackingBadge status={item.emailStatus || item.lastEmailEvent} sentAt={item.lastEmailSentAt} /></button>}
+                                        {!isUniversitySuccessList && (
+                                          <span className="rounded-full border border-stone-200 bg-white px-2.5 py-1 font-semibold text-stone-500">
+                                            {item.weeklyLogs.length > 0 ? formatCount(item.weeklyLogs.length, 'log') : 'No logs'}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {(canModify || item.needsResearch) && (
+                                        <div className="mt-3">
+                                          {canModify && !isBulkSelectionMode ? (
+                                            <button
+                                              type="button"
+                                              aria-pressed={Boolean(item.needsResearch)}
+                                              aria-label={`More research needed for ${item.title}`}
+                                              title={item.needsResearch ? 'Remove research tag' : 'Mark as needing more research'}
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                toggleItemResearchNeeded(item.id);
+                                              }}
+                                              onKeyDown={(event) => event.stopPropagation()}
+                                              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-400 ${item.needsResearch
+                                                ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                                                : 'border-dashed border-stone-300 text-stone-500 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800'}`}
+                                            >
+                                              {item.needsResearch ? 'More research needed' : '+ More research needed'}
+                                            </button>
+                                          ) : item.needsResearch ? (
+                                            <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                                              More research needed
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      )}
+
+                                      {nextStepText && (
+                                        <p
+                                          onMouseEnter={(event) => showNextStepTooltip(event, nextStepText)}
+                                          onMouseLeave={() => setNextStepTooltip(null)}
+                                          className="mt-3 line-clamp-2 text-sm leading-5 text-stone-600"
+                                        >
+                                          {nextStepText}
+                                        </p>
+                                      )}
+
+                                      <div className="mt-3 flex items-center justify-end gap-2 border-t border-stone-100 pt-3">
+                                        <button
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            setSelectedLogItemId(item.id);
+                                            setViewMode('logs');
+                                          }}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                                          title="Open logs"
+                                        >
+                                          <ClipboardList className="h-4 w-4" />
+                                        </button>
+                                        {canModify && (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                handleEditItem(item);
+                                              }}
+                                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                                              title={isContactListActive ? 'Edit contact' : isTaskListActive ? 'Edit task' : 'Edit opportunity'}
+                                            >
+                                              <Edit className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                handleDeleteItem(item.id);
+                                              }}
+                                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
+                                              title={isContactListActive ? 'Delete contact' : isTaskListActive ? 'Delete task' : 'Delete opportunity'}
+                                            >
+                                              <Trash2 className="h-4 w-4" />
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </article>
+                                  );
+                                })
+                              ) : (
+                                <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-stone-200 bg-white/70 px-3 py-8 text-center">
+                                  <p className="text-sm font-medium text-stone-400">No visible items</p>
+                                </div>
+                              )}
+                            </div>
+                          </section>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4 text-sm text-stone-500">
+                  {isUniversitySuccessList
+                    ? `${dueSoonItems} due soon. Open Success for launch, evidence, health, and renewal work.`
+                    : `${dueSoonItems} due soon · ${loggedItems} with logs.`}
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      </main>
+
+      {toastMessage && (
+        <div className="fixed left-1/2 top-5 z-[90] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2" aria-live="polite">
+          <div
+            className={`rounded-full border px-4 py-3 text-center text-sm font-semibold shadow-2xl ${
+              toastMessage.type === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : toastMessage.type === 'error'
+                  ? 'border-rose-200 bg-rose-50 text-rose-800'
+                  : 'border-sky-200 bg-sky-50 text-sky-800'
+            }`}
+          >
+            {toastMessage.text}
+          </div>
+        </div>
+      )}
+
+      {shouldBlockEditShare && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#FAFAF7]/95 px-4 py-6 backdrop-blur-md">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-share-auth-title"
+            className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 text-stone-900 shadow-2xl"
+          >
+            <div className="mb-5">
+              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+              <h3 id="edit-share-auth-title" className="text-xl font-bold text-stone-950">
+                Sign in for edit access
+              </h3>
+              <p className="mt-2 text-sm leading-6 text-stone-500">
+                This invite includes editing permissions for {activeList.name}. Sign in or create an account with the invited email to open the editable list.
+              </p>
+              {user && !canEditShared && (
+                <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-800">
+                  You are signed in as {user.email || 'this account'}, but that email has not been invited to edit this PipeList.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={!canAttemptAuth}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Continue with Google
+              </button>
+
+              <div className="flex items-center gap-3 py-1">
+                <div className="h-px flex-1 bg-stone-100" />
+                <span className="text-xs font-semibold uppercase text-stone-400">or</span>
+                <div className="h-px flex-1 bg-stone-100" />
+              </div>
+
+              <label className="block" htmlFor="edit-share-magic-email">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email magic link</span>
+                <input
+                  id="edit-share-magic-email"
+                  type="email"
+                  value={magicEmail}
+                  onChange={(event) => setMagicEmail(event.target.value)}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder="you@example.com"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={sendMagicLink}
+                disabled={!canAttemptAuth || sendingMagicLink}
+                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sendingMagicLink ? 'Sending...' : 'Send Magic Link'}
+              </button>
+
+              {user && (
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="inline-flex h-10 w-full items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-500 transition hover:text-stone-950"
+                >
+                  Sign out and use another account
+                </button>
+              )}
+
+              <MessageBanner message={authMessage} />
+            </div>
+          </section>
+        </div>
+      )}
+
+      {nextStepTooltip && (
+        <div
+          className="pointer-events-none fixed z-[70] max-w-sm rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm leading-6 text-stone-700 shadow-xl"
+          style={{
+            left: nextStepTooltip.left,
+            top: nextStepTooltip.top,
+            width: nextStepTooltip.width,
+            transform: nextStepTooltip.placement === 'above' ? 'translateY(-100%)' : undefined,
+          }}
+        >
+          <p className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words">{nextStepTooltip.text}</p>
+        </div>
+      )}
+
+      {isSharePanelOpen && !isSharedView && isOwner && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-950/30 px-4 py-10 backdrop-blur-sm sm:py-12"
+          onClick={(event) => {
+            if (isBackdropClick(event)) setIsSharePanelOpen(false);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pipe-share-title"
+            onClick={(event) => event.stopPropagation()}
+            className="my-auto flex max-h-[calc(100dvh-5rem)] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
+          >
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-stone-100 px-5 py-5">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                  <Users className="h-4 w-4" />
+                </div>
+                <h3 id="pipe-share-title" className="text-xl font-bold text-stone-950">
+                  Collaborator access
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  See everyone with access and the PipeLists available to each person.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSharePanelOpen(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              <div className="rounded-lg border border-stone-200 bg-white">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase text-stone-400">People and pending invites</span>
+                      <span className="rounded-full bg-stone-50 px-2 py-1 text-xs font-medium text-stone-500">
+                        {formatCount(inviteHistory.length, 'person')}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-stone-500">All current access and invitations are shown here.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleInviteForm}
+                    aria-expanded={isInviteFormOpen}
+                    aria-controls="pipelists-invite-form"
+                    className="inline-flex h-9 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                  >
+                    {isInviteFormOpen ? <ChevronDown className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    {isInviteFormOpen ? 'Hide invite form' : 'Invite people'}
+                  </button>
+                </div>
+
+                {loadingOwnerShares ? (
+                  <p className="px-4 py-8 text-center text-sm text-stone-500">Loading collaborator access...</p>
+                ) : inviteHistory.length > 0 ? (
+                  <div className="divide-y divide-stone-100">
+                    {inviteHistory.map((invite) => {
+                      const assignedListIds = new Set(invite.listAccess.map((entry) => entry.listId));
+                      const availableAdditionalLists = lists.filter((list) => !assignedListIds.has(list.id));
+                      const memberLabel = invite.displayName || invite.email;
+                      const memberControlId = invite.email.replace(/[^a-z0-9]+/gi, '-');
+                      const additionalListsPanelId = `add-lists-panel-${memberControlId}`;
+                      const isAddingLists = addingListsForEmail === invite.email;
+
+                      return (
+                        <div key={invite.email} className="grid gap-4 px-4 py-4 md:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.3fr)_auto]">
+                        <div
+                          id={`collaborator-member-${memberControlId}`}
+                          tabIndex={-1}
+                          className="flex min-w-0 items-start gap-3 outline-none"
+                        >
+                          {invite.photoURL ? (
+                            <img
+                              src={invite.photoURL}
+                              alt=""
+                              className="h-9 w-9 shrink-0 rounded-full border border-stone-200 object-cover"
+                            />
+                          ) : (
+                            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-100 text-sm font-bold uppercase text-stone-600">
+                              {(invite.displayName || invite.email).charAt(0)}
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-stone-900">
+                              {invite.displayName || invite.email}
+                            </p>
+                            {invite.displayName && <p className="truncate text-xs text-stone-500">{invite.email}</p>}
+                          </div>
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {invite.listAccess.map((entry) => (
+                              <label
+                                key={entry.listId}
+                                className="flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2"
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <span className={`h-2 w-2 shrink-0 rounded-full ${entry.accent}`} />
+                                  <span className="truncate text-sm font-medium text-stone-700">{entry.listName}</span>
+                                </span>
+                                <span className="flex shrink-0 items-center gap-1.5">
+                                  <select
+                                    aria-label={`Access to ${entry.listName} for ${memberLabel}`}
+                                    title={`${entry.listName}: change access`}
+                                    value={entry.access}
+                                    disabled={!ownerSharesReady || Boolean(savingListAccess) || removingAccessEmails.includes(invite.email) || savingAdditionalListsForEmail === invite.email}
+                                    onChange={(event) => void updateCollaboratorListAccess(invite, entry, event.target.value as ShareAccess)}
+                                    className="cursor-pointer rounded-full border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-700 focus:outline-none focus:ring-2 focus:ring-stone-400 disabled:cursor-wait disabled:opacity-50"
+                                  >
+                                    <option value="edit">Can edit</option>
+                                    <option value="read">Read only</option>
+                                  </select>
+                                  {entry.status === 'sent' ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                                      <Clock className="h-3 w-3" />
+                                      Pending
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                                      <CheckCircle2 className="h-3 w-3" />
+                                      Active
+                                    </span>
+                                  )}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+
+                          <div className="mt-2">
+                            {availableAdditionalLists.length > 0 ? (
+                              <button
+                                id={`add-lists-trigger-${memberControlId}`}
+                                type="button"
+                                onClick={() => isAddingLists
+                                  ? closeAdditionalListPicker(invite.email)
+                                  : startAddingListsForCollaborator(invite)}
+                                disabled={!ownerSharesReady || savingAdditionalListsForEmail === invite.email}
+                                aria-expanded={isAddingLists}
+                                aria-controls={additionalListsPanelId}
+                                aria-label={`${isAddingLists ? 'Cancel adding' : 'Add'} PipeLists for ${memberLabel}`}
+                                className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {isAddingLists ? <X className="h-3.5 w-3.5" /> : <ListPlus className="h-3.5 w-3.5" />}
+                                {isAddingLists ? 'Cancel' : 'Add lists'}
+                              </button>
+                            ) : (
+                              <span className="inline-flex min-h-10 items-center text-xs font-medium text-stone-400">
+                                All PipeLists added
+                              </span>
+                            )}
+                          </div>
+
+                          {isAddingLists && (
+                            <div
+                              id={additionalListsPanelId}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Escape') closeAdditionalListPicker(invite.email);
+                              }}
+                              className="mt-3 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3"
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <h4
+                                    id={`add-lists-heading-${memberControlId}`}
+                                    tabIndex={-1}
+                                    className="text-sm font-semibold text-stone-900 outline-none"
+                                  >
+                                    Add PipeLists for {memberLabel}
+                                  </h4>
+                                  <p className="mt-1 text-xs leading-5 text-stone-500">
+                                    Current access stays the same. Choose only the additional lists they should see; we will email an updated dashboard link.
+                                  </p>
+                                </div>
+                                <span aria-live="polite" className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">
+                                  {additionalListIds.length} selected
+                                </span>
+                              </div>
+
+                              <fieldset className="mt-3">
+                                <legend className="sr-only">Choose additional PipeLists for {memberLabel}</legend>
+                                <div className="grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2">
+                                  {availableAdditionalLists.map((list) => (
+                                    <label
+                                      key={list.id}
+                                      className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={additionalListIds.includes(list.id)}
+                                        onChange={() => toggleAdditionalListSelection(list.id)}
+                                        className="h-4 w-4 rounded border-stone-300 accent-stone-900"
+                                      />
+                                      <span className={`h-2 w-2 shrink-0 rounded-full ${list.accent}`} />
+                                      <span className="truncate">{list.name}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </fieldset>
+
+                              <fieldset className="mt-3">
+                                <legend className="text-xs font-semibold uppercase text-stone-400">
+                                  Access for the new lists
+                                </legend>
+                                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                  {([
+                                    { value: 'read' as const, label: 'View only' },
+                                    { value: 'edit' as const, label: 'Can make changes' },
+                                  ]).map((option) => (
+                                    <label
+                                      key={option.value}
+                                      className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700"
+                                    >
+                                      <input
+                                        type="radio"
+                                        name={`additional-list-access-${memberControlId}`}
+                                        value={option.value}
+                                        checked={additionalListAccess === option.value}
+                                        onChange={() => setAdditionalListAccess(option.value)}
+                                        className="h-4 w-4 border-stone-300 accent-stone-900"
+                                      />
+                                      {option.label}
+                                    </label>
+                                  ))}
+                                </div>
+                              </fieldset>
+
+                              <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => closeAdditionalListPicker(invite.email)}
+                                  disabled={savingAdditionalListsForEmail === invite.email}
+                                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => createOrUpdateShareLink({
+                                    existingMember: invite,
+                                    selectedListIds: additionalListIds,
+                                    access: additionalListAccess,
+                                  })}
+                                  disabled={!ownerSharesReady || additionalListIds.length === 0 || savingAdditionalListsForEmail === invite.email}
+                                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <ListPlus className="h-4 w-4" />
+                                  {savingAdditionalListsForEmail === invite.email
+                                    ? 'Adding...'
+                                    : `Add ${formatCount(additionalListIds.length, 'PipeList')}`}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap items-start justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => copyInviteUrl(invite.inviteUrl)}
+                            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                            Copy link
+                          </button>
+                          {invite.status === 'sent' && (
+                            <button
+                              type="button"
+                              onClick={() => resendInviteEmail(invite)}
+                              disabled={resendingInviteEmails.includes(invite.email)}
+                              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <Mail className="h-3.5 w-3.5" />
+                              {resendingInviteEmails.includes(invite.email) ? 'Sending...' : 'Resend'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeCollaboratorAccess(invite)}
+                            disabled={removingAccessEmails.includes(invite.email)}
+                            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-red-200 px-3 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {removingAccessEmails.includes(invite.email) ? 'Removing...' : 'Remove access'}
+                          </button>
+                        </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="px-4 py-8 text-center text-sm text-stone-500">
+                    Invite someone to give them access to a PipeList.
+                  </p>
+                )}
+              </div>
+
+              <MessageBanner message={shareMessage} />
+
+              {isInviteFormOpen && (
+                <div
+                  id="pipelists-invite-form"
+                  className="grid gap-4 rounded-lg border border-stone-200 bg-[#FAFAF7] p-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(300px,0.95fr)]"
+                >
+                  <div className="space-y-4">
+                    <div>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="text-xs font-semibold uppercase text-stone-400">Give access to PipeLists</span>
+                        <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">
+                          {formatCount(selectedShareLists.length, 'list')}
+                        </span>
+                      </div>
+                      <div className="grid max-h-56 gap-2 overflow-y-auto sm:grid-cols-2">
+                        {lists.map((list) => (
+                          <label
+                            key={list.id}
+                            className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-700"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={shareSelectedListIds.includes(list.id)}
+                              onChange={() => toggleShareListSelection(list.id)}
+                              className="h-4 w-4 rounded border-stone-300 accent-stone-900"
+                            />
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${list.accent}`} />
+                            <span className="truncate">{list.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <label className="block" htmlFor="pipe-share-access">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Access</span>
+                      <select
+                        id="pipe-share-access"
+                        value={shareAccess}
+                        onChange={(event) => setShareAccess(event.target.value as ShareAccess)}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none transition focus:border-stone-400"
+                      >
+                        <option value="read">Read only</option>
+                        <option value="edit">Read and edit</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-stone-200 bg-white p-3">
+                      <label className="block" htmlFor="pipe-account-search">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Find account</span>
+                        <div className="flex items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3">
+                          <Search className="h-4 w-4 shrink-0 text-stone-400" />
+                          <input
+                            id="pipe-account-search"
+                            value={collaboratorSearch}
+                            onChange={(event) => setCollaboratorSearch(event.target.value)}
+                            className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-stone-400"
+                            placeholder="Search name or email"
+                          />
+                        </div>
+                      </label>
+
+                      <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+                        {loadingProfiles ? (
+                          <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">Loading accounts...</p>
+                        ) : filteredCollaboratorProfiles.length > 0 ? (
+                          filteredCollaboratorProfiles.map((account) => (
+                            <button
+                              key={account.uid}
+                              type="button"
+                              onClick={() => addCollaboratorEmail(account.email)}
+                              className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition hover:bg-stone-50"
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate font-semibold text-stone-900">
+                                  {account.displayName || account.email}
+                                </span>
+                                <span className="block truncate text-xs text-stone-500">{account.email}</span>
+                              </span>
+                              <Plus className="h-4 w-4 shrink-0 text-stone-500" />
+                            </button>
+                          ))
+                        ) : collaboratorSearch.trim() ? (
+                          <p className="rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-500">No matching PipeLists account found.</p>
+                        ) : null}
+                      </div>
+
+                      {selectedCollaboratorAccountEmails.length > 0 && (
+                        <div className="mt-3 border-t border-stone-100 pt-3">
+                          <span className="mb-2 block text-xs font-semibold uppercase text-stone-400">
+                            Selected accounts
+                          </span>
+                          <div className="space-y-2">
+                            {selectedCollaboratorAccountEmails.map((email) => {
+                              const account = searchableProfiles.find(
+                                (profileAccount) => profileAccount.email.trim().toLowerCase() === email,
+                              );
+                              return (
+                                <div
+                                  key={email}
+                                  className="flex items-center justify-between gap-3 rounded-md bg-emerald-50 px-3 py-2"
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-sm font-semibold text-emerald-900">
+                                      {account?.displayName || email}
+                                    </span>
+                                    {account?.displayName && (
+                                      <span className="block truncate text-xs text-emerald-700">{email}</span>
+                                    )}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSelectedCollaboratorAccount(email)}
+                                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-emerald-700 transition hover:bg-emerald-100 hover:text-emerald-950"
+                                    title={`Remove ${account?.displayName || email}`}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-stone-500">
+                            These accounts receive access as soon as you save.
+                          </p>
+                        </div>
+                      )}
+
+                      <MessageBanner message={profileSearchMessage} />
+                    </div>
+
+                    <label className="block" htmlFor="pipe-share-editors">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Invite someone new by email</span>
+                      <textarea
+                        id="pipe-share-editors"
+                        value={shareEditorEmails}
+                        onChange={(event) => setShareEditorEmails(event.target.value)}
+                        className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400"
+                        placeholder="name@example.com"
+                      />
+                      <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                        Use this only when someone does not have a PipeLists account yet.
+                      </span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => createOrUpdateShareLink()}
+                      disabled={!ownerSharesReady || loadingOwnerShares || selectedShareLists.length === 0}
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Mail className="h-4 w-4" />
+                      {!ownerSharesReady || loadingOwnerShares ? 'Loading current access...' : 'Save Access & Send Link'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {isContactEmailModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-950/30 px-4 py-8 backdrop-blur-sm"
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="contact-email-title"
+            onClick={(event) => event.stopPropagation()}
+            className="my-auto flex max-h-[calc(100dvh-4rem)] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
+          >
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-stone-100 px-5 py-5">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                  <Mail className="h-4 w-4" />
+                </div>
+                <h3 id="contact-email-title" className="text-xl font-bold text-stone-950">
+                  Send email
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  Send a direct update to contacts in {activeList.name}.
+                </p>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+              <div className="grid gap-4 lg:grid-cols-2">
+              <label className="block" htmlFor="contact-email-provider">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email configuration</span>
+                <select
+                  id="contact-email-provider"
+                  value="pulse-brevo"
+                  disabled={!isOwner}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition disabled:cursor-not-allowed disabled:text-stone-400 focus:border-stone-400 focus:bg-white"
+                >
+                  <option value="pulse-brevo">Pulse Brevo</option>
+                </select>
+                <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                  Uses the Brevo sender configured in Netlify. This option only sends when signed in as {TREMAINE_OWNER_EMAIL}.
+                </span>
+              </label>
+
+              <label className="block" htmlFor="contact-email-sender">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">From</span>
+                <select
+                  id="contact-email-sender"
+                  value={contactEmailSender}
+                  onChange={(event) => setContactEmailSender(event.target.value as ContactEmailSender)}
+                  disabled={!isOwner}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition disabled:cursor-not-allowed disabled:text-stone-400 focus:border-stone-400 focus:bg-white"
+                >
+                  {CONTACT_EMAIL_SENDERS.map((email) => <option key={email} value={email}>{email}</option>)}
+                </select>
+                <span className="mt-1.5 block text-xs leading-5 text-stone-400">The address recipients see as the sender and reply-to.</span>
+              </label>
+              </div>
+
+              <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase text-stone-400">External providers</span>
+                  <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-stone-500">Coming next</span>
+                </div>
+                <p className="text-sm leading-6 text-stone-500">
+                  Outside users will configure their own email service here before sending from PipeLists. They will still be able to track sent, delivered, and opened once connected.
+                </p>
+              </div>
+
+              <label className="block" htmlFor="contact-email-recipients">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Recipients</span>
+                <textarea
+                  id="contact-email-recipients"
+                  value={contactEmailRecipients}
+                  onChange={(event) => setContactEmailRecipients(event.target.value)}
+                  className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder="name@example.com, teammate@example.com"
+                />
+                <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                  Use commas, spaces, or new lines. Emails are validated before sending.
+                </span>
+              </label>
+
+              <label className="block" htmlFor="contact-email-type">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email type</span>
+                <select
+                  id="contact-email-type"
+                  value={contactEmailType}
+                  onChange={(event) => setContactEmailType(event.target.value as ContactEmailType)}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                >
+                  {(Object.keys(contactEmailTypeLabels) as ContactEmailType[]).map((emailType) => (
+                    <option key={emailType} value={emailType}>
+                      {contactEmailTypeLabels[emailType]}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                  This is used for the automatic log and email tracking.
+                </span>
+              </label>
+
+              <label className="block" htmlFor="contact-email-subject">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Subject</span>
+                <input
+                  id="contact-email-subject"
+                  value={contactEmailSubject}
+                  onChange={(event) => setContactEmailSubject(event.target.value)}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder="PulseCheck investor update"
+                />
+              </label>
+
+              <label className="block" htmlFor="contact-email-body">
+                <span className="mb-1.5 flex items-center justify-between gap-3 text-xs font-semibold uppercase text-stone-400">
+                  Message
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={openComposerLinkPopover}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold normal-case text-stone-600 transition hover:text-stone-950"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Link
+                  </button>
+                </span>
+                <div className="relative">
+                  <div
+                    id="contact-email-body"
+                    ref={contactEmailBodyEditorRef}
+                    role="textbox"
+                    aria-multiline="true"
+                    contentEditable
+                    suppressContentEditableWarning
+                    onMouseUp={saveContactEmailSelection}
+                    onKeyUp={saveContactEmailSelection}
+                    onInput={(event) => syncContactEmailComposerState(event.currentTarget)}
+                    onBlur={(event) => commitContactEmailComposerState(event.currentTarget)}
+                    className="min-h-48 w-full resize-y overflow-auto whitespace-pre-wrap rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition focus:border-stone-400 focus:bg-white [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
+                  />
+                  {renderComposerLinkPopover()}
+                  {!contactEmailBody && (
+                    <span className="pointer-events-none absolute left-3 top-2 text-sm text-stone-400">
+                      Write the update you want to send.
+                    </span>
+                  )}
+                </div>
+              </label>
+
+              <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="block text-xs font-semibold uppercase text-stone-400">Attachments</span>
+                    <span className="mt-1 block text-xs text-stone-400">Up to 5 files, 15 MB total.</span>
+                  </div>
+                  <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:text-stone-950">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    Add files
+                    <input
+                      type="file"
+                      multiple
+                      className="sr-only"
+                      onChange={async (event) => {
+                        await handleContactEmailAttachments(event.target.files);
+                        event.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+                {contactEmailAttachments.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {contactEmailAttachments.map((attachment) => (
+                      <div
+                        key={attachment.id}
+                        className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-stone-700">{attachment.name}</p>
+                          <p className="text-xs text-stone-400">{formatFileSize(attachment.size)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeContactEmailAttachment(attachment.id)}
+                          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-950"
+                          title={`Remove ${attachment.name}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <MessageBanner message={contactEmailSendMessage} />
+            </div>
+
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-stone-100 px-5 py-4">
+              <button
+                type="button"
+                onClick={closeContactEmailModal}
+                disabled={isSendingContactEmail}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSendContactEmail}
+                disabled={isSendingContactEmail || !isOwner}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-stone-900 px-5 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Mail className="h-4 w-4" />
+                {isSendingContactEmail ? 'Sending...' : 'Send email'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {isNewListModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={(event) => {
+            if (isBackdropClick(event)) setIsNewListModalOpen(false);
+          }}
+        >
+          <form
+            onSubmit={handleCreateList}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-lg rounded-lg border border-stone-200 bg-white p-5 shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                  <ListPlus className="h-4 w-4" />
+                </div>
+                <h3 className="text-xl font-bold text-stone-950">Add new list</h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  Choose a template and create a focused PipeList for a new type of pipeline.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewListModalOpen(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <label className="block" htmlFor="modal-new-list-template">
+              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Template</span>
+              <select
+                id="modal-new-list-template"
+                value={newListTemplateKey}
+                onChange={(event) => setNewListTemplateKey(event.target.value as TemplateKey)}
+                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-700 outline-none transition focus:border-stone-400 focus:bg-white"
+              >
+                {(Object.keys(templateCatalog) as TemplateKey[]).map((key) => (
+                  <option key={key} value={key}>
+                    {templateCatalog[key].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="mt-3 block" htmlFor="modal-new-list-name">
+              <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">List Name</span>
+              <input
+                id="modal-new-list-name"
+                value={newListName}
+                onChange={(event) => setNewListName(event.target.value)}
+                className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                placeholder={templateCatalog[newListTemplateKey].defaultName}
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsNewListModalOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+              >
+                <ListPlus className="h-4 w-4" />
+                Create List
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {contactImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <section role="dialog" aria-modal="true" aria-labelledby="contact-import-title" className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+            <h3 id="contact-import-title" className="text-lg font-semibold text-stone-950">Import contacts</h3>
+            <p className="mt-2 text-sm text-stone-600">Add {selectNewContacts(contactImport.rows, activeList.items).length} new contacts to {lists.find((list) => list.id === contactImport.listId)?.name || 'the selected list'}. Matching names and organizations or email addresses are skipped.</p>
+            <p className="mt-2 text-sm text-stone-600">{contactImport.rows.filter((row) => row.photo || row.imageUrl).length} photos included. Contacts start at the first stage in this list.</p>
+            <ul className="my-4 max-h-64 overflow-y-auto divide-y divide-stone-100 text-sm">
+              {contactImport.rows.map((row) => <li key={row.id} className="py-2"><strong>{row.title}</strong><span className="ml-2 text-stone-500">{row.organization}</span></li>)}
+            </ul>
+            <MessageBanner message={contactImportMessage} />
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" disabled={contactImportBusy} onClick={() => setContactImport(null)} className="rounded-md border border-stone-200 px-4 py-2 text-sm disabled:opacity-50">Cancel</button>
+              <button type="button" disabled={contactImportBusy || contactImport.listId !== activeList.id} onClick={() => void handleContactImport()} className="rounded-md bg-stone-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{contactImportBusy ? 'Importing...' : 'Import contacts'}</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {isListProfileModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={(event) => {
+            if (isBackdropClick(event)) setIsListProfileModalOpen(false);
+          }}
+        >
+          <form
+            onSubmit={handleSaveListProfile}
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100vh-3rem)] w-full max-w-3xl overflow-y-auto rounded-lg border border-stone-200 bg-white p-5 shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                  <Target className="h-4 w-4" />
+                </div>
+                <h3 className="text-xl font-bold text-stone-950">{activeList.name} Profile</h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  {isTaskListActive
+                    ? 'Define what this list is trying to do so tasks stay focused and consistent.'
+                    : 'Define what this list is trying to do. Find leads uses this profile to prefill the research brief.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsListProfileModalOpen(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block" htmlFor="pipe-list-profile-name">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">List name</span>
+                <input
+                  id="pipe-list-profile-name"
+                  value={listProfileDraft.name}
+                  required
+                  maxLength={160}
+                  onChange={(event) => setListProfileDraft((current) => ({ ...current, name: event.target.value }))}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none focus:border-stone-400 focus:bg-white"
+                />
+              </label>
+              {canManageActiveList && activeList.items.length === 0 && (
+                <label className="block" htmlFor="pipe-list-profile-template">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">List template</span>
+                  <select id="pipe-list-profile-template" value={listProfileDraft.templateKey}
+                    onChange={(event) => {
+                      const templateKey = event.target.value as TemplateKey;
+                      setListProfileDraft((current) => ({ ...current, templateKey,
+                        description: templateCatalog[templateKey].description,
+                        objective: defaultListObjective(templateKey, current.name),
+                        leadDefinition: defaultLeadDefinition(templateKey), researchBrief: '' }));
+                    }}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm">
+                    {Object.entries(templateCatalog).map(([key, template]) => <option key={key} value={key}>{template.label}</option>)}
+                  </select>
+                </label>
+              )}
+              <label className="block" htmlFor="pipe-list-profile-description">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Short description</span>
+                <textarea
+                  id="pipe-list-profile-description"
+                  value={listProfileDraft.description}
+                  onChange={(event) => setListProfileDraft((current) => ({ ...current, description: event.target.value }))}
+                  className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder={templateCatalog[activeList.templateKey].description}
+                />
+              </label>
+
+              <label className="block" htmlFor="pipe-list-profile-objective">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Objective</span>
+                <textarea
+                  id="pipe-list-profile-objective"
+                  value={listProfileDraft.objective}
+                  onChange={(event) => setListProfileDraft((current) => ({ ...current, objective: event.target.value }))}
+                  className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder={defaultListObjective(activeList.templateKey, activeList.name)}
+                />
+              </label>
+
+              <label className="block" htmlFor="pipe-list-profile-lead-definition">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                  {isTaskListActive ? 'Ideal task definition' : 'Ideal lead definition'}
+                </span>
+                <textarea
+                  id="pipe-list-profile-lead-definition"
+                  value={listProfileDraft.leadDefinition}
+                  onChange={(event) => setListProfileDraft((current) => ({ ...current, leadDefinition: event.target.value }))}
+                  className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder={defaultLeadDefinition(activeList.templateKey)}
+                />
+              </label>
+
+              <label className="block" htmlFor="pipe-list-profile-research-brief">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Default research brief</span>
+                <textarea
+                  id="pipe-list-profile-research-brief"
+                  value={listProfileDraft.researchBrief}
+                  onChange={(event) => setListProfileDraft((current) => ({ ...current, researchBrief: event.target.value }))}
+                  className="min-h-36 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder={defaultResearchBriefForList(activeList)}
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2 border-t border-stone-100 pt-4">
+              <button
+                type="button"
+                onClick={() => setIsListProfileModalOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Save Profile
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isDeleteListModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={(event) => {
+            if (isBackdropClick(event)) setIsDeleteListModalOpen(false);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-list-title"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md rounded-lg border border-stone-200 bg-white p-5 shadow-2xl"
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                  <Trash2 className="h-4 w-4" />
+                </div>
+                <h3 id="delete-list-title" className="text-xl font-bold text-stone-950">
+                  Delete PipeList
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  Delete {activeList.name} and its {formatCount(activeListItems.length, `active ${listItemNoun(activeList)}`)}. This removes the full list from your workspace.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDeleteListModalOpen(false)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {lists.length <= 1 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+                You need at least one PipeList. Create another list before deleting this one.
+              </div>
+            ) : (
+              <div className="rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-700">
+                This cannot be undone from the Logs restore flow because it deletes the whole PipeList.
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteListModalOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteList}
+                disabled={lists.length <= 1}
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete List
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {isLeadUrlModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={(event) => {
+            if (isBackdropClick(event)) closeLeadUrlModal();
+          }}
+        >
+          <form
+            onSubmit={isManualLeadEntry ? handleManualLeadSave : handleExtractLead}
+            onClick={(event) => event.stopPropagation()}
+            className={`max-h-[calc(100vh-3rem)] w-full overflow-y-auto rounded-lg border border-stone-200 bg-white p-5 shadow-2xl ${
+              isManualLeadEntry ? 'max-w-2xl' : 'max-w-lg'
+            }`}
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                  {isManualLeadEntry ? <Plus className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                </div>
+                <h3 className="text-xl font-bold text-stone-950">
+                  {isManualLeadEntry
+                    ? isContactListActive
+                      ? 'Add contact manually'
+                      : isTaskListActive
+                        ? 'Add task'
+                        : 'Add lead manually'
+                    : isContactListActive
+                      ? 'Add contact'
+                      : 'Add new lead'}
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-stone-500">
+                  {isManualLeadEntry
+                    ? `Enter the details you already have. Nothing will be analyzed automatically.`
+                    : isContactListActive
+                      ? 'Enter an email, URL, person, or organization. PipeLists will create the contact for review.'
+                      : 'Paste a URL or type a person, organization, fund, school, program, or partner name. PipeLists will pull what it can and create the item for review.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeLeadUrlModal}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {isManualLeadEntry ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block" htmlFor="pipe-manual-title">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                    {isContactListActive ? 'Contact name' : isTaskListActive ? 'Task name' : 'Lead name'}
+                  </span>
+                  <input
+                    id="pipe-manual-title"
+                    type="text"
+                    value={manualLeadDraft.title}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, title: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder={isContactListActive ? 'Jane Doe' : isTaskListActive ? 'Follow up on pilot agreement' : 'Wisdom Ventures'}
+                    autoFocus
+                  />
+                </label>
+                <label className="block" htmlFor="pipe-manual-organization">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                    {isContactListActive ? 'Role / Organization' : isTaskListActive ? 'Project / Area' : 'Organization'}
+                  </span>
+                  <input
+                    id="pipe-manual-organization"
+                    type="text"
+                    value={manualLeadDraft.organization}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, organization: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder={isTaskListActive ? 'University Pilots' : 'Organization or role'}
+                  />
+                </label>
+                <label className="block" htmlFor="pipe-manual-email">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email</span>
+                  <input
+                    id="pipe-manual-email"
+                    type="email"
+                    value={manualLeadDraft.email}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, email: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="jane.doe@example.com"
+                  />
+                </label>
+                <label className="block" htmlFor="pipe-manual-phone">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Phone</span>
+                  <input
+                    id="pipe-manual-phone"
+                    type="tel"
+                    value={manualLeadDraft.phone}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, phone: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="Public or business phone"
+                  />
+                </label>
+                <label className="block" htmlFor="pipe-manual-stage">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Stage</span>
+                  <select
+                    id="pipe-manual-stage"
+                    value={manualLeadDraft.stage}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, stage: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  >
+                    {activeList.stages.map((stage) => (
+                      <option key={stage.id} value={stage.id}>
+                        {stage.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block" htmlFor="pipe-manual-source-url">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isTaskListActive ? 'Reference URL' : 'Source URL'}</span>
+                  <input
+                    id="pipe-manual-source-url"
+                    type="url"
+                    value={manualLeadDraft.sourceUrl}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, sourceUrl: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="https://example.com"
+                  />
+                </label>
+                <label className="block sm:col-span-2" htmlFor="pipe-manual-notes">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Notes</span>
+                  <textarea
+                    id="pipe-manual-notes"
+                    value={manualLeadDraft.notes}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, notes: event.target.value }))}
+                    className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="Relationship context, next steps, or anything important"
+                  />
+                </label>
+              </div>
+            ) : (
+              <label className="block" htmlFor="pipe-lead-url">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{isContactListActive ? 'Email, URL, or Name' : 'Lead URL or Name'}</span>
+                <input
+                  id="pipe-lead-url"
+                  type="text"
+                  value={leadUrl}
+                  onChange={(event) => setLeadUrl(event.target.value)}
+                  className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                  placeholder={isContactListActive ? 'jane.doe@example.com or Jane Doe' : 'https://example.com or Wisdom Ventures'}
+                  autoFocus
+                />
+              </label>
+            )}
+
+            <div className="mt-4">
+              <MessageBanner message={leadExtractMessage} />
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={isManualLeadEntry && !isTaskListActive ? () => setIsManualLeadEntry(false) : closeLeadUrlModal}
+                className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+              >
+                {isManualLeadEntry && !isTaskListActive ? 'Back' : 'Cancel'}
+              </button>
+              {!isManualLeadEntry && (
+                <button
+                  type="button"
+                  onClick={openManualLeadEntry}
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:text-stone-950"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add manually
+                </button>
+              )}
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+              >
+                {isManualLeadEntry ? <Plus className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+                {isManualLeadEntry ? (isContactListActive ? 'Save contact' : isTaskListActive ? 'Save task' : 'Save lead') : 'Analyze lead'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isLeadGenModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={(event) => {
+            if (isBackdropClick(event)) closeLeadGenModal();
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pipe-lead-gen-title"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
+          >
+            <div className="sticky top-0 z-10 border-b border-stone-100 bg-white px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                    <Search className="h-4 w-4" />
+                  </div>
+                  <h3 id="pipe-lead-gen-title" className="text-xl font-bold text-stone-950">
+                    Find leads
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-stone-500">
+                    Describe the leads you want to find, then review each recommendation before it goes into {activeList.name}.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeLeadGenModal}
+                  disabled={isGeneratingLeads}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {isGeneratingLeads ? (
+              <div className="px-5 py-12 text-center">
+                <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-stone-900" />
+                <h4 className="text-base font-semibold text-stone-950">Searching leads</h4>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-500">
+                  Researching current sources, checking template fit, and filtering against existing items.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleGenerateLeads} className="max-h-[calc(100vh-10rem)] overflow-y-auto px-5 py-5">
+                <label className="block" htmlFor="pipe-lead-search-prompt">
+                  <span className="mb-1.5 flex items-center justify-between gap-3 text-xs font-semibold uppercase text-stone-400">
+                    <span>Lead targets</span>
+                    <span
+                      className={
+                        leadSearchPrompt.length > LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH
+                          ? 'text-red-600'
+                          : leadSearchPrompt.length >= LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH * 0.9
+                            ? 'text-amber-600'
+                            : 'text-stone-400'
+                      }
+                    >
+                      {leadSearchPrompt.length.toLocaleString()} / {LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH.toLocaleString()}
+                    </span>
+                  </span>
+                  <textarea
+                    id="pipe-lead-search-prompt"
+                    autoFocus
+                    value={leadSearchPrompt}
+                    onChange={(event) => setLeadSearchPrompt(event.target.value)}
+                    className="min-h-44 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder="Paste a list, one per line, or describe the type of leads to find."
+                  />
+                  {leadSearchPrompt.length > LEAD_SEARCH_PROMPT_RECOMMENDED_LENGTH && (
+                    <span className="mt-2 block rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium normal-case text-amber-800">
+                      This prompt is over the recommended 20,000-character limit. You can still search, but results may be incomplete or unpredictable.
+                    </span>
+                  )}
+                </label>
+
+                <label className="mt-4 block" htmlFor="pipe-lead-research-prompt">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Research brief</span>
+                  <textarea
+                    id="pipe-lead-research-prompt"
+                    value={leadResearchPrompt}
+                    onChange={(event) => setLeadResearchPrompt(event.target.value)}
+                    className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-4 py-3 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder={DEFAULT_LEAD_RESEARCH_PROMPT}
+                  />
+                </label>
+
+                <div className="mt-4">
+                  <MessageBanner message={leadGenMessage} />
+                </div>
+
+                {generatedLeads.length > 0 && (
+                  <div className="mt-5 border-t border-stone-100 pt-5">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold uppercase tracking-normal text-stone-400">
+                        Results
+                      </h4>
+                      <span className="text-sm text-stone-500">{formatCount(generatedLeads.length, 'lead')}</span>
+                    </div>
+
+                    <div className="max-h-[48vh] space-y-3 overflow-y-auto pr-1">
+                      {generatedLeads.map((lead) => {
+                        const stage = getStage(activeList, lead.stage);
+                        const key = generatedLeadKey(lead);
+                        const alreadyAdded = addedGeneratedLeadKeys.includes(key);
+                        const alreadyInList = activeLeadKeys.has(key);
+                        const sourceNeedsVerification = lead.sourceVerified === false;
+                        const sourceOpened = openedGeneratedLeadSourceKeys.includes(key);
+                        const sourceUrl = normalizeLeadInputUrl(lead.sourceUrl)?.toString() || '';
+                        const addDisabled = alreadyAdded || alreadyInList;
+
+                        return (
+                          <article
+                            key={key}
+                            className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4"
+                          >
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <h5 className="break-words text-base font-semibold text-stone-950">{lead.title}</h5>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                  {lead.organization && <span>{lead.organization}</span>}
+                                  {lead.segment && <span>{lead.segment}</span>}
+                                  {lead.dueDate && (
+                                    <span className="inline-flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      {lead.dueDate}
+                                    </span>
+                                  )}
+                                  <span className={`inline-flex rounded-full border px-2 py-0.5 font-semibold ${stage.tone}`}>
+                                    {stage.label}
+                                  </span>
+                                  {sourceNeedsVerification && (
+                                    <span
+                                      className={`inline-flex rounded-full border px-2 py-0.5 font-semibold ${
+                                        sourceOpened
+                                          ? 'border-sky-200 bg-sky-50 text-sky-700'
+                                          : 'border-amber-200 bg-amber-50 text-amber-700'
+                                      }`}
+                                    >
+                                      {sourceOpened ? 'Source opened for review' : 'Source needs verification'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {sourceNeedsVerification && !sourceOpened && !alreadyAdded && !alreadyInList && sourceUrl ? (
+                                <a
+                                  href={sourceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={() => handleOpenGeneratedLeadSource(lead)}
+                                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                  Verify source
+                                </a>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddGeneratedLead(lead)}
+                                  disabled={addDisabled || (sourceNeedsVerification && !sourceOpened)}
+                                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                                >
+                                  {addDisabled ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                                  {alreadyAdded
+                                    ? 'Added'
+                                    : alreadyInList
+                                      ? 'In list'
+                                      : sourceNeedsVerification && !sourceOpened
+                                        ? 'Source unavailable'
+                                        : 'Add lead'}
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-600 md:grid-cols-2">
+                              {lead.description && (
+                                <p className="break-words md:col-span-2">
+                                  <span className="font-semibold text-stone-800">Description:</span> {lead.description}
+                                </p>
+                              )}
+                              {lead.rationale && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Fit:</span> {lead.rationale}
+                                </p>
+                              )}
+                              {lead.nextStep && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Next:</span> {lead.nextStep}
+                                </p>
+                              )}
+                              {lead.sourceEvidence && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Source:</span> {lead.sourceEvidence}
+                                </p>
+                              )}
+                              {lead.deadlineStatus && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Date:</span> {lead.deadlineStatus}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                              {lead.amount && <span className="font-semibold text-stone-800">{lead.amount}</span>}
+                              {lead.sourceUrl && (
+                                <a
+                                  href={lead.sourceUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="break-all font-medium text-sky-700 underline-offset-4 hover:underline"
+                                >
+                                  View source
+                                </a>
+                              )}
+                              {sourceNeedsVerification && lead.sourceVerificationReason && (
+                                <span className={sourceOpened ? 'text-stone-500' : 'text-amber-700'}>
+                                  {lead.sourceVerificationReason}
+                                </span>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-5 flex justify-end gap-2 border-t border-stone-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={closeLeadGenModal}
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                  >
+                    <Search className="h-4 w-4" />
+                    Search leads
+                  </button>
+                </div>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
+
+      {isPastedLeadListModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={(event) => {
+            if (isBackdropClick(event)) closePastedLeadListModal();
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pipe-pasted-list-title"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl"
+          >
+            <div className="border-b border-stone-100 px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-700">
+                    <ListPlus className="h-4 w-4" />
+                  </div>
+                  <h3 id="pipe-pasted-list-title" className="text-xl font-bold text-stone-950">
+                    Analyze pasted list
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-stone-500">
+                    Paste names, organizations, emails, profile links, or copied list rows. PipeLists will verify and enrich each contact before you add it to {activeList.name}.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={closePastedLeadListModal}
+                      disabled={isAnalyzingPastedLeadList}
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      form="pipe-pasted-lead-list-form"
+                      disabled={isAnalyzingPastedLeadList}
+                      className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {isAnalyzingPastedLeadList ? 'Analyzing' : analyzedPastedLeads.length > 0 ? 'Analyze again' : 'Analyze list'}
+                    </button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closePastedLeadListModal}
+                  disabled={isAnalyzingPastedLeadList}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40"
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {isAnalyzingPastedLeadList ? (
+              <div className="px-5 py-12 text-center">
+                <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-stone-900" />
+                <h4 className="text-base font-semibold text-stone-950">Analyzing your list</h4>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-stone-500">
+                  Resolving each entry, finding credible sources, and mapping the contacts for review.
+                </p>
+              </div>
+            ) : (
+              <form id="pipe-pasted-lead-list-form" onSubmit={handleAnalyzePastedLeadList} className="max-h-[calc(100vh-12.75rem)] overflow-y-auto px-5 py-5">
+                <label className="block" htmlFor="pipe-pasted-lead-list">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Paste a contact list</span>
+                  <textarea
+                    id="pipe-pasted-lead-list"
+                    value={pastedLeadList}
+                    onChange={(event) => setPastedLeadList(event.target.value)}
+                    className="min-h-44 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                    placeholder={'Jane Doe - Atlanta Hawks\nJohn Smith, Emory Sports Medicine\nhttps://example.com/team'}
+                    autoFocus
+                  />
+                  <p className="mt-2 text-xs leading-5 text-stone-400">
+                    Include one contact or source per line when possible. Lists, directories, and profiles are resolved into individual contacts rather than added as generic leads.
+                  </p>
+                </label>
+
+                <div className="mt-4">
+                  <MessageBanner message={pastedLeadListMessage} />
+                </div>
+
+                {analyzedPastedLeads.length > 0 && (
+                  <div className="mt-5 border-t border-stone-100 pt-5">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold uppercase tracking-normal text-stone-400">Review contacts</h4>
+                      <span className="text-sm text-stone-500">{formatCount(analyzedPastedLeads.length, 'contact')}</span>
+                    </div>
+
+                    <div className="max-h-[46vh] space-y-3 overflow-y-auto pr-1">
+                      {analyzedPastedLeads.map((lead) => {
+                        const stage = getStage(activeList, lead.stage);
+                        const key = generatedLeadKey(lead);
+                        const alreadyAdded = addedPastedLeadKeys.includes(key);
+                        const alreadyInList = activeLeadKeys.has(key);
+                        const addDisabled = alreadyAdded || alreadyInList;
+
+                        return (
+                          <article key={key} className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <h5 className="break-words text-base font-semibold text-stone-950">{lead.title}</h5>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                  {lead.organization && <span>{lead.organization}</span>}
+                                  {lead.segment && <span>{lead.segment}</span>}
+                                  <span className={`inline-flex rounded-full border px-2 py-0.5 font-semibold ${stage.tone}`}>
+                                    {stage.label}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleAddAnalyzedPastedLead(lead)}
+                                disabled={addDisabled}
+                                className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                              >
+                                {addDisabled ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                                {alreadyAdded ? 'Added' : alreadyInList ? 'In list' : 'Add'}
+                              </button>
+                            </div>
+
+                            <div className="mt-3 grid gap-3 text-sm leading-6 text-stone-600 md:grid-cols-2">
+                              {lead.description && (
+                                <p className="break-words md:col-span-2">
+                                  <span className="font-semibold text-stone-800">Description:</span> {lead.description}
+                                </p>
+                              )}
+                              {lead.rationale && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Fit:</span> {lead.rationale}
+                                </p>
+                              )}
+                              {lead.nextStep && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Next:</span> {lead.nextStep}
+                                </p>
+                              )}
+                              {lead.sourceEvidence && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Source:</span> {lead.sourceEvidence}
+                                </p>
+                              )}
+                              <p className="break-all">
+                                <span className="font-semibold text-stone-800">Email:</span>{' '}
+                                {lead.contactEmails.length > 0 ? lead.contactEmails.join(', ') : 'No public email found'}
+                              </p>
+                              {lead.contactPhone && (
+                                <p className="break-words">
+                                  <span className="font-semibold text-stone-800">Phone:</span> {lead.contactPhone}
+                                </p>
+                              )}
+                            </div>
+
+                            {(lead.sourceUrl || lead.linkedinUrl) && (
+                              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                                {lead.sourceUrl && (
+                                <a
+                                  href={lead.sourceUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="break-all font-medium text-sky-700 underline-offset-4 hover:underline"
+                                >
+                                  View source
+                                </a>
+                                )}
+                                {lead.linkedinUrl && (
+                                  <a
+                                    href={lead.linkedinUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  className="break-all font-medium text-sky-700 underline-offset-4 hover:underline"
+                                >
+                                  {displayProfileUrl(lead.linkedinUrl)}
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+              </form>
+            )}
+          </section>
+        </div>
+      )}
+
+      {isLogModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+          onClick={(event) => {
+            if (isBackdropClick(event)) closeLogModal();
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pipe-log-modal-title"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-y-auto rounded-lg border border-stone-200 bg-white shadow-2xl"
+          >
+            <div className="sticky top-0 z-10 border-b border-stone-100 bg-white px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 id="pipe-log-modal-title" className="text-2xl font-bold tracking-normal text-stone-950">
+                    Add Log
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-stone-500">
+                    Record an update and choose where it belongs.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeLogModal}
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                  title="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(event) =>
+                handleSaveLog(event, {
+                  listId: logTargetList.id,
+                  itemId: logTargetItem?.id,
+                  closeOnSave: true,
+                })
+              }
+              className="space-y-4 px-5 py-5"
+            >
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block" htmlFor="modal-log-list">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">PipeList</span>
+                  <select
+                    id="modal-log-list"
+                    value={logTargetList.id}
+                    onChange={(event) => {
+                      const nextList = lists.find((list) => list.id === event.target.value) || activeList;
+                      setLogTargetListId(nextList.id);
+                      setLogTargetItemId(nextList.items[0]?.id || '');
+                      setLogDraft(defaultLogDraft(nextList.templateKey));
+                    }}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  >
+                    {lists.map((list) => (
+                      <option key={list.id} value={list.id}>
+                        {list.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block" htmlFor="modal-log-item">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
+                    {isTaskList(logTargetList) ? 'Task' : isContactList(logTargetList) ? 'Contact' : 'Lead'}
+                  </span>
+                  <select
+                    id="modal-log-item"
+                    value={logTargetItem?.id || ''}
+                    onChange={(event) => setLogTargetItemId(event.target.value)}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                    disabled={logTargetListItems.length === 0}
+                  >
+                    {logTargetListItems.length > 0 ? (
+                      logTargetListItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">
+                        No {isTaskList(logTargetList) ? 'tasks' : isContactList(logTargetList) ? 'contacts' : 'leads'} in this PipeList
+                      </option>
+                    )}
+                  </select>
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                <label className="block" htmlFor="modal-log-weekOf">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Date</span>
+                  <input
+                    id="modal-log-weekOf"
+                    type="date"
+                    value={logDraft.weekOf}
+                    onChange={(event) => setLogDraft((current) => ({ ...current, weekOf: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  />
+                </label>
+
+                <label className="block" htmlFor="modal-log-type">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Type</span>
+                  <select
+                    id="modal-log-type"
+                    value={logDraft.type}
+                    onChange={(event) =>
+                      setLogDraft((current) => updateLogDraftType(current, event.target.value as ActivityLogType))
+                    }
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  >
+                    {(Object.keys(logTypeLabels) as ActivityLogType[]).map((type) => (
+                      <option key={type} value={type}>
+                        {logTypeLabels[type]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block md:col-span-2" htmlFor="modal-log-summary">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Summary</span>
+                  <input
+                    id="modal-log-summary"
+                    value={logDraft.summary}
+                    onChange={(event) => setLogDraft((current) => ({ ...current, summary: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                    placeholder="What happened?"
+                  />
+                </label>
+
+                <label className="block md:col-span-2" htmlFor="modal-log-nextStep">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Next Step</span>
+                  <select
+                    id="modal-log-nextStep"
+                    value={logDraft.nextStep}
+                    onChange={(event) => setLogDraft((current) => ({ ...current, nextStep: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  >
+                    <option value="">No next step</option>
+                    {logNextStepOptions[logDraft.type].map((nextStep) => (
+                      <option key={nextStep} value={nextStep}>
+                        {nextStep}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block md:col-span-2" htmlFor="modal-log-followUpDate">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{followUpDateLabel(logDraft.nextStep)}</span>
+                  <input
+                    id="modal-log-followUpDate"
+                    type="date"
+                    value={logDraft.followUpDate}
+                    onChange={(event) => setLogDraft((current) => ({ ...current, followUpDate: event.target.value }))}
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  />
+                </label>
+              </div>
+
+              <MetricLogFields draft={logDraft} onChange={setLogDraft} idPrefix="modal-log-metric" />
+
+              <label className="block" htmlFor="modal-log-notes">
+                <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Notes</span>
+                <textarea
+                  id="modal-log-notes"
+                  value={logDraft.notes}
+                  onChange={(event) => setLogDraft((current) => ({ ...current, notes: event.target.value }))}
+                  className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                  placeholder="Details, risk, context"
+                />
+              </label>
+
+              <div className="flex justify-end gap-2 border-t border-stone-100 pt-4">
+                <button
+                  type="button"
+                  onClick={closeLogModal}
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 transition hover:text-stone-900"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!logTargetItem}
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Log
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {isAnalyzingLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-lg border border-stone-200 bg-white p-5 text-center shadow-2xl">
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-stone-900" />
+            <h3 className="text-base font-semibold text-stone-950">Analyzing lead</h3>
+            <p className="mt-2 text-sm leading-6 text-stone-500">
+              Pulling page content, extracting useful fields, and mapping it to this list.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {selectedDetailItem && selectedDetailStage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/30 px-4 py-6 backdrop-blur-sm"
+
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pipe-detail-title"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[calc(100vh-3rem)] w-full max-w-4xl overflow-y-auto rounded-lg border border-stone-200 bg-white shadow-2xl"
+          >
+            <div className="sticky top-0 z-10 border-b border-stone-100 bg-white px-5 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    {isInvestorUpdateContactsList ? (
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${emailStatusTone(selectedDetailItem)}`}>
+                        {emailStatusLabel(selectedDetailItem)}
+                      </span>
+                    ) : (
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${selectedDetailStage.tone}`}>
+                        {selectedDetailStage.label}
+                      </span>
+                    )}
+                    <GoodSoilPriorityBadge notes={selectedDetailItem.notes} />
+                    {isUniversitySuccessList && <EmailTrackingBadge status={selectedDetailItem.emailStatus || selectedDetailItem.lastEmailEvent} sentAt={selectedDetailItem.lastEmailSentAt} />}
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${priorityStyles[selectedDetailItem.priority]}`}>
+                      {easeOfContactLabel(selectedDetailItem.priority)}
+                    </span>
+                  </div>
+                  <h3 id="pipe-detail-title" className="break-words text-2xl font-bold tracking-normal text-stone-950">
+                    {selectedDetailIsEditing ? (isTaskListActive ? 'Edit Task' : 'Edit Item') : selectedDetailItem.title}
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-stone-500">
+                    {selectedDetailItem.organization || (isTaskListActive ? 'No project area' : 'No organization')} · {activeList.name}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {selectedDetailIsEditing && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={resetEditor}
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type={itemResearchResult ? 'button' : 'submit'}
+                        onClick={itemResearchResult ? handleApplyItemResearch : undefined}
+                        disabled={isResearchingItem}
+                        form="pipe-item-editor-form"
+                        data-testid="pipe-save-opportunity"
+                        className="inline-flex h-9 items-center justify-center rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                      >
+                        Save
+                      </button>
+                    </>
+                  )}
+                  {!selectedDetailIsEditing && (
+                    <>
+                      {canModify && !isLeadSharedView && (
+                        <button
+                          type="button"
+                          onClick={() => createOrUpdateLeadShareLink(selectedDetailItem)}
+                          className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                          title={isTaskListActive ? 'Share task' : 'Share lead'}
+                        >
+                          <Share2 className="h-4 w-4" />
+                          <span className="hidden sm:inline">{isTaskListActive ? 'Share task' : 'Share lead'}</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyLeadDetails(selectedDetailItem, selectedDetailStage)}
+                        className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                        title={isTaskListActive ? 'Copy task details' : 'Copy lead details'}
+                      >
+                        <Copy className="h-4 w-4" />
+                        <span className="hidden sm:inline">Copy details</span>
+                      </button>
+                    </>
+                  )}
+                  {detailModalMode !== 'email' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetEditor();
+                        closeLeadDetails();
+                        setDetailModalMode('details');
+                      }}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-900"
+                      title="Close details"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {selectedDetailIsEditing && itemSaveError && (
+                <p role="alert" className="mt-3 text-sm font-medium text-rose-600">{itemSaveError}</p>
+              )}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {!selectedDetailIsEditing && detailModalMode !== 'details' && detailModalMode !== 'email' && (
+                  <button
+                    type="button"
+                    onClick={() => setDetailModalMode('details')}
+                    className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                  >
+                    <Layers className="h-4 w-4" />
+                    Details
+                  </button>
+                )}
+                {canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
+                  <button
+                    type="button"
+                    onClick={() => handleEditItem(selectedDetailItem)}
+                    className="inline-flex h-9 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edit
+                  </button>
+                )}
+                {!selectedDetailIsEditing && detailModalMode !== 'email' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLogItemId(selectedDetailItem.id);
+                      setDetailModalMode('logs');
+                    }}
+                    className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
+                      detailModalMode === 'logs'
+                        ? 'bg-stone-900 text-white hover:bg-stone-700'
+                        : 'border border-stone-200 bg-white text-stone-600 hover:text-stone-950'
+                    }`}
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    Logs
+                  </button>
+                )}
+                {canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
+                  <button
+                    type="button"
+                    onClick={() => openItemResearch(selectedDetailItem)}
+                    className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
+                      detailModalMode === 'research'
+                        ? 'bg-stone-900 text-white hover:bg-stone-700'
+                        : 'border border-stone-200 bg-white text-stone-600 hover:text-stone-950'
+                    }`}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Research
+                  </button>
+                )}
+                {canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
+                  <button
+                    type="button"
+                    onClick={() => openItemAsk(selectedDetailItem)}
+                    className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition ${
+                      detailModalMode === 'ask'
+                        ? 'bg-stone-900 text-white hover:bg-stone-700'
+                        : 'border border-stone-200 bg-white text-stone-600 hover:text-stone-950'
+                    }`}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Ask AI
+                  </button>
+                )}
+                {(isContactListActive || (isUniversitySuccessList && isOwner)) && canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && (
+                  <button
+                    type="button"
+                    onClick={() => openContactEmailComposerForItem(selectedDetailItem)}
+                    className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
+                  >
+                    <Mail className="h-4 w-4" />
+                    Send email
+                  </button>
+                )}
+                {canModify && !selectedDetailIsEditing && detailModalMode !== 'email' && !isLeadSharedView && moveTargetLists.length > 0 && (
+                  <label className="inline-flex h-9 items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition focus-within:border-stone-400 hover:text-stone-950">
+                    <ListPlus className="h-4 w-4" />
+                    <span className="sr-only">Move {isTaskListActive ? 'task' : 'lead'} to another PipeList</span>
+                    <select
+                      value={moveTargetListId}
+                      onChange={(event) => {
+                        const nextListId = event.target.value;
+                        setMoveTargetListId(nextListId);
+                        if (nextListId) handleMoveItem(selectedDetailItem.id, nextListId);
+                      }}
+                      className="max-w-[160px] bg-transparent text-sm font-semibold outline-none"
+                    >
+                      <option value="">Move to...</option>
+                      {moveTargetLists.map((list) => (
+                          <option key={list.id} value={list.id}>
+                            {list.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            </div>
+
+            {!selectedDetailIsEditing && (leadCopyMessage || leadShareMessage || leadMoveMessage || attachmentMessage) && (
+              <div className="space-y-2 border-b border-stone-100 px-5 py-3">
+                <MessageBanner message={leadCopyMessage} />
+                <MessageBanner message={leadShareMessage} />
+                <MessageBanner message={leadMoveMessage} />
+                <MessageBanner message={attachmentMessage} />
+                {leadShareUrl && (
+                  <input
+                    readOnly
+                    value={leadShareUrl}
+                    className="h-10 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-xs text-stone-500"
+                    aria-label="Lead share link"
+                  />
+                )}
+              </div>
+            )}
+
+            {selectedDetailIsEditing ? (
+              <div className="px-5 py-5">{renderItemEditor()}</div>
+            ) : detailModalMode === 'email' && isUniversitySuccessList && user ? (
+              <PipeListsEmailSequence
+                key={`${activeList.id}-${selectedDetailItem.id}`}
+                user={user}
+                listId={activeList.id}
+                item={selectedDetailItem}
+                onClose={() => setDetailModalMode('details')}
+              />
+            ) : detailModalMode === 'email' ? (
+              <div className="space-y-5 px-5 py-5">
+                <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4 flex flex-col gap-1">
+                    <h4 className="text-sm font-semibold text-stone-950">Email composer</h4>
+                    <p className="text-sm text-stone-500">
+                      Send a direct update to {selectedDetailItem.title}.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    <label className="block" htmlFor="detail-contact-email-provider">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email configuration</span>
+                      <select
+                        id="detail-contact-email-provider"
+                        value="pulse-brevo"
+                        disabled={!isOwner}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition disabled:cursor-not-allowed disabled:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      >
+                        <option value="pulse-brevo">Pulse Brevo</option>
+                      </select>
+                      <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                        Sends only when signed in as {TREMAINE_OWNER_EMAIL}.
+                      </span>
+                    </label>
+
+                    <label className="block" htmlFor="detail-contact-email-sender">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">From</span>
+                      <select
+                        id="detail-contact-email-sender"
+                        value={contactEmailSender}
+                        onChange={(event) => setContactEmailSender(event.target.value as ContactEmailSender)}
+                        disabled={!isOwner}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition disabled:cursor-not-allowed disabled:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      >
+                        {CONTACT_EMAIL_SENDERS.map((email) => <option key={email} value={email}>{email}</option>)}
+                      </select>
+                      <span className="mt-1.5 block text-xs leading-5 text-stone-400">Used as both sender and reply-to.</span>
+                    </label>
+
+                    <label className="block" htmlFor="detail-contact-email-type">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Email type</span>
+                      <select
+                        id="detail-contact-email-type"
+                        value={contactEmailType}
+                        onChange={(event) => setContactEmailType(event.target.value as ContactEmailType)}
+                        className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                      >
+                        {(Object.keys(contactEmailTypeLabels) as ContactEmailType[]).map((emailType) => (
+                          <option key={emailType} value={emailType}>
+                            {contactEmailTypeLabels[emailType]}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                        Used for the automatic log and tracking status.
+                      </span>
+                    </label>
+                  </div>
+
+                  <label className="mt-4 block" htmlFor="detail-contact-email-recipients">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Recipients</span>
+                    <textarea
+                      id="detail-contact-email-recipients"
+                      value={contactEmailRecipients}
+                      onChange={(event) => setContactEmailRecipients(event.target.value)}
+                      className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="name@example.com, teammate@example.com"
+                    />
+                    <span className="mt-1.5 block text-xs leading-5 text-stone-400">
+                      Use commas, spaces, or new lines. Emails are validated before sending.
+                    </span>
+                  </label>
+
+                  <label className="mt-4 block" htmlFor="detail-contact-email-subject">
+                    <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Subject</span>
+                    <input
+                      id="detail-contact-email-subject"
+                      value={contactEmailSubject}
+                      onChange={(event) => setContactEmailSubject(event.target.value)}
+                      className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                      placeholder="PulseCheck investor update"
+                    />
+                  </label>
+
+                  <label className="mt-4 block" htmlFor="detail-contact-email-body">
+                    <span className="mb-1.5 flex items-center justify-between gap-3 text-xs font-semibold uppercase text-stone-400">
+                      Message
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={openComposerLinkPopover}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold normal-case text-stone-600 transition hover:text-stone-950"
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                        Link
+                      </button>
+                    </span>
+                    <div className="relative">
+                      <div
+                        id="detail-contact-email-body"
+                        ref={contactEmailBodyEditorRef}
+                        role="textbox"
+                        aria-multiline="true"
+                        contentEditable
+                        suppressContentEditableWarning
+                        onMouseUp={saveContactEmailSelection}
+                        onKeyUp={saveContactEmailSelection}
+                        onInput={(event) => syncContactEmailComposerState(event.currentTarget)}
+                        onBlur={(event) => commitContactEmailComposerState(event.currentTarget)}
+                        className="min-h-56 w-full resize-y overflow-auto whitespace-pre-wrap rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition focus:border-stone-400 focus:bg-white [&_a]:text-blue-600 [&_a]:underline [&_a]:underline-offset-4"
+                      />
+                      {renderComposerLinkPopover()}
+                      {!contactEmailBody && (
+                        <span className="pointer-events-none absolute left-3 top-2 text-sm text-stone-400">
+                          Write the update you want to send.
+                        </span>
+                      )}
+                    </div>
+                  </label>
+
+                  <div className="mt-4 rounded-lg border border-stone-200 bg-[#FAFAF7] p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <span className="block text-xs font-semibold uppercase text-stone-400">Attachments</span>
+                        <span className="mt-1 block text-xs text-stone-400">Up to 5 files, 15 MB total.</span>
+                      </div>
+                      <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-700 transition hover:text-stone-950">
+                        <Paperclip className="h-3.5 w-3.5" />
+                        Add files
+                        <input
+                          type="file"
+                          multiple
+                          className="sr-only"
+                          onChange={async (event) => {
+                            await handleContactEmailAttachments(event.target.files);
+                            event.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {contactEmailAttachments.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {contactEmailAttachments.map((attachment) => (
+                          <div
+                            key={attachment.id}
+                            className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-stone-700">{attachment.name}</p>
+                              <p className="text-xs text-stone-400">{formatFileSize(attachment.size)}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeContactEmailAttachment(attachment.id)}
+                              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:text-stone-950"
+                              title={`Remove ${attachment.name}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4">
+                    <MessageBanner message={contactEmailSendMessage} />
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetailModalMode('details');
+                        setContactEmailSendMessage(null);
+                      }}
+                      disabled={isSendingContactEmail}
+                      className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSendContactEmail}
+                      disabled={isSendingContactEmail || !isOwner}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-stone-900 px-5 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Mail className="h-4 w-4" />
+                      {isSendingContactEmail ? 'Sending...' : 'Send email'}
+                    </button>
+                  </div>
+                </section>
+              </div>
+            ) : detailModalMode === 'research' ? (
+              <div className="space-y-5 px-5 py-5">
+                <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-stone-950">Research {selectedDetailItem.title}</h4>
+                    <p className="mt-1 text-sm leading-6 text-stone-500">
+                      Ask for the information that would help you decide how to approach this relationship.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleResearchItem}>
+                    <label className="block" htmlFor="detail-item-research-prompt">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Research prompt</span>
+                      <textarea
+                        id="detail-item-research-prompt"
+                        value={itemResearchPrompt}
+                        onChange={(event) => setItemResearchPrompt(event.target.value)}
+                        className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                        placeholder="Find Bob's current role, the best public contact information, his LinkedIn profile, and a specific reason to reach out."
+                        autoFocus
+                      />
+                    </label>
+
+                    <div className="mt-4">
+                      <MessageBanner message={itemResearchMessage} />
+                    </div>
+
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDetailModalMode('details')}
+                        disabled={isResearchingItem}
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isResearchingItem}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        {isResearchingItem ? 'Researching...' : itemResearchResult ? 'Research again' : 'Research'}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
+                {itemResearchResult && (
+                  <section className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-stone-400">Suggested updates</p>
+                        <h4 className="mt-1 text-lg font-semibold text-stone-950">{itemResearchResult.title}</h4>
+                        {itemResearchResult.organization && <p className="mt-1 text-sm text-stone-500">{itemResearchResult.organization}</p>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleApplyItemResearch}
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        Apply findings
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 text-sm leading-6 text-stone-600 md:grid-cols-2">
+                      <p>
+                        <span className="font-semibold text-stone-800">Email:</span>{' '}
+                        {itemResearchResult.contactEmails.length > 0 ? itemResearchResult.contactEmails.join(', ') : 'No public email found'}
+                      </p>
+                      {itemResearchResult.contactPhone && (
+                        <p>
+                          <span className="font-semibold text-stone-800">Phone:</span> {itemResearchResult.contactPhone}
+                        </p>
+                      )}
+                      {itemResearchResult.rationale && (
+                        <p className="md:col-span-2">
+                          <span className="font-semibold text-stone-800">Why it matters:</span> {itemResearchResult.rationale}
+                        </p>
+                      )}
+                      {itemResearchResult.nextStep && (
+                        <p className="md:col-span-2">
+                          <span className="font-semibold text-stone-800">Suggested next step:</span> {itemResearchResult.nextStep}
+                        </p>
+                      )}
+                      {itemResearchResult.sourceEvidence && (
+                        <p className="md:col-span-2">
+                          <span className="font-semibold text-stone-800">Source:</span> {itemResearchResult.sourceEvidence}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                      <a
+                        href={itemResearchResult.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-sky-700 underline-offset-4 hover:underline"
+                      >
+                        View source
+                      </a>
+                      {itemResearchResult.linkedinUrl && (
+                        <a
+                          href={itemResearchResult.linkedinUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-sky-700 underline-offset-4 hover:underline"
+                        >
+                          {displayProfileUrl(itemResearchResult.linkedinUrl)}
+                        </a>
+                      )}
+                    </div>
+                  </section>
+                )}
+              </div>
+            ) : detailModalMode === 'ask' ? (
+              <div className="space-y-5 px-5 py-5">
+                <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4">
+                    <h4 className="text-sm font-semibold text-stone-950">Ask about {selectedDetailItem.title}</h4>
+                    <p className="mt-1 text-sm leading-6 text-stone-500">
+                      Ask for a draft, recommendation, summary, or next step using this {isTaskListActive ? 'task' : 'lead'}’s context.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleAskItem}>
+                    <label className="block" htmlFor="detail-item-ask-prompt">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Ask anything</span>
+                      <textarea
+                        id="detail-item-ask-prompt"
+                        value={itemAskPrompt}
+                        onChange={(event) => setItemAskPrompt(event.target.value)}
+                        className="min-h-28 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                        placeholder={isTaskListActive ? 'Summarize what should happen next and flag any blockers.' : 'Draft a short LinkedIn note to Rich that mentions Atlanta Track Club and asks for a brief conversation.'}
+                        autoFocus
+                      />
+                    </label>
+
+                    <div className="mt-4">
+                      <MessageBanner message={itemAskMessage} />
+                    </div>
+
+                    <div className="mt-4 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDetailModalMode('details')}
+                        disabled={isAskingItem}
+                        className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isAskingItem}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        {isAskingItem ? 'Thinking...' : itemAskResponse ? 'Ask again' : 'Ask AI'}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
+                {itemAskResponse && (
+                  <section className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold text-stone-950">Answer</h4>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(itemAskResponse);
+                          setToastMessage({ type: 'success', text: 'Answer copied to clipboard.' });
+                        }}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-600 transition hover:text-stone-950"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
+                      </button>
+                    </div>
+                    <div className="whitespace-pre-wrap text-sm leading-7 text-stone-700">{itemAskResponse}</div>
+                  </section>
+                )}
+              </div>
+            ) : detailModalMode === 'logs' ? (
+              <div className="space-y-5 px-5 py-5">
+                {canModify ? (
+                  <form onSubmit={handleSaveLog} className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                    <div className="mb-4 flex flex-col gap-1">
+                      <h4 className="text-sm font-semibold text-stone-950">Add Log</h4>
+                      <p className="text-sm text-stone-500">{selectedDetailItem.organization || selectedDetailItem.title}</p>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                      <label className="block" htmlFor="detail-log-weekOf">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Date</span>
+                        <input
+                          id="detail-log-weekOf"
+                          type="date"
+                          value={logDraft.weekOf}
+                          onChange={(event) => setLogDraft((current) => ({ ...current, weekOf: event.target.value }))}
+                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                        />
+                      </label>
+
+                      <label className="block" htmlFor="detail-log-type">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Type</span>
+                        <select
+                          id="detail-log-type"
+                          value={logDraft.type}
+                          onChange={(event) =>
+                            setLogDraft((current) => updateLogDraftType(current, event.target.value as ActivityLogType))
+                          }
+                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                        >
+                          {(Object.keys(logTypeLabels) as ActivityLogType[]).map((type) => (
+                            <option key={type} value={type}>
+                              {logTypeLabels[type]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="block md:col-span-2" htmlFor="detail-log-summary">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Summary</span>
+                        <input
+                          id="detail-log-summary"
+                          value={logDraft.summary}
+                          onChange={(event) => setLogDraft((current) => ({ ...current, summary: event.target.value }))}
+                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                          placeholder="What happened?"
+                        />
+                      </label>
+
+                      <label className="block md:col-span-2" htmlFor="detail-log-nextStep">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Next Step</span>
+                        <select
+                          id="detail-log-nextStep"
+                          value={logDraft.nextStep}
+                          onChange={(event) => setLogDraft((current) => ({ ...current, nextStep: event.target.value }))}
+                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                        >
+                          <option value="">No next step</option>
+                          {logNextStepOptions[logDraft.type].map((nextStep) => (
+                            <option key={nextStep} value={nextStep}>
+                              {nextStep}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="block md:col-span-2" htmlFor="detail-log-followUpDate">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{followUpDateLabel(logDraft.nextStep)}</span>
+                        <input
+                          id="detail-log-followUpDate"
+                          type="date"
+                          value={logDraft.followUpDate}
+                          onChange={(event) => setLogDraft((current) => ({ ...current, followUpDate: event.target.value }))}
+                          className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-3">
+                      <MetricLogFields draft={logDraft} onChange={setLogDraft} idPrefix="detail-log-metric" />
+                    </div>
+
+                    <label className="mt-3 block" htmlFor="detail-log-notes">
+                      <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Notes</span>
+                      <textarea
+                        id="detail-log-notes"
+                        value={logDraft.notes}
+                        onChange={(event) => setLogDraft((current) => ({ ...current, notes: event.target.value }))}
+                        className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
+                        placeholder="Details, risk, context"
+                      />
+                    </label>
+
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="submit"
+                        className="inline-flex h-10 items-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add Log
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                    <h4 className="text-sm font-semibold text-stone-950">Logs</h4>
+                    <p className="mt-1 text-sm leading-6 text-stone-500">This shared list is read-only. Logs are visible below.</p>
+                  </div>
+                )}
+
+                <div className="overflow-hidden rounded-lg border border-stone-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-stone-100 bg-stone-50 px-4 py-3">
+                    <h4 className="text-xs font-semibold uppercase text-stone-400">Timeline</h4>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-stone-500">
+                      {formatCount(selectedDetailItem.weeklyLogs.length, 'log')}
+                    </span>
+                  </div>
+                  {selectedDetailItem.weeklyLogs.length > 0 ? (
+                    <div className="divide-y divide-stone-100">
+                      {[...selectedDetailItem.weeklyLogs].sort((left, right) => logTimestampMs(right) - logTimestampMs(left)).map((log) => {
+                        const detailLogRowId = `${activeList.id}-${selectedDetailItem.id}-${log.id}`;
+                        const isExpanded = expandedLogIds.has(detailLogRowId);
+
+                        return (
+                          <article key={log.id} className="px-4 py-4">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600">
+                                    {logDisplayLabel(log)}
+                                  </span>
+                                  <span className="text-xs text-stone-400">{formatLogTimestamp(log)}</span>
+                                  {isExpanded && log.followUpDate && (
+                                    <span className="text-xs text-stone-400">
+                                      {followUpDateLabel(log.nextStep)} {log.followUpDate}
+                                    </span>
+                                  )}
+                                </div>
+                                <h5 className="mt-2 text-sm font-semibold text-stone-950">{displayLogSummary(log)}</h5>
+                                {isExpanded && (
+                                  <>
+                                    {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
+                                    {log.systemAction === 'email-sent' ? (
+                                      <EmailLogDetails log={log} />
+                                    ) : (
+                                      log.notes &&
+                                      log.notes !== log.summary && (
+                                        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-stone-500">{log.notes}</p>
+                                      )
+                                    )}
+                                    <MetricLogSummary log={log} />
+                                  </>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 self-start">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpandedLog(detailLogRowId)}
+                                  aria-expanded={isExpanded}
+                                  className="inline-flex h-9 items-center gap-1 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-500 transition hover:border-stone-300 hover:text-stone-900"
+                                >
+                                  {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                  {isExpanded ? 'Collapse' : 'Expand'}
+                                </button>
+                                {canModify && log.systemAction === 'item-deleted' && canRestoreDeletedItem(selectedDetailItem) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRestoreDeletedItem(activeList.id, selectedDetailItem.id)}
+                                    className="inline-flex h-9 items-center justify-center rounded-full bg-stone-900 px-3 text-xs font-semibold text-white transition hover:bg-stone-700"
+                                  >
+                                    Undo Delete
+                                  </button>
+                                )}
+                                {canModify && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLog(selectedDetailItem.id, log.id)}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
+                                    title="Delete log"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-12 text-center text-sm text-stone-400">No logs yet.</div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5 px-5 py-5">
+                {!isLeadSharedView && (
+                  <section className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
+                    <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-stone-950"><Link2 className="h-4 w-4" />Linked leads</h4>
+                    {selectedLinkedLeads.length === 0 && <p className="mb-3 text-sm text-stone-500">No linked leads yet.</p>}
+                    <div className="space-y-2">
+                      {selectedLinkedLeads.map(lead => (
+                        <div key={lead.id} className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-3 py-2">
+                          <button type="button" onClick={() => { setSelectedDetailItemId(lead.id); setDetailModalMode('details'); }} className="min-w-0 text-left text-sm font-semibold text-stone-800 hover:underline" aria-label={`Open linked lead ${lead.title}`}>
+                            {lead.title}{lead.organization && <span className="block text-xs font-normal text-stone-500">{lead.organization}</span>}
+                          </button>
+                          {canModify && <button type="button" onClick={() => handleLeadLink(lead.id, false)} aria-label={`Unlink ${lead.title}`} className="shrink-0 rounded-full p-2 text-stone-500 hover:bg-stone-100 hover:text-stone-900"><X className="h-4 w-4" /></button>}
+                        </div>
+                      ))}
+                    </div>
+                    {canModify && (
+                      <label className="mt-3 block">
+                        <span className="sr-only">Link another lead</span>
+                        <select value="" onChange={event => handleLeadLink(event.target.value, true)} className="h-10 w-full rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700">
+                          <option value="">Link another lead…</option>
+                          {activeListItems.filter(lead => lead.id !== selectedDetailItem.id && !selectedLinkedLeads.some(link => link.id === lead.id)).sort((a, b) => a.title.localeCompare(b.title)).map(lead => <option key={lead.id} value={lead.id}>{lead.title}{lead.organization ? ` · ${lead.organization}` : ''}</option>)}
+                        </select>
+                      </label>
+                    )}
+                  </section>
+                )}
+
+                {selectedDetailItem.imageUrl && (
+                  <a
+                    href={selectedDetailItem.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block overflow-hidden rounded-lg border border-stone-200 bg-[#FAFAF7]"
+                  >
+                    <img
+                      src={selectedDetailItem.imageUrl}
+                      alt={selectedDetailItem.imageName || `${selectedDetailItem.title} image`}
+                      className="max-h-72 w-full object-cover"
+                    />
+                  </a>
+                )}
+
+                {isUniversitySuccessList && <PipeListsEmailTracking
+                  title="Latest email activity"
+                  tracking={{
+                    status: selectedDetailItem.emailStatus || selectedDetailItem.lastEmailEvent,
+                    sentAt: selectedDetailItem.lastEmailSentAt,
+                    deliveredAt: selectedDetailItem.lastEmailDeliveredAt,
+                    openedAt: selectedDetailItem.lastEmailOpenedAt,
+                    clickedAt: selectedDetailItem.lastEmailClickedAt,
+                    openCount: selectedDetailItem.emailOpenCount,
+                    clickCount: selectedDetailItem.emailClickCount,
+                    lastClickedLink: selectedDetailItem.lastEmailClickedLink,
+                  }}
+                  onViewLogs={() => openLogsForItem(selectedDetailItem)}
+                />}
+
+                {renderDetailGrid('grid gap-3 sm:grid-cols-2', [
+                  ...(isContactListActive
+                    ? [
+                        ...(isInvestorUpdateContactsList
+                          ? []
+                          : [
+                              {
+                                label: 'Stage',
+                                value: selectedDetailStage.label,
+                              },
+                            ]),
+                        {
+                          label: 'Email Status',
+                          value: emailStatusLabel(selectedDetailItem),
+                        },
+                        {
+                          label: 'Contact Email',
+                          value: selectedDetailItem.contactEmails.join(', '),
+                        },
+                      ]
+                    : isTaskListActive
+                      ? [
+                          {
+                            label: 'Stage',
+                            value: selectedDetailStage.label,
+                          },
+                          {
+                            label: 'Owner',
+                            value: selectedDetailItem.owner,
+                          },
+                        ]
+                      : [
+                        {
+                          label: isFundSizeList(activeList) ? amountFieldLabelForList(activeList) : 'Value',
+                          value: itemAmountDisplay(activeList, selectedDetailItem),
+                        },
+                      ]),
+                  {
+                    label: isContactListActive ? 'Follow-Up Date' : isTaskListActive ? 'Due Date' : 'Next Date',
+                    value: itemPrimaryDate(activeList, selectedDetailItem),
+                  },
+                ])}
+
+                {renderDetailGrid('grid gap-3 md:grid-cols-2', [
+                  { label: 'Description', value: selectedDetailItem.description, wide: true },
+                  { label: 'Next Step', value: selectedDetailItem.nextStep, wide: true },
+                  { label: 'Notes', value: selectedDetailItem.notes, wide: true },
+                  {
+                    label: isTaskListActive ? 'Reference URL' : 'Source URL',
+                    value: selectedDetailItem.sourceUrl ? (
+                      <a
+                        href={selectedDetailItem.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-stone-950 underline decoration-stone-300 underline-offset-4"
+                      >
+                        {selectedDetailItem.sourceUrl}
+                      </a>
+                    ) : (
+                      ''
+                    ),
+                    wide: true,
+                  },
+                ])}
+
+                <section className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h4 className="text-sm font-semibold text-stone-950">Attachments</h4>
+                      <p className="mt-1 text-xs text-stone-400">
+                        {formatCount(selectedDetailItem.attachments.length, 'attachment')}
+                      </p>
+                    </div>
+                    {canModify && (
+                      <label
+                        htmlFor="lead-attachment-upload"
+                        className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-full bg-stone-900 px-4 text-sm font-semibold text-white transition hover:bg-stone-700"
+                      >
+                        <UploadCloud className="h-4 w-4" />
+                        {uploadingAttachment ? 'Uploading...' : 'Upload file'}
+                        <input
+                          id="lead-attachment-upload"
+                          type="file"
+                          multiple
+                          className="sr-only"
+                          disabled={uploadingAttachment}
+                          onChange={async (event) => {
+                            await handleUploadLeadAttachments(selectedDetailItem, event.target.files);
+                            event.target.value = '';
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {selectedDetailItem.attachments.length > 0 ? (
+                    <div className="divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200">
+                      {selectedDetailItem.attachments.map((attachment) => (
+                        <article key={attachment.id} className="flex flex-col gap-3 bg-[#FAFAF7] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              {attachment.type === 'file' ? (
+                                <Paperclip className="h-4 w-4 shrink-0 text-stone-400" />
+                              ) : (
+                                <Link2 className="h-4 w-4 shrink-0 text-stone-400" />
+                              )}
+                              <a
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                download={attachment.type === 'file' ? attachment.fileName || attachment.name : undefined}
+                                className="truncate text-sm font-semibold text-stone-950 underline-offset-4 hover:underline"
+                              >
+                                {attachment.name}
+                              </a>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+                              <span>{attachment.type === 'file' ? 'Uploaded file' : 'External link'}</span>
+                              {attachment.contentType && <span>{attachment.contentType}</span>}
+                              {attachment.size > 0 && <span>{formatFileSize(attachment.size)}</span>}
+                              {attachment.createdAt && <span>{attachment.createdAt.slice(0, 10)}</span>}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <a
+                              href={attachment.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              download={attachment.type === 'file' ? attachment.fileName || attachment.name : undefined}
+                              className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-600 transition hover:text-stone-950"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              Open
+                            </a>
+                            {canModify && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAttachment(selectedDetailItem.id, attachment.id)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-rose-200 hover:text-rose-600"
+                                title="Remove attachment"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-8 text-center text-sm text-stone-400">
+                      No attachments yet.
+                    </div>
+                  )}
+
+                  {canModify && (
+                    <form
+                      onSubmit={(event) => handleAddAttachmentLink(event, selectedDetailItem)}
+                      className="mt-4 grid gap-2 border-t border-stone-100 pt-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto]"
+                    >
+                      <label className="block" htmlFor="lead-attachment-name">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Name</span>
+                        <input
+                          id="lead-attachment-name"
+                          value={attachmentLinkName}
+                          onChange={(event) => setAttachmentLinkName(event.target.value)}
+                          className="h-10 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                          placeholder="Deck, memo, doc"
+                        />
+                      </label>
+                      <label className="block" htmlFor="lead-attachment-url">
+                        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Link</span>
+                        <input
+                          id="lead-attachment-url"
+                          type="url"
+                          value={attachmentLinkUrl}
+                          onChange={(event) => setAttachmentLinkUrl(event.target.value)}
+                          className="h-10 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
+                          placeholder="https://drive.google.com/..."
+                        />
+                      </label>
+                      <div className="flex items-end">
+                        <button
+                          type="submit"
+                          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-700 transition hover:text-stone-950 md:w-auto"
+                        >
+                          <Link2 className="h-4 w-4" />
+                          Add Link
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </section>
+
+                {renderDetailSection(
+                  isContactListActive ? 'Contact Details' : 'Pipeline Details',
+                  isContactListActive
+                    ? [
+                        { label: 'Relationship Owner', value: selectedDetailItem.owner },
+                        { label: 'Contact Email', value: selectedDetailItem.contactEmails.join(', ') },
+                        { label: 'Phone', value: selectedDetailItem.contactPhone },
+                        {
+                          label: 'LinkedIn',
+                          value: selectedDetailItem.linkedinUrl ? (
+                            <a
+                              href={selectedDetailItem.linkedinUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium text-sky-700 underline-offset-4 hover:underline"
+                            >
+                              {displayProfileUrl(selectedDetailItem.linkedinUrl)}
+                            </a>
+                          ) : (
+                            ''
+                          ),
+                        },
+                        { label: 'Role / Organization', value: selectedDetailItem.organization },
+                        { label: 'Segment', value: selectedDetailItem.segment },
+                        { label: 'Relationship Context', value: selectedDetailItem.decisionMaker },
+                        { label: isInvestorUpdateContactsList ? 'Next Update Date' : 'Next Touchpoint', value: selectedDetailItem.expectedCloseDate },
+                        { label: 'Follow-Up Date', value: selectedDetailItem.dueDate },
+                        {
+                          label: 'Email Notifications',
+                          value: selectedDetailItem.deadlineEmailNotificationsEnabled ? 'On' : 'Off',
+                        },
+                        { label: 'First Contacted', value: selectedDetailItem.pilotStart },
+                        { label: 'Last Contacted', value: selectedDetailItem.pilotEnd },
+                        ...(isInvestorUpdateContactsList ? [{ label: 'Update Cadence', value: selectedDetailItem.athleteCount }] : []),
+                      ]
+                    : [
+                        { label: 'Owner', value: selectedDetailItem.owner },
+                        { label: 'Contact Email', value: selectedDetailItem.contactEmails.join(', ') },
+                        { label: 'Organization', value: selectedDetailItem.organization },
+                        { label: 'Segment', value: selectedDetailItem.segment },
+                        { label: 'Decision Maker', value: selectedDetailItem.decisionMaker },
+                        ...(isFundSizeList(activeList)
+                          ? []
+                          : [
+                              { label: 'ACV', value: selectedDetailItem.acv },
+                              { label: amountFieldLabelForList(activeList), value: selectedDetailItem.amount },
+                            ]),
+                        { label: 'Expected Close', value: selectedDetailItem.expectedCloseDate },
+                        { label: 'Due Date', value: selectedDetailItem.dueDate },
+                        { label: 'Date Added', value: pipeTimestampToDate(selectedDetailItem.createdAt)?.toISOString().slice(0, 10) || 'Unknown' },
+                        {
+                          label: 'Email Notifications',
+                          value: selectedDetailItem.deadlineEmailNotificationsEnabled ? 'On' : 'Off',
+                        },
+                        { label: 'Contract Term', value: selectedDetailItem.contractTerm },
+                        { label: 'Margin Notes', value: selectedDetailItem.grossMargin },
+                        { label: 'Partner Cost', value: selectedDetailItem.partnerCost },
+                        { label: 'Hard Cost', value: selectedDetailItem.hardwareCost },
+                      ],
+                  'grid gap-3 md:grid-cols-2 lg:grid-cols-3',
+                )}
+
+                {renderDetailSection('Scope & Expansion', [
+                  { label: 'Scope', value: selectedDetailItem.pilotScope, wide: true },
+                  { label: 'Expansion Path', value: selectedDetailItem.expansionPath, wide: true },
+                  { label: 'Count', value: selectedDetailItem.athleteCount },
+                  { label: 'Start Date', value: selectedDetailItem.pilotStart },
+                  { label: 'End Date', value: selectedDetailItem.pilotEnd },
+                  { label: 'Loss Reason', value: selectedDetailItem.lossReason },
+                ])}
+
+                <div>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h4 className="text-sm font-semibold text-stone-950">Recent Logs</h4>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-500">
+                        {formatCount(selectedDetailItem.weeklyLogs.length, 'log')}
+                      </span>
+                      {canModify && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedLogItemId(selectedDetailItem.id);
+                            setDetailModalMode('logs');
+                          }}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-stone-900 px-3 text-xs font-semibold text-white transition hover:bg-stone-700"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add Log
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {selectedDetailItem.weeklyLogs.length > 0 ? (
+                    <div className="divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200">
+                      {[...selectedDetailItem.weeklyLogs]
+                        .sort((left, right) => logTimestampMs(right) - logTimestampMs(left))
+                        .slice(0, 3)
+                        .map((log) => (
+                        <article key={log.id} className="bg-white px-4 py-3">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-stone-900">{displayLogSummary(log)}</p>
+                              <p className="mt-1 text-xs text-stone-400">
+                                {formatLogTimestamp(log)} · {logDisplayLabel(log)}
+                              </p>
+                              {log.nextStep && <p className="mt-1 text-sm leading-6 text-stone-500">Next: {log.nextStep}</p>}
+                            </div>
+                            {logHasMetrics(log) && (
+                              <div className="grid grid-cols-3 gap-2 text-right text-xs text-stone-500">
+                                <span>{formatMeasuredMetric(derivedMeasuredCheckInRate(log), '%')} check-ins</span>
+                                <span>{log.signalEvents || 'Missing'} signals</span>
+                                <span>{log.staffFeedbackScore || 'Missing'} staff</span>
+                              </div>
+                            )}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-8 text-center text-sm text-stone-400">
+                      No logs yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </>
+  );
+};
+
+export default PipelinePage;
+
+// Pure candidate detection remains available for explicit migration tooling.
+export { needsUniversityStageMigration };

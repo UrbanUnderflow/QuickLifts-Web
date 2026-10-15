@@ -1,3 +1,4 @@
+import { guardPipeListsApiRequest } from '../../../utils/pipelistsRuntime';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 const MAX_URLS = 40;
@@ -94,6 +95,7 @@ const verifyUrl = async (url: string): Promise<SourceVerification> => {
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (!guardPipeListsApiRequest(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';

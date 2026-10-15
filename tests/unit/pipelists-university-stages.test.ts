@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
-const source = fs.readFileSync(new URL('../../src/pages/PipeLists.tsx', import.meta.url), 'utf8');
+const source = fs.readFileSync(new URL('../../src/features/PipeListsWorkspace.tsx', import.meta.url), 'utf8');
 const stages = source.slice(source.indexOf('const legacyPilotContractStages:'), source.indexOf('const vcStages:'));
 const normalizer = source.slice(source.indexOf('const normalizeStageId ='), source.indexOf('const normalizeActivityLog ='));
 const api = new Function(ts.transpile(stages + normalizer + '\nreturn { sportsMedicineContractStages, pilotContractStages, contractStages, normalizeStageId, needsUniversityStageMigration, reconcileUniversityStages, isSportsMedicineList, reconcileSportsMedicineStages, sportsMedicineLegacyStages };'))();
