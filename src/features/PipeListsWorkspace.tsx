@@ -10758,7 +10758,11 @@ Rules:
             isSidebarCollapsed ? 'lg:grid-cols-[64px_minmax(0,1fr)]' : 'lg:grid-cols-[300px_minmax(0,1fr)]'
           }`}
         >
-          <aside className="lg:sticky lg:top-24 lg:self-start">
+          <aside
+            aria-label="PipeLists navigation"
+            tabIndex={0}
+            className="max-h-[calc(100dvh-7.5rem)] overflow-y-auto overscroll-y-contain rounded-lg lg:sticky lg:top-24 lg:self-start"
+          >
             <div className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm">
               <div className={`flex items-center px-1 ${isSidebarCollapsed ? 'justify-center' : 'mb-3 justify-between'}`}>
                 {!isSidebarCollapsed && (
