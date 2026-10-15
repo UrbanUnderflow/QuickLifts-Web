@@ -869,6 +869,7 @@ const contactStages: StageConfig[] = [
   { id: 'met-in-person', label: 'Met in person', probability: 20, track: 'general', tone: 'bg-violet-50 text-violet-700 border-violet-100' },
   { id: 'contacted', label: 'Contacted', probability: 25, track: 'general', tone: 'bg-sky-50 text-sky-700 border-sky-100' },
   { id: 'engaged', label: 'Engaged', probability: 45, track: 'general', tone: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
+  { id: 'meeting-scheduled', label: 'Meeting Scheduled', probability: 55, track: 'general', tone: 'bg-violet-50 text-violet-700 border-violet-100' },
   { id: 'follow-up-needed', label: 'Follow-Up Needed', probability: 60, track: 'general', tone: 'bg-amber-50 text-amber-700 border-amber-100' },
   { id: 'active-relationship', label: 'Active Relationship', probability: 80, track: 'general', tone: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
   { id: 'paused', label: 'Paused', probability: 0, track: 'general', tone: 'bg-zinc-50 text-zinc-500 border-zinc-200', outcome: 'lost' },
