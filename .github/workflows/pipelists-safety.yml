@@ -9,6 +9,7 @@ on:
       - 'next.config.js'
       - 'netlify.toml'
       - 'scripts/pipelists-deployment.cjs'
+      - 'scripts/ci/**'
       - 'src/pages/_app.tsx'
       - 'src/pages/PipeLists*.tsx'
       - 'src/features/PipeListsWorkspace.tsx'
@@ -20,6 +21,7 @@ on:
       - 'netlify/functions/lib/pipelists*'
       - 'netlify/functions/brevo-email-webhook.ts'
       - 'tests/**/pipelists*'
+      - 'tests/unit/isolated-build.test.cjs'
       - 'tests/api/pipelists/**'
       - 'tests/api/equity/brevo-email-webhook.runtime.test.cjs'
 
@@ -43,3 +45,47 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run test:pipelists:safety
       - run: npm run typecheck
+      - run: node --test tests/unit/isolated-build.test.cjs
+
+  isolated-build:
+    name: Full isolated optimized build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      # No real service configuration, network, deployment or artifact publishing.
+      - run: node scripts/ci/build-isolated.cjs
+
+  isolated-browser:
+    name: Isolated PipeLists Chromium checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      PIPELISTS_UI_SCREENSHOT_DIR: test-results/pipelists-ui
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx --no-install playwright install --with-deps chromium
+      # The fixture mocks Firebase/API calls and aborts all off-fixture traffic.
+      - run: node --test tests/ui/pipelists-queue.test.cjs tests/ui/pipelists-runtime-browser.test.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pipelists-chromium-screenshots
+          path: test-results/pipelists-ui
+          if-no-files-found: warn
+          retention-days: 7

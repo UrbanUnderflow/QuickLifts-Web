@@ -6,6 +6,9 @@ const pipeListsDeployment = writePipeListsDeployment();
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
   experimental: {
+    // The custom webpack callback below disables Next's worker by default.
+    // Isolate compiler phases so their memory is released between builds.
+    webpackBuildWorker: true,
     outputFileTracingIncludes: {
       '/developer/api/*': ['./docs/developer/**/*'],
       '/developer/api/*/artifacts/*': ['./docs/developer/**/*'],

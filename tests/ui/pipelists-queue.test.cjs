@@ -29,8 +29,10 @@ async function fixture(t, { allowed = true, signedIn = true, listId = 'synthetic
         nextStepIndex:1,nextSendAt:'2030-01-01T12:00:00Z',updatedAt:'2029-12-28T12:00:00Z',lastError:'Synthetic delivery review',
         attempt:{index:1,startedAt:'2030-01-01T12:00:00Z'},steps:[{id:'email-1',subject:'Synthetic email subject',sentAt:'2029-12-28T12:00:00Z',messageId:'synthetic-provider-message',tracking:{status:'delivered',lastEventAt:'2029-12-28T12:01:00Z',deliveredAt:'2029-12-28T12:01:00Z',openCount:0,clickCount:0}}]};
       window.fetch=async(url,options)=>{
-        window.__requests.push({url,method:options?.method,body:options?.body,headers:options?.headers});
-        const respond=()=>({ok:window.__status===200,status:window.__status,json:async()=>({success:window.__status===200,sequences:window.__empty?[]:[window.__record]})});
+        window.__requests.push({url,method:options?.method,body:options?.body,headers:options?.headers,signal:options?.signal});
+        const status=window.__status;
+        const sequences=window.__empty?[]:[structuredClone(window.__record)];
+        const respond=()=>({ok:status===200,status,json:async()=>({success:status===200,sequences})});
         if(window.__delay)return new Promise(resolve=>window.__pending.push(()=>resolve(respond())));
         return respond();
       };
@@ -64,7 +66,7 @@ async function fixture(t, { allowed = true, signedIn = true, listId = 'synthetic
   t.after(() => browser.close());
   const page = await browser.newPage({ viewport: { width: 1100, height: 1000 } });
   const origin = `http://127.0.0.1:${server.address().port}`;
-  await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
+  await page.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   await page.goto(origin);
   return page;
 }
@@ -130,4 +132,63 @@ test('signing out during a read discards the late response and clears prior evid
   assert.equal(await page.getByRole('region', { name: 'Stored email queue', exact: true }).count(), 0);
   assert.equal(await page.getByText('synthetic-provider-message', { exact: true }).count(), 0);
   assert.equal(await page.evaluate(() => window.__requests.every(request => request.method === 'GET' && !request.body)), true);
+});
+
+
+test('repeated inspection aborts the earlier scope and ignores its late response', async t => {
+  const page = await fixture(t);
+  const region = page.getByRole('region', { name: 'Stored email queue', exact: true });
+  await region.waitFor();
+  await page.evaluate(() => { window.__delay = true; });
+  await page.getByRole('button', { name: 'Inspect stored status' }).click();
+  await page.waitForFunction(() => window.__pending.length === 1);
+  assert.equal(await region.count(), 0);
+  await page.evaluate(() => { window.__record = { ...window.__record, listId: 'newer-list', id: 'newer-sequence', toEmail: 'newer@example.test' }; });
+  await page.getByLabel('List ID', { exact: true }).fill('newer-list');
+  await page.getByRole('button', { name: 'Inspect stored status' }).click();
+  await page.waitForFunction(() => window.__pending.length === 2);
+  assert.equal(await page.evaluate(() => window.__requests[1].signal.aborted), true);
+  await page.evaluate(() => window.__pending.pop()());
+  await region.getByRole('heading', { name: 'newer@example.test', exact: true }).waitFor();
+  await page.evaluate(() => window.__pending.shift()());
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert.match(await region.textContent(), /newer-sequence/);
+  assert.doesNotMatch(await region.textContent(), /synthetic-sequence/);
+  assert.equal(await page.evaluate(() => window.__requests.every(request => request.method === 'GET' && !request.body)), true);
+});
+
+test('an empty scoped result is distinct from an unavailable read', async t => {
+  const page = await fixture(t);
+  const region = page.getByRole('region', { name: 'Stored email queue', exact: true });
+  await region.waitFor();
+  await page.evaluate(() => { window.__empty = true; });
+  await page.getByRole('button', { name: 'Inspect stored status' }).click();
+  await page.getByText('No stored email sequences were returned for this list.', { exact: true }).waitFor();
+  assert.match(await region.textContent(), /covers only this list/);
+  await page.evaluate(() => { window.__status = 500; });
+  await page.getByRole('button', { name: 'Inspect stored status' }).click();
+  await page.getByRole('alert').filter({ hasText: 'could not be read' }).waitFor();
+  assert.equal(await region.count(), 0);
+  assert.equal(await page.getByText('No stored email sequences were returned for this list.', { exact: true }).count(), 0);
+  assert.equal(await page.evaluate(() => window.__requests.every(request => request.method === 'GET' && !request.body)), true);
+});
+
+test('long stored identifiers remain readable without mobile horizontal overflow', async t => {
+  const page = await fixture(t);
+  await page.getByRole('region', { name: 'Stored email queue', exact: true }).waitFor();
+  await page.evaluate(() => {
+    window.__record.id = 'sequence-'.repeat(35);
+    window.__record.itemId = 'item-'.repeat(45);
+    window.__record.steps[0].messageId = 'provider-message-'.repeat(35);
+    window.__record.steps[0].subject = 'subject-'.repeat(45);
+    window.__record.lastError = 'error-detail-'.repeat(35);
+  });
+  await page.setViewportSize({ width: 375, height: 900 });
+  await page.getByRole('button', { name: 'Inspect stored status' }).click();
+  await page.getByText('sequence-'.repeat(35), { exact: false }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  if (process.env.PIPELISTS_UI_SCREENSHOT_DIR) {
+    await fs.mkdir(process.env.PIPELISTS_UI_SCREENSHOT_DIR, { recursive: true });
+    await page.screenshot({ path: path.join(process.env.PIPELISTS_UI_SCREENSHOT_DIR, 'queue-long-identifiers-mobile.png'), fullPage: true });
+  }
 });
