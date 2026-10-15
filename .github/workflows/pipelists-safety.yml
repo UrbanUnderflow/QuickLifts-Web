@@ -60,7 +60,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      # No real service configuration, network, deployment or artifact publishing.
+      # Synthetic configuration and a Node TCP/fetch/DNS guard; no deployment or artifact publishing.
       - run: node scripts/ci/build-isolated.cjs
 
   isolated-browser:

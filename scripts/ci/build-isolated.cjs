@@ -78,7 +78,9 @@ function main() {
   const provenance = JSON.parse(fs.readFileSync(path.join(root, 'src/generated/pipelists-deployment.json'), 'utf8'));
   assert.deepEqual(provenance, { production: false, siteId: '', siteName: '', url: '' });
   assert.ok(fs.readFileSync(path.join(root, DIST_DIR, 'BUILD_ID'), 'utf8').trim(), 'Build must finish, including page generation');
-  console.log('Full optimized build completed with synthetic configuration and network disabled. Not a deployment artifact.');
+  const html = fs.readFileSync(path.join(root, DIST_DIR, 'server/pages/404.html'), 'utf8');
+  assert.match(html, /<meta[^>]*property="og:site_name"[^>]*content="Pulse Intelligence Labs"/, 'Async application shell must preserve server-rendered metadata');
+  console.log('Full optimized build completed with synthetic configuration and Node TCP/fetch/DNS blocked. Not a deployment artifact.');
 }
 
 module.exports = { buildEnvironment, DIST_DIR, PROJECT_ID };

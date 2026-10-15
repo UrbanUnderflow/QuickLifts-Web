@@ -166,19 +166,27 @@ test('browser boundary denies all local, preview and unknown hosts even with a c
   }
 });
 
-test('PipeLists routes never evaluate the global shell; unrelated routes retain it', () => {
+test('PipeLists routes never evaluate the global shell; unrelated routes await it during SSR', async () => {
   let shellCalls = 0;
-  const shell = () => null;
-  const react = { createElement: (component, props, ...children) => ({ component, props, children }) };
-  const run = sandbox({}, { react, 'next/head': () => null, '../components/ApplicationShell': { get default() { shellCalls++; return shell; } } });
+  const react = require('react');
+  const { renderToReadableStream } = require('react-dom/server.browser');
+  const shell = ({ Component, pageProps }) => react.createElement('section', { 'data-shell': 'ready' }, react.createElement(Component, pageProps));
+  const run = sandbox({}, { react, 'next/head': () => null, '../components/ApplicationShell': { __esModule: true, get default() { shellCalls++; return shell; } } });
   const App = run.load('src/pages/_app.tsx').default;
+  const Page = () => react.createElement('p', null, 'SSR page content');
+  const render = async pathname => {
+    const stream = await renderToReadableStream(react.createElement(App, { router: { pathname }, Component: Page, pageProps: {} }));
+    await stream.allReady;
+    return new Response(stream).text();
+  };
   for (const pathname of ['/PipeLists', '/PipeListsQueue', '/pipelists/', '/PipeLists?test=1']) {
-    App({ router: { pathname }, Component: () => null, pageProps: {} });
+    assert.match(await render(pathname), /SSR page content/);
     assert.equal(shellCalls, 0);
   }
-  const unrelated = App({ router: { pathname: '/PulseCheck' }, Component: () => null, pageProps: {} });
+  const unrelated = await render('/PulseCheck');
   assert.equal(shellCalls, 1);
-  assert.equal(unrelated.component, shell);
+  assert.match(unrelated, /data-shell="ready"/);
+  assert.match(unrelated, /SSR page content/);
   assert.deepEqual(run.effects, []);
 });
 

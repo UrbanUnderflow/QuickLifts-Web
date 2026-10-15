@@ -15,12 +15,13 @@ async function fixture(t, productionBuild) {
   await build({
     stdin: { contents: `
       import React from 'react'; import {createRoot} from 'react-dom/client';
+      import App from './src/pages/_app';
       import WorkspaceEntry from './src/pages/PipeLists';
       import QueueEntry from './src/pages/PipeListsQueue';
-      window.__fixtureCounters={workspace:0,auth:0,config:0,fetch:0};
+      window.__fixtureCounters={shell:0,workspace:0,auth:0,config:0,fetch:0};
       window.fetch=async()=>{window.__fixtureCounters.fetch++;throw Error('Unexpected fixture request')};
       const Entry=location.pathname==='/PipeListsQueue'?QueueEntry:WorkspaceEntry;
-      createRoot(document.getElementById('root')).render(<Entry/>);
+      createRoot(document.getElementById('root')).render(<App Component={Entry} pageProps={{}} router={{pathname:location.pathname}}/>);
     `, resolveDir: process.cwd(), sourcefile: 'runtime-entry-fixture.tsx', loader: 'tsx' },
     bundle: true, outfile: path.join(directory, 'bundle.js'), platform: 'browser',
     define: { 'process.env.NEXT_PUBLIC_PIPELISTS_PRODUCTION_BUILD': JSON.stringify(String(productionBuild)) },
@@ -31,10 +32,14 @@ async function fixture(t, productionBuild) {
         'firebase/auth': 'window.__fixtureCounters.auth++;export function onAuthStateChanged(){throw Error("Unexpected auth initialization")}',
         config: 'window.__fixtureCounters.config++;export const simpBudgetAuth={}',
         workspace: 'window.__fixtureCounters.workspace++;export default function Workspace(){throw Error("Unexpected workspace initialization")}',
+        shell: 'window.__fixtureCounters.shell++;export default function Shell(){throw Error("Unexpected application shell initialization")}',
+        style: '',
       };
       build.onResolve({ filter: /^(next\/(head|router)|firebase\/auth)$/ }, args => ({ path: args.path, namespace: 'isolated-services' }));
       build.onResolve({ filter: /\/api\/firebase\/simpBudgetConfig$/ }, () => ({ path: 'config', namespace: 'isolated-services' }));
       build.onResolve({ filter: /\/features\/PipeListsWorkspace$/ }, () => ({ path: 'workspace', namespace: 'isolated-services' }));
+      build.onResolve({ filter: /\/components\/ApplicationShell$/ }, () => ({ path: 'shell', namespace: 'isolated-services' }));
+      build.onResolve({ filter: /\.css$/ }, () => ({ path: 'style', namespace: 'isolated-services' }));
       build.onLoad({ filter: /.*/, namespace: 'isolated-services' }, args => ({ contents: mocks[args.path], loader: 'js' }));
     } }],
   });
@@ -71,7 +76,7 @@ for (const productionBuild of [false, true]) {
       await page.getByRole('heading', { name: route === '/PipeListsQueue' ? 'Email queue' : 'PipeLists', exact: true }).waitFor();
       if (route === '/PipeListsQueue') await page.getByRole('alert').filter({ hasText: 'disabled outside' }).waitFor();
       else await page.getByText('PipeLists is available only on the production site. Development and preview sessions cannot connect to its services.', { exact: true }).waitFor();
-      assert.deepEqual(await page.evaluate(() => window.__fixtureCounters), { workspace: 0, auth: 0, config: 0, fetch: 0 });
+      assert.deepEqual(await page.evaluate(() => window.__fixtureCounters), { shell: 0, workspace: 0, auth: 0, config: 0, fetch: 0 });
       assert.equal(await page.getByRole('button').count(), 0);
     };
     await page.goto(`${origin}/PipeLists`);

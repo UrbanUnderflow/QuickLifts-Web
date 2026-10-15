@@ -6,6 +6,7 @@ const os = require('node:os');
 const http = require('node:http');
 const { build } = require('esbuild');
 const { chromium } = require('playwright');
+const { expect } = require('@playwright/test');
 const postcss = require('postcss');
 const tailwind = require('tailwindcss');
 
@@ -29,7 +30,7 @@ async function fixture(t, { allowed = true, signedIn = true, listId = 'synthetic
         nextStepIndex:1,nextSendAt:'2030-01-01T12:00:00Z',updatedAt:'2029-12-28T12:00:00Z',lastError:'Synthetic delivery review',
         attempt:{index:1,startedAt:'2030-01-01T12:00:00Z'},steps:[{id:'email-1',subject:'Synthetic email subject',sentAt:'2029-12-28T12:00:00Z',messageId:'synthetic-provider-message',tracking:{status:'delivered',lastEventAt:'2029-12-28T12:01:00Z',deliveredAt:'2029-12-28T12:01:00Z',openCount:0,clickCount:0}}]};
       window.fetch=async(url,options)=>{
-        window.__requests.push({url,method:options?.method,body:options?.body,headers:options?.headers,signal:options?.signal});
+        window.__requests.push({url,method:options?.method,body:options?.body,headers:options?.headers,signal:options?.signal,responseStatus:window.__status,empty:!!window.__empty});
         const status=window.__status;
         const sequences=window.__empty?[]:[structuredClone(window.__record)];
         const respond=()=>({ok:status===200,status,json:async()=>({success:status===200,sequences})});
@@ -168,8 +169,25 @@ test('an empty scoped result is distinct from an unavailable read', async t => {
   await page.evaluate(() => { window.__status = 500; });
   await page.getByRole('button', { name: 'Inspect stored status' }).click();
   await page.getByRole('alert').filter({ hasText: 'could not be read' }).waitFor();
-  assert.equal(await region.count(), 0);
-  assert.equal(await page.getByText('No stored email sequences were returned for this list.', { exact: true }).count(), 0);
+  // Use a web-first assertion without relaxing the stale-result requirement.
+  // Preserve the real browser state if it fails so a race cannot be hidden.
+  try {
+    await expect(region).toHaveCount(0);
+    await expect(page.getByText('No stored email sequences were returned for this list.', { exact: true })).toHaveCount(0);
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      html: document.getElementById('root').innerHTML,
+      requests: window.__requests.map(({ signal, ...request }) => ({ ...request, aborted: signal?.aborted })),
+      pendingCount: window.__pending.length,
+    }));
+    t.diagnostic(JSON.stringify(state));
+    if (process.env.PIPELISTS_UI_SCREENSHOT_DIR) {
+      await fs.mkdir(process.env.PIPELISTS_UI_SCREENSHOT_DIR, { recursive: true });
+      await fs.writeFile(path.join(process.env.PIPELISTS_UI_SCREENSHOT_DIR, 'queue-failed-read-state.json'), JSON.stringify(state, null, 2));
+      await page.screenshot({ path: path.join(process.env.PIPELISTS_UI_SCREENSHOT_DIR, 'queue-failed-read.png'), fullPage: true });
+    }
+    throw error;
+  }
   assert.equal(await page.evaluate(() => window.__requests.every(request => request.method === 'GET' && !request.body)), true);
 });
 

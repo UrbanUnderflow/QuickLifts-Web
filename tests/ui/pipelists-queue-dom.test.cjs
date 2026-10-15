@@ -33,7 +33,7 @@ async function fixture(t, { allowed = true, signedIn = true, listId = 'synthetic
   };
   const fetchStatus = async (url, options) => {
     state.requests.push({ url, ...options });
-    const respond = () => ({ ok: state.status === 200, status: state.status, json: async () => ({ success: state.status === 200, sequences: [state.record] }) });
+    const respond = () => ({ ok: state.status === 200, status: state.status, json: async () => ({ success: state.status === 200, sequences: state.empty ? [] : [state.record] }) });
     return state.delay ? new Promise(resolve => state.pending.push(() => resolve(respond()))) : respond();
   };
   const queue = load('src/utils/pipelistsQueue.ts', {}, { fetch: fetchStatus });
@@ -113,4 +113,16 @@ test('session change aborts a pending read and suppresses its late response', as
   assert.equal(state.requests[1].signal.aborted, true);
   assert.equal(document.querySelector('[aria-label="Stored email queue"]'), null);
   assert.equal(document.body.textContent.includes('synthetic-provider-message'), false);
+});
+
+
+test('empty result is cleared when a later read fails', async t => {
+  const { state, document, inspect } = await fixture(t);
+  state.empty = true;
+  await inspect('synthetic-list');
+  assert.match(document.body.textContent, /No stored email sequences/);
+  state.status = 500;
+  await inspect('synthetic-list');
+  assert.match(document.querySelector('[role="alert"]').textContent, /could not be read/);
+  assert.equal(document.querySelector('[aria-label="Stored email queue"]'), null);
 });

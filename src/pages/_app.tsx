@@ -6,6 +6,11 @@ import '../components/Footer/GlisteningButton.css';
 import '../index.css';
 import '../styles/animations.css';
 
+// React.lazy runs this import only if the shell is rendered. Next's Pages SSR
+// renderer waits for Suspense, including ESM-only dependencies in optimized
+// builds. A synchronous require can return Webpack's unresolved async module.
+const ApplicationShell = React.lazy(() => import('../components/ApplicationShell'));
+
 export default function MyApp(props: AppProps) {
   // These standalone pages gate their own runtime before loading Firebase.
   // Do not import the general shell here: its auth/store dependencies initialize
@@ -15,8 +20,5 @@ export default function MyApp(props: AppProps) {
     return <><Head><meta name="viewport" content="width=device-width, initial-scale=1" /></Head><Component {...pageProps} /></>;
   }
 
-  // Synchronous lazy require preserves the existing SSR/render behavior of all
-  // other products without evaluating their service clients on PipeLists routes.
-  const ApplicationShell = require('../components/ApplicationShell').default as React.ComponentType<AppProps>;
-  return <ApplicationShell {...props} />;
+  return <React.Suspense fallback={null}><ApplicationShell {...props} /></React.Suspense>;
 }
