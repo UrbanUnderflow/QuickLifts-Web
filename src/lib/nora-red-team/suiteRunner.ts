@@ -26,12 +26,10 @@ export function resolveNoraRedTeamScheduledBuild(
   },
   now: Date = new Date(),
 ): string {
-  // Match the chat runtime's commit precedence before using non-release metadata.
-  // A deployment ID must never mask an available candidate commit.
   const deployedBuild =
     input.commitRef?.trim() ||
-    input.publicCommitSha?.trim() ||
-    input.deployId?.trim();
+    input.deployId?.trim() ||
+    input.publicCommitSha?.trim();
   if (deployedBuild) return deployedBuild;
 
   // Netlify's build metadata is not guaranteed to be present in a scheduled
