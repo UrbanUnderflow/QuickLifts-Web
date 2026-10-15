@@ -12,10 +12,12 @@ import {
   X,
 } from 'lucide-react';
 import PageHead from '../PageHead';
+import PulseCheckEditorial from './PulseCheckEditorial';
 
 type ProductPortfolioHomeProps = {
   metaData: React.ComponentProps<typeof PageHead>['metaData'];
   pageOgUrl?: string;
+  focusPulseCheck?: boolean;
   finalCtaHeading?: string;
   finalCtaBody?: string;
 };
@@ -53,7 +55,7 @@ const DEMO_PRODUCT_OPTIONS = ['PulseCheck', 'Fit With Pulse', 'Fit Club', 'Macra
 const homeMeta = (metaData: ProductPortfolioHomeProps['metaData'], pageOgUrl: string) => ({
   ...(metaData || {}),
   pageId: 'index',
-  pageTitle: 'Pulse Intelligence Labs — PulseCheck, Fit With Pulse, Fit Club, and Macra',
+  pageTitle: metaData?.pageTitle || 'Pulse Intelligence Labs — PulseCheck, Fit With Pulse, Fit Club, and Macra',
   metaDescription:
     'Pulse Intelligence Labs builds products for mental performance, fitness communities, clubs, and nutrition: PulseCheck, Fit With Pulse, Fit Club, and Macra.',
   ogTitle: 'Pulse Intelligence Labs',
@@ -93,7 +95,7 @@ const productSections: ProductSection[] = [
       { src: '/fitclub-media/10-event-detail-rsvp.png', alt: 'Fit Club event RSVP screen' },
     ],
     links: [
-      { name: 'Visit Fit Club', href: '/fitclub', label: 'Visit the Fit Club website' },
+      { name: 'Visit Fit Club', href: 'https://fitwithpulse.ai/fitclub', label: 'Visit the Fit Club website' },
       { name: 'Contact', href: `mailto:${CONTACT_EMAIL}?subject=Fit%20Club%20Inquiry`, label: 'Contact Pulse Intelligence Labs about Fit Club' },
     ],
     proof: ['Club pages', 'Events and RSVPs', 'Challenges'],
@@ -113,7 +115,7 @@ const productSections: ProductSection[] = [
       { src: '/fwp-media/04-immersive-player.png', alt: 'Fit With Pulse immersive workout player' },
     ],
     links: [
-      { name: 'Visit Fit With Pulse', href: '/FWP', label: 'Visit the Fit With Pulse website' },
+      { name: 'Visit Fit With Pulse', href: 'https://fitwithpulse.ai/FWP', label: 'Visit the Fit With Pulse website' },
       { name: 'Contact', href: `mailto:${CONTACT_EMAIL}?subject=Fit%20With%20Pulse%20Inquiry`, label: 'Contact Pulse Intelligence Labs about Fit With Pulse' },
     ],
     proof: ['Personal workouts', 'Recovery guidance', 'Creator-led training'],
@@ -191,6 +193,7 @@ const emptyDemoRequestForm: DemoRequestForm = {
 const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
   metaData,
   pageOgUrl = 'https://fitwithpulse.ai',
+  focusPulseCheck = false,
   finalCtaHeading = 'Tell us what you are building. We will point you to the right product.',
   finalCtaBody =
     'Use the demo form to tell us your role and which product you want to see. We will follow up with the clearest next step.',
@@ -254,7 +257,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [demoStatus, isDemoModalOpen]);
 
-  const openDemoModal = (product = '') => {
+  const openDemoModal = (product = focusPulseCheck ? 'PulseCheck' : '') => {
     setDemoForm((current) => ({ ...current, product }));
     setDemoStatus('idle');
     setDemoError('');
@@ -305,7 +308,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
   return (
     <div className="min-h-screen overflow-x-hidden bg-black text-white selection:bg-white/20">
       <PageHead
-        metaData={homeMeta(metaData, pageOgUrl)}
+        metaData={{ ...homeMeta(metaData, pageOgUrl), ...(focusPulseCheck ? { pageTitle: "Pulse Intelligence Labs | PulseCheck", metaDescription: "The company behind PulseCheck. Daily mental performance practice and tools to help teams coordinate support.", ogTitle: "Pulse Intelligence Labs | PulseCheck", ogDescription: "Daily mental performance practice with PulseCheck.", twitterTitle: "Pulse Intelligence Labs | PulseCheck", twitterDescription: "Daily mental performance practice with PulseCheck." } : {}) }}
         pageOgUrl={pageOgUrl}
         pageOgImage="/pil-og.png"
         themeColor="#050505"
@@ -313,16 +316,16 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
 
       <header className="fixed left-0 right-0 top-0 z-40 border-b border-white/10 bg-black/75 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <a href="#top" className="flex items-center gap-3" aria-label="Pulse Intelligence Labs home">
+          <a href={pageOgUrl.endsWith("/products") ? "/PIL" : "#top"} className="flex items-center gap-3" aria-label="Pulse Intelligence Labs home">
             <span className="h-2.5 w-2.5 rounded-full bg-white" />
             <span className="text-sm font-semibold text-white">Pulse Intelligence Labs</span>
           </a>
 
           <nav className="hidden items-center gap-5 text-sm text-zinc-300 md:flex" aria-label="Primary">
             <a href="#pulsecheck" className="transition-colors hover:text-white">PulseCheck</a>
-            <a href="#fit-club" className="transition-colors hover:text-white">Fit Club</a>
+            {focusPulseCheck ? <Link href="/PIL/products" className="transition-colors hover:text-white">Other products</Link> : <> <a href="#fit-club" className="transition-colors hover:text-white">Fit Club</a>
             <a href="#fit-with-pulse" className="transition-colors hover:text-white">Fit With Pulse</a>
-            <a href="#macra" className="transition-colors hover:text-white">Macra</a>
+            <a href="#macra" className="transition-colors hover:text-white">Macra</a> </>}
           </nav>
 
           <button
@@ -336,7 +339,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
         </div>
       </header>
 
-      <main id="top">
+      {focusPulseCheck ? <PulseCheckEditorial onDemo={() => openDemoModal("PulseCheck")} /> : <main id="top">
         <section className="relative flex min-h-[82vh] overflow-hidden pt-16">
           <video
             ref={heroVideoRef}
@@ -361,10 +364,10 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
           <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col justify-center px-4 py-20 sm:px-6 lg:justify-end lg:pb-24">
             <div className="max-w-4xl">
               <h1 className="mt-6 max-w-4xl text-5xl font-semibold leading-none text-white">
-                The Human Performance Company
+                {focusPulseCheck ? "Mental performance starts with PulseCheck." : pageOgUrl.endsWith("/products") ? "Our product suite" : "The Human Performance Company"}
               </h1>
               <p className="mt-6 max-w-2xl text-xl leading-relaxed text-zinc-200">
-                Using AI technology to improve human performance.
+                {focusPulseCheck ? "Pulse Intelligence Labs builds PulseCheck to help people practice mental skills, reflect on how they feel, and connect with support." : "Using AI technology to improve human performance."}
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <button
@@ -442,6 +445,12 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
           </div>
         </section>
 
+        {focusPulseCheck ? <section className="border-t border-white/10 bg-black">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-6 px-4 py-12 sm:px-6">
+            <div><h2 className="text-2xl font-semibold">More from Pulse Intelligence Labs</h2><p className="mt-3 text-zinc-400">Explore our complete product suite.</p></div>
+            <Link href="/PIL/products" className="inline-flex items-center gap-3 rounded-lg border border-white/20 px-5 py-3 font-semibold hover:bg-white/10">Explore our other products <ArrowUpRight className="h-4 w-4" /></Link>
+          </div>
+        </section> : <>
         <section className="border-t border-white/10 bg-black">
           <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
             <p className="text-sm font-semibold text-zinc-500">More Pulse products</p>
@@ -520,10 +529,12 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
           </section>
         ))}
 
+        </>}
+
         <section className="border-t border-white/10 bg-white text-black">
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-16 sm:px-6 md:grid-cols-[1fr_auto] md:items-end">
             <div>
-              <p className="text-sm font-semibold text-zinc-500">Need help choosing?</p>
+              <p className="text-sm font-semibold text-zinc-500">{focusPulseCheck ? "See PulseCheck in action" : "Need help choosing?"}</p>
               <h2 className="mt-3 text-4xl font-semibold leading-tight">
                 {finalCtaHeading}
               </h2>
@@ -541,16 +552,16 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
             </button>
           </div>
         </section>
-      </main>
+      </main>}
 
       <footer className="border-t border-white/10 bg-black">
         <div className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-8 text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="font-semibold text-zinc-300">Pulse Intelligence Labs © {new Date().getFullYear()}</div>
           <div className="flex flex-wrap gap-4">
             <a href="#pulsecheck" className="hover:text-white">PulseCheck</a>
-            <a href="#fit-club" className="hover:text-white">Fit Club</a>
+            {focusPulseCheck ? <Link href="/PIL/products" className="hover:text-white">Other products</Link> : <> <a href="#fit-club" className="hover:text-white">Fit Club</a>
             <a href="#fit-with-pulse" className="hover:text-white">Fit With Pulse</a>
-            <a href="#macra" className="hover:text-white">Macra</a>
+            <a href="#macra" className="hover:text-white">Macra</a> </>}
             <a href={`mailto:${CONTACT_EMAIL}`} className="hover:text-white">Contact</a>
           </div>
         </div>
@@ -569,7 +580,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#C084FC]">Pulse Intelligence Labs</p>
                 <h2 id="demo-request-title" className="mt-2 text-2xl font-semibold text-white">Request a demo</h2>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                  Tell us who you are and which product you want to see. We will follow up from hello@fitwithpulse.ai.
+                  {focusPulseCheck ? "Tell us about your role and explore PulseCheck with us. We will follow up from hello@fitwithpulse.ai." : "Tell us who you are and which product you want to see. We will follow up from hello@fitwithpulse.ai."}
                 </p>
               </div>
               <button
@@ -646,7 +657,7 @@ const ProductPortfolioHome: React.FC<ProductPortfolioHomeProps> = ({
                     required
                   >
                     <option value="">Choose a product</option>
-                    {DEMO_PRODUCT_OPTIONS.map((product) => (
+                    {(focusPulseCheck ? ['PulseCheck'] : DEMO_PRODUCT_OPTIONS).map((product) => (
                       <option key={product} value={product}>{product}</option>
                     ))}
                   </select>
