@@ -7,11 +7,13 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '../../..');
 function load(file, mocks = {}, globals = {}) {
   const module = { exports: {} };
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { module, exports: module.exports, require: name => name in mocks ? mocks[name] : require(name), console, Date, Intl, process: { env: { BREVO_WEBHOOK_SECRET: 'test-secret', BREVO_API_KEY: 'mock-provider-key' } }, AbortSignal, ...globals });
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, { module, exports: module.exports, require: name => name in mocks ? mocks[name] : require(name), console, Date, Intl, process: { env: { NODE_ENV: 'production', CONTEXT: 'production', SITE_ID: 'synthetic-site-id', SITE_NAME: 'synthetic-site', URL: 'https://fitwithpulse.ai', BREVO_WEBHOOK_SECRET: 'test-secret', BREVO_API_KEY: 'mock-provider-key' } }, AbortSignal, ...globals });
   return module.exports;
 }
 const sequenceUtils = load('src/utils/pipelistsEmailSequence.ts');
-const lib = load('netlify/functions/lib/pipelistsEmailSequences.ts', { '../../../src/utils/pipelistsEmailSequence': sequenceUtils, '../utils/emailSequenceHelpers': { sendBrevoTransactionalEmail: () => { throw Error('Never send a real email in tests'); } } });
+const runtime = load('src/utils/pipelistsRuntime.ts', { '../generated/pipelists-deployment.json': { production: true, siteId: 'synthetic-site-id', siteName: 'synthetic-site', url: 'https://fitwithpulse.ai' } });
+const transportPolicy = load('src/utils/pipelistsTransportPolicy.ts');
+const lib = load('netlify/functions/lib/pipelistsEmailSequences.ts', { '../../../src/utils/pipelistsRuntime': runtime, '../../../src/utils/pipelistsTransportPolicy': transportPolicy, '../../../src/utils/pipelistsEmailSequence': sequenceUtils, '../utils/emailSequenceHelpers': { sendBrevoTransactionalEmail: () => { throw Error('Never send a real email in tests'); } } });
 function database() {
   const records = new Map();
   const ref = path => ({ id: path.split('/').pop(), path, collection: id => collection(`${path}/${id}`), get: async () => snapshot(path), set: async data => records.set(path, { ...records.get(path), ...data }), update: async data => records.set(path, { ...records.get(path), ...data }) });
@@ -29,9 +31,9 @@ function database() {
 }
 function setup() {
   const db = database();
-  const list = { id: 'school-list', items: [{ id: 'school', title: 'Test school', weeklyLogs: [] }] };
+  const list = { id: 'school-list', templateKey: 'contacts', items: [{ id: 'school', title: 'Test school', weeklyLogs: [] }] };
   db.records.set('simpbudget-users/owner/pipeLists/state', { lists: [structuredClone(list)] });
-  db.records.set('pipeListProtectedShares/owner-school-list', { ownerUid: 'owner', list });
+  db.records.set('pipeListProtectedShares/owner-school-list', { ownerUid: 'owner', listId: 'school-list', list });
   return db;
 }
 function draft() { return { audience: 'coaches', fromEmail: 'tre@fitwithpulse.ai', toEmail: 'test@example.com', steps: [0,4,7].map((delayDays,i) => ({ id: `email-${i+1}`, delayDays, subject: `Email ${i+1}`, body: 'Hello Coach', sentAt: '', messageId: '' })) }; }
@@ -70,7 +72,7 @@ test('draft/version/ownership checks prevent accidental activation and lost edit
   await assert.rejects(lib.mutateSequence(db, 'owner', input('send', 0, bad)), /placeholders/);
   await lib.mutateSequence(db, 'owner', input('save', 0, bad));
   await assert.rejects(lib.mutateSequence(db, 'owner', input('save', 0, draft())), /changed/);
-  await assert.rejects(lib.mutateSequence(db, 'other', input('send', 0, draft())), /no longer exists/);
+  await assert.rejects(lib.mutateSequence(db, 'other', input('send', 0, draft())), /could not be verified/);
 });
 test('deleted canonical lead never sends and sent steps cannot be rewritten', async () => {
   const db = setup(); const seq = await lib.mutateSequence(db, 'owner', input('send', 0, draft()));
@@ -86,12 +88,13 @@ test('calendar days preserve Eastern time through daylight saving', () => {
 });
 test('API requires verified owner identity and rejects other methods', async () => {
   const api = load('src/pages/api/pipelists/email-sequence.ts', {
+    '../../../utils/pipelistsRuntime': runtime,
     '../../../../netlify/functions/utils/getSimpBudgetServiceAccount': { getSimpBudgetAuth: async () => ({ verifyIdToken: async token => ({ uid: 'other', email: token }) }), getSimpBudgetFirestore: async () => { throw Error('not authorized'); } },
     '../../../../netlify/functions/lib/pipelistsEmailSequences': lib,
   }).default;
   for (const [method, token, expected] of [['POST', null, 401], ['POST', 'other@example.com', 403], ['DELETE', null, 405]]) {
     const res = { setHeader() {}, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } };
-    await api({ method, headers: token ? { authorization: `Bearer ${token}` } : {} }, res); assert.equal(res.code, expected);
+    await api({ method, headers: token ? { host: 'fitwithpulse.ai', authorization: `Bearer ${token}` } : { host: 'fitwithpulse.ai' } }, res); assert.equal(res.code, expected);
   }
 });
 test('editing interval, pausing, and resuming keep the lead due date synchronized', async () => {
@@ -128,12 +131,13 @@ test('formatted email safely includes resource links and sender signature', () =
 test('GET and POST deny missing or non-owner tokens before any datastore access', async () => {
   let datastoreCalls = 0;
   const api = load('src/pages/api/pipelists/email-sequence.ts', {
+    '../../../utils/pipelistsRuntime': runtime,
     '../../../../netlify/functions/utils/getSimpBudgetServiceAccount': { getSimpBudgetAuth: async () => ({ verifyIdToken: async () => ({ uid: 'someone', email: 'someone@example.com' }) }), getSimpBudgetFirestore: async () => { datastoreCalls++; throw Error('must not reach datastore'); } },
     '../../../../netlify/functions/lib/pipelistsEmailSequences': lib,
   }).default;
   for (const method of ['GET', 'POST']) for (const token of ['', 'not-owner']) {
     const res = { setHeader() {}, status(code) { this.code = code; return this; }, json() {} };
-    await api({ method, headers: token ? { authorization: `Bearer ${token}` } : {}, query: { listId: 'school-list', itemId: 'school' }, body: input('send', 0, draft()) }, res);
+    await api({ method, headers: token ? { host: 'fitwithpulse.ai', authorization: `Bearer ${token}` } : { host: 'fitwithpulse.ai' }, query: { listId: 'school-list', itemId: 'school' }, body: input('send', 0, draft()) }, res);
     assert.equal(res.code, token ? 403 : 401);
   }
   assert.equal(datastoreCalls, 0);
@@ -171,7 +175,7 @@ test('scheduler selects only due active records and bounds the delivery batch', 
   const called = [];
   const records = [{ id: 'paused', status: 'paused', nextSendAt: '2000-01-01' }, { id: 'future', status: 'active', nextSendAt: '2099-01-01' }, ...[1,2,3,4].map(id => ({ id: `due-${id}`, status: 'active', nextSendAt: '2000-01-01' }))];
   const db = { collection: () => ({ where: (field, op, value) => ({ get: async () => ({ docs: records.filter(r => r[field] === value).map(r => ({ id: r.id, data: () => r })) }) }) }) };
-  const scheduler = load('netlify/functions/pipelists-email-sequences.ts', { './utils/getSimpBudgetServiceAccount': { getSimpBudgetFirestore: async () => db }, './lib/pipelistsEmailSequences': { COLLECTION: lib.COLLECTION, dispatchSequence: async (_, id) => { called.push(id); } } });
+  const scheduler = load('netlify/functions/pipelists-email-sequences.ts', { '../../src/utils/pipelistsRuntime': runtime, './utils/getSimpBudgetServiceAccount': { getSimpBudgetFirestore: async () => db }, './lib/pipelistsEmailSequences': { COLLECTION: lib.COLLECTION, dispatchSequence: async (_, id) => { called.push(id); return { id }; } } });
   await scheduler.handler({});
   assert.deepEqual(called.sort(), ['due-1', 'due-2', 'due-3']);
 });
@@ -222,7 +226,7 @@ test('actual Brevo webhook routes school outreach into exact-step tracking with 
   const db = setup(); let seq = await lib.mutateSequence(db, 'owner', input('send', 0, draft()));
   seq = await lib.dispatchSequence(db, seq.id, new Date(), async () => ({ success: true, messageId: 'first' }));
   const firestore = () => db; firestore.FieldValue = { increment: value => value };
-  const webhook = load('netlify/functions/brevo-email-webhook.ts', { './config/firebase': { admin: { firestore } }, './utils/getSimpBudgetServiceAccount': { getSimpBudgetFirestore: async () => db }, './utils/mixpanelAnalytics': { MACRA_MIXPANEL_EVENTS: {}, safeTrackMacraWebOfferEvent: async () => {} }, '../../src/lib/equityEmailDelivery': {}, './lib/pipelistsEmailSequenceTracking': tracking });
+  const webhook = load('netlify/functions/brevo-email-webhook.ts', { '../../src/utils/pipelistsRuntime': runtime, './config/firebase': { admin: { firestore } }, './utils/getSimpBudgetServiceAccount': { getSimpBudgetFirestore: async () => db }, './utils/mixpanelAnalytics': { MACRA_MIXPANEL_EVENTS: {}, safeTrackMacraWebOfferEvent: async () => {} }, '../../src/lib/equityEmailDelivery': {}, './lib/pipelistsEmailSequenceTracking': tracking });
   const body = JSON.stringify({ event: 'opened', email: seq.toEmail, 'message-id': 'first', ts_event: Math.floor(Date.now()/1000), id: 1234, 'X-Mailin-custom': JSON.stringify({ pipeListsOwnerUid: 'owner', pipeListsListId: 'school-list', pipeListsItemIds: ['school'], pipeListsEmailType: 'school-outreach', pipeListsSequenceId: seq.id, pipeListsSequenceStepId: seq.steps[0].id }) });
   for (let i=0;i<2;i++) { const res = await webhook.handler({ httpMethod: 'POST', headers: { 'x-brevo-secret': 'test-secret' }, body }); assert.equal(res.statusCode, 200, res.body); }
   assert.equal(db.records.get(`${lib.COLLECTION}/${seq.id}`).steps[0].tracking.openCount, 1);
@@ -350,4 +354,148 @@ test('unconfirmed school sends leave the pipeline stage unchanged', async () => 
     assert.equal(db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].items[0].stage, 'outreach-queued');
     assert.equal(db.records.get('pipeListProtectedShares/owner-school-list').list.items[0].stage, 'outreach-queued');
   }
+});
+
+function existingUniversitySequence(db, { status = 'active', attempt = null, personal = true, protectedList = true } = {}) {
+  if (personal) db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].templateKey = 'university-pilot';
+  if (protectedList) db.records.get('pipeListProtectedShares/owner-school-list').list.templateKey = 'university-pilot';
+  const sequence = {
+    ...draft(), id: lib.sequenceId('owner', 'school-list', 'school'), ownerUid: 'owner', listId: 'school-list', itemId: 'school',
+    status, nextStepIndex: 0, nextSendAt: status === 'active' ? '2026-01-01T12:00:00.000Z' : '',
+    version: 3, lastError: '', createdAt: '2026-01-01T12:00:00.000Z', updatedAt: '2026-01-01T12:00:00.000Z', attempt,
+  };
+  db.records.set(`${lib.COLLECTION}/${sequence.id}`, structuredClone(sequence));
+  return sequence;
+}
+
+test('university sequence creation, saves, send and resume reject before datastore writes', async () => {
+  for (const location of ['personal', 'protectedList', 'both']) {
+    for (const action of ['save', 'send', 'resume']) {
+      const db = setup();
+      existingUniversitySequence(db, { status: 'paused', personal: location !== 'protectedList', protectedList: location !== 'personal' });
+      const before = structuredClone([...db.records]);
+      await assert.rejects(lib.mutateSequence(db, 'owner', input(action, 3, draft())), error => error.status === 403 && /manual-only/.test(error.message));
+      assert.deepEqual([...db.records], before);
+    }
+    const db = setup();
+    const seq = existingUniversitySequence(db, { personal: location !== 'protectedList', protectedList: location !== 'personal' });
+    db.records.delete(`${lib.COLLECTION}/${seq.id}`);
+    const before = structuredClone([...db.records]);
+    await assert.rejects(lib.mutateSequence(db, 'owner', input('save', 0, draft())), /manual-only/);
+    assert.deepEqual([...db.records], before);
+  }
+});
+
+test('due university sequences never claim, deliver, or rewrite queue and review evidence', async () => {
+  for (const location of ['personal', 'protectedList', 'both']) for (const attempt of [null, { index: 0, startedAt: '2000-01-01T00:00:00Z' }]) {
+    const db = setup();
+    const seq = existingUniversitySequence(db, { attempt, personal: location !== 'protectedList', protectedList: location !== 'personal' });
+    const before = structuredClone([...db.records]);
+    let calls = 0;
+    assert.equal(await lib.dispatchSequence(db, seq.id, new Date(), async () => { calls++; throw Error('No provider calls'); }), null);
+    assert.equal(calls, 0);
+    assert.deepEqual([...db.records], before);
+  }
+  const db = setup(); const seq = existingUniversitySequence(db);
+  db.records.get('simpbudget-users/owner/pipeLists/state').lists = [];
+  db.records.get('pipeListProtectedShares/owner-school-list').list.items = [];
+  const before = structuredClone([...db.records]);
+  assert.equal(await lib.dispatchSequence(db, seq.id, new Date(), () => { throw Error('No provider calls'); }), null);
+  assert.deepEqual([...db.records], before);
+});
+
+test('university sequences stay readable and pausable without allowing pause to save a draft', async () => {
+  const db = setup(); const seq = existingUniversitySequence(db);
+  const current = await lib.readSequences(db, 'owner', 'school-list', 'school');
+  assert.equal(current.id, seq.id);
+  await assert.rejects(lib.mutateSequence(db, 'owner', input('pause', 3, draft())), /manual-only/);
+  const paused = await lib.mutateSequence(db, 'owner', input('pause', 3));
+  assert.equal(paused.status, 'paused'); assert.equal(paused.nextSendAt, '');
+  assert.deepEqual(paused.steps, seq.steps);
+  await assert.rejects(lib.mutateSequence(db, 'owner', input('resume', paused.version)), /manual-only/);
+});
+
+test('university delivery uncertainty remains inspectable and existing tracking review is available', async () => {
+  const db = setup(); const seq = existingUniversitySequence(db, { status: 'error', attempt: { index: 0, startedAt: '2026-01-01T12:00:00.000Z' } });
+  seq.lastError = 'Delivery outcome is uncertain. Check Brevo before any further send.';
+  db.records.set(`${lib.COLLECTION}/${seq.id}`, structuredClone(seq));
+  let refreshCalls = 0;
+  const api = load('src/pages/api/pipelists/email-sequence.ts', {
+    '../../../utils/pipelistsRuntime': runtime,
+    '../../../../netlify/functions/utils/getSimpBudgetServiceAccount': { getSimpBudgetAuth: async () => ({ verifyIdToken: async () => ({ uid: 'owner', email: lib.OWNER_EMAIL }) }), getSimpBudgetFirestore: async () => db },
+    '../../../../netlify/functions/lib/pipelistsEmailSequences': lib,
+    '../../../../netlify/functions/lib/pipelistsEmailSequenceTracking': { refreshSequenceTracking: async (_, current) => { assert.equal(current.id, seq.id); refreshCalls++; } },
+  }).default;
+  for (const method of ['GET', 'POST']) {
+    const res = { setHeader() {}, status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } };
+    await api({ method, headers: { host: 'fitwithpulse.ai', authorization: 'Bearer verified-owner' }, query: { listId: 'school-list', itemId: 'school' }, body: { action: 'refresh-tracking', listId: 'school-list', itemId: 'school' } }, res);
+    assert.equal(res.code, 200); assert.equal(res.body.sequence.lastError, seq.lastError);
+    assert.deepEqual(res.body.sequence.attempt, seq.attempt);
+  }
+  assert.equal(refreshCalls, 1);
+  assert.deepEqual(db.records.get(`${lib.COLLECTION}/${seq.id}`), seq);
+});
+
+function unverifiedSequenceIdentities() {
+  return [
+    db => { delete db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].templateKey; },
+    db => { db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].templateKey = 'unknown'; },
+    db => { const lists = db.records.get('simpbudget-users/owner/pipeLists/state').lists; lists.push({ ...lists[0] }); },
+    db => { const lists = db.records.get('simpbudget-users/owner/pipeLists/state').lists; lists.push({ ...lists[0], deletedAt: '2026-01-01' }); },
+    db => { delete db.records.get('pipeListProtectedShares/owner-school-list').list.templateKey; },
+    db => { db.records.get('pipeListProtectedShares/owner-school-list').list.templateKey = 'unknown'; },
+    db => { delete db.records.get('pipeListProtectedShares/owner-school-list').ownerUid; },
+    db => { db.records.get('pipeListProtectedShares/owner-school-list').ownerUid = 'foreign'; },
+    db => { delete db.records.get('pipeListProtectedShares/owner-school-list').listId; },
+    db => { db.records.get('pipeListProtectedShares/owner-school-list').list.id = 'foreign-list'; },
+    db => { db.records.get('pipeListProtectedShares/owner-school-list').list.deletedAt = '2026-01-01'; },
+    db => { delete db.records.get('pipeListProtectedShares/owner-school-list').list; },
+    db => { db.records.get('simpbudget-users/owner/pipeLists/state').lists = []; },
+  ];
+}
+
+test('sequence create, save, send and resume fail closed on unverified list identity or template', async () => {
+  for (const change of unverifiedSequenceIdentities()) {
+    for (const action of ['save', 'send', 'resume']) {
+      const db = setup();
+      const seq = await lib.mutateSequence(db, 'owner', input('save', 0, draft()));
+      change(db);
+      const before = structuredClone([...db.records]);
+      await assert.rejects(lib.mutateSequence(db, 'owner', input(action, seq.version, draft())), error => error.status === 403 && /could not be verified/.test(error.message));
+      assert.deepEqual([...db.records], before);
+    }
+    const db = setup(); change(db);
+    await assert.rejects(lib.mutateSequence(db, 'owner', input('save', 0, draft())), /could not be verified/);
+    assert.equal(db.records.has(`${lib.COLLECTION}/${lib.sequenceId('owner', 'school-list', 'school')}`), false);
+  }
+});
+
+test('unverified queued sequence identity never claims, rewrites, or calls the provider', async () => {
+  for (const change of unverifiedSequenceIdentities()) for (const stale of [false, true]) {
+    const db = setup(); const seq = await lib.mutateSequence(db, 'owner', input('send', 0, draft()));
+    if (stale) db.records.get(`${lib.COLLECTION}/${seq.id}`).attempt = { index: 0, startedAt: '2000-01-01T00:00:00Z' };
+    change(db);
+    const before = structuredClone([...db.records]);
+    let calls = 0;
+    assert.equal(await lib.dispatchSequence(db, seq.id, new Date(), async () => { calls++; return { success: true, messageId: 'must-not-send' }; }), null);
+    assert.equal(calls, 0); assert.deepEqual([...db.records], before);
+  }
+});
+
+test('known unrelated personal-only sequence delivery remains available and missing template allows read/pause only', async () => {
+  for (const template of ['vc', 'grant', 'pitch', 'contract', 'partner', 'investor-metrics', 'contacts', 'task']) {
+    const db = setup(); db.records.delete('pipeListProtectedShares/owner-school-list');
+    db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].templateKey = template;
+    const seq = await lib.mutateSequence(db, 'owner', input('send', 0, draft()));
+    let calls = 0;
+    const delivered = await lib.dispatchSequence(db, seq.id, new Date(), async () => { calls++; return { success: true, messageId: 'synthetic-message' }; });
+    assert.equal(calls, 1); assert.equal(delivered.nextStepIndex, 1);
+  }
+  const db = setup(); const seq = await lib.mutateSequence(db, 'owner', input('send', 0, draft()));
+  delete db.records.get('simpbudget-users/owner/pipeLists/state').lists[0].templateKey;
+  assert.equal((await lib.readSequences(db, 'owner', 'school-list', 'school')).id, seq.id);
+  await assert.rejects(lib.mutateSequence(db, 'owner', input('pause', seq.version, draft())), /could not be verified/);
+  const paused = await lib.mutateSequence(db, 'owner', input('pause', seq.version));
+  assert.equal(paused.status, 'paused');
+  await assert.rejects(lib.mutateSequence(db, 'owner', input('resume', paused.version)), /could not be verified/);
 });

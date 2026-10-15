@@ -1,8 +1,10 @@
+import { guardPipeListsApiRequest } from '../../../utils/pipelistsRuntime';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getSimpBudgetAuth, getSimpBudgetFirestore } from '../../../../netlify/functions/utils/getSimpBudgetServiceAccount';
 import { OWNER_EMAIL, SequenceError, dispatchSequence, mutateSequence, readSequences, requireId } from '../../../../netlify/functions/lib/pipelistsEmailSequences';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (!guardPipeListsApiRequest(req, res)) return;
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed.' });
   try {

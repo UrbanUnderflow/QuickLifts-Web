@@ -1,3 +1,7 @@
+// Regenerate before every Next dev/build/start, including after a production build.
+const { writePipeListsDeployment } = require('./scripts/pipelists-deployment.cjs');
+const pipeListsDeployment = writePipeListsDeployment();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
@@ -13,7 +17,7 @@ const nextConfig = {
   compress: true,
   // Enable SWC minification for smaller bundles
   swcMinify: true,
-  webpack: (config, { isServer }) => {
+  webpack: (config) => {
     config.experiments = {
       ...config.experiments,
       asyncWebAssembly: true,
@@ -30,9 +34,6 @@ const nextConfig = {
         { source: '/pilot-expansion', destination: '/pilot-expansion/index.html' },
         { source: '/RunOfShow', destination: '/RunOfShow/index.html' },
         { source: '/compress-pdf', destination: '/compress-pdf/index.html' },
-        ...(process.env.NODE_ENV === 'development'
-          ? [{ source: '/api/pipelists/runbook', destination: 'https://fitwithpulse.ai/api/pipelists/runbook' }]
-          : []),
       ],
     };
   },
@@ -45,6 +46,8 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   env: {
+    // Derived here so a copied public env flag cannot enable preview/local PipeLists.
+    NEXT_PUBLIC_PIPELISTS_PRODUCTION_BUILD: String(pipeListsDeployment.production),
     // Production Firebase Config
     NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,

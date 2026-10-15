@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../../../netlify/functions/utils/emailSequenceHelpers';
+import { getSimpBudgetFirestore } from '../../../../netlify/functions/utils/getSimpBudgetServiceAccount';
+import { guardPipeListsApiRequest } from '../../../utils/pipelistsRuntime';
+import { blocksUniversityBrevoTransport, hasKnownPipeListTemplate, UNIVERSITY_BREVO_BLOCK_REASON } from '../../../utils/pipelistsTransportPolicy';
 
 type SendContactEmailRequest = {
   provider?: 'pulse-brevo';
@@ -162,6 +164,35 @@ const verifySimpBudgetAuth = async (authHeader: string | undefined): Promise<Ver
   }
 };
 
+class ContactEmailListError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
+async function readOwnedEmailList(uid: string, listId: string, emailType: string) {
+  const db = await getSimpBudgetFirestore();
+  return db.runTransaction(async tx => {
+    const stateRef = db.collection('simpbudget-users').doc(uid).collection('pipeLists').doc('state');
+    const protectedRef = db.collection('pipeListProtectedShares').doc(`${uid}-${listId}`);
+    const [state, protectedDoc] = await Promise.all([tx.get(stateRef), tx.get(protectedRef)]);
+    const lists = state.data()?.lists;
+    const matches = Array.isArray(lists) ? lists.filter((list: any) => list?.id === listId) : [];
+    if (matches.length !== 1 || matches[0].deletedAt) throw new ContactEmailListError(404, 'This owned list could not be verified.');
+    const personalList = matches[0];
+    const protectedData = protectedDoc.data();
+    const protectedList = protectedData?.list;
+    if (protectedDoc.exists && (protectedData?.ownerUid !== uid || protectedList?.id !== listId || protectedList?.deletedAt || protectedData?.listId !== listId)) {
+      throw new ContactEmailListError(403, 'This owned list could not be verified.');
+    }
+    if (blocksUniversityBrevoTransport(personalList, protectedList, emailType)) {
+      throw new ContactEmailListError(403, UNIVERSITY_BREVO_BLOCK_REASON);
+    }
+    if (!hasKnownPipeListTemplate(personalList) || (protectedDoc.exists && !hasKnownPipeListTemplate(protectedList))) {
+      throw new ContactEmailListError(403, 'The list template could not be verified. Sending is disabled.');
+    }
+    return protectedDoc.exists ? protectedList : personalList;
+  });
+}
+
 const buildContactEmailHtml = (args: {
   message: string;
   messageHtml?: string;
@@ -191,6 +222,7 @@ const buildContactEmailHtml = (args: {
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (!guardPipeListsApiRequest(req, res)) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method Not Allowed' });
   }
@@ -203,7 +235,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(403).json({ success: false, error: 'Pulse Brevo sending is only enabled for the PipeLists owner.' });
   }
 
-  const body = req.body as SendContactEmailRequest;
+  const body = (req.body || {}) as SendContactEmailRequest;
   if (body.provider !== 'pulse-brevo') {
     return res.status(400).json({ success: false, error: 'Select a configured email provider.' });
   }
@@ -223,8 +255,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const messageHtml = typeof body.messageHtml === 'string' ? body.messageHtml : '';
   const emailType = cleanEmailType(body.emailType);
   const emailTypeLabel = emailType === 'general-update' ? 'General Update' : 'Investor Update';
-  const listId = cleanText(body.listId, 120);
-  const listName = cleanText(body.listName, 120) || 'PipeLists';
+  const listId = typeof body.listId === 'string' ? body.listId.trim() : '';
+  if (!listId || listId.length > 120 || listId.includes('/')) {
+    return res.status(400).json({ success: false, error: 'Select a valid owned list.' });
+  }
+  let ownedList;
+  try {
+    ownedList = await readOwnedEmailList(verifiedUser.uid, listId, emailType);
+  } catch (error) {
+    if (!(error instanceof ContactEmailListError)) console.error('[pipelists-send-contact-email] List verification failed:', error);
+    return res.status(error instanceof ContactEmailListError ? error.status : 503).json({ success: false, error: error instanceof ContactEmailListError ? error.message : 'Unable to verify the owned list. No email was sent.' });
+  }
+  const listName = cleanText(ownedList.name, 120) || 'PipeLists';
   const ownerUid = verifiedUser.uid;
   const batchId = cleanText(body.batchId, 120) || String(Date.now());
   const attachments = Array.isArray(body.attachments)
@@ -262,6 +304,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ success: false, error: 'Add a message.' });
   }
 
+  const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('../../../../netlify/functions/utils/emailSequenceHelpers') as typeof import('../../../../netlify/functions/utils/emailSequenceHelpers');
   const results = await Promise.all(
     toEmails.map(async (toEmail) => {
       const itemIds = itemIdsByEmail.get(toEmail) || [];

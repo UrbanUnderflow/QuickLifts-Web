@@ -40,3 +40,6 @@ test-results/
 # Local machine handoff bundles and imported credentials
 .setup/
 .local-secrets/
+
+# Generated deployment provenance. Never commit an enabled production marker.
+/src/generated/pipelists-deployment.json

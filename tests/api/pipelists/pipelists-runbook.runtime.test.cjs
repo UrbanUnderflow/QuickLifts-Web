@@ -9,7 +9,7 @@ const componentSource = fs.readFileSync(
   path.join(repoRoot, 'src/components/pipelists/PipeListsRunbook.tsx'),
   'utf8',
 );
-const pageSource = fs.readFileSync(path.join(repoRoot, 'src/pages/PipeLists.tsx'), 'utf8');
+const pageSource = fs.readFileSync(path.join(repoRoot, 'src/features/PipeListsWorkspace.tsx'), 'utf8');
 const rulesSource = fs.readFileSync(path.join(repoRoot, 'firestore.simpbudget.rules'), 'utf8');
 
 test('runbook API derives the actor and workspace access from verified SimpBudget identity', () => {

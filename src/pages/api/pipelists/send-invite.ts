@@ -1,5 +1,5 @@
+import { guardPipeListsApiRequest } from '../../../utils/pipelistsRuntime';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { buildEmailDedupeKey, sendBrevoTransactionalEmail } from '../../../../netlify/functions/utils/emailSequenceHelpers';
 
 type SendInviteRequest = {
   toEmail?: string;
@@ -118,6 +118,7 @@ const buildInviteHtml = (args: {
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (!guardPipeListsApiRequest(req, res)) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method Not Allowed' });
   }
@@ -151,6 +152,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ success: false, error: 'At least one PipeList is required.' });
   }
 
+  const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = await import('../../../../netlify/functions/utils/emailSequenceHelpers');
   const result = await sendBrevoTransactionalEmail({
     toEmail,
     toName: toEmail,

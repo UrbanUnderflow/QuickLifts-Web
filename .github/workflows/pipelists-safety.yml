@@ -1,0 +1,45 @@
+name: PipeLists Safety
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/pipelists-safety.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'next.config.js'
+      - 'netlify.toml'
+      - 'scripts/pipelists-deployment.cjs'
+      - 'src/pages/_app.tsx'
+      - 'src/pages/PipeLists*.tsx'
+      - 'src/features/PipeListsWorkspace.tsx'
+      - 'src/components/ApplicationShell.tsx'
+      - 'src/components/pipelists/**'
+      - 'src/pages/api/pipelists/**'
+      - 'src/utils/pipelists*.ts'
+      - 'netlify/functions/*pipelists*'
+      - 'netlify/functions/lib/pipelists*'
+      - 'netlify/functions/brevo-email-webhook.ts'
+      - 'tests/**/pipelists*'
+      - 'tests/api/pipelists/**'
+      - 'tests/api/equity/brevo-email-webhook.runtime.test.cjs'
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-safety:
+    name: Isolated PipeLists safety checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run test:pipelists:safety
+      - run: npm run typecheck

@@ -8,7 +8,7 @@ const repoRoot = path.resolve(__dirname, '../../..');
 const read = (relativePath) => fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 
 test('PipeLists Find leads routes pasted university batches through the local API', () => {
-  const pipeLists = read('src/pages/PipeLists.tsx');
+  const pipeLists = read('src/features/PipeListsWorkspace.tsx');
 
   assert.match(
     pipeLists,
@@ -192,7 +192,7 @@ test('PipeLists generate-leads API accepts larger structured pasted lists', () =
 });
 
 test('PipeLists supports bulk select, delete, and move from the list toolbar', () => {
-  const pipeLists = read('src/pages/PipeLists.tsx');
+  const pipeLists = read('src/features/PipeListsWorkspace.tsx');
 
   assert.match(pipeLists, /const \[isBulkSelectionMode, setIsBulkSelectionMode\] = useState\(false\)/);
   assert.match(pipeLists, /const \[selectedBulkItemIds, setSelectedBulkItemIds\] = useState<string\[\]>\(\[\]\)/);
@@ -205,7 +205,7 @@ test('PipeLists supports bulk select, delete, and move from the list toolbar', (
 });
 
 test('PipeLists visible rows sort progressed stages before Identified and lost stages last', () => {
-  const pipeLists = read('src/pages/PipeLists.tsx');
+  const pipeLists = read('src/features/PipeListsWorkspace.tsx');
 
   assert.match(
     pipeLists,
@@ -235,7 +235,7 @@ test('PipeLists visible rows sort progressed stages before Identified and lost s
 });
 
 test('PipeLists visible rows show their current sorted row number', () => {
-  const pipeLists = read('src/pages/PipeLists.tsx');
+  const pipeLists = read('src/features/PipeListsWorkspace.tsx');
 
   assert.match(
     pipeLists,
@@ -255,7 +255,7 @@ test('PipeLists visible rows show their current sorted row number', () => {
 });
 
 test('PipeLists opens an unverified source before allowing the lead to be added', () => {
-  const pipeLists = read('src/pages/PipeLists.tsx');
+  const pipeLists = read('src/features/PipeListsWorkspace.tsx');
 
   assert.match(
     pipeLists,

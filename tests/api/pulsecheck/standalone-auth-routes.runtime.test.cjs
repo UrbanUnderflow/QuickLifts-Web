@@ -79,7 +79,7 @@ test('passive public pages render while Firebase auth initializes', () => {
 });
 
 test('PipeLists login controls recover when standalone auth readiness stalls', () => {
-  const pipeLists = read('src/pages/PipeLists.tsx');
+  const pipeLists = read('src/features/PipeListsWorkspace.tsx');
 
   assert.match(
     pipeLists,
@@ -109,7 +109,7 @@ test('PipeLists login controls recover when standalone auth readiness stalls', (
 });
 
 test('PipeLists Google login falls back to redirect when the popup is blocked or closed', () => {
-  const pipeLists = read('src/pages/PipeLists.tsx');
+  const pipeLists = read('src/features/PipeListsWorkspace.tsx');
 
   assert.match(
     pipeLists,

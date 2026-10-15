@@ -1,3 +1,4 @@
+import { guardPipeListsApiRequest } from '../../../utils/pipelistsRuntime';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 const OPENAI_LEAD_GEN_MODEL = process.env.OPENAI_LEAD_GEN_MODEL || process.env.OPENAI_SEARCH_MODEL || 'gpt-4o-mini';
@@ -357,6 +358,7 @@ const sanitizeLead = (
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (!guardPipeListsApiRequest(req, res)) return;
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }

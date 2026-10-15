@@ -1,6 +1,8 @@
 import { createHash } from 'crypto';
+import { assertPipeListsProductionRuntime } from '../../../src/utils/pipelistsRuntime';
+import { blocksUniversityBrevoTransport, hasKnownPipeListTemplate, UNIVERSITY_BREVO_BLOCK_REASON } from '../../../src/utils/pipelistsTransportPolicy';
 import { sequenceReadinessIssues, type EmailSequence, type SequenceStep } from '../../../src/utils/pipelistsEmailSequence';
-import { sendBrevoTransactionalEmail } from '../utils/emailSequenceHelpers';
+import type { sendBrevoTransactionalEmail } from '../utils/emailSequenceHelpers';
 
 export const COLLECTION = 'pipeListEmailSequences';
 export const OWNER_EMAIL = 'tremaine.grant@gmail.com';
@@ -67,20 +69,35 @@ export function requireReady(sequence: Pick<EmailSequence, 'steps'>) {
     throw new SequenceError(400, `Complete these fields or placeholders before automatic follow-ups: ${details}`);
   }
 }
-async function readLead(db: DB, tx: FirebaseFirestore.Transaction, uid: string, listId: string, itemId?: string) {
+async function readListRecords(db: DB, tx: FirebaseFirestore.Transaction, uid: string, listId: string) {
   const stateRef = db.collection('simpbudget-users').doc(uid).collection('pipeLists').doc('state');
   const protectedRef = db.collection('pipeListProtectedShares').doc(`${uid}-${listId}`);
   const [state, protectedDoc] = await Promise.all([tx.get(stateRef), tx.get(protectedRef)]);
-  const lists = state.data()?.lists || [];
-  const personalList = lists.find((l: any) => l.id === listId && !l.deletedAt);
+  const lists = Array.isArray(state.data()?.lists) ? state.data()!.lists : [];
+  const protectedData = protectedDoc.data();
+  const protectedList = protectedData?.list;
+  return { stateRef, protectedRef, lists, protectedDoc, protectedData, protectedList };
+}
+type ListRecords = Awaited<ReturnType<typeof readListRecords>>;
+function hasVerifiedTransportList(records: ListRecords, uid: string, listId: string): boolean {
+  const matches = records.lists.filter((list: any) => list?.id === listId);
+  if (matches.length !== 1 || matches[0].deletedAt || !hasKnownPipeListTemplate(matches[0])) return false;
+  if (!records.protectedDoc.exists) return true;
+  return records.protectedData?.ownerUid === uid && records.protectedData?.listId === listId &&
+    records.protectedList?.id === listId && !records.protectedList?.deletedAt && hasKnownPipeListTemplate(records.protectedList);
+}
+async function readLead(db: DB, tx: FirebaseFirestore.Transaction, uid: string, listId: string, itemId?: string, records?: ListRecords) {
+  const { stateRef, protectedRef, lists, protectedDoc, protectedList } = records || await readListRecords(db, tx, uid, listId);
+  const matches = lists.filter((list: any) => list?.id === listId);
+  if (matches.length > 1) throw new SequenceError(403, 'This owned list could not be verified.');
+  const personalList = matches.find((list: any) => !list.deletedAt);
   if (!personalList) throw new SequenceError(404, 'This list no longer exists.');
   if (itemId && !personalList.items?.some((item: any) => item.id === itemId && !item.deletedAt)) throw new SequenceError(404, 'This lead no longer exists in the list.');
-  const protectedList = protectedDoc.data()?.list;
   const list = protectedList?.id === listId ? protectedList : personalList;
-  if (protectedDoc.exists && protectedDoc.data()?.ownerUid && protectedDoc.data()?.ownerUid !== uid) throw new SequenceError(403, 'You do not own this list.');
+  if (protectedDoc.exists && (protectedDoc.data()?.ownerUid !== uid || protectedDoc.data()?.listId !== listId || protectedList?.id !== listId || protectedList?.deletedAt)) throw new SequenceError(403, 'This owned list could not be verified.');
   const item = itemId ? list.items?.find((i: any) => i.id === itemId && !i.deletedAt) : null;
   if (itemId && !item) throw new SequenceError(404, 'This lead no longer exists.');
-  return { stateRef, protectedRef, lists, list, item, protectedList, personalItem: personalList.items?.find((item: any) => item.id === itemId) };
+  return { stateRef, protectedRef, lists, list, item, protectedList, personalList, personalItem: personalList.items?.find((item: any) => item.id === itemId) };
 }
 async function clearScheduledDueDate(db: DB, tx: FirebaseFirestore.Transaction, s: StoredSequence) {
   if (!s.nextSendAt) return;
@@ -92,6 +109,7 @@ async function clearScheduledDueDate(db: DB, tx: FirebaseFirestore.Transaction, 
   if (lead.protectedList) tx.update(lead.protectedRef, { list: clear(lead.protectedList) });
 }
 export async function readSequences(db: DB, uid: string, listId: string, itemId?: string) {
+  assertPipeListsProductionRuntime();
   await db.runTransaction(tx => readLead(db, tx, uid, listId, itemId));
   if (itemId) {
     const data = (await db.collection(COLLECTION).doc(sequenceId(uid, listId, itemId)).get()).data();
@@ -101,13 +119,21 @@ export async function readSequences(db: DB, uid: string, listId: string, itemId?
   return snapshot.docs.map(d => ({ ...d.data(), ccEmails: d.data().ccEmails || [], bccEmails: d.data().bccEmails || [] } as FirebaseFirestore.DocumentData)).filter(s => s.listId === listId);
 }
 export async function mutateSequence(db: DB, uid: string, input: any, now = new Date()): Promise<StoredSequence> {
+  assertPipeListsProductionRuntime();
   const listId = requireId(input.listId), itemId = requireId(input.itemId);
   if (!['save', 'send', 'pause', 'resume'].includes(input.action) || !Number.isInteger(input.expectedVersion)) throw new SequenceError(400, 'Invalid sequence action or version.');
   const ref = db.collection(COLLECTION).doc(sequenceId(uid, listId, itemId));
   return db.runTransaction(async tx => {
     const snap = await tx.get(ref);
-    const lead = await readLead(db, tx, uid, listId, itemId);
+    const identities = await readListRecords(db, tx, uid, listId);
+    const verifiedTransportList = hasVerifiedTransportList(identities, uid, listId);
+    if (!verifiedTransportList && (input.action !== 'pause' || input.sequence)) throw new SequenceError(403, 'The owned list and template could not be verified. Sending is disabled.');
+    const lead = await readLead(db, tx, uid, listId, itemId, identities);
     const old = snap.data() as StoredSequence | undefined;
+    const universityList = blocksUniversityBrevoTransport(lead.personalList, lead.protectedList);
+    if (universityList && input.action !== 'pause') throw new SequenceError(403, UNIVERSITY_BREVO_BLOCK_REASON);
+    // Pausing remains available, but cannot carry a hidden draft edit.
+    if (universityList && input.sequence) throw new SequenceError(403, UNIVERSITY_BREVO_BLOCK_REASON);
     if ((old?.version || 0) !== input.expectedVersion) throw new SequenceError(409, 'This sequence changed. Reload before saving.');
     if (old?.attempt) throw new SequenceError(409, 'An email is being sent or needs delivery review. Reload shortly.');
     const timestamp = now.toISOString();
@@ -149,11 +175,16 @@ export function emailHtml(body: string, sender: string) {
   const text = escapeHtml(body).replace(/(https?:\/\/[^\s<>]+)/g, url => `<a href="${url}">${url}</a>`).replace(/\n/g, '<br>');
   return `<div>${text}<p><strong>Tremaine Grant</strong><br>Founder &amp; CEO · <a href="https://pulseintelligencelabs.com">Pulse Intelligence Labs</a><br><a href="mailto:${escapeHtml(sender)}">${escapeHtml(sender)}</a></p></div>`;
 }
-export async function dispatchSequence(db: DB, id: string, now = new Date(), send = sendBrevoTransactionalEmail): Promise<StoredSequence | null> {
+export async function dispatchSequence(db: DB, id: string, now = new Date(), send?: typeof sendBrevoTransactionalEmail): Promise<StoredSequence | null> {
+  assertPipeListsProductionRuntime();
   const ref = db.collection(COLLECTION).doc(id);
   const claimed = await db.runTransaction(async tx => {
     const snap = await tx.get(ref); const s = snap.data() as StoredSequence | undefined;
     if (!s || s.status !== 'active' || !s.nextSendAt || s.nextSendAt > now.toISOString()) return null;
+    // Read the persisted list identity before any claim or queue mutation.
+    // Existing university records remain available for delivery review.
+    const identities = await readListRecords(db, tx, s.ownerUid, s.listId);
+    if (!hasVerifiedTransportList(identities, s.ownerUid, s.listId) || identities.lists.some((list: any) => list?.id === s.listId && blocksUniversityBrevoTransport(list)) || blocksUniversityBrevoTransport(undefined, identities.protectedList)) return null;
     if (s.attempt) {
       if (now.getTime() - new Date(s.attempt.startedAt).getTime() > 15 * 60000) {
         await clearScheduledDueDate(db, tx, s);
@@ -162,7 +193,7 @@ export async function dispatchSequence(db: DB, id: string, now = new Date(), sen
       return null;
     }
     try {
-      const lead = await readLead(db, tx, s.ownerUid, s.listId, s.itemId);
+      const lead = await readLead(db, tx, s.ownerUid, s.listId, s.itemId, identities);
       if (['unsubscribed', 'unsubscribe', 'blocked', 'hard_bounce', 'spam', 'invalid_email', 'error'].some(status => [lead.item.emailStatus, lead.personalItem?.emailStatus].includes(status))) throw new Error('The contact has an email delivery issue. Review before continuing.');
       validateDraft(s, s);
       requireReady(s);
@@ -178,7 +209,8 @@ export async function dispatchSequence(db: DB, id: string, now = new Date(), sen
   const key = `pipelists-sequence:${id}:${step.id}`;
   let result;
   try {
-    result = await send({ toEmail: claimed.toEmail, cc: (claimed.ccEmails || []).map(email => ({ email })), bcc: (claimed.bccEmails || []).map(email => ({ email })), checkAllRecipientSuppression: true, subject: step.subject, htmlContent: emailHtml(step.body, claimed.fromEmail), sender: { email: claimed.fromEmail, name: claimed.fromEmail === 'tre@fitwithpulse.ai' ? 'Tremaine Grant' : 'Pulse' }, preserveSenderEmail: true, replyTo: { email: claimed.fromEmail }, tags: ['pipelists', 'school-outreach'], headers: { 'X-Mailin-custom': JSON.stringify({ pipeListsOwnerUid: claimed.ownerUid, pipeListsListId: claimed.listId, pipeListsItemIds: [claimed.itemId], pipeListsEmailType: 'school-outreach', pipeListsSequenceId: id, pipeListsSequenceStepId: step.id, pipeListsEmailBatchId: key, pipeListsEmailRecordId: key }) }, idempotencyKey: key, idempotencyMetadata: { feature: 'PipeLists school outreach', sequenceId: id, stepId: step.id }, bypassDailyRecipientLimit: true, failClosedOnSuppressionError: true });
+    const deliver = send || (require('../utils/emailSequenceHelpers') as typeof import('../utils/emailSequenceHelpers')).sendBrevoTransactionalEmail;
+    result = await deliver({ toEmail: claimed.toEmail, cc: (claimed.ccEmails || []).map(email => ({ email })), bcc: (claimed.bccEmails || []).map(email => ({ email })), checkAllRecipientSuppression: true, subject: step.subject, htmlContent: emailHtml(step.body, claimed.fromEmail), sender: { email: claimed.fromEmail, name: claimed.fromEmail === 'tre@fitwithpulse.ai' ? 'Tremaine Grant' : 'Pulse' }, preserveSenderEmail: true, replyTo: { email: claimed.fromEmail }, tags: ['pipelists', 'school-outreach'], headers: { 'X-Mailin-custom': JSON.stringify({ pipeListsOwnerUid: claimed.ownerUid, pipeListsListId: claimed.listId, pipeListsItemIds: [claimed.itemId], pipeListsEmailType: 'school-outreach', pipeListsSequenceId: id, pipeListsSequenceStepId: step.id, pipeListsEmailBatchId: key, pipeListsEmailRecordId: key }) }, idempotencyKey: key, idempotencyMetadata: { feature: 'PipeLists school outreach', sequenceId: id, stepId: step.id }, bypassDailyRecipientLimit: true, failClosedOnSuppressionError: true });
   } catch (error) { result = { success: false, error: `Delivery outcome is uncertain: ${(error as Error).message}` }; }
   const sentAt = new Date().toISOString();
   return db.runTransaction(async tx => {

@@ -182,7 +182,8 @@
     "promo:create-custom": "node scripts/create-promo-codes.js custom",
     "heartbeat:tracker": "node scripts/hourlyObjectiveTracker.js",
     "pulsecheckathletedemo:audio": "node scripts/generate-pulsecheckathletedemo-audio.js",
-    "media:pulsecheck-appstore": "node scripts/generate-pulsecheck-app-store-media.cjs"
+    "media:pulsecheck-appstore": "node scripts/generate-pulsecheck-app-store-media.cjs",
+    "test:pipelists:safety": "node --import tsx --test tests/unit/pipelists-*.test.ts && node --test tests/api/pipelists/*.test.cjs tests/api/equity/brevo-email-webhook.runtime.test.cjs tests/api/pulsecheck/pipelists-deadline-reminders.runtime.test.cjs tests/api/pulsecheck/pipelists-lead-generation.runtime.test.cjs tests/ui/pipelists-queue-dom.test.cjs"
   },
   "browserslist": {
     "production": [

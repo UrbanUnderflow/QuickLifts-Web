@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
+import { preserveStoredUniversityList } from '../../src/utils/pipelistsPersistence';
 import { runPipeListSaveWithRetry } from '../../src/utils/pipelistsAutosave';
 import { mergePipeListSnapshotsThreeWay, pipeListSnapshotsEqual } from '../../src/utils/pipelistsCollaboration';
 
-const source = fs.readFileSync(new URL('../../src/pages/PipeLists.tsx', import.meta.url), 'utf8');
+const source = fs.readFileSync(new URL('../../src/features/PipeListsWorkspace.tsx', import.meta.url), 'utf8');
 const start = source.indexOf('    if (isSharedView) return;\n    if (!user || !dataReady || !personalStateReady) return;');
 assert.notEqual(start, -1, 'personal autosave effect must exist');
 const end = source.indexOf('\n  }, [dataReady, isOwner, isSharedView, lists, personalStateReady', start);
@@ -26,11 +27,11 @@ function harness() {
   const schedule = (callback: () => unknown) => { const id = ++timerId; timers.set(id, callback); return id; };
   const scope: any = {
     isSharedView: false, user: { uid: 'owner', email: 'owner@example.com' }, dataReady: true, personalStateReady: true,
-    lists: board('cold-email-sent'), sharedListIds: new Set(), universityStageMigrationPending: false, isOwner: true,
+    lists: board('cold-email-sent'), sharedListIds: new Set(), isOwner: true,
     personalSnapshotBaselineRef: { current: board('outreach-queued') }, personalListsRef: { current: board('outreach-queued') },
     personalSaveQueueRef: { current: Promise.resolve() }, simpBudgetAuth: { currentUser: { uid: 'owner' } },
     purgeExpiredDeletedItems: (value: any) => value, normalizeList: (value: any) => value,
-    pipeListSnapshotsEqual, mergePipeListSnapshotsThreeWay, needsUniversityStageMigration: () => false,
+    pipeListSnapshotsEqual, mergePipeListSnapshotsThreeWay, preserveStoredUniversityList,
     stripUndefined: (value: any) => value, serverTimestamp: () => 'server-time', doc: (...args: any[]) => args,
     simpBudgetDb: {}, SIMPBUDGET_USERS_COLLECTION: 'users', PIPELISTS_SUBCOLLECTION: 'pipeLists', PIPELISTS_STATE_DOCUMENT_ID: 'state', STORAGE_KEY: 'cache',
     personalSaveFailureRef: { current: null }, saveFailureDetails: (error: any) => ({ message: error.message, code: error.code }),
@@ -192,4 +193,21 @@ test('observed stored-version failed-precondition is retryable but other precond
   const error = Object.assign(new Error('Missing required index'), { code: 'failed-precondition' });
   await assert.rejects(runPipeListSaveWithRetry(async () => { attempts++; throw error; }, () => true, async () => { assert.fail('must not wait'); }), (caught) => caught === error);
   assert.equal(attempts, 1);
+});
+
+test('owner load and unrelated autosave preserve raw university stage/history representation', async () => {
+  const h = harness();
+  const university: any = { id: 'university', templateKey: 'university-pilot', stages: [{ id: 'cold-email-sent', label: 'Custom stage' }], items: [{ id: 'legacy', stage: 'closed-won', weeklyLogs: [{ summary: 'Existing synthetic history' }] }] };
+  const other: any = { id: 'other', templateKey: 'contacts', name: 'Unchanged', items: [] };
+  const normalize = (list: any) => list.templateKey === 'university-pilot' ? { ...list, stages: list.stages.some((stage: any) => stage.id === 'call-attempted') ? list.stages : [...list.stages, { id: 'call-attempted' }], items: list.items.map((item: any) => ({ ...item, stage: item.stage === 'closed-won' ? 'pilot-active' : item.stage, notes: '' })) } : list;
+  h.state.remote = [university, other];
+  h.scope.normalizeList = normalize;
+  h.scope.personalSnapshotBaselineRef.current = h.state.remote.map(normalize);
+  h.scope.lists = structuredClone(h.scope.personalSnapshotBaselineRef.current);
+  h.start(); await h.tick(); assert.equal(h.state.writes.length, 0);
+  h.scope.lists[1].name = 'Explicit unrelated edit';
+  h.start(); await h.tick();
+  assert.equal(h.state.writes.length, 1);
+  assert.deepEqual(h.state.remote[0], university);
+  assert.equal((h.state.remote[1] as any).name, 'Explicit unrelated edit');
 });
