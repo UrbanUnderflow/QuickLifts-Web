@@ -1,0 +1,283 @@
+{
+  "title": "University Pilot Sales Strategy",
+  "status": "proposed_pending_live_runbook_reconciliation",
+  "authorization": "Documentation only; no sending or CRM-write authorization granted",
+  "source": "repository default university sales runbook; current live version unverified",
+  "stages": [
+    {
+      "stage": "Identified",
+      "evidence": "University fit and credible need hypothesis, with a source and verification date.",
+      "action": "Research owner records contacts, missing evidence and next action.",
+      "exit": "Outreach Queued only when fit, two stakeholders and draft preparation are complete."
+    },
+    {
+      "stage": "Outreach Queued",
+      "evidence": "Named owner, two verified stakeholders, relevant message and approved resource.",
+      "action": "Prepare Gmail sender, recipient, follow-up plan, call task and authorization record.",
+      "exit": "First Email Sent only after a verified send result; a draft stays queued."
+    },
+    {
+      "stage": "First Email Sent",
+      "evidence": "Verified Day 1 Gmail send, logged with recipient, time and message/thread reference.",
+      "action": "Read replies before the next touch. Record the completed action in the contact activity log, verify the saved log, then move the card and set the next action/date.",
+      "exit": "A substantive reply moves directly to Engaged or the appropriate outcome. Stop requests suppress outreach. Advance to another touchpoint only after that action is verified; log any skipped touch explicitly."
+    },
+    {
+      "stage": "Call Attempted",
+      "evidence": "Human-confirmed Day 4 call attempt, logged with time, caller and actual outcome.",
+      "action": "Read replies before the next touch. Record the completed action in the contact activity log, verify the saved log, then move the card and set the next action/date.",
+      "exit": "A substantive reply moves directly to Engaged or the appropriate outcome. Stop requests suppress outreach. Advance to another touchpoint only after that action is verified; log any skipped touch explicitly."
+    },
+    {
+      "stage": "Follow-Up Email Sent",
+      "evidence": "Verified Day 8 Gmail follow-up in the existing thread, logged with send evidence.",
+      "action": "Read replies before the next touch. Record the completed action in the contact activity log, verify the saved log, then move the card and set the next action/date.",
+      "exit": "A substantive reply moves directly to Engaged or the appropriate outcome. Stop requests suppress outreach. Advance to another touchpoint only after that action is verified; log any skipped touch explicitly."
+    },
+    {
+      "stage": "Final Outreach Email Sent",
+      "evidence": "Verified Day 12 final outreach email in Gmail, logged with send evidence.",
+      "action": "Read replies before the next touch. Record the completed action in the contact activity log, verify the saved log, then move the card and set the next action/date.",
+      "exit": "A substantive reply moves directly to Engaged or the appropriate outcome. Stop requests suppress outreach. Advance to another touchpoint only after that action is verified; log any skipped touch explicitly."
+    },
+    {
+      "stage": "Engaged",
+      "evidence": "Relevant human reply or conversation; record interest, objection or referral.",
+      "action": "Pause generic follow-ups. Qualify priority, workflow, timing and buying group.",
+      "exit": "Meeting Scheduled requires an agreed time and attendees; a proposed time is insufficient."
+    },
+    {
+      "stage": "Meeting Scheduled",
+      "evidence": "Confirmed meeting, participants and purpose.",
+      "action": "Prepare discovery and persona-specific demonstration. Log findings and technical questions after the meeting.",
+      "exit": "Proposal Sent requires completed discovery/validation evidence, approved terms and confirmed proposal delivery."
+    },
+    {
+      "stage": "Proposal Sent",
+      "evidence": "Approved scope, cohort, responsibilities, support path, price and dates sent to the buyer.",
+      "action": "Track questions, procurement/security path and the agreed review date.",
+      "exit": "Negotiating requires actual buyer discussion of terms or changes; silence is not negotiation."
+    },
+    {
+      "stage": "Negotiating",
+      "evidence": "Documented buyer requests and unresolved commercial or procurement issues.",
+      "action": "Prepare responses; founder owns pricing, commitments and exceptions.",
+      "exit": "Pilot Agreed requires documented mutual agreement on scope, price and responsibilities."
+    },
+    {
+      "stage": "Pilot Agreed",
+      "evidence": "Mutual agreement and a defined contracting path.",
+      "action": "Coordinate contract review and launch preparation; record unresolved conditions.",
+      "exit": "Contract Signed requires the executed agreement, not verbal approval."
+    },
+    {
+      "stage": "Contract Signed",
+      "evidence": "Verified executed agreement with scope, value and term.",
+      "action": "Record pilot value separately from post-pilot annual value. Assign implementation owner.",
+      "exit": "Pilot Active requires completed launch tasks and first valid reporting week. A free pilot contract is not paid conversion."
+    },
+    {
+      "stage": "Pilot Active",
+      "evidence": "Launch complete, confirmed cohort and valid reporting inputs.",
+      "action": "Weekly scorecard; coach/coordinator working review every two weeks; midpoint buyer review.",
+      "exit": "Pilot Complete requires end-of-pilot review and recorded outcome. Track paid conversion, renewal and expansion separately."
+    },
+    {
+      "stage": "Pilot Complete",
+      "evidence": "Documented results, limitations, buyer decision and follow-through owner.",
+      "action": "Hand off paid delivery, a bounded extension, expansion or agreed closure.",
+      "exit": "No automatic revenue claim. Link the commercial outcome and its actual signed value."
+    },
+    {
+      "stage": "Closed Lost / Paused",
+      "evidence": "Recorded reason and explicit distinction between lost and paused.",
+      "action": "For paused accounts, keep a restart condition and date. For stop requests, suppress outreach.",
+      "exit": "Reopen only with documented new evidence and appropriate authorization."
+    }
+  ],
+  "outreach": [
+    {
+      "timing": "Before Day 1",
+      "action": "Research and qualify",
+      "requirement": "Verify institutional fit, source freshness and at least two relevant stakeholders. Draft one credible workflow hypothesis."
+    },
+    {
+      "timing": "Day 1",
+      "action": "First email",
+      "requirement": "Observation, relevant problem, useful outcome and one 10\u201315 minute ask. Confirm recipient and sending authorization."
+    },
+    {
+      "timing": "Day 4",
+      "action": "Call task",
+      "requirement": "Assigned human makes the call; voicemail references the first email and stays under 25 seconds. Record the actual outcome."
+    },
+    {
+      "timing": "Day 8",
+      "action": "Proof follow-up",
+      "requirement": "Use the existing thread and one approved workflow visual, pilot blueprint or case study. Illustrative examples remain labeled."
+    },
+    {
+      "timing": "Day 12",
+      "action": "Close the loop",
+      "requirement": "Offer two real availability options, ask for the correct owner or request permission to reconnect."
+    },
+    {
+      "timing": "Day 21 onward",
+      "action": "Trigger-based nurture",
+      "requirement": "Use an actual season, budget, event or new approved evidence trigger. Record the reason and next date; avoid indefinite automatic chasing."
+    }
+  ],
+  "responses": [
+    {
+      "response": "Interested",
+      "action": "Pause generic sequence; record the stated need and route to founder for discovery. Offer only confirmed availability with authorization.",
+      "stageRule": "Engaged; scheduled only after agreement."
+    },
+    {
+      "response": "Referral / wrong person",
+      "action": "Record referral evidence, verify the new person and suppression status; prepare a relevant introduction.",
+      "stageRule": "Keep the account stage evidence-based; new contact is not automatically engaged."
+    },
+    {
+      "response": "Not now",
+      "action": "Record the requested timing and reason. Pause the sequence and schedule an authorized revisit.",
+      "stageRule": "Paused with restart condition and date."
+    },
+    {
+      "response": "Objection / existing provider",
+      "action": "Record the objection accurately. Prepare a response grounded in approved product facts and the current workflow.",
+      "stageRule": "Founder handles pricing, clinical, compliance and contractual questions."
+    },
+    {
+      "response": "No response",
+      "action": "Continue only the approved remaining touches. After the sequence, move to trigger-based nurture.",
+      "stageRule": "Do not advance based on delivery, opens or clicks."
+    },
+    {
+      "response": "Stop / unsubscribe",
+      "action": "Stop further outreach immediately through the authorized suppression workflow; verify sequence is paused and alert the owner.",
+      "stageRule": "Record do-not-contact status. If access fails, escalate urgently; do not send."
+    },
+    {
+      "response": "Bounce / delivery error",
+      "action": "Stop the sequence; verify the address and delivery state before any retry.",
+      "stageRule": "Report blocked delivery; never invent a replacement address."
+    },
+    {
+      "response": "Ambiguous send / save failure",
+      "action": "Re-read the record and provider state. Reconcile whether the action completed before retrying.",
+      "stageRule": "Unknown outcome stays unresolved; prevent duplicate sends or updates."
+    }
+  ],
+  "fields": [
+    {
+      "purpose": "Account identity",
+      "fields": "Title, Organization, Source URL",
+      "rule": "Check for existing organization/contact records before adding a lead."
+    },
+    {
+      "purpose": "Execution",
+      "fields": "Owner, Priority, Next Step, Next Action Required Date",
+      "rule": "One concrete action with a person and date. Do not infer an owner from a name mentioned in notes."
+    },
+    {
+      "purpose": "Contacts and authority",
+      "fields": "Contact Emails, Contact Phone, LinkedIn URL, Decision Maker",
+      "rule": "Verify role and source. Record champion and other stakeholders in structured notes when no dedicated field exists."
+    },
+    {
+      "purpose": "Evidence and history",
+      "fields": "Notes, attachments, activity logs",
+      "rule": "Record date, actor, observed result, source and next step. Separate facts, hypotheses and proposed actions."
+    },
+    {
+      "purpose": "Commercial plan",
+      "fields": "Amount, ACV, Expected Close Date, Contract Term",
+      "rule": "Label pilot value and post-pilot annual value separately. Stage probability is not observed conversion evidence."
+    },
+    {
+      "purpose": "Pilot plan",
+      "fields": "Pilot Scope, Athlete Count, Pilot Start, Pilot End, Expansion Path",
+      "rule": "Add success plan, review dates, support contacts and handoff owner."
+    },
+    {
+      "purpose": "Outcome",
+      "fields": "Loss Reason, notes and linked commercial evidence",
+      "rule": "Differentiate paid conversion, renewal, expansion, extension, paused and closed lost."
+    }
+  ],
+  "resources": [
+    "University pilot overview",
+    "Performance and sports medicine workflow briefs",
+    "Discovery guide and stakeholder map",
+    "Role-specific demonstration script",
+    "Pilot charter, success plan and mutual action plan",
+    "Security, privacy, data-flow and accessibility packet",
+    "Claims and evidence guide",
+    "Staff and athlete launch communications",
+    "Weekly scorecard, midpoint review and executive readout",
+    "Pricing and procurement checklist"
+  ],
+  "unresolved": [
+    "Live runbook version",
+    "Target segment and exclusions",
+    "Named owners and capacity",
+    "Approved sending scope and volume",
+    "Reply monitoring and stop controls",
+    "Verified Gmail sender access, reply monitoring and scheduling controls",
+    "Approved asset versions",
+    "Calendar-day vs business-day timing",
+    "Recurring run schedule"
+  ],
+  "cadence": {
+    "pilotWorkingReview": "every two weeks",
+    "pilotScorecard": "weekly",
+    "internalSalesReview": "weekly proposed"
+  },
+  "emailChannel": {
+    "decision": "approved_by_founder",
+    "provider": "gmail",
+    "sender": "founder-approved business Gmail inbox; verify exact account before sending",
+    "crm": "PipeLists for stages, activity logs, owners and next actions",
+    "prohibited": [
+      "PipeLists Brevo Send Email",
+      "PipeLists Brevo email-sequence send/resume",
+      "Fallback to Brevo when Gmail is unavailable"
+    ],
+    "beforeSend": [
+      "Verify sender, recipient, latest Gmail thread, replies, suppression, scheduled touches and prior sends",
+      "Block while an existing Brevo sequence is active; an authorized owner must pause and verify its stop",
+      "Verify authorized Gmail send/read access; otherwise draft only"
+    ],
+    "stopRules": "Pause generic follow-ups on reply; stop on opt-out or delivery failure; verify queued sends cancelled",
+    "record": [
+      "recipient",
+      "send time",
+      "subject",
+      "available Gmail message/thread reference",
+      "verified outcome",
+      "next action/date"
+    ],
+    "tracking": "Log Gmail evidence in PipeLists; automatic sync unverified; Brevo events are not Gmail evidence",
+    "unknownOutcome": "Reconcile Gmail Sent and thread before retrying; never switch provider"
+  },
+  "touchpoints": {
+    "stageIds": [
+      "cold-email-sent",
+      "call-attempted",
+      "follow-up-email-sent",
+      "final-outreach-email-sent"
+    ],
+    "rule": "Latest verified completed touchpoint; full history stays in activity logs. Dates alone never advance a card.",
+    "legacy": "cold-email-sent retains its ID and becomes First Email Sent; do not infer later touches from legacy cards.",
+    "afterFinal": "Keep Final Outreach Email Sent until a reply, explicit pause/closure or approved nurture action; no automatic Engaged transition."
+  },
+  "productIdentity": {
+    "name": "Athletic Mind",
+    "parts": [
+      "mental performance",
+      "mental care"
+    ],
+    "rule": "Present equal parts of one product; omit underlying company names from school-facing materials; preserve clinical responsibilities, consent and evidence boundaries."
+  }
+}

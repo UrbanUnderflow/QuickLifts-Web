@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "data": {
+    "baselineId": "baseline_synthetic_001",
+    "athleteId": "athlete_synthetic_001",
+    "externalId": "synthetic-athlete-001",
+    "submissionId": "synthetic-starting-point-v2-001",
+    "receivedAt": "2026-10-14T16:00:00.000Z",
+    "created": true
+  },
+  "requestId": "request_synthetic_001"
+}

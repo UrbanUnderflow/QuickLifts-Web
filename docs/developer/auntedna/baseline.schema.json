@@ -1,0 +1,1043 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pulse to AuntEdna Starting Point baseline request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "submissionId",
+    "version",
+    "ownershipVersion",
+    "identity",
+    "fields",
+    "universityCode"
+  ],
+  "properties": {
+    "submissionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "version": {
+      "const": "cau-starting-point-v2"
+    },
+    "ownershipVersion": {
+      "const": "cau-routing-v3"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "email",
+        "verification"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 254
+        },
+        "verification": {
+          "const": "self_reported"
+        }
+      }
+    },
+    "fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cau-starting-point-02",
+        "cau-starting-point-03",
+        "cau-starting-point-04",
+        "cau-starting-point-06",
+        "cau-starting-point-07",
+        "cau-starting-point-08",
+        "cau-starting-point-35",
+        "cau-starting-point-36",
+        "cau-starting-point-37",
+        "cau-starting-point-38",
+        "cau-starting-point-39",
+        "cau-starting-point-40",
+        "cau-starting-point-41",
+        "cau-starting-point-42",
+        "cau-starting-point-43",
+        "cau-starting-point-44",
+        "cau-starting-point-45",
+        "cau-starting-point-47",
+        "cau-starting-point-48"
+      ],
+      "properties": {
+        "cau-starting-point-02": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-02"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Strengthen my mental performance",
+                    "Better understand and manage my emotions",
+                    "Manage stress, recovery, or life demands",
+                    "Curious about the experience",
+                    "Not convinced, but willing to try",
+                    "Participation is expected",
+                    "I feel pressured or forced",
+                    "I am not sure yet",
+                    "Prefer not to answer"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-02"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-03": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-03"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "Perform more consistently",
+                      "Improve focus and confidence",
+                      "Handle pressure and recover after mistakes",
+                      "Better understand and manage emotions",
+                      "Improve rest, recovery, or stress management",
+                      "Learn more about myself as an athlete",
+                      "Know where to find confidential support",
+                      "I am not sure yet"
+                    ]
+                  },
+                  "minItems": 1,
+                  "maxItems": 2,
+                  "uniqueItems": true,
+                  "allOf": [
+                    {
+                      "if": {
+                        "contains": {
+                          "enum": [
+                            "I am not sure yet"
+                          ]
+                        }
+                      },
+                      "then": {
+                        "maxItems": 1
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-03"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-04": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-04"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Strongly disagree",
+                    "Disagree",
+                    "Unsure",
+                    "Agree",
+                    "Strongly agree",
+                    "Prefer not to answer"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-04"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-06": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-06"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Not at all",
+                    "A little",
+                    "Somewhat",
+                    "Mostly",
+                    "Completely"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-06"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-07": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-07"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Not at all",
+                    "A little",
+                    "Somewhat",
+                    "Mostly",
+                    "Completely"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-07"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-08": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-08"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Not at all",
+                    "A little",
+                    "Somewhat",
+                    "Mostly",
+                    "Completely"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-08"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-35": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-35"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Not at all",
+                    "A little",
+                    "Somewhat",
+                    "Mostly",
+                    "Completely"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-35"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-36": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-36"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Not at all",
+                    "A little",
+                    "Somewhat",
+                    "Mostly",
+                    "Completely"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-36"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-37": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-37"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Not at all",
+                    "A little",
+                    "Somewhat",
+                    "Mostly",
+                    "Completely"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-37"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-38": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-38"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Not at all",
+                    "A little",
+                    "Somewhat",
+                    "Mostly",
+                    "Completely"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-38"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-39": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-39"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Less than 5 hours",
+                    "5–5.9 hours",
+                    "6–6.9 hours",
+                    "7–7.9 hours",
+                    "8 hours or more",
+                    "Not sure",
+                    "Prefer not to answer"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-39"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-40": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-40"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "Academics",
+                      "Volleyball performance",
+                      "Playing time or team role",
+                      "Injury or physical health",
+                      "Sleep or recovery",
+                      "Team dynamics",
+                      "Family",
+                      "Relationships",
+                      "Finances",
+                      "Housing, food, or transportation",
+                      "Identity or belonging",
+                      "Future or career",
+                      "Something positive",
+                      "Nothing significant",
+                      "Other",
+                      "Prefer not to answer"
+                    ]
+                  },
+                  "minItems": 1,
+                  "maxItems": 3,
+                  "uniqueItems": true,
+                  "allOf": [
+                    {
+                      "if": {
+                        "contains": {
+                          "enum": [
+                            "Nothing significant",
+                            "Prefer not to answer"
+                          ]
+                        }
+                      },
+                      "then": {
+                        "maxItems": 1
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-40"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-41": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-41"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Strongly disagree",
+                    "Disagree",
+                    "Unsure",
+                    "Agree",
+                    "Strongly agree"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-41"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-42": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-42"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Strongly disagree",
+                    "Disagree",
+                    "Unsure",
+                    "Agree",
+                    "Strongly agree"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-42"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-43": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-43"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Strongly disagree",
+                    "Disagree",
+                    "Unsure",
+                    "Agree",
+                    "Strongly agree"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-43"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-44": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-44"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Strongly disagree",
+                    "Disagree",
+                    "Unsure",
+                    "Agree",
+                    "Strongly agree"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-44"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-45": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-45"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Strongly disagree",
+                    "Disagree",
+                    "Unsure",
+                    "Agree",
+                    "Strongly agree"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-45"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-47": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-47"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "Understanding changes in my well-being",
+                      "Managing stress",
+                      "Improving sleep or recovery habits",
+                      "Finding confidential resources",
+                      "Knowing when I may need additional support",
+                      "Connecting with someone",
+                      "Managing life outside sport",
+                      "Injury or recovery support",
+                      "I am not sure yet"
+                    ]
+                  },
+                  "minItems": 1,
+                  "maxItems": 2,
+                  "uniqueItems": true,
+                  "allOf": [
+                    {
+                      "if": {
+                        "contains": {
+                          "enum": [
+                            "I am not sure yet"
+                          ]
+                        }
+                      },
+                      "then": {
+                        "maxItems": 1
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-47"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        },
+        "cau-starting-point-48": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state",
+                "value"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-48"
+                },
+                "state": {
+                  "const": "local"
+                },
+                "value": {
+                  "enum": [
+                    "Show resources I can review",
+                    "Ask whether I want to connect with someone",
+                    "Offer a private follow-up",
+                    "Let me decide later",
+                    "I am not sure"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "questionId",
+                "state"
+              ],
+              "properties": {
+                "questionId": {
+                  "const": "cau-starting-point-48"
+                },
+                "state": {
+                  "const": "skipped"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "universityCode": {
+      "enum": [
+        "SANDBOX",
+        "CAU"
+      ]
+    }
+  }
+}

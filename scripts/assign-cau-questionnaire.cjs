@@ -15,7 +15,7 @@ const option = key => args[args.indexOf(key)+1];
  const ref=db.collection('pulsecheck-restricted-questionnaire-submissions').doc(`assignment_${uid}`);
  const existing=await ref.get();
  if(existing.exists)throw Error('Assignment already exists. Review it instead of overwriting submission identity.');
- const assignment={kind:'assignment',enabled:true,version:'cau-operational-web-v1',submissionId:randomUUID(),teamId,environment,universityCode:environment==='test'?'SANDBOX':'CAU'};
+ const assignment={kind:'assignment',enabled:true,version:'cau-operational-web-v1',questionnaireVersion:'cau-starting-point-v2',submissionId:randomUUID(),teamId,environment,universityCode:environment==='test'?'SANDBOX':'CAU'};
  if(args.includes('--apply'))await ref.create({...assignment,createdAt:admin.firestore.FieldValue.serverTimestamp()});
  console.log(JSON.stringify({applied:args.includes('--apply'),projectId,uid,assignment},null,2));
 })().catch(e=>{console.error(e.message);process.exitCode=1});

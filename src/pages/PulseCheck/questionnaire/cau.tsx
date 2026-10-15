@@ -1,6 +1,5 @@
-import { isDerivedQuestion, isRemovedQuestion } from '../../../lib/questionnaires/cau-derived';
 import ConsolidatedSkillsBaseline, { ConsolidatedSkillsDraft } from '../../../components/mentaltraining/ConsolidatedSkillsBaseline';
-import { VERSION } from '../../../lib/questionnaires/cau';
+import { QUESTIONNAIRE_VERSION } from '../../../lib/questionnaires/cau';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { auth, isUsingDevFirebase } from '../../../api/firebase/config';
 import { questionCustodian, questionVisible } from '../../../lib/questionnaires/cau-routing';
@@ -13,8 +12,9 @@ import {
 } from 'lucide-react';
 import source from '../../../content/questionnaires/cau-operational.json';
 
-// Preserve source items; the user requested name and email in place of onboarding ID.
-const allQuestions = source.questions.filter(q => q.id !== 'cau-operational-04' && !isDerivedQuestion(q.id) && !isRemovedQuestion(q.id));
+const allQuestions = source.questions;
+const performanceQuestionCount = allQuestions.filter(q => questionCustodian(q.id) === 'PulseCheck').length;
+const performanceItemCount = performanceQuestionCount + 24;
 
 export function getServerSideProps({ res }: any) {
   res.setHeader('Cache-Control', 'no-store');
@@ -253,18 +253,15 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     setName(sandboxTest ? '' : next?.displayName || ''); setEmail(next?.email || '');
     if (next) next.getIdToken().then(token => fetch(endpoint, {
       headers: {...testHeaders(), Authorization: `Bearer ${token}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod'},
-    })).then(async response => { const result = await response.json(); if (!response.ok) throw Error(result.error || 'Could not check your questionnaire. Refresh to try again.'); return result; })
+    })).then(async response => { const result = await response.json(); if (!response.ok) throw Error(result.error || 'Could not check your questionnaire. Refresh to try again.'); if (!result.completed && result.questionnaireVersion !== QUESTIONNAIRE_VERSION) throw Error('The questionnaire has been updated. Refresh this page to continue.'); return result; })
       .then(result => { if (sessionUid.current === next.uid) {setStatus(result);setSaved(result.completed);setShareHealth(result.healthSharingAllowed);setReceipt(result.receipt || null);
         setPriorSubmission(result.questionnaireSubmitted === true);setSkillsState(result.skills || null);skillsRevision.current=result.skills?.revision || 0;
-        if (result.draft?.version === VERSION && !result.completed) {
+        if (result.draft?.version === QUESTIONNAIRE_VERSION && !result.completed) {
           const draft = result.draft; draftRevision.current = draft.revision;
           setAnswers(draft.answers); setName(draft.name); setStarted(true); setDraftSaved(true);
           setPerformanceQuestionsComplete(draft.completed);
           setCompleted({performance:draft.completed && result.skills?.completed===true,health:result.questionnaireSubmitted === true});
-          const oldPerformance = source.questions.filter(q => q.id !== 'cau-operational-04' && questionCustodian(q.id) === 'PulseCheck');
-          const performance = allQuestions.filter(q=>questionCustodian(q.id)==='PulseCheck');
-          const previousOrder = draft.flowVersion === 2 ? oldPerformance.filter(q=>!isDerivedQuestion(q.id)) : oldPerformance;
-          const resume = draft.flowVersion === 3 ? Math.min(draft.position,performance.length-1) : Math.min(previousOrder.slice(0,draft.position).filter(q=>!isDerivedQuestion(q.id) && !isRemovedQuestion(q.id)).length,performance.length-1);
+          const resume = Math.min(draft.position, performanceQuestionCount - 1);
           setPositions({performance:resume,health:0});
           if (!draft.completed) {setTrack('performance');setIndex(resume);}
           else if (!result.skills?.completed) setShowSkills(true);
@@ -296,7 +293,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       draftBusy.current = true; setDraftSaving(true); setDraftSaved(false);
       try {
         const performanceAnswers = Object.fromEntries(Object.entries(currentAnswers).filter(([id]) => questionCustodian(id) === 'PulseCheck'));
-        const response = await fetch(endpoint, {method:'POST',signal:AbortSignal.timeout(20000),headers:{...testHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase() ? 'dev' : 'prod'},body:JSON.stringify({action:'savePerformanceDraft',draft:{flowVersion:3,version:VERSION,name,answers:performanceAnswers,position:next >= questions.length ? 0 : next,completed:next >= questions.length,revision:draftRevision.current}})});
+        const response = await fetch(endpoint, {method:'POST',signal:AbortSignal.timeout(20000),headers:{...testHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase() ? 'dev' : 'prod'},body:JSON.stringify({questionnaireVersion:QUESTIONNAIRE_VERSION,action:'savePerformanceDraft',draft:{flowVersion:4,version:QUESTIONNAIRE_VERSION,name,answers:performanceAnswers,position:next >= questions.length ? 0 : next,completed:next >= questions.length,revision:draftRevision.current}})});
         const result = await response.json();
         if (!response.ok || !result.draft) throw Error(result.error || 'Could not save progress. Press Continue to retry.');
         if (sessionUid.current !== uid) return;
@@ -319,13 +316,13 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     const next = selected ? previous.filter(v => v !== option) : exclusive.includes(option) ? [option] : [...previous.filter(v => !exclusive.includes(v)), option];
     if (q.type === 'multi_select' && q.maxSelections && next.length > q.maxSelections) { setError(`Choose up to ${q.maxSelections} answers.`); return; }
     setError('');
-    setAnswers(old => { const updated = { ...old, [q.id]: q.type === 'multi_select' ? next : option }; if (q.id === 'cau-operational-12' && option !== 'Yes') delete updated['cau-operational-13']; return updated; });
+    setAnswers(old => { const updated = { ...old, [q.id]: q.type === 'multi_select' ? next : option }; return updated; });
     if (q.type !== 'multi_select' && (!q.requiresConfirmation || option === 'Yes')) timer.current = setTimeout(() => move(index + 1, {...answers,[q.id]:option}), 450);
   }
   async function saveSkillsProgress(draft: ConsolidatedSkillsDraft, complete = false) {
     if(!user) throw Error('Sign in to continue.');
     const uid=user.uid;
-    const response=await fetch(endpoint,{method:'POST',signal:AbortSignal.timeout(45000),headers:{...testHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase()?'dev':'prod'},body:JSON.stringify({action:complete?'completeSkills':'saveSkillsDraft',draft,revision:skillsRevision.current})});
+    const response=await fetch(endpoint,{method:'POST',signal:AbortSignal.timeout(45000),headers:{...testHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase()?'dev':'prod'},body:JSON.stringify({questionnaireVersion:QUESTIONNAIRE_VERSION,action:complete?'completeSkills':'saveSkillsDraft',draft,revision:skillsRevision.current})});
     const result=await response.json();
     if(!response.ok || !result.skills)throw Error(result.error || 'Could not save your skills. Try again.');
     if(sessionUid.current!==uid)throw Error('Your account changed. Reopen the baseline.');
@@ -337,7 +334,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     if (saving || saved || !user || !completed.health || !completed.performance) return;
     setSaving(true); setSubmittedOnce(true); setError('');
     try {
-      const response = await fetch(endpoint, { method: 'POST', headers: { ...testHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' }, body: JSON.stringify({ name, email, answers, shareHealth, completedSections: completed }) });
+      const response = await fetch(endpoint, { method: 'POST', headers: { ...testHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' }, body: JSON.stringify({ questionnaireVersion: QUESTIONNAIRE_VERSION, name, email, answers, shareHealth, completedSections: completed }) });
       const result = await response.json();
       if (sessionUid.current !== user.uid) return;
       if (!response.ok || !result.saved) throw Error(result.error || 'Unable to save answers.');
@@ -363,7 +360,10 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         <h1 className="cau-h1">Your starting point</h1>
         <p className="cau-body">Choose either section to begin. Finish both, then submit your answers.</p>
         <Disclosure summary="Before you begin: privacy and questionnaire context">
-          <p className="cau-muted-sm cau-pre-line">{source.questions[0].instructions}</p>
+          <p className="cau-muted-sm cau-pre-line">{source.purpose}</p>
+          <p className="cau-muted-sm">This questionnaire supports onboarding, service delivery, and internal pilot evaluation. It is not a diagnostic assessment or an IRB-approved research study.</p>
+          <p className="cau-muted-sm">Your individual mental-health and help-seeking responses will not be provided to coaches, teammates, or performance personnel. Health sharing is optional and follows your current authorization.</p>
+          <p className="cau-muted-sm">This questionnaire is not monitored as an emergency service. For immediate help, contact CAU’s designated resource, call or text 988, or call 911 in an emergency.</p>
         </Disclosure>
 
         <div className="cau-track-list">
@@ -376,7 +376,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
                 <span className="cau-track-icon"><Icon size={18} /></span>
                 <span className="cau-track-copy">
                   <span className="cau-track-title">{completed[section] && <Check size={14} />}{section === 'health' ? 'Well-being and support' : 'Performance baseline'}</span>
-                  <span className="cau-body-sm">{section === 'health' ? 'Health, injury, well-being, and support.' : 'Your context, how you feel today, and eight mental-skills activities.'}</span>
+                  <span className="cau-body-sm">{section === 'health' ? 'Your participation, well-being, recovery, and support.' : 'Your sport, how you feel today, and eight mental-skills activities.'}</span>
                   <span className="cau-track-status">{section === 'health' && !shareHealth ? 'Health sharing is optional · not shared' : completed[section] ? 'Complete · review answers' : positions[section] > 0 ? 'In progress · continue' : 'Still to do'}</span>
                 </span>
                 <ChevronRight size={16} className="cau-track-chevron" />
@@ -431,10 +431,10 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           </button>
         </div>
 
-        <div className="cau-progress-track" role="progressbar" aria-label="Questionnaire progress" aria-valuenow={index} aria-valuemin={0} aria-valuemax={track === 'performance' ? 30 : questions.length}>
-          <motion.div className="cau-progress-fill" animate={{ width: `${questions.length ? (index / (track === 'performance' ? 30 : questions.length)) * 100 : 0}%` }} transition={{ type: 'spring', stiffness: 280, damping: 32 }} />
+        <div className="cau-progress-track" role="progressbar" aria-label="Questionnaire progress" aria-valuenow={index} aria-valuemin={0} aria-valuemax={track === 'performance' ? performanceItemCount : questions.length}>
+          <motion.div className="cau-progress-fill" animate={{ width: `${questions.length ? (index / (track === 'performance' ? performanceItemCount : questions.length)) * 100 : 0}%` }} transition={{ type: 'spring', stiffness: 280, damping: 32 }} />
         </div>
-        <p className="cau-step-label">{index + 1} of {track === 'performance' ? 30 : questions.length} · {q.sectionTitle.replace(/\s*[—–-]\s*auntEDNA only/gi, '')}</p>
+        <p className="cau-step-label">{index + 1} of {track === 'performance' ? performanceItemCount : questions.length} · {q.sectionTitle.replace(/\s*[—–-]\s*auntEDNA only/gi, '')}</p>
 
         <AnimatePresence mode="wait" initial={false} custom={dir}>
           <motion.div key={q.id} custom={dir} variants={questionVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} style={{ display: 'grid', gap: 16 }}>
@@ -587,7 +587,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       return (
         <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim()) return; setStarted(true); }} className="cau-stage cau-form">
           <h1 className="cau-h1">Hey, I’m Nora. Let’s start with you.</h1>
-          <p className="cau-body">These questions help us understand how you’re feeling and where you’d like support. Answer from where you are today. We’ll take it one step at a time.</p>
+          <p className="cau-body">Your starting point includes 24 questions and 24 mental-skills ratings and activities. Answer from where you are today. We’ll take it one step at a time.</p>
           <label className="cau-field">
             <span className="cau-field-label">Your name</span>
             <input required maxLength={150} autoComplete="name" value={name} onChange={e => setName(e.target.value)} className="cau-input" />
@@ -601,7 +601,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       );
     }
 
-    if (showSkills) return <ConsolidatedSkillsBaseline sportName="Volleyball" initialDraft={skillsState?.draft} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={(_result,draft)=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
+    if (showSkills) return <ConsolidatedSkillsBaseline precedingItemCount={performanceQuestionCount} sportName="Volleyball" initialDraft={skillsState?.draft} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={(_result,draft)=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
     if (track && q) return renderQuestion();
     return renderSections();
   }

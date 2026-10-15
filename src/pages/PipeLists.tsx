@@ -305,6 +305,7 @@ type LeadAttachment = {
 type PipelineItem = {
   id: string;
   linkedLeadIds?: string[];
+  needsResearch?: boolean;
   title: string;
   organization: string;
   description: string;
@@ -884,7 +885,7 @@ const legacyPilotContractStages: StageConfig[] = [
 
 const contractStages: StageConfig[] = legacyPilotContractStages.filter((stage) => stage.track === 'run');
 
-const pilotContractStages: StageConfig[] = [
+const sportsMedicineContractStages: StageConfig[] = [
   ...['identified', 'outreach-queued']
     .map((id) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)! })),
   { id: 'cold-email-sent', label: 'Cold Email Sent', probability: 15, track: 'build', tone: 'bg-cyan-50 text-cyan-700 border-cyan-100' },
@@ -896,6 +897,16 @@ const pilotContractStages: StageConfig[] = [
   ...['pilot-active', 'pilot-complete', 'closed-lost-paused']
     .map((id) => ({ ...legacyPilotContractStages.find((stage) => stage.id === id)!, probability: id === 'closed-lost-paused' ? 0 : 100 })),
 ];
+
+// Retain the first-email ID so existing cards keep their assignment and history.
+const pilotContractStages: StageConfig[] = sportsMedicineContractStages.flatMap((stage) =>
+  stage.id === 'cold-email-sent' ? [
+    { ...stage, label: 'First Email Sent' },
+    { ...stage, id: 'call-attempted', label: 'Call Attempted' },
+    { ...stage, id: 'follow-up-email-sent', label: 'Follow-Up Email Sent' },
+    { ...stage, id: 'final-outreach-email-sent', label: 'Final Outreach Email Sent' },
+  ] : [{ ...stage }],
+);
 
 // Keep stages saved by newer clients instead of rewriting their items into Identified.
 const reconcileUniversityStages = (savedStages: StageConfig[] = [], canonicalStages = pilotContractStages): StageConfig[] => {
@@ -922,7 +933,7 @@ const sportsMedicineLegacyStages: Record<string, string> = {
 };
 
 const reconcileSportsMedicineStages = (stages: StageConfig[] = []) =>
-  reconcileUniversityStages(stages.filter((stage) => !sportsMedicineLegacyStages[stage.id]));
+  reconcileUniversityStages(stages.filter((stage) => !sportsMedicineLegacyStages[stage.id]), sportsMedicineContractStages);
 
 const needsUniversityStageMigration = (lists: Partial<PipeList>[]) => lists.some((list) =>
   isSportsMedicineList(list) ? (
@@ -2216,7 +2227,7 @@ const createList = (
     }),
     accent: template.accent || accentClasses[index % accentClasses.length],
     templateKey,
-    stages: isSportsMedicineList({ templateKey, name }) ? pilotContractStages : template.stages,
+    stages: isSportsMedicineList({ templateKey, name }) ? sportsMedicineContractStages : template.stages,
     items,
     createdAt: new Date().toISOString(),
   };
@@ -8172,6 +8183,16 @@ Rules:
     setKanbanDropStageId(null);
   };
 
+  const toggleItemResearchNeeded = (itemId: string) => {
+    if (!canModify || isBulkSelectionMode) return;
+    setLists((currentLists) => currentLists.map((list) => list.id !== activeList.id ? list : {
+      ...list,
+      items: list.items.map((item) => item.id === itemId && !item.deletedAt
+        ? { ...item, needsResearch: !item.needsResearch, updatedAt: new Date().toISOString() }
+        : item),
+    }));
+  };
+
   const handleKanbanDrop = (event: React.DragEvent<HTMLElement>, stageId: string) => {
     event.preventDefault();
     clearKanbanDrag();
@@ -12069,6 +12090,33 @@ Rules:
                                           </span>
                                         )}
                                       </div>
+
+                                      {(canModify || item.needsResearch) && (
+                                        <div className="mt-3">
+                                          {canModify && !isBulkSelectionMode ? (
+                                            <button
+                                              type="button"
+                                              aria-pressed={Boolean(item.needsResearch)}
+                                              aria-label={`More research needed for ${item.title}`}
+                                              title={item.needsResearch ? 'Remove research tag' : 'Mark as needing more research'}
+                                              onClick={(event) => {
+                                                event.stopPropagation();
+                                                toggleItemResearchNeeded(item.id);
+                                              }}
+                                              onKeyDown={(event) => event.stopPropagation()}
+                                              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-amber-400 ${item.needsResearch
+                                                ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                                                : 'border-dashed border-stone-300 text-stone-500 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800'}`}
+                                            >
+                                              {item.needsResearch ? 'More research needed' : '+ More research needed'}
+                                            </button>
+                                          ) : item.needsResearch ? (
+                                            <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                                              More research needed
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      )}
 
                                       {nextStepText && (
                                         <p

@@ -1,9 +1,10 @@
+import { createHash } from 'crypto';
 import { deriveAdministrativeAnswers, applyAdministrativeAnswers } from '../../../../lib/questionnaires/cau-derived';
 import { saveSkills } from '../../../../lib/questionnaires/cau-skills';
 import { retainedPrivateCopy, liveRetentionEnabled } from '../../../../lib/questionnaires/cau-retention';
 import { savePerformanceDraft } from '../../../../lib/questionnaires/cau-performance-draft';
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { COLLECTION, VERSION, splitSubmission } from '../../../../lib/questionnaires/cau';
+import { COLLECTION, VERSION, QUESTIONNAIRE_VERSION, isCurrentQuestionnaire, baselineRecordId, baselineComplete, splitSubmission } from '../../../../lib/questionnaires/cau';
 import { deliverQuestionnaire } from '../../../../lib/questionnaires/cau-delivery';
 import { PartnerError } from '../../../../lib/questionnaires/auntedna-partner';
 
@@ -24,9 +25,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const assignment = (await collection.doc(`assignment_${user.uid}`).get()).data();
     let active = assignment?.kind === 'assignment' && assignment.enabled === true && assignment.version === VERSION && typeof assignment.teamId === 'string' && assignment.teamId.length > 0;
     const enabled = process.env.CAU_QUESTIONNAIRE_COLLECTION_ENABLED === 'true';
-    const recordRef = collection.doc(`baseline_${user.uid}_${VERSION}`);
+    const recordRef = collection.doc(baselineRecordId(user.uid));
     const existing = await recordRef.get();
-    const completed = existing.exists && existing.data()?.status === 'complete' && existing.data()?.externalId === user.uid;
+    const legacy = await collection.doc(`baseline_${user.uid}_${VERSION}`).get();
+    // Completed historical baselines remain completed; unfinished drafts start in a separate namespace.
+    const completed = baselineComplete(existing.data(), user.uid) || baselineComplete(legacy.data(), user.uid);
     let healthSharingAllowed = false;
     if (active && assignment?.teamId) {
       const memberRef = db.collection('pulsecheck-team-memberships').doc(`${assignment.teamId}_${user.uid}`);
@@ -47,14 +50,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       healthSharingAllowed = member?.status === 'active' && !member.revokedAt && latest?.actorUserId === user.uid &&
         healthDocs.length > 0 && accepts(member?.athleteOnboarding?.consentDecisions) && accepts(latest?.decisions);
     }
-    const draftRef = collection.doc(`performance_draft_${user.uid}_${VERSION}`);
+    const draftRef = collection.doc(`performance_draft_${user.uid}_${QUESTIONNAIRE_VERSION}`);
     const draft = active && enabled && !completed ? (await draftRef.get()).data() : null;
-    const skillsRef = collection.doc(`skills_draft_${user.uid}_${VERSION}`);
+    const skillsRef = collection.doc(`skills_draft_${user.uid}_${QUESTIONNAIRE_VERSION}`);
     const savedSkills = active && enabled ? (await skillsRef.get()).data() : null;
     const canonical = active && enabled ? (await db.collection('athlete-mental-progress').doc(user.uid).get()).data()?.mentalSkillsBaseline : null;
     const skills = canonical?.version === 5 ? {completed:true,result:canonical,reused:true} : savedSkills ? {...savedSkills,completed:false} : null;
-    if (req.method === 'GET') return res.json({ required: Boolean(active && enabled && !completed), completed, version: VERSION,
+    if (req.method === 'GET') return res.json({ required: Boolean(active && enabled && !completed), completed, version: VERSION, questionnaireVersion: QUESTIONNAIRE_VERSION,
       available: Boolean(active && enabled), draft: draft || null, skills, healthSharingAllowed, questionnaireUrl: 'https://fitwithpulse.ai/PulseCheck/questionnaire/cau' });
+    if (!isCurrentQuestionnaire(req.body)) return res.status(409).json({error:'This questionnaire has changed. Reload the page to continue with the current version.'});
     if (!assignment || !active || !enabled) return res.status(503).json({ error: 'Your questionnaire is not available yet. Please contact your program team.' });
     if (completed) return res.json({ saved: true, completed: true });
     if (['saveSkillsDraft','completeSkills'].includes(req.body?.action)) {
@@ -81,11 +85,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.body?.completedSections?.performance !== true || req.body?.completedSections?.health !== true || typeof req.body.shareHealth !== 'boolean') return res.status(400).json({ error: 'Finish both sections before submitting.' });
     // Stable assignment ID and authenticated UID bind retries across web and apps.
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(assignment.submissionId || '')) return res.status(503).json({ error: 'Your questionnaire setup needs review.' });
-    const input = applyAdministrativeAnswers({ ...req.body, submissionId: assignment.submissionId, email: user.email || req.body.email }, await deriveAdministrativeAnswers(db,user.uid));
+    const input = applyAdministrativeAnswers({ ...req.body, submissionId: `sp2-${createHash('sha256').update(assignment.submissionId).digest('hex')}`, email: user.email || req.body.email }, await deriveAdministrativeAnswers(db,user.uid));
     let split;
     try { split = splitSubmission(input); } catch { return res.status(400).json({ error: 'Please check your answers before submitting.' }); }
     if (req.body.shareHealth !== false && !healthSharingAllowed) return res.status(403).json({ error: 'Review your health-sharing authorization, or complete performance only.' });
-    const attemptRef = collection.doc(`attempt_${user.uid}_${VERSION}`);
+    const attemptRef = collection.doc(`attempt_${user.uid}_${QUESTIONNAIRE_VERSION}`);
     const shareHealth = req.body.shareHealth !== false;
     const attempt = await db.runTransaction(async tx => {
       const current = await tx.get(attemptRef);
@@ -108,7 +112,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Completing the requirement does not require health disclosure.
       const mirror = { ...split.pulseCheck, externalId: user.uid, status: 'complete',
         auntEdnaReferences: Object.fromEntries(Object.keys(split.pulseCheck.auntEdnaReferences).map(id => [id, {
-          questionId: id, questionnaireVersion: VERSION, custodian: 'auntEDNA', state: 'not_shared',
+          questionId: id, questionnaireVersion: QUESTIONNAIRE_VERSION, custodian: 'auntEDNA', state: 'not_shared',
         }])) };
       await create(input.submissionId, mirror);
     } else {

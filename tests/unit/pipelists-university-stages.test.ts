@@ -5,10 +5,10 @@ import ts from 'typescript';
 const source = fs.readFileSync(new URL('../../src/pages/PipeLists.tsx', import.meta.url), 'utf8');
 const stages = source.slice(source.indexOf('const legacyPilotContractStages:'), source.indexOf('const vcStages:'));
 const normalizer = source.slice(source.indexOf('const normalizeStageId ='), source.indexOf('const normalizeActivityLog ='));
-const api = new Function(ts.transpile(stages + normalizer + '\nreturn { pilotContractStages, contractStages, normalizeStageId, needsUniversityStageMigration, reconcileUniversityStages, isSportsMedicineList, reconcileSportsMedicineStages, sportsMedicineLegacyStages };'))();
+const api = new Function(ts.transpile(stages + normalizer + '\nreturn { sportsMedicineContractStages, pilotContractStages, contractStages, normalizeStageId, needsUniversityStageMigration, reconcileUniversityStages, isSportsMedicineList, reconcileSportsMedicineStages, sportsMedicineLegacyStages };'))();
 
 test('university stages follow the requested sequence and retain a lost/paused destination', () => {
-  assert.deepEqual(api.pilotContractStages.map((s: any) => s.id), ['identified','outreach-queued','cold-email-sent','engaged','meeting-scheduled','proposal-sent','negotiating','pilot-agreed','contract-signed','pilot-active','pilot-complete','closed-lost-paused']);
+  assert.deepEqual(api.pilotContractStages.map((s: any) => s.id), ['identified','outreach-queued','cold-email-sent','call-attempted','follow-up-email-sent','final-outreach-email-sent','engaged','meeting-scheduled','proposal-sent','negotiating','pilot-agreed','contract-signed','pilot-active','pilot-complete','closed-lost-paused']);
   assert.equal(api.contractStages.some((s: any) => s.id === 'closed-won'), true);
 });
 test('existing university wins migrate to Pilot Active while contract wins stay unchanged', () => {
@@ -71,7 +71,7 @@ test('sports medicine and performance partner lists use university stages and mi
     assert.equal(api.isSportsMedicineList(list), true);
     assert.equal(api.needsUniversityStageMigration([list]), true);
     const stages = api.reconcileSportsMedicineStages(list.stages);
-    assert.deepEqual(stages, api.pilotContractStages);
+    assert.deepEqual(stages, api.sportsMedicineContractStages);
     const items = list.items.map(item => ({ stage: api.normalizeStageId(api.sportsMedicineLegacyStages[item.stage] || item.stage, stages) }));
     assert.equal(items[0].stage, 'engaged');
     assert.equal(api.needsUniversityStageMigration([{ ...list, stages, items }]), false);
@@ -81,4 +81,16 @@ test('sports medicine and performance partner lists use university stages and mi
   assert.equal(api.sportsMedicineLegacyStages.sourced, 'identified');
   assert.equal(api.sportsMedicineLegacyStages.parked, 'closed-lost-paused');
   assert.equal(api.sportsMedicineLegacyStages.won, 'pilot-active');
+});
+
+
+test('legacy outreach cards keep their ID while gaining four touchpoints without forecast inflation', () => {
+  const old = api.sportsMedicineContractStages;
+  const updated = api.reconcileUniversityStages(old);
+  assert.equal(api.needsUniversityStageMigration([{templateKey:'university-pilot', stages:old, items:[{stage:'cold-email-sent'}]}]), true);
+  assert.equal(api.normalizeStageId('cold-email-sent', updated), 'cold-email-sent');
+  assert.deepEqual(updated.slice(2,6).map((s: any) => s.label), ['First Email Sent','Call Attempted','Follow-Up Email Sent','Final Outreach Email Sent']);
+  assert.ok(updated.slice(2,6).every((s: any) => s.probability === 15));
+  assert.equal(api.needsUniversityStageMigration([{templateKey:'university-pilot', stages:updated, items:[{stage:'cold-email-sent'}]}]), false);
+  assert.equal(api.reconcileSportsMedicineStages(old).length, 12);
 });

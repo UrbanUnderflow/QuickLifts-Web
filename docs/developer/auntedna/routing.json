@@ -1,0 +1,150 @@
+{
+  "version": "cau-routing-v3",
+  "classification": "Product privacy routing. Not a legal HIPAA classification. Sport-specific readiness, motivation and connection items 5, 9 and 10 require alignment with the source data-sharing schedule before live collection.",
+  "questions": [
+    {
+      "questionId": "cau-starting-point-01",
+      "custodian": "PulseCheck",
+      "reason": "General questionnaire-purpose acknowledgement.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-02",
+      "custodian": "auntEDNA",
+      "reason": "Participation reasons include emotional needs, stress and perceived pressure; retain the whole item in the protected workflow.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-03",
+      "custodian": "auntEDNA",
+      "reason": "Mixed personal goals include emotional needs, recovery and confidential support; retain the whole item together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-04",
+      "custodian": "auntEDNA",
+      "reason": "Perceived freedom to participate belongs with the confidential participation workflow.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-05",
+      "custodian": "PulseCheck",
+      "reason": "Sport-specific mental readiness; no clinical details requested.",
+      "requiresDataMapAlignment": true
+    },
+    {
+      "questionId": "cau-starting-point-06",
+      "custodian": "auntEDNA",
+      "reason": "Physical health/readiness, not narrowly mental performance.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-07",
+      "custodian": "auntEDNA",
+      "reason": "Daily energy is a confidential well-being assessment.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-08",
+      "custodian": "auntEDNA",
+      "reason": "Rest and recovery assessment.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-09",
+      "custodian": "PulseCheck",
+      "reason": "Sport-specific motivation; no clinical details requested.",
+      "requiresDataMapAlignment": true
+    },
+    {
+      "questionId": "cau-starting-point-10",
+      "custodian": "PulseCheck",
+      "reason": "Sport-specific connection; no clinical details requested.",
+      "requiresDataMapAlignment": true
+    },
+    {
+      "questionId": "cau-starting-point-35",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-36",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-37",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-38",
+      "custodian": "auntEDNA",
+      "reason": "Confidential well-being or stress assessment; retain the instrument together.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-39",
+      "custodian": "auntEDNA",
+      "reason": "Sleep or mixed life-impact assessment.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-40",
+      "custodian": "auntEDNA",
+      "reason": "Sleep or mixed life-impact assessment.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-41",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness or trust in mental-health confidentiality.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-42",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness or trust in mental-health confidentiality.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-43",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness or trust in mental-health confidentiality.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-44",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness or trust in mental-health confidentiality.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-45",
+      "custodian": "auntEDNA",
+      "reason": "Team safety, support awareness or trust in mental-health confidentiality.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-46",
+      "custodian": "PulseCheck",
+      "reason": "Mental-performance training goals, without clinical details.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-47",
+      "custodian": "auntEDNA",
+      "reason": "Well-being, health and confidential-support preferences.",
+      "requiresDataMapAlignment": false
+    },
+    {
+      "questionId": "cau-starting-point-48",
+      "custodian": "auntEDNA",
+      "reason": "Support follow-up preferences belong with the confidential support pathway.",
+      "requiresDataMapAlignment": false
+    }
+  ]
+}

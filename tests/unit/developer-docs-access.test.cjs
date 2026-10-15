@@ -47,3 +47,48 @@ test('developer password attempts are persistently limited and arbitrary slugs d
  const unlock=h.load('src/pages/api/developer/docs/[slug]/unlock.ts').createDeveloperDocsUnlockHandler({db:h.db});const unlockRes=h.response();await unlock({method:'POST',query:{slug},body:{password:'SyntheticDeveloperPassword'}},unlockRes);assert.equal(unlockRes.code,503);assert.equal(unlockRes.headers['Set-Cookie'],undefined);
  const download=h.load('src/pages/developer/api/[slug]/artifacts/[...filename].tsx').getServerSideProps;const downloadRes=h.response();await download({params:{slug,filename:['README.md']},req:{cookies},res:downloadRes});assert.equal(downloadRes.code,503);assert.ok(!downloadRes.body.includes('# Athletic'));assert.equal(calls,3);
  }));
+
+test('AuntEdna guide and artifacts use the existing protected access boundary',async()=>configured(async()=>{
+ const h=harness(async()=>{}),helper=h.load('src/lib/developerDocsServer.ts'),slug='auntedna';
+ const page=h.load('src/pages/developer/api/auntedna.tsx');
+ const locked=await page.getServerSideProps({req:{cookies:{}},res:h.response()});
+ assert.equal(locked.props.locked,true);assert.deepEqual(locked.props.artifacts,[]);
+ const cookie=helper.developerDocsCookie(slug).split(';')[0].split('=')[1];
+ const unlocked=await page.getServerSideProps({req:{cookies:{[helper.developerDocsCookieName(slug)]:cookie}},res:h.response()});
+ assert.equal(unlocked.props.locked,false);assert.equal(unlocked.props.artifacts.length,6);
+ assert.ok(unlocked.props.artifacts.find(a=>a.name==='README.md').content.includes('cau-starting-point-v2'));
+ assert.equal(helper.developerArtifactAllowed(slug,'../../secrets'),false);
+ const download=h.load('src/pages/developer/api/[slug]/artifacts/[...filename].tsx').getServerSideProps;
+ const res=h.response();await download({params:{slug,filename:['examples','baseline.synthetic.json']},req:{cookies:{}},res});
+ assert.equal(res.code,401);assert.ok(!res.body.includes('Synthetic Athlete'));
+}));
+
+test('published baseline artifacts match canonical questions, routing and protected wire fields',()=>{
+ const read=p=>JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));
+ const base='docs/developer/auntedna/';
+ const questions=read('src/content/questionnaires/cau-operational.json'),routing=read('src/content/questionnaires/cau-routing.json');
+ assert.deepEqual(read(base+'questionnaire.json'),questions);assert.deepEqual(read(base+'routing.json'),routing);
+ assert.equal(questions.questions.length+24,48);
+ const payload=read(base+'examples/baseline.synthetic.json'),schema=read(base+'baseline.schema.json');
+ const protectedIds=routing.questions.filter(q=>q.custodian==='auntEDNA').map(q=>q.questionId).sort();
+ assert.equal(protectedIds.length,19);assert.deepEqual(Object.keys(payload.fields).sort(),protectedIds);
+ assert.deepEqual(schema.properties.fields.required.sort(),protectedIds);
+ assert.equal(payload.version,questions.version);assert.equal(payload.ownershipVersion,routing.version);
+ for(const q of questions.questions.filter(q=>protectedIds.includes(q.id))){
+  const field=payload.fields[q.id],spec=schema.properties.fields.properties[q.id].oneOf[0].properties.value;
+  assert.equal(field.questionId,q.id);
+  assert.deepEqual(q.type==='multi_select'?spec.items.enum:spec.enum,q.choices);
+  if(field.state==='local')for(const choice of Array.isArray(field.value)?field.value:[field.value])assert.ok(q.choices.includes(choice));
+ }
+ const receipt=read(base+'examples/receipt.synthetic.json');assert.equal(receipt.data.submissionId,payload.submissionId);
+});
+
+test('baseline request schema accepts the example and rejects wrong versions, ownership and options',()=>{
+ const Ajv=require('ajv'),ajv=new Ajv({allErrors:true});
+ const schema=JSON.parse(fs.readFileSync(path.join(root,'docs/developer/auntedna/baseline.schema.json'),'utf8'));
+ const example=JSON.parse(fs.readFileSync(path.join(root,'docs/developer/auntedna/examples/baseline.synthetic.json'),'utf8'));
+ const validate=ajv.compile(schema);assert.equal(validate(example),true,JSON.stringify(validate.errors));
+ for(const mutate of [x=>x.version='cau-operational-web-v1',x=>x.fields['cau-starting-point-01']={questionId:'cau-starting-point-01',state:'local',value:'Yes'},x=>x.fields['cau-starting-point-35'].value='Often',x=>x.fields['cau-starting-point-40'].value=['Academics','Volleyball performance','Family','Finances'],x=>x.fields['cau-starting-point-40'].value=['Nothing significant','Academics']]){
+  const changed=JSON.parse(JSON.stringify(example));mutate(changed);assert.equal(validate(changed),false);
+ }
+});

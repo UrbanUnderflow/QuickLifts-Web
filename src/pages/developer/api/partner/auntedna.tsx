@@ -82,9 +82,10 @@ export default function AuntEdnaPartnerPortal() {
         <dl className={styles.metadata}><div><dt>Key ID</dt><dd><code>{session.keyId}</code></dd></div><div><dt>Expires</dt><dd>{new Date(session.expiresAt).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})}</dd></div></dl>
       </section>
       <section aria-labelledby="partner-guides"><h2 id="partner-guides" className={styles.sectionTitle}>Integration guides</h2><div className={styles.guides}>
+        <a href="/developer/api/auntedna"><h3>AuntEdna athlete baseline <ArrowUpRight size={20}/></h3><p>The 48-item Starting Point, question ownership, versioning, and delivery examples.</p><span>Open baseline guide</span></a>
         <a href="/developer/api/athleticmind-snapshots"><h3>Athletic Mind snapshots <ArrowUpRight size={20}/></h3><p>Request signing, payload schema, examples, and receipts.</p><span>Open snapshot guide</span></a>
         <a href="/developer/api/clinical-bridge"><h3>Clinical bridge <ArrowUpRight size={20}/></h3><p>Emergency handoff, case acknowledgment, and workflow updates.</p><span>Open clinical guide</span></a>
-      </div><p className={styles.hint}>The snapshot secret signs snapshot API requests. Clinical bridge credentials follow the setup described in its guide.</p></section>
+      </div><p className={styles.hint}>The snapshot secret signs snapshot API requests. Baseline delivery uses the AuntEdna partner Bearer key. Clinical bridge credentials follow the setup described in its guide.</p></section>
     </>}
   </DeveloperLayout>;
 }

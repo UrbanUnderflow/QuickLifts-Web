@@ -3,7 +3,12 @@ export { OWNERSHIP_VERSION, questionCustodian } from './cau-routing';
 import source from '../../content/questionnaires/cau-operational.json';
 export const COLLECTION = 'pulsecheck-restricted-questionnaire-submissions';
 export const VERSION = 'cau-operational-web-v1';
-export const questions = source.questions.filter(q => q.id !== 'cau-operational-04');
+// VERSION is the native gate transport contract; content and persisted answers evolve independently.
+export const QUESTIONNAIRE_VERSION = 'cau-starting-point-v2';
+export const questions = source.questions;
+export function isCurrentQuestionnaire(input: any) { return input?.questionnaireVersion === QUESTIONNAIRE_VERSION; }
+export function baselineRecordId(uid: string) { return `baseline_${uid}_${QUESTIONNAIRE_VERSION}`; }
+export function baselineComplete(record: any, uid: string) { return record?.status === 'complete' && record?.externalId === uid; }
 export function validateSubmission(input: any) {
   if (!input || typeof input.name !== 'string' || !input.name.trim() || input.name.length > 150) throw Error('Enter your name.');
   if (typeof input.email !== 'string' || input.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw Error('Enter a valid email address.');
@@ -24,7 +29,7 @@ export function validateSubmission(input: any) {
     }
     fields[q.id] = { questionId: q.id, state: 'local', value };
   }
-  return { version: VERSION, completedSections: { performance: input.completedSections?.performance === true, health: input.completedSections?.health === true }, identity: { name: input.name.trim(), email: input.email.trim().toLowerCase(), verification: 'self_reported' }, fields };
+  return { version: QUESTIONNAIRE_VERSION, completedSections: { performance: input.completedSections?.performance === true, health: input.completedSections?.health === true }, identity: { name: input.name.trim(), email: input.email.trim().toLowerCase(), verification: 'self_reported' }, fields };
 }
 export function splitSubmission(input: any) {
   const validated = validateSubmission(input);
@@ -35,17 +40,17 @@ export function splitSubmission(input: any) {
     if (questionCustodian(id) === 'auntEDNA') {
       auntEdnaFields[id] = field;
       // Never copy value, free text, scores, or answer hashes into the mirror.
-      references[id] = { questionId: id, questionnaireVersion: VERSION, custodian: 'auntEDNA', state: 'awaiting_receipt' };
+      references[id] = { questionId: id, questionnaireVersion: QUESTIONNAIRE_VERSION, custodian: 'auntEDNA', state: 'awaiting_receipt' };
     } else pulseFields[id] = field;
   }
   return {
-    auntEdna: { submissionId: input.submissionId, version: VERSION, ownershipVersion: OWNERSHIP_VERSION, identity: validated.identity, fields: auntEdnaFields },
-    pulseCheck: { submissionId: input.submissionId, version: VERSION, ownershipVersion: OWNERSHIP_VERSION, identity: validated.identity, fields: pulseFields, auntEdnaReferences: references }
+    auntEdna: { submissionId: input.submissionId, version: QUESTIONNAIRE_VERSION, ownershipVersion: OWNERSHIP_VERSION, identity: validated.identity, fields: auntEdnaFields },
+    pulseCheck: { submissionId: input.submissionId, version: QUESTIONNAIRE_VERSION, ownershipVersion: OWNERSHIP_VERSION, identity: validated.identity, fields: pulseFields, auntEdnaReferences: references }
   };
 }
 // Receipt must be authenticated by the integration, not trusted from a browser.
 // This constructs the restricted mirror only; no clinical values are accepted.
 export function attachAuntEdnaReceipt(pulseRecord: ReturnType<typeof splitSubmission>['pulseCheck'], receipt: { submissionId: string; recordId: string; receiptId: string }) {
   if (receipt.submissionId !== pulseRecord.submissionId || !receipt.recordId || !receipt.receiptId) throw Error('Matching auntEDNA receipt required.');
-  return { ...pulseRecord, auntEdnaReferences: Object.fromEntries(Object.entries(pulseRecord.auntEdnaReferences).map(([id, ref]) => [id, { questionId: id, questionnaireVersion: VERSION, custodian: 'auntEDNA', state: 'external', recordId: receipt.recordId, receiptId: receipt.receiptId }])) };
+  return { ...pulseRecord, auntEdnaReferences: Object.fromEntries(Object.entries(pulseRecord.auntEdnaReferences).map(([id, ref]) => [id, { questionId: id, questionnaireVersion: QUESTIONNAIRE_VERSION, custodian: 'auntEDNA', state: 'external', recordId: receipt.recordId, receiptId: receipt.receiptId }])) };
 }

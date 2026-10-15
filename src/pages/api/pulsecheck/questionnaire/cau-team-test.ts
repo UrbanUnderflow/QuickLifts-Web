@@ -4,7 +4,7 @@ import { retainedPrivateCopy } from '../../../../lib/questionnaires/cau-retentio
 import { savePerformanceDraft } from '../../../../lib/questionnaires/cau-performance-draft';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createHash, timingSafeEqual } from 'crypto';
-import { COLLECTION, VERSION, splitSubmission } from '../../../../lib/questionnaires/cau';
+import { COLLECTION, VERSION, QUESTIONNAIRE_VERSION, isCurrentQuestionnaire, splitSubmission } from '../../../../lib/questionnaires/cau';
 import { deliverQuestionnaire } from '../../../../lib/questionnaires/cau-delivery';
 
 export const config = { api: { bodyParser: { sizeLimit: '128kb' } } };
@@ -35,17 +35,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try { user = await admin.auth(app).verifyIdToken(bearer.slice(7), true); }
     catch { return res.status(401).json({error:'Sign in to PulseCheck again to continue.'}); }
     const tester = digest(`${campaign}:${user.uid}`).toString('hex').slice(0,32);
-    const externalId = `sandbox-pulse-${tester}`, submissionId = `team-test-${campaign}-${tester}`;
+    const externalId = `sandbox-pulse-${tester}`, submissionId = `team-test-${campaign}-${tester}-sp2`;
     const collection = admin.firestore(app).collection(COLLECTION);
-    const recordRef = collection.doc(`sandbox_${campaign}_${tester}`);
+    const recordRef = collection.doc(`sandbox_${campaign}_${tester}_${QUESTIONNAIRE_VERSION}`);
     const existing = await recordRef.get();
-    const draftRef = collection.doc(`sandbox_draft_${campaign}_${tester}`);
+    const draftRef = collection.doc(`sandbox_draft_${campaign}_${tester}_${QUESTIONNAIRE_VERSION}`);
     const draft = (await draftRef.get()).data();
-    const skillsRef = collection.doc(`sandbox_skills_${campaign}_${tester}`);
+    const skillsRef = collection.doc(`sandbox_skills_${campaign}_${tester}_${QUESTIONNAIRE_VERSION}`);
     const skills = (await skillsRef.get()).data() || null;
     const complete = existing.exists && skills?.completed === true;
-    const resumedDraft = existing.exists ? {version:VERSION,revision:draft?.revision || 0,name:draft?.name || 'Tester',position:0,completed:true,answers:Object.fromEntries(Object.entries(existing.data()?.fields || {}).filter(([,field]:any)=>field.state==='local').map(([id,field]:any)=>[id,field.value]))} : draft || null;
-    if (req.method === 'GET') return res.json({available:true,completed:complete,questionnaireSubmitted:existing.exists,required:false,healthSharingAllowed:true,version:VERSION,skills,draft:complete ? null : resumedDraft,receipt:publicReceipt(existing.data())});
+    const resumedDraft = existing.exists ? {version:QUESTIONNAIRE_VERSION,flowVersion:4,revision:draft?.revision || 0,name:draft?.name || 'Tester',position:0,completed:true,answers:Object.fromEntries(Object.entries(existing.data()?.fields || {}).filter(([,field]:any)=>field.state==='local').map(([id,field]:any)=>[id,field.value]))} : draft || null;
+    if (req.method === 'GET') return res.json({available:true,completed:complete,questionnaireSubmitted:existing.exists,required:false,healthSharingAllowed:true,version:VERSION,questionnaireVersion:QUESTIONNAIRE_VERSION,skills,draft:complete ? null : resumedDraft,receipt:publicReceipt(existing.data())});
+    if (!isCurrentQuestionnaire(req.body)) return res.status(409).json({error:'This questionnaire has changed. Reload the page to continue with the current version.'});
     if (['saveSkillsDraft','completeSkills'].includes(req.body?.action)) {
       if (!existing.exists && !draft?.completed) return res.status(400).json({error:'Complete your performance questions first.'});
       try {const savedSkills=await saveSkills(admin.firestore(app),skillsRef,req.body,user.uid,req.body.action==='completeSkills');return res.json({skills:savedSkills,completed:existing.exists && savedSkills.completed,receipt:publicReceipt(existing.data())});}
@@ -64,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const input = applyAdministrativeAnswers({...req.body,submissionId,name:`Sandbox tester ${tester.slice(0,8)}`,email:`sandbox-${tester}@example.com`}, await deriveAdministrativeAnswers(admin.firestore(app),user.uid));
     let split;
     try { split = splitSubmission(input); } catch { return res.status(400).json({error:'Please check your answers before submitting.'}); }
-    const db = admin.firestore(app), attemptRef = collection.doc(`sandbox_attempt_${campaign}_${tester}`);
+    const db = admin.firestore(app), attemptRef = collection.doc(`sandbox_attempt_${campaign}_${tester}_${QUESTIONNAIRE_VERSION}`);
     const attempt = await db.runTransaction(async tx => {
       const current = await tx.get(attemptRef);
       if (current.exists) return current.data()!;

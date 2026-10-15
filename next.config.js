@@ -25,6 +25,10 @@ const nextConfig = {
   async rewrites() {
     return {
       beforeFiles: [
+        { source: '/operations', destination: '/operations/index.html' },
+        { source: '/university-sales-strategy', destination: '/university-sales-strategy/index.html' },
+        { source: '/pilot-expansion', destination: '/pilot-expansion/index.html' },
+        { source: '/RunOfShow', destination: '/RunOfShow/index.html' },
         { source: '/compress-pdf', destination: '/compress-pdf/index.html' },
         ...(process.env.NODE_ENV === 'development'
           ? [{ source: '/api/pipelists/runbook', destination: 'https://fitwithpulse.ai/api/pipelists/runbook' }]

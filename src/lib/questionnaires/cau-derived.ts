@@ -28,5 +28,7 @@ export async function deriveAdministrativeAnswers(db: any, uid: string, now = ne
   return {answers, metadata:{version:1,submittedAt:observedAt,provenance,pulseCheckCheckInsBeforeToday,checkInScope:'mental-check-ins/check-ins with sourceDate before submission day; auntEDNA history excluded'}};
 }
 export function applyAdministrativeAnswers(input: any, derived: Awaited<ReturnType<typeof deriveAdministrativeAnswers>>) {
-  return {...input,answers:{...Object.fromEntries(Object.entries(input.answers || {}).filter(([id])=>!isDerivedQuestion(id) && !isRemovedQuestion(id))),...derived.answers},administrativeMetadata:derived.metadata};
+  // Administrative observations are metadata, never synthetic questionnaire answers.
+  // Preserve unknown client IDs so validation rejects stale submissions instead of reinterpreting them.
+  return {...input, answers:input.answers, administrativeMetadata:{...derived.metadata,legacyAdministrativeObservations:derived.answers}};
 }

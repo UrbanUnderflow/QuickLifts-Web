@@ -9,45 +9,36 @@ require.extensions['.ts'] = (mod, filename) => mod._compile(ts.transpileModule(f
 const { validateSubmission, splitSubmission, attachAuntEdnaReceipt } = require(path.resolve('src/lib/questionnaires/cau.ts'));
 const {questionCustodian} = require(path.resolve('src/lib/questionnaires/cau-routing.ts'));
 require.extensions['.ts'] = previousLoader;
-test('stores supplied values and self-reported identity, with skipped fields represented', () => {
- const record = validateSubmission({name:' Test Athlete ',email:'Athlete@example.com',answers:{'cau-operational-14':'Often'}});
- assert.equal(record.identity.email, 'athlete@example.com');
- assert.equal(record.fields['cau-operational-14'].value, 'Often');
- assert.equal(record.fields['cau-operational-14'].state,'local');
+test('24 operational items plus 24 skills interactions form the approved 48-item baseline', () => {
+ const {questions,QUESTIONNAIRE_VERSION,VERSION}=require(path.resolve('src/lib/questionnaires/cau.ts'));
+ assert.equal(questions.length,24); assert.equal(questions.length+8+8+8,48);
+ assert.equal(VERSION,'cau-operational-web-v1');assert.equal(QUESTIONNAIRE_VERSION,'cau-starting-point-v2');
+ assert.deepEqual(questions.map(q=>Number(q.id.slice(-2))),[1,2,3,4,5,6,7,8,9,10,35,36,37,38,39,40,41,42,43,44,45,46,47,48]);
 });
-test('rejects unknown IDs, invalid options, impossible dates', () => {
- for (const answers of [{fake:'x'},{'cau-operational-01':'bogus'},{'cau-operational-05':'2026-02-30'}]) assert.throws(() => validateSubmission({name:'Test',email:'a@example.com',answers}));
+test('stores supplied values, self-reported identity and explicit skipped fields', () => {
+ const record=validateSubmission({name:' Test Athlete ',email:'Athlete@example.com',answers:{'cau-starting-point-05':'Mostly'}});
+ assert.equal(record.identity.email,'athlete@example.com');assert.equal(record.fields['cau-starting-point-05'].value,'Mostly');
+ assert.equal(record.fields['cau-starting-point-06'].state,'skipped');assert.equal(record.version,'cau-starting-point-v2');
 });
-test('separate records never copy auntEDNA values or answer hashes into PulseCheck', () => {
- const split=splitSubmission({submissionId:'test',name:'Example',email:'test@example.com',answers:{'cau-operational-14':'Often','cau-operational-26':'PRIVATE_SENTINEL'}});
- assert.equal(Object.keys(split.auntEdna.fields).length,48);
- assert.equal(Object.keys(split.pulseCheck.fields).length,13);
- assert.equal(Object.keys(split.pulseCheck.auntEdnaReferences).length,48);
- assert.equal(JSON.stringify(split.pulseCheck).includes('PRIVATE_SENTINEL'),false);
- assert.equal(split.pulseCheck.fields['cau-operational-14'],undefined);
+test('rejects legacy IDs, unknown options, duplicate, excessive and exclusive mixed selections',()=>{
+ for(const answers of [{fake:'x'},{'cau-operational-14':'Often'},{'cau-starting-point-01':'bogus'},{'cau-starting-point-46':['Focus','Focus']},{'cau-starting-point-46':['Focus','Confidence','Preparation']},{'cau-starting-point-46':['Focus','I am not sure yet']}]) assert.throws(()=>validateSubmission({name:'Test',email:'a@example.com',answers}));
+});
+test('19 protected fields never enter the 5-field performance mirror',()=>{
+ const split=splitSubmission({submissionId:'test',name:'Example',email:'test@example.com',answers:{'cau-starting-point-39':'Less than 5 hours'}});
+ assert.equal(Object.keys(split.auntEdna.fields).length,19);assert.equal(Object.keys(split.pulseCheck.fields).length,5);
+ assert.equal(JSON.stringify(split.pulseCheck).includes('Less than 5 hours'),false);
  const mirror=attachAuntEdnaReceipt(split.pulseCheck,{submissionId:'test',recordId:'ae-test',receiptId:'receipt-test'});
- assert.equal(mirror.auntEdnaReferences['cau-operational-14'].recordId,'ae-test');
- assert.equal(mirror.auntEdnaReferences['cau-operational-14'].value,undefined);
+ assert.equal(mirror.auntEdnaReferences['cau-starting-point-39'].questionnaireVersion,'cau-starting-point-v2');
+ assert.equal(mirror.auntEdnaReferences['cau-starting-point-39'].value,undefined);
  assert.throws(()=>attachAuntEdnaReceipt(split.pulseCheck,{submissionId:'wrong',recordId:'ae-test',receiptId:'receipt-test'}));
 });
-test('restricted collection is excluded from signed-in fallback', () => {
- const rules=fs.readFileSync('firestore.rules','utf8');
- assert.match(rules,/return collectionName == 'pulsecheck-restricted-questionnaire-submissions'/);
+test('restricted collection stays excluded from signed-in fallback',()=>{
+ const rules=fs.readFileSync('firestore.rules','utf8');assert.match(rules,/collectionName == 'pulsecheck-restricted-questionnaire-submissions'/);
  assert.match(rules,/match \/pulsecheck-restricted-questionnaire-submissions\/\{document=\*\*\} \{\s*allow read, write: if false;/);
 });
-
-test('every active question has exactly one explicit routing rule', () => {
- const source = require('../../src/content/questionnaires/cau-operational.json');
- const routing = require('../../src/content/questionnaires/cau-routing.json');
- assert.deepEqual(routing.questions.map(q=>q.questionId).sort(),source.questions.filter(q=>q.id!=='cau-operational-04').map(q=>q.id).sort());
- assert.throws(()=>questionCustodian('unknown'));
- for(const n of [2,3,6,7,8,10,12,13,33,38,39,40,53,55,57,58,61]) assert.equal(questionCustodian('cau-operational-'+String(n).padStart(2,'0')),'auntEDNA');
-});
-test('injury narrative is conditional and never enters the performance record', () => {
- for(const answer of ['Yes','No']) {
- const result=splitSubmission({submissionId:'conditional',name:'Example',email:'test@example.com',answers:{'cau-operational-12':answer,'cau-operational-13':'INJURY_PRIVATE'}});
- assert.equal(JSON.stringify(result.pulseCheck).includes('INJURY_PRIVATE'),false);
- assert.equal(result.auntEdna.fields['cau-operational-13'].state,answer==='Yes'?'local':'not_applicable');
- assert.equal(result.auntEdna.fields['cau-operational-13'].value,answer==='Yes'?'INJURY_PRIVATE':undefined);
- }
+test('each current item has exactly one routing decision and old IDs cannot be reinterpreted',()=>{
+ const source=require('../../src/content/questionnaires/cau-operational.json'),routing=require('../../src/content/questionnaires/cau-routing.json');
+ assert.deepEqual(routing.questions.map(q=>q.questionId).sort(),source.questions.map(q=>q.id).sort());
+ assert.throws(()=>questionCustodian('cau-operational-35'));
+ for(const n of [2,3,4,6,7,8,35,36,37,38,39,40,41,42,43,44,45,47,48])assert.equal(questionCustodian('cau-starting-point-'+String(n).padStart(2,'0')),'auntEDNA');
 });

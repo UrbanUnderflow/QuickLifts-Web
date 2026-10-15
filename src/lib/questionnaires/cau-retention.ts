@@ -6,6 +6,7 @@ export const RETENTION_VERSION = 'cau-private-retention-v1';
 const operational = new Set([1,2,3,5,9,11,34,35,36,37,50,51,52,53,54,55,56,59,60,61]);
 const externalOnly = new Set([12,13,19,20,26,30,39,49,57,58,62]);
 export function retentionClass(id: string) {
+  if (/^cau-starting-point-\d{2}$/.test(id)) return questionCustodian(id) === 'auntEDNA' ? 'external-only' : 'operational';
   if (!/^cau-operational-\d{2}$/.test(id)) throw Error('Unknown question.');
   const n = Number(id.slice(-2));
   if (n < 1 || n > 62 || n === 4) throw Error('Unknown question.');

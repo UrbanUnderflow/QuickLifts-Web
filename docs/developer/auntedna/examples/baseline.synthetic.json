@@ -1,0 +1,113 @@
+{
+  "submissionId": "synthetic-starting-point-v2-001",
+  "version": "cau-starting-point-v2",
+  "ownershipVersion": "cau-routing-v3",
+  "identity": {
+    "name": "Synthetic Athlete",
+    "email": "synthetic-athlete@example.com",
+    "verification": "self_reported"
+  },
+  "fields": {
+    "cau-starting-point-02": {
+      "questionId": "cau-starting-point-02",
+      "state": "local",
+      "value": "Strengthen my mental performance"
+    },
+    "cau-starting-point-03": {
+      "questionId": "cau-starting-point-03",
+      "state": "local",
+      "value": [
+        "Perform more consistently"
+      ]
+    },
+    "cau-starting-point-04": {
+      "questionId": "cau-starting-point-04",
+      "state": "local",
+      "value": "Strongly disagree"
+    },
+    "cau-starting-point-06": {
+      "questionId": "cau-starting-point-06",
+      "state": "local",
+      "value": "Not at all"
+    },
+    "cau-starting-point-07": {
+      "questionId": "cau-starting-point-07",
+      "state": "local",
+      "value": "Not at all"
+    },
+    "cau-starting-point-08": {
+      "questionId": "cau-starting-point-08",
+      "state": "local",
+      "value": "Not at all"
+    },
+    "cau-starting-point-35": {
+      "questionId": "cau-starting-point-35",
+      "state": "local",
+      "value": "Not at all"
+    },
+    "cau-starting-point-36": {
+      "questionId": "cau-starting-point-36",
+      "state": "local",
+      "value": "Not at all"
+    },
+    "cau-starting-point-37": {
+      "questionId": "cau-starting-point-37",
+      "state": "local",
+      "value": "Not at all"
+    },
+    "cau-starting-point-38": {
+      "questionId": "cau-starting-point-38",
+      "state": "local",
+      "value": "Not at all"
+    },
+    "cau-starting-point-39": {
+      "questionId": "cau-starting-point-39",
+      "state": "local",
+      "value": "Less than 5 hours"
+    },
+    "cau-starting-point-40": {
+      "questionId": "cau-starting-point-40",
+      "state": "local",
+      "value": [
+        "Academics"
+      ]
+    },
+    "cau-starting-point-41": {
+      "questionId": "cau-starting-point-41",
+      "state": "local",
+      "value": "Strongly disagree"
+    },
+    "cau-starting-point-42": {
+      "questionId": "cau-starting-point-42",
+      "state": "local",
+      "value": "Strongly disagree"
+    },
+    "cau-starting-point-43": {
+      "questionId": "cau-starting-point-43",
+      "state": "local",
+      "value": "Strongly disagree"
+    },
+    "cau-starting-point-44": {
+      "questionId": "cau-starting-point-44",
+      "state": "local",
+      "value": "Strongly disagree"
+    },
+    "cau-starting-point-45": {
+      "questionId": "cau-starting-point-45",
+      "state": "skipped"
+    },
+    "cau-starting-point-47": {
+      "questionId": "cau-starting-point-47",
+      "state": "local",
+      "value": [
+        "Understanding changes in my well-being"
+      ]
+    },
+    "cau-starting-point-48": {
+      "questionId": "cau-starting-point-48",
+      "state": "local",
+      "value": "Show resources I can review"
+    }
+  },
+  "universityCode": "SANDBOX"
+}

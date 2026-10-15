@@ -1,5 +1,21 @@
 # CAU direct auntEDNA integration
 
+## Current 48-item baseline — October 14, 2026
+
+The approved Starting Point now contains 24 questionnaire prompts and the existing 24 mental-skills ratings/activities (8 current-state, 8 familiarity, 8 activities). Questionnaire IDs retain the approved printed numbers 01–10 and 35–48. There are no additional conditional prompts. Questions remain optional, and the existing performance-only path remains available.
+
+The shared web route is also the required-baseline experience opened by iOS and Android. Its two privacy sections contain 5 PulseCheck questionnaire items plus 24 skills interactions, and 19 auntEDNA questionnaire items. The presentation groups by existing privacy ownership, so its order differs from the printed document. Previously completed skill baselines can still be reused. Annual clinical screening remains separate.
+
+`cau-starting-point-v2` identifies content, saved drafts, submissions and provider payloads. Native status transport remains `cau-operational-web-v1`; GET also returns `questionnaireVersion`. Every POST must identify the current content version. Old completed baselines still satisfy the gate; incomplete old drafts remain preserved in their original namespace and are not interpreted as new answers. New external submission identifiers are version-isolated for safe retries. Archived question/routing JSONs preserve historical definitions.
+
+Administrative information is metadata, not added questionnaire answers. Sensitive/mixed responses retain the external-provider routing and current health-authorization check. New sensitive fields do not inherit earlier private-retention eligibility. No collection activation or team intake migration is part of this source update. Team-owned custom intake remains a separate configuration.
+
+Native demo fixtures mirror the 24 questionnaire items; their labels identify that limited preview accurately. Run `python3 scripts/generate-cau-questionnaire-demo.py --check` in PulseCheck to verify source parity.
+
+Validation for this revision: 28 questionnaire/API/partner tests and 8 mental-skills tests passed; TypeScript and scoped UI lint passed. A local browser walkthrough completed all 24 questionnaire answers and the 24 skills interactions, verified content-version requests and the success screen, and reported no browser errors. Authentication and API responses were mocked; no live records or partner calls were made. Native JSON/generator parity, Swift syntax parsing and Android Kotlin compilation passed. Deployment, live provider acceptance, full iOS build and device verification remain unverified.
+
+The older integration notes below describe the historical version and its verification. They do not establish deployment or acceptance of the new content.
+
 Updated September 16, 2026 against the supplied auntEDNA Partner API Integration Guide dated September 11.
 
 ## Routing and transport

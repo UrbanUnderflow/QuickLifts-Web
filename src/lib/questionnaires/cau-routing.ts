@@ -9,6 +9,6 @@ export function questionCustodian(id: string): 'auntEDNA' | 'PulseCheck' {
   return routingFor(id).custodian as 'auntEDNA' | 'PulseCheck';
 }
 export function questionVisible(id: string, answers: Record<string, unknown>) {
-  const condition = routingFor(id).showWhen;
+  const condition = (routingFor(id) as { showWhen?: { questionId: string; equals: string } }).showWhen;
   return !condition || answers[condition.questionId] === condition.equals;
 }
