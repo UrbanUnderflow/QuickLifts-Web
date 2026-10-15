@@ -30,3 +30,13 @@ test('skips existing and repeated contacts by name+organization or email, allowi
   assert.deepEqual(selectNewContacts(rows, existing).map((row) => row.organization), ['B', 'C']);
   assert.equal(existing.length, 1);
 });
+
+
+test('import preserves normalized lead tags and supports legacy untagged files', () => {
+  const rows = parseContactImport({ contacts: [
+    { title: 'Adjacent contact', tags: [' Not at conference ', 'not at conference', 'Partner'] },
+    { title: 'Existing format' },
+  ] });
+  assert.deepEqual(rows[0].tags, ['Not at conference', 'Partner']);
+  assert.deepEqual(rows[1].tags, []);
+});

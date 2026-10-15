@@ -1,3 +1,4 @@
+import { normalizeLeadTags } from '../utils/pipelistsTags';
 import { preserveStoredUniversityList } from '../utils/pipelistsPersistence';
 import { getLinkedLeads, normalizeLinkedLeadIds, setLeadLink } from '../utils/pipelistsLinkedLeads';
 import { reconcilePipeListStages } from '../utils/pipelistsStages';
@@ -307,6 +308,7 @@ type PipelineItem = {
   id: string;
   linkedLeadIds?: string[];
   needsResearch?: boolean;
+  tags?: string[];
   title: string;
   organization: string;
   description: string;
@@ -460,6 +462,7 @@ type GeneratedLead = ItemDraft & {
   sourceVerificationReason?: string;
 };
 type ManualLeadDraft = {
+  tags: string[];
   title: string;
   organization: string;
   email: string;
@@ -1449,6 +1452,7 @@ const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
 });
 
 const defaultManualLeadDraft = (stage = generalStages[0].id): ManualLeadDraft => ({
+  tags: [],
   title: '',
   organization: '',
   email: '',
@@ -1736,6 +1740,7 @@ const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
   const now = new Date().toISOString();
   return {
     ...draft,
+    tags: normalizeLeadTags(draft.tags),
     description: draft.description.trim(),
     contactEmails: normalizeContactEmails(draft.contactEmails),
     contactPhone: draft.contactPhone.trim(),
@@ -2493,6 +2498,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[], s
     ...item,
     title,
     organization,
+    tags: normalizeLeadTags(item.tags),
     description: item.description || '',
     owner: item.owner || '',
     contactEmails: normalizeContactEmails(item.contactEmails),
@@ -5013,6 +5019,7 @@ const PipelinePage: NextPage = () => {
             item.segment,
             item.decisionMaker,
             item.notes,
+            ...normalizeLeadTags(item.tags),
           ]
             .join(' ')
             .toLowerCase()
@@ -7542,6 +7549,7 @@ Rules:
         sourceUrl: normalizedSourceUrl,
         stage,
         notes: cleanDealNotes(manualLeadDraft.notes),
+        tags: normalizeLeadTags(manualLeadDraft.tags),
       },
       makeId(),
     );
@@ -8123,6 +8131,7 @@ Rules:
       ...draft,
       title: isContactListActive && !draft.title.trim() && inferredContactName ? inferredContactName : draft.title,
       contactEmails: normalizedContactEmails,
+      tags: normalizeLeadTags(draft.tags),
       notes: cleanDealNotes(draft.notes),
       ...(customerSuccessToSave
         ? {
@@ -9998,6 +10007,18 @@ Rules:
       onChange={() => setItemSaveError('')}
       className="space-y-4"
     >
+      <label className="block" htmlFor="pipe-lead-tags">
+        <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Tags</span>
+        <input
+          id="pipe-lead-tags"
+          value={(draft.tags || []).join(',')}
+          onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value.split(',') }))}
+          placeholder="Not at conference, Partnership"
+          aria-describedby="pipe-lead-tags-help"
+          className="h-11 w-full rounded-md border border-stone-200 bg-white px-3 text-sm outline-none focus:border-stone-400"
+        />
+        <p id="pipe-lead-tags-help" className="mt-1 text-xs text-stone-500">Separate tags with commas. Tags appear on board cards.</p>
+      </label>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {(isContactListActive
           ? [
@@ -12104,6 +12125,16 @@ Rules:
                                         )}
                                       </div>
 
+                                      {normalizeLeadTags(item.tags).length > 0 && (
+                                        <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Lead tags">
+                                          {normalizeLeadTags(item.tags).map((tag) => (
+                                            <span key={tag.toLowerCase()} className="inline-flex max-w-full break-words rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-800">
+                                              {tag}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+
                                       {(canModify || item.needsResearch) && (
                                         <div className="mt-3">
                                           {canModify && !isBulkSelectionMode ? (
@@ -13348,6 +13379,18 @@ Rules:
 
             {isManualLeadEntry ? (
               <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block sm:col-span-2" htmlFor="pipe-manual-tags">
+                  <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Tags</span>
+                  <input
+                    id="pipe-manual-tags"
+                    value={manualLeadDraft.tags.join(',')}
+                    onChange={(event) => setManualLeadDraft((current) => ({ ...current, tags: event.target.value.split(',') }))}
+                    placeholder="Not at conference, Partnership"
+                    aria-describedby="pipe-manual-tags-help"
+                    className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none focus:border-stone-400"
+                  />
+                  <p id="pipe-manual-tags-help" className="mt-1 text-xs text-stone-500">Separate tags with commas. Tags appear on board cards.</p>
+                </label>
                 <label className="block" htmlFor="pipe-manual-title">
                   <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
                     {isContactListActive ? 'Contact name' : isTaskListActive ? 'Task name' : 'Lead name'}

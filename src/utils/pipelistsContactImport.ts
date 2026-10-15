@@ -1,5 +1,8 @@
+import { normalizeLeadTags } from './pipelistsTags';
+
 export type ImportedContact = {
   title: string;
+  tags: string[];
   organization: string;
   description: string;
   notes: string;
@@ -40,7 +43,7 @@ export function parseContactImport(input: unknown): ImportedContact[] {
       if (!['image/jpeg', 'image/png', 'image/webp'].includes(contentType) || !dataUrl.startsWith(`data:${contentType};base64,`) || !/^[A-Za-z0-9+/]+={0,2}$/.test(dataUrl.split(',')[1] || '')) throw new Error(`Use a JPEG, PNG or WebP photo for ${title}.`);
       photo = { name: text(row.photo.name, 200) || 'portrait.jpg', contentType, dataUrl };
     }
-    return { title, organization: text(row.organization, 1000), description: text(row.description), notes: text(row.notes), nextStep: text(row.nextStep), sourceUrl: url(row.sourceUrl), imageUrl: url(row.imageUrl), linkedinUrl: url(row.linkedinUrl), contactEmails: contactEmails.map((email: string) => email.trim().toLowerCase()), contactPhone: text(row.contactPhone, 100), ...(photo ? { photo } : {}) };
+    return { title, tags: normalizeLeadTags(row.tags), organization: text(row.organization, 1000), description: text(row.description), notes: text(row.notes), nextStep: text(row.nextStep), sourceUrl: url(row.sourceUrl), imageUrl: url(row.imageUrl), linkedinUrl: url(row.linkedinUrl), contactEmails: contactEmails.map((email: string) => email.trim().toLowerCase()), contactPhone: text(row.contactPhone, 100), ...(photo ? { photo } : {}) };
   });
 }
 
