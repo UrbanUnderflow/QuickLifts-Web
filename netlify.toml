@@ -777,6 +777,14 @@
   status = 200
   force = true
 
+# Keep the native image decoder and its Linux binaries in each Clay function.
+[functions.pulsecheck-clay-self]
+  external_node_modules = ["sharp"]
+
+[functions.pulsecheck-clay-self-background]
+  external_node_modules = ["sharp"]
+
 # Remove abandoned Clay Self reference photos after one hour.
 [functions.pulsecheck-clay-self-cleanup]
   schedule = "15 * * * *"
+  external_node_modules = ["sharp"]
