@@ -271,11 +271,17 @@ test('output diagnostics distinguish safe rejection categories and validation ph
   }
 });
 
-test('a faint edge pixel still fails strict guard and is never silently padded', async () => {
+test('one alpha quantization level is cleaned but stronger edge content stays rejected', async () => {
   const {data, info} = await sharp(await portrait()).ensureAlpha().raw().toBuffer({resolveWithObject:true});
   data[3] = 1;
   const faintEdge = await sharp(data, {raw:info}).png().toBuffer();
-  await assert.rejects(c.framePortrait(faintEdge), {failureCode:'output_edge_touch'});
+  const cleaned = await c.framePortrait(faintEdge);
+  await c.validatePortrait(cleaned, 0.08);
+  for (const alpha of [2, 32, 255]) {
+    data[3] = alpha;
+    const touched = await sharp(data, {raw:info}).png().toBuffer();
+    await assert.rejects(c.framePortrait(touched), {failureCode:'output_edge_touch', edgeAlphaMax:alpha});
+  }
 });
 
 test('missing provider image payload has safe validation classification', async () => {

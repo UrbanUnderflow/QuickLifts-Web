@@ -14,7 +14,9 @@ The private job records the style version and generation settings. New settings
 apply to new jobs only. Existing approved portraits are preserved.
 
 Output validation decodes the PNG, checks portrait dimensions and alpha, rejects
-empty output and any nontransparent content touching a canvas edge. Fully
+empty output and substantive content touching a canvas edge. A narrowly bounded
+cleanup removes alpha 1/255 fringe only when the maximum alpha anywhere on the
+outer edge is exactly 1. Alpha 2/255 and stronger edge content remains rejected. Fully
 contained output with tight margins is resized as a whole onto a transparent
 portrait canvas to provide at least 8 percent margins. No anatomy is reconstructed. This catches canvas-edge clipping and opaque
 backgrounds, but cannot identify a missing foot inside otherwise padded output,
@@ -49,3 +51,7 @@ Both are required; missing/expired configuration restores the limit automaticall
 Other accounts keep the default limit. Remove the tester configuration when
 validation finishes. Never print or place actual tester UIDs in documentation.
 The override does not bypass concurrent-job protection or ownership checks.
+
+Edge failures record only the numeric maximum outer-edge alpha (0–255), without
+pixels or image content, so faint-fringe and substantive clipping can be
+distinguished operationally. This metric does not determine missing anatomy.

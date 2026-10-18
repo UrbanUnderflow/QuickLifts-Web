@@ -31,10 +31,12 @@ async function validatePortrait(bytes, requiredMargin = 0.02) {
   let data, info;
   try { ({ data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true })); }
   catch { throw outputFailure('output_decode'); }
-  let left = info.width, top = info.height, right = -1, bottom = -1;
+  let left = info.width, top = info.height, right = -1, bottom = -1, edgeAlphaMax = 0;
   for (let y = 0; y < info.height; y++) {
     for (let x = 0; x < info.width; x++) {
-      // Deliberately strict: even faint edge pixels cannot prove complete anatomy.
+      const alpha = data[(y * info.width + x) * info.channels + info.channels - 1];
+      if (x === 0 || y === 0 || x === info.width - 1 || y === info.height - 1) edgeAlphaMax = Math.max(edgeAlphaMax, alpha);
+      // Strict after the narrowly bounded alpha quantization cleanup below.
       if (data[(y * info.width + x) * info.channels + info.channels - 1] > 0) {
         left = Math.min(left, x); right = Math.max(right, x);
         top = Math.min(top, y); bottom = Math.max(bottom, y);
@@ -42,14 +44,25 @@ async function validatePortrait(bytes, requiredMargin = 0.02) {
     }
   }
   if (right < left) throw outputFailure('output_empty');
-  if (left === 0 || top === 0 || right === info.width - 1 || bottom === info.height - 1) throw outputFailure('output_edge_touch');
+  if (left === 0 || top === 0 || right === info.width - 1 || bottom === info.height - 1) throw Object.assign(outputFailure('output_edge_touch'), { edgeAlphaMax });
   const marginX = Math.ceil(info.width * requiredMargin), marginY = Math.ceil(info.height * requiredMargin);
   if (left < marginX || top < marginY || right >= info.width - marginX || bottom >= info.height - marginY) throw outputFailure('output_margin');
 }
 
 async function framePortrait(bytes) {
-  // Reject any edge-touching source. Padding cannot reconstruct missing anatomy.
-  await validatePortrait(bytes, 0);
+  // A one-level alpha fringe can be a quantization artifact on an otherwise
+  // complete cutout. Clear only that <= 1/255 opacity fringe, never visible edges.
+  // Padding cannot reconstruct missing anatomy, so stronger edge contact rejects.
+  try { await validatePortrait(bytes, 0); }
+  catch (error) {
+    if (error.failureCode !== 'output_edge_touch' || error.edgeAlphaMax !== 1) throw error;
+    try {
+      const { data, info } = await sharp(bytes).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      for (let i = info.channels - 1; i < data.length; i += info.channels) if (data[i] === 1) data[i] = 0;
+      bytes = await sharp(data, { raw: info }).png().toBuffer();
+    } catch { throw outputFailure('output_processing'); }
+    await validatePortrait(bytes, 0);
+  }
   try { await validatePortrait(bytes, 0.08); return bytes; } catch (error) { if (error.failureCode !== 'output_margin') throw error; }
   const width = 858, height = 1288;
   let result;
@@ -67,11 +80,11 @@ function fail(statusCode, message, failureCode) { return Object.assign(new Error
 function failureDetails(error, phase, startedAt, now = Date.now()) {
   const safePhase = FAILURE_CODES.has(error?.failureCode) && error.failureCode.startsWith('output_') ? 'output_validation' : FAILURE_PHASES.has(phase) ? phase : 'finalize';
   const defaults = { input_read: 'storage_read', input_upload: 'storage_write', provider: 'provider_transport', output_validation: 'output_invalid', output_save: 'storage_write', dispatch: 'dispatch_failed', expiry: 'job_expired' };
-  return { failureCode: FAILURE_CODES.has(error?.failureCode) ? error.failureCode : defaults[safePhase] || 'internal_error', failurePhase: safePhase, failedAt: now, elapsedMs: Math.max(0, now - startedAt) };
+  return { failureCode: FAILURE_CODES.has(error?.failureCode) ? error.failureCode : defaults[safePhase] || 'internal_error', failurePhase: safePhase, failedAt: now, elapsedMs: Math.max(0, now - startedAt), ...(Number.isInteger(error?.edgeAlphaMax) && error.edgeAlphaMax >= 0 && error.edgeAlphaMax <= 255 ? { edgeAlphaMax: error.edgeAlphaMax } : {}) };
 }
 function logFailure(details) {
   // Rebuild the allowlisted fields. Never log error objects, identifiers or content.
-  const safe = failureDetails({ failureCode: details.failureCode }, details.failurePhase, details.failedAt - details.elapsedMs, details.failedAt);
+  const safe = failureDetails({ failureCode: details.failureCode, edgeAlphaMax: details.edgeAlphaMax }, details.failurePhase, details.failedAt - details.elapsedMs, details.failedAt);
   console.warn(JSON.stringify({ event: 'clay_self_failed', ...safe }));
 }
 function publicFailure(current, expired = false) {
