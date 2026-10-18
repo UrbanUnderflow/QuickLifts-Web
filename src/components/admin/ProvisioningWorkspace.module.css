@@ -188,9 +188,10 @@
 .workspace { background: #f7f8f5; min-height: 100vh; }
 .workspace > header { color: #22302e; }
 .workspace > header :global([class*="text-white"]), .workspace > header :global([class*="text-zinc-1"]), .workspace > header :global([class*="text-zinc-2"]) { color: #22302e; }
-.workspace > header :global([class*="text-zinc-4"]), .workspace > header :global([class*="text-zinc-5"]), .workspace > header :global([class*="text-zinc-7"]) { color: #65716c; }
+.workspace > header :global([class*="text-zinc-3"]), .workspace > header :global([class*="text-zinc-4"]), .workspace > header :global([class*="text-zinc-5"]), .workspace > header :global([class*="text-zinc-7"]) { color: #65716c; }
 .workspace > header :global([class*="text-[#d7ff00]"]), .workspace > header :global([class*="text-emerald-"]) { color: #356b60; }
-.workspace > header :global([class*="bg-[#171b21]"]) { background: #fff; }
+.workspace > header :global([class*="bg-[#171b21]"]), .workspace > header :global(.bg-zinc-900) { background: #fff; }
+.workspace > header :global(button[class*="hover:bg-zinc-"]):hover { background: #eef2e8; color: #22302e; }
 .workspace > header :global([class*="border-zinc-"]) { border-color: #dfe5dc; }
 @media(max-width:760px) {
   .theme :global(.pcp-head-right .pcp-btn) { flex: 1 1 25%; padding: 10px 8px; }
