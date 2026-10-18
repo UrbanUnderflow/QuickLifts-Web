@@ -1955,7 +1955,7 @@ export const pulseCheckProvisioningService = {
       const team = teamSnapshot.exists() ? teamSnapshot.data() : null;
       const organizationSnapshot = team?.organizationId ? await getDocFromServer(doc(db, ORGANIZATIONS_COLLECTION, team.organizationId)) : null;
       const organization = organizationSnapshot?.exists() ? organizationSnapshot.data() : null;
-      staff = Boolean(team && organization && member.organizationId === team.organizationId
+      staff = Boolean(team && organization && member?.organizationId === team.organizationId
         && team.status === 'active' && organization.status === 'active'
         && !team.archivedAt && !team.deletedAt && !organization.archivedAt && !organization.deletedAt);
     }
