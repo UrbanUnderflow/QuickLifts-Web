@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { consentDecisionComplete, usesAthleticMindConsent, selectConsentDocumentsForProduct, HEALTH_CONSENT, RESEARCH_CONSENT, PARTICIPATION_CONSENT, researchEligible, type ConsentDecisions } from '../../src/api/firebase/pulsecheckProvisioning/consentPolicy';
+import { assertCurrentConsentDecisions, consentDecisionComplete, usesAthleticMindConsent, selectConsentDocumentsForProduct, HEALTH_CONSENT, RESEARCH_CONSENT, PARTICIPATION_CONSENT, researchEligible, type ConsentDecisions } from '../../src/api/firebase/pulsecheckProvisioning/consentPolicy';
 import { hasCompletedRequiredConsents } from '../../src/api/firebase/pulsecheckProvisioning/accessState';
 import { getDefaultPulseCheckRequiredConsents } from '../../src/api/firebase/pulsecheckProvisioning/types';
 const receipt = (doc: typeof HEALTH_CONSENT, decision: 'accepted' | 'declined' | 'revoked') => ({ decision, version: doc.version, signedName: 'Test Athlete', decidedAt: new Date().toISOString(), document: doc });
@@ -58,4 +58,31 @@ test('PulseCheck stock terms exclude AuntEdna and require a fresh exact receipt 
  assert.equal(selectConsentDocumentsForProduct([{ ...PARTICIPATION_CONSENT, title: 'University agreement' }], 'pulsecheck')[0].version, PARTICIPATION_CONSENT.version);
  assert.equal(getDefaultPulseCheckRequiredConsents('research', 'pulsecheck').some(doc => /auntedna/i.test(doc.body)), false);
  assert.deepEqual(getDefaultPulseCheckRequiredConsents('research', 'athleticmind'), getDefaultPulseCheckRequiredConsents('research'));
+});
+
+
+test('access gate rejects old product receipts and legacy IDs after product-specific revision', () => {
+  const revised = selectConsentDocumentsForProduct([PARTICIPATION_CONSENT], 'pulsecheck')[0];
+  for (const versions of [{}, { [revised.id]: 'v1' }, { [revised.id]: revised.version }]) {
+    assert.equal(hasCompletedRequiredConsents({ requiredConsents: [revised], completedConsentIds: [revised.id], completedConsentVersions: versions }), false);
+  }
+  assert.equal(hasCompletedRequiredConsents({ requiredConsents: [revised], consentDecisions: { [revised.id]: receipt(PARTICIPATION_CONSENT, 'accepted') } }), false);
+  assert.equal(hasCompletedRequiredConsents({ requiredConsents: [revised], consentDecisions: { [revised.id]: receipt(revised, 'accepted') } }), true);
+  assert.equal(hasCompletedRequiredConsents({ requiredConsents: [{ ...revised, body: revised.body + ' Updated scope.' }], consentDecisions: { [revised.id]: receipt(revised, 'accepted') } }), false);
+});
+
+test('research refusal from an old version does not bypass current document review', () => {
+  assert.equal(hasCompletedRequiredConsents({ requiredConsents: [RESEARCH_CONSENT], researchConsentStatus: 'declined' }), false);
+  assert.equal(hasCompletedRequiredConsents({ requiredConsents: [RESEARCH_CONSENT], researchConsentStatus: 'declined', consentDecisions: { [RESEARCH_CONSENT.id]: receipt(RESEARCH_CONSENT, 'declined') } }), true);
+});
+
+
+test('stale open-form changes fail before saving while historical evidence and optional refusal remain valid', () => {
+  const old = receipt(PARTICIPATION_CONSENT, 'accepted');
+  const revised = selectConsentDocumentsForProduct([PARTICIPATION_CONSENT, HEALTH_CONSENT], 'pulsecheck');
+  assert.throws(() => assertCurrentConsentDecisions({ [old.document.id]: old }, {}, revised), /terms changed/);
+  assert.doesNotThrow(() => assertCurrentConsentDecisions({ [old.document.id]: old }, { [old.document.id]: old }, revised));
+  const choices = Object.fromEntries(revised.map(doc => [doc.id, receipt(doc, doc.category === 'health_authorization' ? 'declined' : 'accepted')]));
+  assert.doesNotThrow(() => assertCurrentConsentDecisions(choices, {}, revised));
+  assert.throws(() => assertCurrentConsentDecisions(choices, {}, revised.map(doc => ({ ...doc, body: doc.body + ' New terms.' }))), /terms changed/);
 });

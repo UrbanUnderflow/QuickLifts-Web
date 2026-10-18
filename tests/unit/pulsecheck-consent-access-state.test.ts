@@ -27,7 +27,7 @@ test('requiresReConsentForVersion detects older accepted versions', () => {
   assert.equal(requiresReConsentForVersion('v5', 'v6'), true);
   assert.equal(requiresReConsentForVersion('v6', 'v6'), false);
   assert.equal(requiresReConsentForVersion('', 'v6'), true);
-  assert.equal(requiresReConsentForVersion('v7', 'v6'), false);
+  assert.equal(requiresReConsentForVersion('v7', 'v6'), true);
 });
 
 test('PulseCheck consent v6 re-prompts athletes who completed v5 documents', () => {

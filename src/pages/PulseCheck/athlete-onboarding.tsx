@@ -242,6 +242,7 @@ export default function PulseCheckAthleteOnboardingPage() {
   const [organization, setOrganization] = useState<PulseCheckOrganization | null>(null);
   const [pilot, setPilot] = useState<PulseCheckPilot | null>(null);
   const [team, setTeam] = useState<PulseCheckTeam | null>(null);
+  const [scopeInvalid, setScopeInvalid] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const progressSaveQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -363,6 +364,33 @@ export default function PulseCheckAthleteOnboardingPage() {
     return () => { active = false; };
   }, [currentUser?.id, currentUserLoading, organizationId, teamId, previewMode]);
 
+  useEffect(() => {
+    if (previewMode || !progressHydrated || !membership || !currentUser?.id) return;
+    let active = true;
+    let checking = false;
+    const verify = async () => {
+      if (checking || document.visibilityState !== 'visible') return;
+      checking = true;
+      try {
+        const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
+        const current = memberships.find(value => value.id === membership.id);
+        if (active && (!current || current.organizationId !== membership.organizationId
+          || JSON.stringify(current.athleteOnboarding?.requiredConsents) !== JSON.stringify(membership.athleteOnboarding?.requiredConsents))) setScopeInvalid(true);
+      } catch {
+        if (active) setScopeInvalid(true);
+      } finally { checking = false; }
+    };
+    window.addEventListener('focus', verify);
+    document.addEventListener('visibilitychange', verify);
+    const interval = window.setInterval(verify, 60000);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', verify);
+      document.removeEventListener('visibilitychange', verify);
+      window.clearInterval(interval);
+    };
+  }, [previewMode, progressHydrated, membership, currentUser?.id]);
+
   const requiresResearchConsent = pilot?.studyMode === 'research';
   const hasPilotEnrollment = Boolean(membership?.athleteOnboarding?.targetPilotId);
   const sourceRequiredConsents = previewMode
@@ -395,7 +423,7 @@ export default function PulseCheckAthleteOnboardingPage() {
   };
 
   useEffect(() => {
-    if (!progressHydrated || !membership || saving || membership.onboardingStatus === 'complete') return;
+    if (scopeInvalid || !progressHydrated || !membership || saving || membership.onboardingStatus === 'complete') return;
 
     const trimmedName = displayName.trim();
     const researchChoiceMade = !requiresResearchConsent || researchConsentStatus === 'accepted' || researchConsentStatus === 'declined';
@@ -423,11 +451,13 @@ export default function PulseCheckAthleteOnboardingPage() {
           : {}),
       })).catch((error) => {
         console.error('[PulseCheck athlete onboarding] Failed to sync onboarding progress:', error);
+        setScopeInvalid(true);
       });
     }, 250);
 
     return () => window.clearTimeout(timeout);
   }, [
+    scopeInvalid,
     completedConsentIds,
     completedConsentVersions,
     consentDecisions,
@@ -491,7 +521,7 @@ export default function PulseCheckAthleteOnboardingPage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!currentUser || !membership) return;
+    if (scopeInvalid || !currentUser || !membership) return;
     if (!displayName.trim()) { setMessage({ type: 'error', text: 'Tell us what name you would like us to use.' }); return; }
     if (!isValidE164(normalizePhoneToE164(phone))) {
       setMessage({ type: 'error', text: 'Add a phone number where your team can reach you (e.g. (301) 555-1234).' });
@@ -515,15 +545,6 @@ export default function PulseCheckAthleteOnboardingPage() {
     setMessage(null);
     try {
       await progressSaveQueue.current;
-      await userService.updateUser(currentUser.id, {
-        ...currentUser.toDictionary(),
-        displayName: displayName.trim(),
-        preferredName: displayName.trim(),
-        pulseCheckOnboardingComplete: true,
-        updatedAt: new Date(),
-      });
-      const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
-      userService.nonUICurrentUser = refreshedUser;
       await pulseCheckProvisioningService.completeAthleteOnboarding({
         teamMembershipId: membership.id,
         consentVersion: CONSENT_VERSION,
@@ -540,6 +561,16 @@ export default function PulseCheckAthleteOnboardingPage() {
         intakeFormVersion,
         phone: normalizePhoneToE164(phone),
       });
+
+      await userService.updateUser(currentUser.id, {
+        ...currentUser.toDictionary(),
+        displayName: displayName.trim(),
+        preferredName: displayName.trim(),
+        pulseCheckOnboardingComplete: true,
+        updatedAt: new Date(),
+      });
+      const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
+      userService.nonUICurrentUser = refreshedUser;
 
       // Let the team's coaches/admins know this athlete finished onboarding.
       // Fire-and-forget with keepalive so it survives the redirect and never
@@ -573,6 +604,13 @@ export default function PulseCheckAthleteOnboardingPage() {
   };
 
   // ── Loading state ────────────────────────────────────────────────────────
+  if (scopeInvalid) {
+    return <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+      <p>Your team requirements need to be checked again before you continue.</p>
+      <button onClick={() => window.location.reload()}>Reload current requirements</button>
+    </div>;
+  }
+
   if (currentUserLoading || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#05070c]">

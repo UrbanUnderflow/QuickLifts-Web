@@ -21,6 +21,7 @@ import {
     hasCompletedAssignedIntake,
 } from '../api/firebase/pulsecheckProvisioning/accessState';
 import { pulseCheckProvisioningService } from '../api/firebase/pulsecheckProvisioning/service';
+import { isActivePulseCheckTeamMembership } from '../api/firebase/pulsecheckProvisioning/types';
 import type {
     PulseCheckOrganization,
     PulseCheckPilot,
@@ -200,6 +201,8 @@ const PulseCheckPage: NextPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
     const [showNoraOnboarding, setShowNoraOnboarding] = useState(false);
+    const [athleteGateError, setAthleteGateError] = useState(false);
+    const [athleteGateRevision, setAthleteGateRevision] = useState(0);
     const [athleteGateLoading, setAthleteGateLoading] = useState(false);
     const [athleteGateCheckedUserId, setAthleteGateCheckedUserId] = useState<string | null>(null);
     const [pendingAthleteTeamSetups, setPendingAthleteTeamSetups] = useState<PendingAthleteTeamSetup[]>([]);
@@ -379,20 +382,20 @@ const PulseCheckPage: NextPage = () => {
         const userId = currentUser.id;
 
         const loadAthleteGate = async () => {
-            setAthleteGateLoading(true);
+            // Background refresh must not unmount an athlete's active conversation.
+            if (athleteGateCheckedUserId !== userId) setAthleteGateLoading(true);
+            setAthleteGateError(false);
 
             try {
                 const memberships = (await pulseCheckProvisioningService.listUserTeamMemberships(userId))
-                    .filter((membership) => membership.role === 'athlete');
+                    .filter((membership) => membership.role === 'athlete' && isActivePulseCheckTeamMembership(membership));
 
                 const teamIds = Array.from(new Set(memberships.map((membership) => membership.teamId).filter(Boolean)));
                 const teams = await Promise.all(
                     teamIds.map(async (teamId) => {
-                        try {
-                            return await pulseCheckProvisioningService.getTeam(teamId);
-                        } catch {
-                            return null;
-                        }
+                        const value = await pulseCheckProvisioningService.getTeam(teamId);
+                        if (!value) throw new Error("Team configuration unavailable");
+                        return value;
                     })
                 );
                 const teamMap = new Map(teams.filter(Boolean).map((team) => [team!.id, team!]));
@@ -405,11 +408,9 @@ const PulseCheckPage: NextPage = () => {
                 );
                 const pilots = await Promise.all(
                     pilotIds.map(async (pilotId) => {
-                        try {
-                            return await pulseCheckProvisioningService.getPilot(pilotId);
-                        } catch {
-                            return null;
-                        }
+                        const value = await pulseCheckProvisioningService.getPilot(pilotId);
+                        if (!value) throw new Error("Team configuration unavailable");
+                        return value;
                     })
                 );
                 const pilotMap = new Map(pilots.filter(Boolean).map((pilot) => [pilot!.id, pilot!]));
@@ -427,11 +428,9 @@ const PulseCheckPage: NextPage = () => {
                 );
                 const organizations = await Promise.all(
                     organizationIds.map(async (organizationId) => {
-                        try {
-                            return await pulseCheckProvisioningService.getOrganization(organizationId);
-                        } catch {
-                            return null;
-                        }
+                        const value = await pulseCheckProvisioningService.getOrganization(organizationId);
+                        if (!value) throw new Error("Team configuration unavailable");
+                        return value;
                     })
                 );
                 const organizationMap = new Map(organizations.filter(Boolean).map((organization) => [organization!.id, organization!]));
@@ -483,8 +482,8 @@ const PulseCheckPage: NextPage = () => {
             } catch (error) {
                 console.error('[PulseCheck] Failed to load athlete team setup gate:', error);
                 if (active) {
-                    setPendingAthleteTeamSetups([]);
-                    setAthleteGateCheckedUserId(userId);
+                    setAthleteGateError(true);
+                    setAthleteGateCheckedUserId(null);
                 }
             } finally {
                 if (active) {
@@ -494,11 +493,18 @@ const PulseCheckPage: NextPage = () => {
         };
 
         void loadAthleteGate();
+        const refresh = () => { if (document.visibilityState === 'visible') setAthleteGateRevision(value => value + 1); };
+        window.addEventListener('focus', refresh);
+        document.addEventListener('visibilitychange', refresh);
+        const interval = window.setInterval(refresh, 60000);
 
         return () => {
             active = false;
+            window.removeEventListener('focus', refresh);
+            document.removeEventListener('visibilitychange', refresh);
+            window.clearInterval(interval);
         };
-    }, [currentUser?.id, currentUserLoading, showMarketing]);
+    }, [currentUser?.id, currentUserLoading, showMarketing, athleteGateRevision]);
 
     const handleNoraOnboardingComplete = () => {
         localStorage.setItem(STORAGE_KEY_NORA_ONBOARDING, 'true');
@@ -1898,6 +1904,12 @@ const PulseCheckPage: NextPage = () => {
 
     // If user chose web app (and is logged in), show web app content
     if (!showMarketing && currentUser) {
+        if (athleteGateError && !athleteGateLoading) {
+            return <div className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center gap-4">
+                <p>We could not verify your team requirements. Please try again.</p>
+                <button onClick={() => setAthleteGateRevision(value => value + 1)}>Retry</button>
+            </div>;
+        }
         if (currentUserLoading || athleteGateLoading || athleteGateCheckedUserId !== currentUser.id) {
             return <PulseCheckAppLoading label="Checking team setup..." />;
         }

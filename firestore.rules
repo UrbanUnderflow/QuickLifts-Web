@@ -1136,7 +1136,7 @@ service cloud.firestore {
           'phone',
           'postActivationCompletedAt',
           'smsConsentAt',
-          'staffConsentDecisions', 'staffConsentRecordedAt', 'updatedAt'
+          'staffConsentDecisions', 'staffConsentRecordedAt', 'title', 'updatedAt'
         ]);
     }
     function hasHumanUiAuditFields() {
@@ -2884,6 +2884,56 @@ service cloud.firestore {
     // Membership identity, role, capabilities, and roster scope are grants, not
     // profile fields. Self-service clients can only update bounded onboarding and
     // notification preferences; invite redemption is handled by trusted APIs.
+    // Consent summaries live on memberships. Discover your own records freely;
+    // other records require active, persisted staff authority and roster scope.
+    function pcConsentActive(data) {
+      return data.get('status', 'active') == 'active'
+        && data.get('revokedAt', null) == null
+        && data.get('archivedAt', null) == null
+        && data.get('deletedAt', null) == null;
+    }
+    function pcConsentStaff(teamId) {
+      let staff = get(pcMembershipPath(teamId)).data;
+      let team = get(/databases/$(database)/documents/pulsecheck-teams/$(teamId)).data;
+      let organization = get(/databases/$(database)/documents/pulsecheck-organizations/$(team.organizationId)).data;
+      return isSignedIn()
+        && staff.userId == request.auth.uid && staff.teamId == teamId
+        && staff.organizationId == team.organizationId
+        && pcConsentActive(staff) && pcConsentActive(team) && pcConsentActive(organization)
+        && team.status == 'active' && organization.status == 'active'
+        && staff.role in ['team-admin', 'coach', 'support-staff', 'performance-staff', 'clinician']
+        && (!('staffCapabilities' in staff)
+          || (staff.staffCapabilities is list
+            && staff.staffCapabilities.hasAny(['admin', 'coaching', 'administrative', 'athletic_trainer'])));
+    }
+    function pcConsentCanReadMember(data) {
+      let staff = get(pcMembershipPath(data.teamId)).data;
+      return pcConsentStaff(data.teamId)
+        && (staff.get('rosterVisibilityScope', 'team') == 'team'
+          || (staff.get('rosterVisibilityScope', 'team') == 'assigned'
+            && data.userId in staff.get('allowedAthleteIds', [])));
+    }
+    function pcConsentManager(teamId) {
+      let staff = get(pcMembershipPath(teamId)).data;
+      return pcConsentStaff(teamId)
+        && ((!('staffCapabilities' in staff) && staff.role == 'team-admin')
+          || ('admin' in staff.get('staffCapabilities', [])));
+    }
+    function pcConsentSameIdentity() {
+      return request.resource.data.userId == resource.data.userId
+        && request.resource.data.teamId == resource.data.teamId
+        && request.resource.data.organizationId == resource.data.organizationId;
+    }
+    function pcConsentOwnUpdate() {
+      return isSignedIn() && resource.data.userId == request.auth.uid
+        && pcConsentSameIdentity()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'athleteAge', 'athleteOnboarding', 'coachIntakeCompletedAt',
+          'coachIntakeFormVersion', 'coachIntakeResponses', 'notificationPreferences',
+          'onboardingStatus', 'phone', 'postActivationCompletedAt', 'smsConsentAt',
+          'staffConsentDecisions', 'staffConsentRecordedAt', 'title', 'updatedAt'
+        ]);
+    }
     match /pulsecheck-team-memberships/{membershipId} {
       match /consent-events/{eventId} {
         allow read: if isSignedIn() && get(/databases/$(database)/documents/pulsecheck-team-memberships/$(membershipId)).data.userId == request.auth.uid;
@@ -2894,28 +2944,16 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['actorUserId', 'decisions', 'recordedAt']);
         allow update, delete: if false;
       }
-      allow read: if isAdminUser()
-        || (
-          isSignedIn()
-          && (
-            resource.data.userId == request.auth.uid
-            || pcIsTeamStaff(resource.data.teamId)
-          )
-        );
-      allow create: if isAdminUser()
-        || (
-          pcCanManageTeam(request.resource.data.teamId)
-          && membershipId == request.resource.data.teamId + '_' + request.resource.data.userId
-          && pcTeamScopedDataIsActive(request.resource.data)
-        );
-      allow update: if isAdminUser()
-        || pcIsSafeOwnMembershipUpdate()
-        || (
-          pcCanManageTeam(resource.data.teamId)
-          && pcMembershipIdentityIsImmutable()
-          && membershipId == resource.data.teamId + '_' + resource.data.userId
-        );
-      allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
+      allow read: if isAdminUser() || (isSignedIn()
+        && (resource.data.userId == request.auth.uid || pcConsentCanReadMember(resource.data)));
+      // Self-service invitations use the authenticated server redeem API. A user
+      // cannot invent a staff grant to bypass the scoped read policy above.
+      allow create: if isAdminUser() || (pcConsentManager(request.resource.data.teamId)
+        && membershipId == request.resource.data.teamId + '_' + request.resource.data.userId
+        && request.resource.data.organizationId == get(/databases/$(database)/documents/pulsecheck-teams/$(request.resource.data.teamId)).data.organizationId);
+      allow update: if isAdminUser() || pcConsentOwnUpdate()
+        || (pcConsentManager(resource.data.teamId) && pcConsentSameIdentity());
+      allow delete: if isAdminUser() || pcConsentManager(resource.data.teamId);
     }
 
     // Pilot definitions are visible to authenticated PulseCheck clients, but

@@ -1,6 +1,6 @@
 import { normalizeProductBrand, validateProductBrand, normalizeAppBranding } from '../../../lib/pulsecheck/productConfig';
-import { selectConsentDocumentsForProduct, consentCategory, consentDecisionComplete, researchEligible, staffConsentDocuments, type ConsentDecisions } from './consentPolicy';
-import { addDoc, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocs, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { assertCurrentConsentDecisions, selectConsentDocumentsForProduct, consentCategory, consentDecisionComplete, researchEligible, staffConsentDocuments, type ConsentDecisions } from './consentPolicy';
+import { addDoc, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocFromServer, getDocs, getDocsFromServer, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders, isUsingDevFirebase } from '../config';
 import {
   buildPulseCheckAthleteOfferWebUrl,
@@ -10,6 +10,7 @@ import {
 import { isPulseCheckCoachPricedAthleteOfferActive } from '../../../utils/pulsecheckCommercialization';
 import { SubscriptionPlatform, SubscriptionType } from '../user';
 import {
+  isActivePulseCheckTeamMembership,
   derivePulseCheckTeamPlanBypass,
   getDefaultPulseCheckIntakeForm,
   getDefaultPulseCheckRequiredConsents,
@@ -453,10 +454,11 @@ const normalizeConsentDocList = (value: unknown): PulseCheckRequiredConsentDocum
 // Read the configured product from its persisted organization, never the UI
 // display brand or the legacy product fallback.
 const readConfiguredOrganizationProduct = async (organizationId: string) => {
-  if (!organizationId) return undefined;
-  const snapshot = await getDoc(doc(db, ORGANIZATIONS_COLLECTION, organizationId));
+  if (!organizationId) throw new Error("Program configuration is unavailable. Please retry.");
+  const snapshot = await getDocFromServer(doc(db, ORGANIZATIONS_COLLECTION, organizationId));
   const product = snapshot.exists() ? snapshot.data()?.productBrand : undefined;
-  return product === 'pulsecheck' || product === 'athleticmind' ? product : undefined;
+  if (product !== 'pulsecheck' && product !== 'athleticmind') throw new Error('Program configuration is unavailable. Please retry.');
+  return product;
 };
 
 const resolveEffectiveRequiredConsents = (
@@ -468,7 +470,7 @@ const resolveEffectiveRequiredConsents = (
   const teamList = normalizeConsentDocList(teamConsents);
   if (teamList.length > 0) {
     if (pilot?.studyMode === 'research') {
-      const research = normalizeRequiredConsentDocuments(pilot.requiredConsents || [], 'research');
+      const research = normalizeRequiredConsentDocuments(pilot.requiredConsents || [], 'research').filter(doc => consentCategory(doc) === 'research');
       const byId = new Map<string, PulseCheckRequiredConsentDocument>();
       [...teamList, ...research].forEach((consent) => {
         if (!byId.has(consent.id)) byId.set(consent.id, consent);
@@ -1411,26 +1413,27 @@ const applyLatestConsentStateToEnrollment = (
 const getPilotById = async (pilotId: string): Promise<PulseCheckPilot | null> => {
   const normalizedPilotId = normalizeString(pilotId);
   if (!normalizedPilotId) return null;
-  const snapshot = await getDoc(doc(db, PILOTS_COLLECTION, normalizedPilotId));
+  const snapshot = await getDocFromServer(doc(db, PILOTS_COLLECTION, normalizedPilotId));
   return snapshot.exists() ? toPilot(snapshot.id, snapshot.data() as Record<string, any>) : null;
 };
 
 const getTeamById = async (teamId: string): Promise<PulseCheckTeam | null> => {
   const normalizedTeamId = normalizeString(teamId);
   if (!normalizedTeamId) return null;
-  const snapshot = await getDoc(doc(db, TEAMS_COLLECTION, normalizedTeamId));
+  const snapshot = await getDocFromServer(doc(db, TEAMS_COLLECTION, normalizedTeamId));
   return snapshot.exists() ? toTeam(snapshot.id, snapshot.data() as Record<string, any>) : null;
 };
 
 const hydrateMembershipConsentStates = async (
   memberships: PulseCheckTeamMembership[]
 ): Promise<PulseCheckTeamMembership[]> => {
+  const activeMemberships = memberships.filter(isActivePulseCheckTeamMembership);
   const teamIds = Array.from(
-    new Set(memberships.map((membership) => normalizeString(membership.teamId)).filter(Boolean))
+    new Set(activeMemberships.map((membership) => normalizeString(membership.teamId)).filter(Boolean))
   );
   const pilotIds = Array.from(
     new Set(
-      memberships
+      activeMemberships
         .map((membership) => normalizeString(membership.athleteOnboarding?.targetPilotId))
         .filter(Boolean)
     )
@@ -1447,8 +1450,18 @@ const hydrateMembershipConsentStates = async (
   const organizationIds = [...new Set(teams.filter(Boolean).map(team => team!.organizationId).filter(Boolean))];
   const brandsByOrganization = new Map(await Promise.all(organizationIds.map(async id => [id, await readConfiguredOrganizationProduct(id)] as const)));
 
+  for (const membership of activeMemberships.filter(member => member.role === 'athlete')) {
+    const team = teamsById.get(membership.teamId);
+    const pilotId = membership.athleteOnboarding?.targetPilotId;
+    const pilot = pilotId ? pilotsById.get(pilotId) : null;
+    if (!team || !membership.organizationId || team.organizationId !== membership.organizationId
+      || (pilotId && (!pilot || pilot.organizationId !== team.organizationId))) {
+      throw new Error('Your team requirements could not be verified. Please retry.');
+    }
+  }
+
   return memberships.map((membership) =>
-    applyLatestConsentStateToMembership(
+    !isActivePulseCheckTeamMembership(membership) ? membership : applyLatestConsentStateToMembership(
       membership,
       teamsById.get(normalizeString(membership.teamId)) || null,
       pilotsById.get(normalizeString(membership.athleteOnboarding?.targetPilotId)) || null,
@@ -1914,7 +1927,7 @@ export const pulseCheckProvisioningService = {
   },
 
   async listUserTeamMemberships(userId: string): Promise<PulseCheckTeamMembership[]> {
-    const snapshot = await getDocs(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('userId', '==', normalizeString(userId))));
+    const snapshot = await getDocsFromServer(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('userId', '==', normalizeString(userId))));
     return hydrateMembershipConsentStates(snapshot.docs.map((docSnap) => toTeamMembership(docSnap.id, docSnap.data() as Record<string, any>)));
   },
 
@@ -1926,7 +1939,37 @@ export const pulseCheckProvisioningService = {
   },
 
   async listTeamMemberships(teamId: string): Promise<PulseCheckTeamMembership[]> {
-    const snapshot = await getDocs(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('teamId', '==', normalizeString(teamId))));
+    const user = auth.currentUser;
+    if (!user) throw new Error('Sign in to view your team.');
+    const normalizedTeamId = normalizeString(teamId);
+    const selfSnapshot = await getDocsFromServer(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('userId', '==', user.uid)));
+    const self = selfSnapshot.docs.find(entry => entry.data().teamId === normalizedTeamId);
+    const member = self?.data();
+    const adminSnapshot = user.email ? await getDocFromServer(doc(db, 'admin', user.email)) : null;
+    const staffRoles = ['team-admin', 'coach', 'support-staff', 'performance-staff', 'clinician'];
+    let staff = member && self?.id === `${normalizedTeamId}_${user.uid}` && staffRoles.includes(member.role) && (!member.status || member.status === 'active')
+      && !member.revokedAt && !member.archivedAt && !member.deletedAt
+      && (!Array.isArray(member.staffCapabilities) || member.staffCapabilities.some((capability: string) => ['admin', 'coaching', 'administrative', 'athletic_trainer'].includes(capability)));
+    if (staff && !adminSnapshot?.exists()) {
+      const teamSnapshot = await getDocFromServer(doc(db, TEAMS_COLLECTION, normalizedTeamId));
+      const team = teamSnapshot.exists() ? teamSnapshot.data() : null;
+      const organizationSnapshot = team?.organizationId ? await getDocFromServer(doc(db, ORGANIZATIONS_COLLECTION, team.organizationId)) : null;
+      const organization = organizationSnapshot?.exists() ? organizationSnapshot.data() : null;
+      staff = Boolean(team && organization && member.organizationId === team.organizationId
+        && team.status === 'active' && organization.status === 'active'
+        && !team.archivedAt && !team.deletedAt && !organization.archivedAt && !organization.deletedAt);
+    }
+    let rosterDocs = self ? [self] : [];
+    if (adminSnapshot?.exists() || (staff && (!member.rosterVisibilityScope || member.rosterVisibilityScope === 'team'))) {
+      rosterDocs = (await getDocsFromServer(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('teamId', '==', normalizedTeamId)))).docs;
+    } else if (staff && member.rosterVisibilityScope === 'assigned') {
+      const allowed = Array.isArray(member.allowedAthleteIds) ? member.allowedAthleteIds.filter((id: unknown) => typeof id === 'string') : [];
+      for (let offset = 0; offset < allowed.length; offset += 30) {
+        rosterDocs.push(...(await getDocsFromServer(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION),
+          where('teamId', '==', normalizedTeamId), where('userId', 'in', allowed.slice(offset, offset + 30))))).docs);
+      }
+    }
+    const snapshot = { docs: [...new Map(rosterDocs.map(entry => [entry.id, entry])).values()] };
     const memberships = await hydrateMembershipConsentStates(
       snapshot.docs.map((docSnap) => toTeamMembership(docSnap.id, docSnap.data() as Record<string, any>))
     );
@@ -3977,17 +4020,25 @@ export const pulseCheckProvisioningService = {
 
   async completeAthleteOnboarding(input: CompletePulseCheckAthleteOnboardingInput): Promise<void> {
     const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
-    const membershipSnap = await getDoc(membershipRef);
+    const membershipSnap = await getDocFromServer(membershipRef);
     const currentData = membershipSnap.exists() ? (membershipSnap.data() as Record<string, any>) : {};
+    if (!membershipSnap.exists() || currentData.userId !== auth.currentUser?.uid || currentData.role !== 'athlete'
+      || currentData.revokedAt || (currentData.status && currentData.status !== 'active')) {
+      throw new Error('Active athlete membership is required.');
+    }
     const currentAthleteOnboarding = (currentData.athleteOnboarding || {}) as Record<string, any>;
     const nextResearchConsentStatus = input.researchConsentStatus || currentAthleteOnboarding.researchConsentStatus || 'not-required';
 
     const pilotId = normalizeString(currentAthleteOnboarding.targetPilotId);
     const userId = normalizeString(currentData.userId);
-    const pilotSnap = pilotId ? await getDoc(doc(db, PILOTS_COLLECTION, pilotId)) : null;
+    const pilotSnap = pilotId ? await getDocFromServer(doc(db, PILOTS_COLLECTION, pilotId)) : null;
     const pilotStudyMode = pilotSnap?.exists() ? ((pilotSnap.data()?.studyMode as PulseCheckPilotStudyMode) || 'operational') : null;
     const teamId = normalizeString(currentData.teamId);
-    const teamSnap = teamId ? await getDoc(doc(db, TEAMS_COLLECTION, teamId)) : null;
+    const teamSnap = teamId ? await getDocFromServer(doc(db, TEAMS_COLLECTION, teamId)) : null;
+    if (!teamSnap?.exists() || !currentData.organizationId || currentData.organizationId !== teamSnap.data()?.organizationId
+      || (pilotId && (!pilotSnap?.exists() || pilotSnap.data()?.organizationId !== currentData.organizationId))) {
+      throw new Error('Your team requirements could not be verified. Please retry.');
+    }
     const requiredConsents = resolveEffectiveRequiredConsents(
       teamSnap?.exists() ? teamSnap.data()?.requiredConsents : undefined,
       pilotSnap?.exists() ? toPilot(pilotSnap.id, pilotSnap.data() as Record<string, any>) : null,
@@ -4003,16 +4054,17 @@ export const pulseCheckProvisioningService = {
       defaultToLatest: Array.isArray(input.completedConsentIds),
     });
     const completedConsentIds = completedConsentIdsFromVersions(completedConsentVersions, requiredConsents);
+    assertCurrentConsentDecisions(input.consentDecisions, currentAthleteOnboarding.consentDecisions, requiredConsents);
     const consentDecisions = validateConsentDecisions(input.consentDecisions ?? currentAthleteOnboarding.consentDecisions, requiredConsents);
     const nextEligibleForDataset = researchEligible(requiredConsents, consentDecisions, nextResearchConsentStatus, completedConsentIds, completedConsentVersions);
     const pilotEnrollmentRef = pilotId && userId
       ? doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId))
       : null;
-    const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await getDoc(pilotEnrollmentRef) : null;
+    const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await getDocFromServer(pilotEnrollmentRef) : null;
     const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists()
       ? (existingPilotEnrollmentSnap.data() as Record<string, any>)
       : {};
-    const progressSnap = userId ? await getDoc(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, userId)) : null;
+    const progressSnap = userId ? await getDocFromServer(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, userId)) : null;
     const progress = progressSnap?.exists() ? (progressSnap.data() as AthleteMentalProgress) : null;
     const baselineState = preserveCompletedBaselineState({
       athleteOnboarding: currentAthleteOnboarding,
@@ -4132,16 +4184,24 @@ export const pulseCheckProvisioningService = {
 
   async saveAthleteOnboardingProgress(input: SavePulseCheckAthleteOnboardingProgressInput): Promise<void> {
     const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
-    const membershipSnap = await getDoc(membershipRef);
+    const membershipSnap = await getDocFromServer(membershipRef);
     const currentData = membershipSnap.exists() ? (membershipSnap.data() as Record<string, any>) : {};
+    if (!membershipSnap.exists() || currentData.userId !== auth.currentUser?.uid || currentData.role !== 'athlete'
+      || currentData.revokedAt || (currentData.status && currentData.status !== 'active')) {
+      throw new Error('Active athlete membership is required.');
+    }
     const currentAthleteOnboarding = (currentData.athleteOnboarding || {}) as Record<string, any>;
     const nextResearchConsentStatus = input.researchConsentStatus || currentAthleteOnboarding.researchConsentStatus || 'not-required';
     const pilotId = normalizeString(currentAthleteOnboarding.targetPilotId);
     const userId = normalizeString(currentData.userId);
-    const pilotSnap = pilotId ? await getDoc(doc(db, PILOTS_COLLECTION, pilotId)) : null;
+    const pilotSnap = pilotId ? await getDocFromServer(doc(db, PILOTS_COLLECTION, pilotId)) : null;
     const pilotStudyMode = pilotSnap?.exists() ? ((pilotSnap.data()?.studyMode as PulseCheckPilotStudyMode) || 'operational') : null;
     const teamId = normalizeString(currentData.teamId);
-    const teamSnap = teamId ? await getDoc(doc(db, TEAMS_COLLECTION, teamId)) : null;
+    const teamSnap = teamId ? await getDocFromServer(doc(db, TEAMS_COLLECTION, teamId)) : null;
+    if (!teamSnap?.exists() || !currentData.organizationId || currentData.organizationId !== teamSnap.data()?.organizationId
+      || (pilotId && (!pilotSnap?.exists() || pilotSnap.data()?.organizationId !== currentData.organizationId))) {
+      throw new Error('Your team requirements could not be verified. Please retry.');
+    }
     const requiredConsents = resolveEffectiveRequiredConsents(
       teamSnap?.exists() ? teamSnap.data()?.requiredConsents : undefined,
       pilotSnap?.exists() ? toPilot(pilotSnap.id, pilotSnap.data() as Record<string, any>) : null,
@@ -4157,16 +4217,17 @@ export const pulseCheckProvisioningService = {
       defaultToLatest: Array.isArray(input.completedConsentIds),
     });
     const completedConsentIds = completedConsentIdsFromVersions(completedConsentVersions, requiredConsents);
+    assertCurrentConsentDecisions(input.consentDecisions, currentAthleteOnboarding.consentDecisions, requiredConsents);
     const consentDecisions = validateConsentDecisions(input.consentDecisions ?? currentAthleteOnboarding.consentDecisions, requiredConsents);
     const nextEligibleForDataset = researchEligible(requiredConsents, consentDecisions, nextResearchConsentStatus, completedConsentIds, completedConsentVersions);
     const pilotEnrollmentRef = pilotId && userId
       ? doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId))
       : null;
-    const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await getDoc(pilotEnrollmentRef) : null;
+    const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await getDocFromServer(pilotEnrollmentRef) : null;
     const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists()
       ? (existingPilotEnrollmentSnap.data() as Record<string, any>)
       : {};
-    const progressSnap = userId ? await getDoc(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, userId)) : null;
+    const progressSnap = userId ? await getDocFromServer(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, userId)) : null;
     const progress = progressSnap?.exists() ? (progressSnap.data() as AthleteMentalProgress) : null;
     const baselineState = preserveCompletedBaselineState({
       athleteOnboarding: currentAthleteOnboarding,

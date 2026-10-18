@@ -56,3 +56,20 @@ export function selectConsentDocumentsForProduct(
     return key ? { ...pulseCheckOnly[key] } as PulseCheckRequiredConsentDocument : doc;
   });
 }
+
+/** Reject newly submitted choices from an outdated open form without rewriting historical receipts. */
+export function assertCurrentConsentDecisions(
+  submitted: ConsentDecisions | undefined,
+  previous: ConsentDecisions = {},
+  documents: PulseCheckRequiredConsentDocument[],
+): void {
+  if (!submitted) return;
+  for (const [id, entry] of Object.entries(submitted)) {
+    if (JSON.stringify(entry) === JSON.stringify(previous[id])) continue;
+    const current = documents.find(doc => doc.id === id);
+    if (!current || entry.version !== current.version || entry.document?.body !== current.body
+      || consentCategory(entry.document) !== consentCategory(current)) {
+      throw new Error('The agreement terms changed. Refresh this page and review the current terms.');
+    }
+  }
+}

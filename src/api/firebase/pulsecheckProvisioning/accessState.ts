@@ -23,12 +23,6 @@ const normalizeConsentIds = (value: unknown) =>
         .filter((entry, index, values) => entry && values.indexOf(entry) === index)
     : [];
 
-const parseConsentVersionNumber = (version?: unknown): number => {
-  const normalized = normalizeString(version).toLowerCase();
-  const match = normalized.match(/(\d+)/);
-  return match ? Number(match[1]) || 0 : 0;
-};
-
 const normalizeConsentVersions = (value: unknown): Record<string, string> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
 
@@ -80,7 +74,7 @@ export const requiresReConsentForVersion = (currentAccepted: unknown, latest: un
   const acceptedVersion = normalizeString(currentAccepted);
   if (!acceptedVersion) return true;
 
-  return parseConsentVersionNumber(acceptedVersion) < parseConsentVersionNumber(latestVersion);
+  return acceptedVersion !== latestVersion;
 };
 
 export const hasCompletedRequiredConsents = (athleteOnboarding?: AthleteOnboardingLike): boolean => {
@@ -89,23 +83,12 @@ export const hasCompletedRequiredConsents = (athleteOnboarding?: AthleteOnboardi
     return true;
   }
 
-  const completedConsentIds = new Set(normalizeConsentIds(athleteOnboarding?.completedConsentIds));
+  const completedConsentIds = normalizeConsentIds(athleteOnboarding?.completedConsentIds);
   const completedConsentVersions = normalizeConsentVersions(athleteOnboarding?.completedConsentVersions);
-  const hasVersionedCompletions = Object.keys(completedConsentVersions).length > 0;
-  return requiredConsents.filter(doc => consentCategory(doc) !== 'staff').every((consent) => {
-    const decisions = (athleteOnboarding?.consentDecisions || {}) as ConsentDecisions;
-    if (decisions[consent.id] || consentCategory(consent) === 'health_authorization') return consentDecisionComplete(consent, decisions);
-    if (consentCategory(consent) === 'research' && athleteOnboarding?.researchConsentStatus === 'declined') return true;
-    if (!completedConsentIds.has(consent.id)) return false;
-    if (!hasVersionedCompletions) return true;
-
-    const acceptedVersion = completedConsentVersions[consent.id];
-    if (acceptedVersion) {
-      return !requiresReConsentForVersion(acceptedVersion, consent.version);
-    }
-
-    return false;
-  });
+  const decisions = (athleteOnboarding?.consentDecisions || {}) as ConsentDecisions;
+  return requiredConsents.filter(doc => consentCategory(doc) !== 'staff').every(consent =>
+    consentDecisionComplete(consent, decisions, completedConsentIds, completedConsentVersions)
+  );
 };
 
 export const hasResolvedResearchConsent = (
