@@ -10,7 +10,8 @@ test('missing declined revoked expired and stale authorizations block routine tr
  }
  assert.equal(allowed({ documents, decisions: accepted, participationEnded: true }), false);
 });
-test('urgent safety uses its separate basis; legacy deployments retain existing workflow', () => {
+test('urgent safety remains separate; missing routine authorization fails closed', () => {
  assert.equal(allowed({ documents, tier: 3 }), true);
- assert.equal(allowed({ documents: [] }), true);
+ assert.equal(allowed({ documents: [] }), false);
+ assert.equal(allowed({ documents: [], participationEnded: true }), false);
 });
