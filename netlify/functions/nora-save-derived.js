@@ -1,3 +1,4 @@
+const {accountOpenSet} = require('./lib/account-closure-guard');
 const {getFirebaseAdminApp,headers}=require('./config/firebase');
 const {runtimeHelpers:{verifyPulseCheckCaller}}=require('./pulsecheck-chat');
 const {assessNoraStorage}=require('./utils/noraStoragePolicy');
@@ -19,7 +20,7 @@ exports.handler=async event=>{
     const merged={...(prior.exists?prior.data():{}),...data,userId:caller.userId};
     const policy=await assessNoraStorage(merged);
     if(policy.restricted) return {statusCode:409,headers,body:JSON.stringify({error:'This content cannot be saved as an ordinary note or summary.',storagePolicy:policy})};
-    await ref.set(merged);
+    await accountOpenSet(db, caller.userId, ref, merged);
     return {statusCode:200,headers,body:JSON.stringify({id})};
   } catch(error) { return {statusCode:error.statusCode||500,headers,body:JSON.stringify({error:'This record could not be saved safely.'})}; }
 };

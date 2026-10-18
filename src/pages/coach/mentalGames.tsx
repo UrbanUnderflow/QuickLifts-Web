@@ -1058,8 +1058,10 @@ const CoachMentalTraining: React.FC = () => {
   };
 
   const handleReviewPrimaryPlan = useCallback((athleteId: string) => {
+    // This legacy modal reads private athlete state directly; staff use server projections.
+    if (currentUser?.id !== athleteId) return;
     setSelectedPrimaryPlanAthleteId(athleteId);
-  }, []);
+  }, [currentUser?.id]);
 
   const openManualAssignmentForAthlete = useCallback((athleteId: string) => {
     setSelectedAthleteId(athleteId);
@@ -1571,13 +1573,13 @@ const CoachMentalTraining: React.FC = () => {
 
                     {/* Actions */}
                     <div className="flex flex-col gap-2 shrink-0">
-                      <button
+                      {currentUser?.id === athlete.id && <button
                         onClick={() => handleReviewPrimaryPlan(athlete.id)}
                         className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-zinc-700 bg-zinc-900/70 text-zinc-200 font-medium hover:border-[#E0FE10]/40 hover:text-[#E0FE10] transition-colors"
                       >
                         <Eye className="w-4 h-4" />
                         Review Plan
-                      </button>
+                      </button>}
                       <button
                         onClick={() => handleAssignToAthlete(athlete.id)}
                         disabled={athleteNeedsBaseline(athlete)}
@@ -2523,7 +2525,7 @@ const CoachMentalTraining: React.FC = () => {
       />
 
       <CoachPrimaryPlanReviewModal
-        isOpen={selectedPrimaryPlanAthleteId !== null}
+        isOpen={selectedPrimaryPlanAthleteId !== null && selectedPrimaryPlanAthleteId === currentUser?.id}
         athlete={selectedPrimaryPlanAthleteId ? athletes.find((athlete) => athlete.id === selectedPrimaryPlanAthleteId) || null : null}
         coachId={coachProfile?.id || currentUser?.id || ''}
         coachName={currentUser?.displayName || currentUser?.username}

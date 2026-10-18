@@ -12,6 +12,11 @@ const QUERY_TARGETS = [
   ['pulsecheck-polar-connections','userId'], ['health-provider-connections','userId'],
   ['pulsecheck-oauth-states','userId'],
   ...['health-context-source-status','health-context-source-records','health-context-snapshots','health-context-snapshot-revisions','health-context-assembly-traces','health-context-jobs','pulsecheck-polar-webhook-events','google-health-webhook-events'].map(name=>[name,'athleteUserId']),
+  // Append only: persisted job.step indexes must keep their original meaning.
+  ['conversationSummaries','userId'], ['dailySentimentAnalysis','userId'],
+  ['state-snapshots','athleteId'], ['conversation-derived-signal-events','athleteId'],
+  ['pulsecheck-morning-checkins','athleteUserId'], ['mental-exercise-assignments','athleteUserId'],
+  ['sim-assignments','athleteUserId'], ['pulsecheck-training-plans','athleteId'],
 ];
 async function requestClosure({db,auth,uid,now}) {
   const ref = db.collection(JOBS).doc(uid);
@@ -48,7 +53,7 @@ async function runClosureJob({db,auth,storage,uid,now,maxPages=20}) {
     }
     if(step<QUERY_TARGETS.length)return {pending:true,step};
     // User-owned subcollections are erased recursively, not just the profile document.
-    for(const collection of ['pulsecheck-oura-connections','pulsecheck-whoop-connections','pulsecheck-polar-connections','users','athlete-mental-progress']) await db.recursiveDelete(db.collection(collection).doc(uid));
+    for(const collection of ['pulsecheck-oura-connections','pulsecheck-whoop-connections','pulsecheck-polar-connections','users','athlete-mental-progress','mental-check-ins','user-mental-notes']) await db.recursiveDelete(db.collection(collection).doc(uid));
     await db.recursiveDelete(db.collection('health-provider-connections').doc(`${uid}_google_health`));
     await db.collection('users').doc(uid).set({accountClosureRequestedAt:job.requestedAt,accountStatus:'closed'});
     if(storage) for(const prefix of [`profile-images/${uid}/`,`profile-avatars/${uid}/`]) await storage.deleteFiles({prefix,force:true});

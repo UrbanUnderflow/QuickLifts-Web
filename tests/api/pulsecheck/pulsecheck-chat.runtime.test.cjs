@@ -12,6 +12,19 @@ const { evaluateNoraEngagementResponse } = require(path.join(
   'netlify/functions/utils/noraEngagementPolicy.js',
 ));
 
+// Security tombstone reads precede personal-data reads; this fixture models both
+// Firestore transactions and an open account without bypassing the guard.
+function withClosureSupport(db) {
+  return {
+    ...db,
+    collection(name) {
+      if (name === 'account-closure-jobs') return {doc:()=>({get:async()=>({exists:false})})};
+      return db.collection(name);
+    },
+    runTransaction: async body => body({get:ref=>ref.get(),set:(ref,...args)=>ref.set(...args),update:(ref,...args)=>ref.update(...args),delete:ref=>ref.delete()}),
+  };
+}
+
 function loadRuntimeHelpers() {
   delete require.cache[chatPath];
   delete require.cache[configPath];
@@ -107,7 +120,7 @@ function createConversationRecoveryDb({ conversations = [] }) {
     },
   };
 
-  return { db, writes };
+  return { db: withClosureSupport(db), writes };
 }
 
 test('classifies acknowledgments as conversational closure before turn-taking', () => {
@@ -522,10 +535,10 @@ function loadAuthBoundaryHandler({ decoded = { uid: 'athlete-1' }, verifyError =
         return decoded;
       },
     }),
-    firestore: () => ({
+    firestore: () => withClosureSupport({
       collection() {
         firestoreReads += 1;
-        throw new Error('Auth boundary test must return before Firestore access.');
+        throw new Error('Auth boundary test must return before personal Firestore access.');
       },
     }),
   };
@@ -643,7 +656,7 @@ function createEscalationFlowDb({
   assignmentDocs = [],
   // Direct chat is pro-track only, so the default athlete is on a pro team.
   teamMemberships = [{ id: 'team-pro_athlete-1', userId: 'athlete-1', role: 'athlete', teamId: 'team-pro' }],
-  teams = [{ id: 'team-pro', commercialConfig: { youthTrack: 'pro' } }],
+  teams = [{ id: 'team-pro', organizationId: 'org-pro', commercialConfig: { youthTrack: 'pro' } }],
 } = {}) {
   const writes = {
     conversations: [],
@@ -827,6 +840,9 @@ function createEscalationFlowDb({
       if (name === 'pulsecheck-teams') {
         return makeSimpleDocCollection(teamStore, 'pulsecheck-teams');
       }
+      if (name === 'pulsecheck-organizations') {
+        return makeSimpleDocCollection(new Map([['org-pro', { productBrand: 'pulsecheck' }]]), name);
+      }
       return {
         doc() {
           return {
@@ -853,7 +869,7 @@ function createEscalationFlowDb({
     },
   };
 
-  return { db, writes, recordStore, conversationStore };
+  return { db: withClosureSupport(db), writes, recordStore, conversationStore };
 }
 
 async function waitFor(predicate, timeoutMs = 5000, intervalMs = 25) {
@@ -1097,10 +1113,10 @@ test('downgrades benign performance stress escalation requests before record cre
       initializeFirebaseAdmin: () => {},
       getFirebaseAdminApp: () => ({
         auth: () => ({ verifyIdToken: async () => ({ uid: 'athlete-1' }) }),
-        firestore: () => db,
+        firestore: () => withClosureSupport(db),
       }),
       admin: {
-        firestore: () => db,
+        firestore: () => withClosureSupport(db),
       },
       headers: {},
     },
@@ -1219,10 +1235,10 @@ test('elevates loss-of-function language into a true care escalation', async () 
       initializeFirebaseAdmin: () => {},
       getFirebaseAdminApp: () => ({
         auth: () => ({ verifyIdToken: async () => ({ uid: 'athlete-1' }) }),
-        firestore: () => db,
+        firestore: () => withClosureSupport(db),
       }),
       admin: {
-        firestore: () => db,
+        firestore: () => withClosureSupport(db),
       },
       headers: {},
     },
@@ -1347,10 +1363,10 @@ test('dedupes same-conversation escalation records within the merge window', asy
       initializeFirebaseAdmin: () => {},
       getFirebaseAdminApp: () => ({
         auth: () => ({ verifyIdToken: async () => ({ uid: 'athlete-1' }) }),
-        firestore: () => db,
+        firestore: () => withClosureSupport(db),
       }),
       admin: {
-        firestore: () => db,
+        firestore: () => withClosureSupport(db),
       },
       headers: {},
     },
@@ -1453,7 +1469,7 @@ test('withdrawn consent prevents every coach-message database operation', async 
   assert.equal(result.reason, 'consent_withdrawn');
 });
 
-test('synthetic runtime preflight proves identity before any data reads', async () => {
+test('synthetic runtime preflight checks identity and closure before personal data reads', async () => {
   const runtime=loadAuthBoundaryHandler({decoded:{uid:'nora-red-team-probe',noraRedTeamSynthetic:true}});
   const response=await runtime.handler({httpMethod:'POST',headers:{authorization:'Bearer synthetic-token','x-pulsecheck-firebase-mode':'dev','x-nora-red-team-synthetic':'true'},body:JSON.stringify({userId:'nora-red-team-probe',runtimeProbe:true})});
   assert.equal(response.statusCode,200);
@@ -1489,9 +1505,9 @@ function loadTrackGateHandler({ db, decoded = { uid: 'athlete-1' } }) {
       initializeFirebaseAdmin: () => {},
       getFirebaseAdminApp: () => ({
         auth: () => ({ verifyIdToken: async () => decoded }),
-        firestore: () => trackedDb,
+        firestore: () => withClosureSupport(trackedDb),
       }),
-      admin: { firestore: () => trackedDb },
+      admin: { firestore: () => withClosureSupport(trackedDb) },
       headers: {},
       isDevMode: (request) => String(request?.headers?.['x-pulsecheck-firebase-mode'] || '').toLowerCase() === 'dev',
     },

@@ -1,3 +1,4 @@
+const {accountOpenSet} = require('./lib/account-closure-guard');
 const { getFirebaseAdminApp, headers } = require('./config/firebase');
 const {runtimeHelpers:{verifyPulseCheckCaller}} = require('./pulsecheck-chat');
 const {assessNoraStorage,safeTranscript} = require('./utils/noraStoragePolicy');
@@ -27,7 +28,7 @@ exports.handler = async event => {
     for(const key of ['sessionDuration','assessmentQuestionCount','assessmentQuestionLimit']) if(Number.isFinite(input[key])) safeState[key]=input[key];
     if(['open_chat','assignment_assessment'].includes(input.conversationMode)) safeState.conversationMode=input.conversationMode;
     if(typeof input.assessmentDecisionCompleted==='boolean') safeState.assessmentDecisionCompleted=input.assessmentDecisionCompleted;
-    await ref.set({...safeState,id:ref.id,userId:caller.userId,title:'Nora',messages:safeTranscript(normalized,storagePolicy),tags:[],storagePolicy,updatedAt:Date.now()/1000,createdAt:Number.isFinite(prior.createdAt)?prior.createdAt:Date.now()/1000});
+    await accountOpenSet(db, caller.userId, ref, {...safeState,id:ref.id,userId:caller.userId,title:'Nora',messages:safeTranscript(normalized,storagePolicy),tags:[],storagePolicy,updatedAt:Date.now()/1000,createdAt:Number.isFinite(prior.createdAt)?prior.createdAt:Date.now()/1000});
     return {statusCode:200,headers,body:JSON.stringify({id:ref.id,storagePolicy})};
   } catch(error) {
     return {statusCode:error.statusCode||500,headers,body:JSON.stringify({error:'The conversation could not be saved safely.'})};

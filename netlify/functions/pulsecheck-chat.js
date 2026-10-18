@@ -1,3 +1,4 @@
+const { assertAccountOpen, accountOpenSet, accountOpenBatch, accountOpenDatabase } = require('./lib/account-closure-guard');
 const console = require('./utils/noraSafeLogger');
 const { assessNoraStorage, safeTranscript, WITHHELD } = require('./utils/noraStoragePolicy');
 const { buildNoraChatActions } = require('./utils/noraChatActions');
@@ -76,9 +77,10 @@ async function verifyPulseCheckCaller(firebaseApp, event) {
   }
 
   try {
-    const decoded = await firebaseApp.auth().verifyIdToken(match[1]);
+    const decoded = await firebaseApp.auth().verifyIdToken(match[1], true);
     const userId = String(decoded?.uid || '').trim();
     if (!userId) throw new Error('Firebase token is missing a user id.');
+    await assertAccountOpen(firebaseApp.firestore(), userId);
     return { decoded, userId };
   } catch (cause) {
     const error = new Error('Your sign-in session is invalid or expired.');
@@ -1652,7 +1654,7 @@ async function sendNoraCoachHandoff({
   const conversationRef = db.collection('coach-athlete-conversations').doc(conversationId);
   const conversationSnap = await conversationRef.get();
   if (!scopeSnapshotExists(conversationSnap)) {
-    await conversationRef.set({
+    await accountOpenSet(db, athleteId, conversationRef, {
       coachId: coach.coachId,
       athleteId,
       organizationId: coach.organizationId,
@@ -1699,7 +1701,7 @@ async function sendNoraCoachHandoff({
   const handoffText = coachBrief.messageBody;
 
   const messageRef = db.collection('coach-athlete-messages').doc();
-  const batch = db.batch();
+  const batch = accountOpenBatch(db, athleteId);
   batch.set(messageRef, {
     conversationId,
     senderId: athleteId,
@@ -2092,10 +2094,10 @@ async function recoverSnapshotFromSavedConversation({
     decisionSource: signalAnalysis.decisionSource || 'fallback_rules',
   };
 
-  await Promise.all([
-    eventRef.set(stripUndefinedDeep(conversationSignalEvent)),
-    db.collection(SNAPSHOTS_COLLECTION).doc(snapshot.id).set(stripUndefinedDeep(refreshedSnapshot), { merge: true }),
-  ]);
+  await accountOpenBatch(db, userId)
+    .set(eventRef, stripUndefinedDeep(conversationSignalEvent))
+    .set(db.collection(SNAPSHOTS_COLLECTION).doc(snapshot.id), stripUndefinedDeep(refreshedSnapshot), { merge: true })
+    .commit();
 
   return {
     applied: true,
@@ -2536,10 +2538,10 @@ exports.handler = async (event, context) => {
             decisionSource: signalAnalysis.decisionSource || 'fallback_rules',
           };
 
-          await Promise.all([
-            eventRef.set(stripUndefinedDeep(conversationSignalEvent)),
-            db.collection(SNAPSHOTS_COLLECTION).doc(currentStateSnapshot.id).set(stripUndefinedDeep(refreshedSnapshot), { merge: true }),
-          ]);
+          await accountOpenBatch(db, userId)
+            .set(eventRef, stripUndefinedDeep(conversationSignalEvent))
+            .set(db.collection(SNAPSHOTS_COLLECTION).doc(currentStateSnapshot.id), stripUndefinedDeep(refreshedSnapshot), { merge: true })
+            .commit();
           currentStateSnapshot = refreshedSnapshot;
 
           const assignmentStatus = String(todaysNoraAssignment?.status || '');
@@ -2554,7 +2556,7 @@ exports.handler = async (event, context) => {
             && athleteMentalProgress?.activeProgram) {
             const priorAssignment = todaysNoraAssignment;
             const rematerialized = await pulseCheckSubmissionRuntime.rematerializeAssignmentFromSnapshot({
-              db,
+              db: accountOpenDatabase(db, userId),
               athleteId: userId,
               sourceCheckInId:
                 priorAssignment?.sourceCheckInId
@@ -2728,7 +2730,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     if (!storagePolicy.restricted && !handledOnboarding && onboardingState === 'asked') {
       const yn = parseYesNo(message);
       if (yn === 'no') {
-        await db.collection('users').doc(userId).set({
+        await accountOpenSet(db, userId, db.collection('users').doc(userId), {
           mentalTrainingPreferences: {
             assignmentReminders: {
               enabled: false,
@@ -2743,7 +2745,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         assistantMessage = `All good, ${displayName.split(' ')[0]} — I won't send reminders for assignments.`;
         handledOnboarding = true;
       } else if (yn === 'yes') {
-        await db.collection('users').doc(userId).set({
+        await accountOpenSet(db, userId, db.collection('users').doc(userId), {
           mentalTrainingPreferences: {
             assignmentRemindersOnboarding: {
               state: 'awaiting_time',
@@ -2765,7 +2767,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         'UTC';
 
       if (shouldUseSmartNoon(message)) {
-        await db.collection('users').doc(userId).set({
+        await accountOpenSet(db, userId, db.collection('users').doc(userId), {
           mentalTrainingPreferences: {
             assignmentReminders: {
               enabled: true,
@@ -2789,7 +2791,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           assistantMessage = `Tell me a reminder time like “7pm” (or say “you decide” for noon).`;
           handledOnboarding = true;
         } else {
-          await db.collection('users').doc(userId).set({
+          await accountOpenSet(db, userId, db.collection('users').doc(userId), {
             mentalTrainingPreferences: {
               assignmentReminders: {
                 enabled: true,
@@ -3005,7 +3007,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           if (activeAssignments.length > 0) {
             assistantMessage +=
               `\n\nAlso — you have assigned mental exercises right now. Want me to send reminders if you haven’t completed them by noon (local time)? Reply “yes” or “no”.`;
-            await db.collection('users').doc(userId).set({
+            await accountOpenSet(db, userId, db.collection('users').doc(userId), {
               mentalTrainingPreferences: {
                 assignmentRemindersOnboarding: {
                   state: 'asked',
@@ -3279,11 +3281,11 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           data.syntheticRedTeam = true;
           data.syntheticRedTeamRunId = syntheticRedTeamRunId || null;
         }
-        await convoRef.set(data, { merge: true });
+        await accountOpenSet(db, userId, convoRef, data, { merge: true });
         newConvoId = convoRef.id;
       } else {
         const updated = Array.isArray(convo?.messages) ? [...convo.messages, userMsg, aiMsg] : [userMsg, aiMsg];
-        await convoRef.set({
+        await accountOpenSet(db, userId, convoRef, {
           id: convoRef.id,
           userId,
           title: storagePolicy.restricted ? 'Nora' : (convo?.title || 'Nora'),
@@ -4064,7 +4066,7 @@ async function createEscalationRecord(db, userId, conversationId, messageId, tri
     };
     console.log('[createEscalationRecord] [STEP 5] Conversation update data:', conversationUpdate);
     
-    await db.collection('conversations').doc(conversationId).set(conversationUpdate, { merge: true });
+    await accountOpenSet(db, userId, db.collection('conversations').doc(conversationId), conversationUpdate, { merge: true });
     const conversationUpdateDuration = Date.now() - conversationUpdateStartTime;
     console.log(`[createEscalationRecord] [STEP 5] ✅ Conversation updated in ${conversationUpdateDuration}ms`);
     console.log('[createEscalationRecord] [STEP 5] Conversation ID:', conversationId);

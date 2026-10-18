@@ -15,3 +15,27 @@ test('closure removes local Polar Google Health tokens OAuth and derived records
 test('provider sync guard blocks durable closure even without user tombstone',async()=>{const {assertAccountOpen}=require('../lib/account-closure-guard');const f=fixture();f.records.set('account-closure-jobs/A',{status:'queued'});await assert.rejects(assertAccountOpen(f.db,'A'),{code:'account_closing'});await assertAccountOpen(f.db,'B');});
 
 test('provider persistence rechecks closure transactionally after fetch',async()=>{const {accountOpenBatch}=require('../lib/account-closure-guard');const f=fixture();const pending=accountOpenBatch(f.db,'A').set(f.db.collection('health-provider-connections').doc('A_google_health'),{accessToken:'synthetic'});f.records.set('account-closure-jobs/A',{status:'queued'});await assert.rejects(pending.commit(),{code:'account_closing'});assert.equal(f.records.has('health-provider-connections/A_google_health'),false);await accountOpenBatch(f.db,'B').set(f.db.collection('health-provider-connections').doc('B_google_health'),{userId:'B'}).commit();assert.equal(f.records.has('health-provider-connections/B_google_health'),true);});
+
+test('current personal collection inventory is erased without touching other users or retained clinical evidence',async()=>{const f=fixture();await requestClosure({...f,uid:'A',now:1});for(const [name,field] of [['conversationSummaries','userId'],['dailySentimentAnalysis','userId'],['state-snapshots','athleteId'],['conversation-derived-signal-events','athleteId'],['pulsecheck-morning-checkins','athleteUserId'],['mental-exercise-assignments','athleteUserId'],['sim-assignments','athleteUserId'],['pulsecheck-training-plans','athleteId']]){f.records.set(name+'/A',{[field]:'A'});f.records.set(name+'/B',{[field]:'B'});}for(const name of ['mental-check-ins','user-mental-notes']){f.records.set(name+'/A/items/1',{private:'synthetic'});f.records.set(name+'/B/items/1',{private:'other'});}f.records.set('escalation-records/retained',{userId:'A'});for(let i=0;i<5;i++)await runClosureJob({...f,uid:'A',now:2});assert.equal(f.records.get('account-closure-jobs/A').status,'retention_review');for(const name of ['conversationSummaries','dailySentimentAnalysis','state-snapshots','conversation-derived-signal-events','pulsecheck-morning-checkins','mental-exercise-assignments','sim-assignments','pulsecheck-training-plans']){assert.equal(f.records.has(name+'/A'),false);assert.equal(f.records.has(name+'/B'),true);}for(const name of ['mental-check-ins','user-mental-notes']){assert.equal(f.records.has(name+'/A/items/1'),false);assert.equal(f.records.has(name+'/B/items/1'),true);}assert.equal(f.records.has('escalation-records/retained'),true);});
+
+ test('existing queued step retains its original cleanup target', async () => {
+  const f=fixture(); await requestClosure({...f,uid:'A',now:1});
+  f.records.get('account-closure-jobs/A').step=1;
+  f.records.set('mentalNotes/owned',{userId:'A'}); f.records.set('mentalNotes/other',{userId:'B'});
+  await runClosureJob({...f,uid:'A',now:2,maxPages:1});
+  assert.equal(f.records.has('mentalNotes/owned'),false); assert.equal(f.records.has('mentalNotes/other'),true);
+  const {QUERY_TARGETS}=require('../lib/account-closure');
+  assert.deepEqual(QUERY_TARGETS[1],['mentalNotes','userId']);
+ });
+ test('scoped rematerialization adapter blocks delayed direct and batch writes after closure', async () => {
+  const f=fixture(); const {accountOpenDatabase}=require('../lib/account-closure-guard');
+  const scoped=accountOpenDatabase(f.db,'A'); const ref=scoped.collection('pulsecheck-training-plans').doc('A');
+  const pending=scoped.batch().set(ref,{athleteId:'A'});
+  f.records.set('account-closure-jobs/A',{status:'queued'});
+  await assert.rejects(ref.set({athleteId:'A'}),{code:'account_closing'});
+  await assert.rejects(pending.commit(),{code:'account_closing'});
+  await assert.rejects(scoped.runTransaction(tx=>tx.set(ref,{athleteId:'A'})),{code:'account_closing'});
+  assert.equal(f.records.has('pulsecheck-training-plans/A'),false);
+  const other=accountOpenDatabase(f.db,'B'); await other.collection('pulsecheck-training-plans').doc('B').set({athleteId:'B'});
+  assert.equal(f.records.get('pulsecheck-training-plans/B').athleteId,'B');
+ });

@@ -4,7 +4,7 @@ const {initializeTestEnvironment,assertSucceeds,assertFails}=require('@firebase/
 const {doc,setDoc,updateDoc,getDoc,getDocs,query,collection,where,serverTimestamp,deleteDoc,setLogLevel}=require('firebase/firestore');
 setLogLevel('silent');let env;
 const rulesPath=process.env.CONSENT_RULES_FILE||path.resolve('firestore.rules');
-before(async()=>{env=await initializeTestEnvironment({projectId:'demo-consent-remediation',firestore:{host:'127.0.0.1',port:8197,rules:fs.readFileSync(rulesPath,'utf8')}})});
+before(async()=>{env=await initializeTestEnvironment({projectId:'demo-consent-remediation',firestore:{host:'127.0.0.1',port:Number(process.env.CONSENT_FIRESTORE_PORT || 8197),rules:fs.readFileSync(rulesPath,'utf8')}})});
 after(async()=>{await env?.cleanup()});
 const auth=u=>env.authenticatedContext(u,{email:u+'@example.test'}).firestore();
 const member=(db,id)=>doc(db,'pulsecheck-team-memberships',id);

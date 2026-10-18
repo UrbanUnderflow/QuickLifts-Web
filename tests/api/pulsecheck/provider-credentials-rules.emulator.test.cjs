@@ -1,0 +1,34 @@
+const { test } = require('node:test');
+const fs = require('node:fs');
+const { initializeTestEnvironment, assertFails } = require('@firebase/rules-unit-testing');
+const { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, setLogLevel } = require('firebase/firestore');
+setLogLevel('silent');
+const COLLECTIONS = ['pulsecheck-oura-connections', 'pulsecheck-whoop-connections', 'pulsecheck-polar-connections', 'health-provider-connections', 'pulsecheck-oauth-states'];
+
+test('provider credentials and OAuth server collections reject every client role, including platform admin', async (t) => {
+  const env = await initializeTestEnvironment({ projectId: 'demo-provider-credentials-rules', firestore: { host: '127.0.0.1', port: 8188, rules: fs.readFileSync(process.env.FIRESTORE_RULES_FILE || 'firestore.rules', 'utf8') } });
+  try {
+    await env.withSecurityRulesDisabled(async context => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'admin', 'admin@synthetic.example'), { email: 'admin@synthetic.example', role: 'admin' });
+      for (const name of COLLECTIONS) {
+        await setDoc(doc(db, name, 'existing'), { synthetic: true, secret: 'synthetic-fixture' });
+        await setDoc(doc(db, name, 'existing', 'nested', 'existing'), { synthetic: true });
+      }
+    });
+    for (const [role, context] of [['anonymous', env.unauthenticatedContext()], ['owner', env.authenticatedContext('existing', { email: 'owner@synthetic.example' })], ['stranger', env.authenticatedContext('stranger', { email: 'stranger@synthetic.example' })], ['admin', env.authenticatedContext('admin', { email: 'admin@synthetic.example' })]]) {
+      const db = context.firestore();
+      for (const name of COLLECTIONS) await t.test(`${role}: ${name}`, async () => {
+        const existing = doc(db, name, 'existing');
+        await assertFails(getDoc(existing));
+        await assertFails(getDocs(collection(db, name)));
+        await assertFails(setDoc(doc(db, name, `new-${role}`), { synthetic: true }));
+        await assertFails(setDoc(existing, { synthetic: true }));
+        await assertFails(updateDoc(existing, { secret: 'changed' }));
+        await assertFails(deleteDoc(existing));
+        await assertFails(getDoc(doc(db, name, 'existing', 'nested', 'existing')));
+        await assertFails(setDoc(doc(db, name, 'existing', 'nested', `new-${role}`), { synthetic: true }));
+      });
+    }
+  } finally { await env.cleanup(); }
+});
