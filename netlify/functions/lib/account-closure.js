@@ -56,7 +56,8 @@ async function runClosureJob({db,auth,storage,uid,now,maxPages=20}) {
     for(const collection of ['pulsecheck-oura-connections','pulsecheck-whoop-connections','pulsecheck-polar-connections','users','athlete-mental-progress','mental-check-ins','user-mental-notes']) await db.recursiveDelete(db.collection(collection).doc(uid));
     await db.recursiveDelete(db.collection('health-provider-connections').doc(`${uid}_google_health`));
     await db.collection('users').doc(uid).set({accountClosureRequestedAt:job.requestedAt,accountStatus:'closed'});
-    if(storage) for(const prefix of [`profile-images/${uid}/`,`profile-avatars/${uid}/`]) await storage.deleteFiles({prefix,force:true});
+    await db.recursiveDelete(db.collection('pulsecheck-private-users').doc(uid).collection('clay-self').doc('current'));
+    if(storage) for(const prefix of [`profile-images/${uid}/`,`profile-avatars/${uid}/`,`pulsecheck-clay-self-private/${uid}/`,`pulsecheck-clay-self-inputs/${uid}/`]) await storage.deleteFiles({prefix,force:true});
     try {await auth.deleteUser(uid);}catch(error){if(error.code!=='auth/user-not-found')throw error;}
     await ref.set({status:'retention_review',coreClosureCompletedAt:now,updatedAt:now,retentionReview:RETAINED},{merge:true});
     return {coreClosed:true,retentionReviewRequired:true};

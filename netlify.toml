@@ -776,3 +776,7 @@
   to = "/RunOfShow/index.html"
   status = 200
   force = true
+
+# Remove abandoned Clay Self reference photos after one hour.
+[functions.pulsecheck-clay-self-cleanup]
+  schedule = "15 * * * *"

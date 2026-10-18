@@ -374,3 +374,22 @@ test('appearance proxy preserves authenticated team scope, environment and Clay 
     assert.equal(String(response.body), '{"appExperience":{"ios":"clay"}}');
   } finally {global.fetch = originalFetch;}
 });
+
+test('Clay Self proxy preserves authenticated three-photo request and async response', async () => {
+  const originalFetch = global.fetch;
+  let call;
+  global.fetch = async (url, options) => { call = { url: String(url), options }; return {
+    status: 202, headers: new Headers({ 'content-type': 'application/json', 'cache-control': 'private, no-store' }),
+    arrayBuffer: async () => Buffer.from('{"jobId":"synthetic-job","status":"processing"}'),
+  }; };
+  try {
+    const response = createResponseRecorder();
+    const body = { action: 'generate', images: ['full_body', 'face', 'reference'].map(role => ({ role, mimeType: 'image/jpeg', imageBase64: 'synthetic' })) };
+    await loadProxyModule().default({ method: 'POST', query: { name: 'pulsecheck-clay-self' }, headers: { authorization: 'Bearer synthetic-token', 'x-pulsecheck-firebase-mode': 'dev' }, body }, response);
+    assert.equal(response.statusCode, 202);
+    assert.equal(call.url, 'https://fitwithpulse.ai/.netlify/functions/pulsecheck-clay-self');
+    assert.equal(call.options.headers.get('authorization'), 'Bearer synthetic-token');
+    assert.equal(call.options.headers.get('x-pulsecheck-firebase-mode'), 'dev');
+    assert.deepEqual(JSON.parse(call.options.body), body);
+  } finally { global.fetch = originalFetch; }
+});
