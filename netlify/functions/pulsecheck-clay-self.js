@@ -53,7 +53,7 @@ exports.handler = async (event) => {
     let previous;
     await db.runTransaction(async (tx) => {
       previous = (await tx.get(ref)).data() || {};
-      const limits = c.gate(previous, now);
+      const limits = c.gate(previous, now, uid);
       tx.set(ref, { ...limits, jobId: id, status: 'queued', createdAt: now, approvedPath: previous.approvedPath || null });
     });
     const locations = c.paths(uid, id);

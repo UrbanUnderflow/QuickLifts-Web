@@ -20,9 +20,9 @@ test('rejects URLs, unsupported files, oversized photos and malformed base64', (
 test('transaction gate prevents concurrent jobs and caps daily generation', () => {
   const now = Date.parse('2026-10-18T12:00:00Z');
   assert.throws(() => c.gate({ status: 'processing', createdAt: now - 1 }, now), { statusCode: 409 });
-  assert.throws(() => c.gate({ day: '2026-10-18', count: 3 }, now), { statusCode: 429 });
-  assert.equal(c.gate({ day: '2026-10-17', count: 3 }, now).count, 1);
-  assert.equal(c.gate({ status: 'processing', createdAt: now - c.MAX_AGE - 1 }, now).count, 1);
+  assert.throws(() => c.gate({ quotaVersion: 2, successDay: '2026-10-18', successfulCount: 3 }, now), { statusCode: 429 });
+  assert.equal(c.gate({ quotaVersion: 2, successDay: '2026-10-17', successfulCount: 3 }, now).successfulCount, 0);
+  assert.equal(c.gate({ status: 'processing', createdAt: now - c.MAX_AGE - 1 }, now).successfulCount, 0);
 });
 test('job identifiers cannot inject owner paths', () => {
   assert.throws(() => c.jobID('../../other-user'), { statusCode: 400 });
@@ -99,6 +99,9 @@ test('owner-only lifecycle: create, background, preview, approve, restore, delet
     assert.equal(h.files.size, 1, 'reference photos erased after generation');
     const saved = [...h.states.values()][0];
     assert.equal(saved.styleVersion, 'clay-self-v1');
+    assert.equal(saved.successfulCount, 1);
+    await h.worker(h.event('POST', { jobId }));
+    assert.equal([...h.states.values()][0].successfulCount, 1, 'duplicate completion is not counted twice');
     assert.equal(saved.generationQuality, 'high');
     assert.equal(saved.generationSize, '1024x1536');
     const ready = JSON.parse((await h.api(h.event('GET', {}, { jobId }))).body);
@@ -127,6 +130,7 @@ test('worker failure erases source photos and cannot turn a failed job into read
     const { jobId } = JSON.parse((await h.api(h.event('POST', { action: 'generate', images: photos() }))).body);
     await h.worker(h.event('POST', { jobId }));
     assert.equal(h.files.size, 0);
+    assert.equal([...h.states.values()][0].successfulCount, 0, 'failed jobs consume no success allowance');
     assert.equal(JSON.parse((await h.api(h.event('GET', {}, { jobId }))).body).status, 'failed');
     assert.equal((await h.api(h.event('POST', { action: 'approve', jobId }))).statusCode, 409);
   } finally { global.fetch = oldFetch; if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey; }
@@ -195,6 +199,7 @@ test('worker rejects a clipped provider result and erases private source photos'
     const { jobId } = JSON.parse((await h.api(h.event('POST', { action: 'generate', images: photos() }))).body);
     await h.worker(h.event('POST', { jobId }));
     assert.equal(h.files.size, 0);
+    assert.equal([...h.states.values()][0].successfulCount, 0, 'failed jobs consume no success allowance');
     assert.equal(JSON.parse((await h.api(h.event('GET', {}, { jobId }))).body).status, 'failed');
     assert.equal((await h.api(h.event('POST', { action: 'approve', jobId }))).statusCode, 409);
   } finally { global.fetch = oldFetch; if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey; }
@@ -247,4 +252,61 @@ test('dispatch failure records sanitized diagnostic fields in owner-only job', a
     assert.equal(status.failureCode, 'dispatch_failed');
     assert.equal(status.error.includes('different photo'), false);
   } finally { global.fetch = oldFetch; if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey; }
+});
+
+test('output diagnostics distinguish safe rejection categories and validation phase', async () => {
+  const make = (width, height, channels, background) => sharp({ create: { width, height, channels, background } }).png().toBuffer();
+  const cases = [
+    [Buffer.from('malformed'), 'output_decode'],
+    [await sharp(await portrait()).jpeg().toBuffer(), 'output_format'],
+    [await make(100, 100, 4, '#00000000'), 'output_dimensions'],
+    [await make(1024, 1536, 3, '#ffffff'), 'output_alpha_missing'],
+    [await make(1024, 1536, 4, '#00000000'), 'output_empty'],
+    [await portrait(0, 200), 'output_edge_touch'],
+    [await portrait(200, 535), 'output_margin'],
+  ];
+  for (const [bytes, failureCode] of cases) {
+    await assert.rejects(c.validatePortrait(bytes), { failureCode });
+    assert.equal(c.failureDetails({ failureCode }, 'provider', 100, 200).failurePhase, 'output_validation');
+  }
+});
+
+test('a faint edge pixel still fails strict guard and is never silently padded', async () => {
+  const {data, info} = await sharp(await portrait()).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  data[3] = 1;
+  const faintEdge = await sharp(data, {raw:info}).png().toBuffer();
+  await assert.rejects(c.framePortrait(faintEdge), {failureCode:'output_edge_touch'});
+});
+
+test('missing provider image payload has safe validation classification', async () => {
+  await assert.rejects(c.editImages([], 'synthetic', async () => ({ok:true,json:async()=>({data:[]})})), {failureCode:'output_payload'});
+});
+
+test('success allowance rolls over on UTC completion day and migrates legacy attempts', () => {
+  const now = Date.parse('2026-10-19T00:00:01Z');
+  const prior = {quotaVersion:2,successDay:'2026-10-18',successfulCount:3};
+  assert.equal(c.completedQuota(prior, now).successfulCount, 1);
+  assert.equal(c.completedQuota(prior, now).successDay, '2026-10-19');
+  assert.equal(c.gate({day:'2026-10-19',count:3,status:'failed'},now).successfulCount,0);
+  assert.equal(c.gate({status:'ready',completedAt:now-1},now).successfulCount,1);
+});
+
+test('temporary tester override requires exact UID and future expiry; concurrency always applies', () => {
+  const oldUIDs=process.env.CLAY_SELF_TESTER_UIDS, oldUntil=process.env.CLAY_SELF_TESTING_UNTIL;
+  const now=Date.parse('2026-10-18T12:00:00Z');
+  const current={quotaVersion:2,successDay:'2026-10-18',successfulCount:3};
+  try {
+    process.env.CLAY_SELF_TESTER_UIDS='tester-a';
+    process.env.CLAY_SELF_TESTING_UNTIL='2026-10-18T18:00:00Z';
+    assert.equal(c.gate(current,now,'tester-a').successfulCount,3);
+    assert.throws(()=>c.gate(current,now,'tester-b'),{statusCode:429});
+    assert.throws(()=>c.gate({...current,status:'processing',createdAt:now},now,'tester-a'),{statusCode:409});
+    process.env.CLAY_SELF_TESTING_UNTIL='2026-10-18T11:00:00Z';
+    assert.throws(()=>c.gate(current,now,'tester-a'),{statusCode:429});
+    process.env.CLAY_SELF_TESTING_UNTIL='invalid';
+    assert.throws(()=>c.gate(current,now,'tester-a'),{statusCode:429});
+  } finally {
+    if(oldUIDs===undefined)delete process.env.CLAY_SELF_TESTER_UIDS;else process.env.CLAY_SELF_TESTER_UIDS=oldUIDs;
+    if(oldUntil===undefined)delete process.env.CLAY_SELF_TESTING_UNTIL;else process.env.CLAY_SELF_TESTING_UNTIL=oldUntil;
+  }
 });

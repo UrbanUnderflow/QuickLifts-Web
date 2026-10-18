@@ -16,46 +16,57 @@ const STYLE_REFERENCES = ['basketball.png', 'athlete.png'].map(name => ({ name, 
 const GENERATION_SETTINGS = Object.freeze({ model: 'gpt-image-1.5', size: '1024x1536', quality: 'high' });
 
 // This is a pixel framing gate, not a semantic likeness or style classifier.
+function outputFailure(code) {
+  return fail(502, 'Your Clay Self could not be framed completely. Please try again.', code);
+}
 async function validatePortrait(bytes, requiredMargin = 0.02) {
+  let image, metadata;
   try {
-    const image = sharp(bytes, { limitInputPixels: 1024 * 1536 });
-    const metadata = await image.metadata();
-    if (metadata.format !== 'png' || metadata.width !== 1024 || metadata.height !== 1536 || !metadata.hasAlpha) throw new Error('format');
-    const { data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    let left = info.width, top = info.height, right = -1, bottom = -1;
-    for (let y = 0; y < info.height; y++) {
-      for (let x = 0; x < info.width; x++) {
-        if (data[(y * info.width + x) * info.channels + info.channels - 1] > 0) {
-          left = Math.min(left, x); right = Math.max(right, x);
-          top = Math.min(top, y); bottom = Math.max(bottom, y);
-        }
+    image = sharp(bytes, { limitInputPixels: 1024 * 1536 });
+    metadata = await image.metadata();
+  } catch { throw outputFailure('output_decode'); }
+  if (metadata.format !== 'png') throw outputFailure('output_format');
+  if (metadata.width !== 1024 || metadata.height !== 1536) throw outputFailure('output_dimensions');
+  if (!metadata.hasAlpha) throw outputFailure('output_alpha_missing');
+  let data, info;
+  try { ({ data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true })); }
+  catch { throw outputFailure('output_decode'); }
+  let left = info.width, top = info.height, right = -1, bottom = -1;
+  for (let y = 0; y < info.height; y++) {
+    for (let x = 0; x < info.width; x++) {
+      // Deliberately strict: even faint edge pixels cannot prove complete anatomy.
+      if (data[(y * info.width + x) * info.channels + info.channels - 1] > 0) {
+        left = Math.min(left, x); right = Math.max(right, x);
+        top = Math.min(top, y); bottom = Math.max(bottom, y);
       }
     }
-    // Small tolerance for antialiasing; requested margins are considerably larger.
-    const marginX = Math.max(1, Math.ceil(info.width * requiredMargin)), marginY = Math.max(1, Math.ceil(info.height * requiredMargin));
-    if (right < left || left < marginX || top < marginY || right >= info.width - marginX || bottom >= info.height - marginY) throw new Error('edge');
-  } catch {
-    throw fail(502, 'Your Clay Self could not be framed completely. Please try again.', 'output_invalid');
   }
+  if (right < left) throw outputFailure('output_empty');
+  if (left === 0 || top === 0 || right === info.width - 1 || bottom === info.height - 1) throw outputFailure('output_edge_touch');
+  const marginX = Math.ceil(info.width * requiredMargin), marginY = Math.ceil(info.height * requiredMargin);
+  if (left < marginX || top < marginY || right >= info.width - marginX || bottom >= info.height - marginY) throw outputFailure('output_margin');
 }
 
 async function framePortrait(bytes) {
   // Reject any edge-touching source. Padding cannot reconstruct missing anatomy.
   await validatePortrait(bytes, 0);
-  try { await validatePortrait(bytes, 0.08); return bytes; } catch {}
+  try { await validatePortrait(bytes, 0.08); return bytes; } catch (error) { if (error.failureCode !== 'output_margin') throw error; }
   const width = 858, height = 1288;
-  const resized = await sharp(bytes).resize(width, height, { fit: 'inside' }).png().toBuffer();
-  const result = await sharp({ create: { width: 1024, height: 1536, channels: 4, background: '#00000000' } })
-    .composite([{ input: resized, gravity: 'centre' }]).png().toBuffer();
+  let result;
+  try {
+    const resized = await sharp(bytes).resize(width, height, { fit: 'inside' }).png().toBuffer();
+    result = await sharp({ create: { width: 1024, height: 1536, channels: 4, background: '#00000000' } })
+      .composite([{ input: resized, gravity: 'centre' }]).png().toBuffer();
+  } catch { throw outputFailure('output_processing'); }
   await validatePortrait(result, 0.08);
   return result;
 }
-const FAILURE_CODES = new Set(['provider_rejected', 'provider_timeout', 'provider_transport', 'provider_unavailable', 'output_invalid', 'storage_read', 'storage_write', 'dispatch_failed', 'job_expired', 'internal_error']);
-const FAILURE_PHASES = new Set(['input_read', 'input_upload', 'provider', 'output_save', 'finalize', 'dispatch', 'expiry']);
+const FAILURE_CODES = new Set(['provider_rejected', 'provider_timeout', 'provider_transport', 'provider_unavailable', 'output_invalid', 'output_payload', 'output_format', 'output_dimensions', 'output_alpha_missing', 'output_decode', 'output_empty', 'output_edge_touch', 'output_margin', 'output_processing', 'storage_read', 'storage_write', 'dispatch_failed', 'job_expired', 'internal_error']);
+const FAILURE_PHASES = new Set(['input_read', 'input_upload', 'provider', 'output_validation', 'output_save', 'finalize', 'dispatch', 'expiry']);
 function fail(statusCode, message, failureCode) { return Object.assign(new Error(message), { statusCode, ...(FAILURE_CODES.has(failureCode) ? { failureCode } : {}) }); }
 function failureDetails(error, phase, startedAt, now = Date.now()) {
-  const safePhase = FAILURE_PHASES.has(phase) ? phase : 'finalize';
-  const defaults = { input_read: 'storage_read', input_upload: 'storage_write', provider: 'provider_transport', output_save: 'storage_write', dispatch: 'dispatch_failed', expiry: 'job_expired' };
+  const safePhase = FAILURE_CODES.has(error?.failureCode) && error.failureCode.startsWith('output_') ? 'output_validation' : FAILURE_PHASES.has(phase) ? phase : 'finalize';
+  const defaults = { input_read: 'storage_read', input_upload: 'storage_write', provider: 'provider_transport', output_validation: 'output_invalid', output_save: 'storage_write', dispatch: 'dispatch_failed', expiry: 'job_expired' };
   return { failureCode: FAILURE_CODES.has(error?.failureCode) ? error.failureCode : defaults[safePhase] || 'internal_error', failurePhase: safePhase, failedAt: now, elapsedMs: Math.max(0, now - startedAt) };
 }
 function logFailure(details) {
@@ -67,7 +78,7 @@ function publicFailure(current, expired = false) {
   const failureCode = expired ? 'job_expired' : FAILURE_CODES.has(current.failureCode) ? current.failureCode : 'internal_error';
   const error = failureCode === 'job_expired' || failureCode === 'provider_timeout'
     ? 'This request timed out. Please try again. Your current profile is unchanged.'
-    : failureCode === 'output_invalid'
+    : failureCode.startsWith('output_')
       ? 'We could not finish the illustration. Please try again. Your current profile is unchanged.'
       : 'We could not create your Clay Self. Please try again. Your current profile is unchanged.';
   return { error, failureCode };
@@ -90,13 +101,31 @@ function jobID(value) {
   if (typeof value !== 'string' || !/^[a-f0-9-]{36}$/.test(value)) throw fail(400, 'Invalid Clay Self request.');
   return value;
 }
-function gate(current, now) {
-  if (['queued', 'processing'].includes(current?.status) && now - current.createdAt < MAX_AGE) throw fail(409, 'Your Clay Self is still being made.');
+function successfulQuota(current, now) {
   const day = new Date(now).toISOString().slice(0, 10);
-  const count = current?.day === day ? current.count || 0 : 0;
-  if (count >= 3) throw fail(429, 'You can make another Clay Self tomorrow.');
-  return { day, count: count + 1 };
+  if (current?.quotaVersion === 2) return { quotaVersion: 2, successDay: day, successfulCount: current.successDay === day ? Math.max(0, Number(current.successfulCount) || 0) : 0 };
+  // Legacy count measured attempts, so it cannot reliably describe successes.
+  // Carry forward the one known completed current result if it completed today.
+  const completedDay = Number.isFinite(current?.completedAt) ? new Date(current.completedAt).toISOString().slice(0, 10) : null;
+  return { quotaVersion: 2, successDay: day, successfulCount: ['ready', 'approved'].includes(current?.status) && completedDay === day ? 1 : 0 };
 }
+function testingQuotaOverride(uid, now) {
+  if (!uid) return false;
+  const until = Date.parse(process.env.CLAY_SELF_TESTING_UNTIL || '');
+  const testers = (process.env.CLAY_SELF_TESTER_UIDS || '').split(',').map(value => value.trim()).filter(Boolean);
+  return Number.isFinite(until) && now < until && testers.includes(uid);
+}
+function gate(current, now, uid) {
+  if (['queued', 'processing'].includes(current?.status) && now - current.createdAt < MAX_AGE) throw fail(409, 'Your Clay Self is still being made.');
+  const quota = successfulQuota(current, now);
+  if (quota.successfulCount >= 3 && !testingQuotaOverride(uid, now)) throw fail(429, 'You can make another Clay Self tomorrow.');
+  return quota;
+}
+function completedQuota(current, now) {
+  const quota = successfulQuota(current, now);
+  return { ...quota, successfulCount: quota.successfulCount + 1 };
+}
+
 function paths(uid, id) {
   const prefix = `pulsecheck-clay-self-private/${uid}/${id}`;
   return { sources: ROLES.map((role) => `pulsecheck-clay-self-inputs/${uid}/${id}/${role}.jpg`), output: `${prefix}/portrait.png` };
@@ -136,11 +165,11 @@ async function editImages(images, key, fetcher = fetch) {
   catch (error) { throw fail(502, 'Image service temporarily unavailable. Please try again.', ['TimeoutError', 'AbortError'].includes(error?.name) ? 'provider_timeout' : 'provider_transport'); }
   if (!response.ok) throw fail(502, 'We could not make your Clay Self. Please try again.', 'provider_rejected');
   let payload;
-  try { payload = await response.json(); } catch { throw fail(502, 'The image service did not return a portrait.', 'output_invalid'); }
+  try { payload = await response.json(); } catch { throw fail(502, 'The image service did not return a portrait.', 'output_payload'); }
   const encoded = payload?.data?.[0]?.b64_json;
-  if (typeof encoded !== 'string' || encoded.length > 24 * 1024 * 1024) throw fail(502, 'The image service did not return a portrait.', 'output_invalid');
+  if (typeof encoded !== 'string' || encoded.length > 24 * 1024 * 1024) throw fail(502, 'The image service did not return a portrait.', 'output_payload');
   const bytes = Buffer.from(encoded, 'base64');
-  if (!bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw fail(502, 'The image service did not return a portrait.', 'output_invalid');
+  if (!bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw outputFailure('output_format');
   return framePortrait(bytes);
 }
 async function removeExpiredInputs(bucket, now = Date.now()) {
@@ -159,4 +188,4 @@ async function removeExpiredInputs(bucket, now = Date.now()) {
   return removed;
 }
 
-module.exports = { framePortrait, failureDetails, logFailure, publicFailure, STYLE_VERSION, GENERATION_SETTINGS, validatePortrait, removeExpiredInputs, crypto, ROLES, MAX_AGE, parseImages, jobID, gate, paths, stateRef, bucketFor, authenticate, remove, signedURL, parseBody, providerKey, editImages, fail };
+module.exports = { successfulQuota, testingQuotaOverride, completedQuota, framePortrait, failureDetails, logFailure, publicFailure, STYLE_VERSION, GENERATION_SETTINGS, validatePortrait, removeExpiredInputs, crypto, ROLES, MAX_AGE, parseImages, jobID, gate, paths, stateRef, bucketFor, authenticate, remove, signedURL, parseBody, providerKey, editImages, fail };

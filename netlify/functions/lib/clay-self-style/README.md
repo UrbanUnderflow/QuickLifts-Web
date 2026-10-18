@@ -32,3 +32,20 @@ Failed jobs record only allowlisted failure code/phase and numeric timing. Serve
 logs contain those same sanitized fields, without user IDs, URLs, input content
 or raw provider messages. Expired GET responses use job_expired without mutating
 the job during a read. Earlier failures cannot be diagnosed retrospectively.
+
+## Successful-result allowance and temporary testing
+
+Quota version 2 counts successful ready results, incremented only inside the
+same transaction that changes processing to ready. Duplicate worker deliveries,
+failed jobs, rejected output and cancelled late results consume no successful
+allowance. One active job per account remains enforced. Counts reset by UTC day
+of completion. Legacy attempt counts cannot prove successful creations: migration
+carries only the currently known ready/approved result completed on that day.
+
+The default limit remains three successful results per UTC day. The server-only
+`CLAY_SELF_TESTER_UIDS` comma-separated exact UID allowlist can temporarily bypass
+that limit, and only while `CLAY_SELF_TESTING_UNTIL` is a valid future timestamp.
+Both are required; missing/expired configuration restores the limit automatically.
+Other accounts keep the default limit. Remove the tester configuration when
+validation finishes. Never print or place actual tester UIDs in documentation.
+The override does not bypass concurrent-job protection or ownership checks.

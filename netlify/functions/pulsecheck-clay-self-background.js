@@ -38,7 +38,8 @@ exports.handler = async (event) => {
     const kept = await db.runTransaction(async (tx) => {
       const current = (await tx.get(ref)).data();
       if (current?.jobId !== id || current.status !== 'processing') return false;
-      tx.update(ref, { status: 'ready', completedAt: Date.now() });
+      const completedAt = Date.now();
+      tx.update(ref, { status: 'ready', completedAt, ...c.completedQuota(current, completedAt) });
       return true;
     });
     if (!kept) await c.remove(bucket, [locations.output]);
