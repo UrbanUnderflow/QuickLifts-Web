@@ -1,0 +1,211 @@
+/* Provisioning shares the coach dashboard's clay palette and editorial hierarchy. */
+.theme {
+  --bg: #f7f8f5;
+  --t1: #22302e;
+  --t2: #5c6862;
+  --t3: #65716c;
+  --teal: #356b60;
+  --teal-d: #edf3e8;
+  --teal-b: #cdddcf;
+  --amber: #895817;
+  --amber-d: #fbf2df;
+  --green: #2f6a48;
+  --green-d: #edf4eb;
+  --blue: #3c647d;
+  --blue-d: #edf3f7;
+  --purple: #70558c;
+  --purple-d: #f3eef8;
+  --mb: #dfe5dc;
+  --glass: #f7f9f4;
+  --glass2: #edf3e8;
+  --glassh: #eef3e9;
+  --fd: Arial, Helvetica, sans-serif;
+  --fm: Arial, Helvetica, sans-serif;
+  --fb: Arial, Helvetica, sans-serif;
+  color: var(--t1);
+  color-scheme: light;
+  font: 14px/1.5 Arial, Helvetica, sans-serif;
+  background: #f7f8f5;
+}
+.theme :global(:focus-visible) { outline: 2px solid #356b60; outline-offset: 3px; }
+.theme :global(button), .theme :global(input), .theme :global(select), .theme :global(textarea) { font-family: inherit; }
+.theme :global(button) { cursor: pointer; }
+.theme :global(button:disabled) { cursor: not-allowed; }
+/* Shared admin account/environment controls stay available and match this route. */
+.workspace > header { background: #fff; border-color: #dfe5dc; box-shadow: none; position: relative; z-index: 60; }
+.theme :global([class*="text-white"]), .theme :global([class*="text-zinc-1"]), .theme :global([class*="text-zinc-2"]) { color: #22302e; }
+.theme :global([class*="text-zinc-3"]), .theme :global([class*="text-zinc-4"]), .theme :global([class*="text-zinc-5"]), .theme :global([class*="text-zinc-6"]) { color: #65716c; }
+.theme :global([class*="text-emerald-"]), .theme :global([class*="text-cyan-"]), .theme :global([class*="text-[#d7ff00]"]) { color: #356b60; }
+.theme :global([class*="text-amber-"]) { color: #895817; }
+.theme :global([class*="text-red-"]), .theme :global([class*="text-rose-"]) { color: #ac263b; }
+.theme :global([class*="border-zinc-"]), .theme :global([class*="border-white/"]) { border-color: #dfe5dc; }
+.theme :global([class*="bg-zinc-"]), .theme :global([class*="bg-[#111417]"]), .theme :global([class*="bg-[#10131b]"]) { background-color: #fff; }
+.theme :global([class*="bg-black/10"]), .theme :global([class*="bg-black/20"]), .theme :global([class*="bg-black/30"]) { background: #f4f6f1; }
+.theme :global(.pcp-org-dashboard) { background: #f7f8f5 url('/images/clay-form/background.png') center top/1100px auto; overflow: visible; }
+.theme :global(.pcp-shell) { grid-template-columns: 240px minmax(0, 1fr); grid-template-rows: 1fr; align-items: start; }
+.sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 28px 14px 18px; background: rgba(250,251,249,.96); border-right: 1px solid #dfe5dc; display: flex; flex-direction: column; gap: 24px; }
+.wordmark { font: bold 28px/1.2 Georgia, serif; letter-spacing: -1px; padding: 0 8px; }
+.wordmark span { display: block; font: 10px/1.5 Arial, sans-serif; letter-spacing: 1.6px; color: #65716c; margin-top: 8px; }
+.account { display: flex; align-items: center; gap: 10px; border: 1px solid #e0e5dd; background: #fff; padding: 13px 10px; border-radius: 14px; font-size: 12px; overflow-wrap: anywhere; }
+.account small { display: block; color: #65716c; font-size: 11px; margin-top: 3px; }
+.account :global(.pcp-av) { background: #e7efdc; color: #34584a; width: 34px; height: 34px; flex-shrink: 0; font-size: 11px; }
+.navItem { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; margin: 3px 0; border-radius: 10px; border: 0; background: transparent; color: #5c6862; text-align: left; font-size: 13px; min-height: 44px; }
+.navItem:hover { background: #f0f3ec; }
+.navItem[aria-current="page"] { background: #e7efdc; color: #23473d; font-weight: 600; }
+.navItem > span:last-child:not(.navName) { margin-left: auto; }
+.navName { overflow-wrap: anywhere; }
+.navLabel { font-size: 10px; letter-spacing: 1.3px; text-transform: uppercase; color: #65716c; margin: 26px 12px 8px; }
+.orgDot { width: 6px; height: 6px; background: #8aa78c; border-radius: 50%; flex-shrink: 0; }
+.sidebarFooter { display: grid; gap: 6px; margin-top: auto; padding-top: 20px; border-top: 1px solid #dfe5dc; }
+.sidebarFooter a, .sidebarFooter button { display: flex; align-items: center; gap: 9px; padding: 10px; background: transparent; border: 0; font-size: 12px; color: #5c6862; text-align: left; min-height: 40px; }
+.theme :global(.pcp-main) { overflow: visible; min-width: 0; max-width: 1600px; width: 100%; margin: 0 auto; }
+.theme :global(.pcp-page-head) { background: transparent; border: 0; padding: 36px 32px 24px; gap: 22px; grid-template-columns: 1fr; }
+.theme :global(.pcp-heading) { font: normal clamp(32px,3.2vw,44px)/1.15 Georgia, 'Times New Roman', serif; letter-spacing: -1.2px; margin: 10px 0 13px; overflow-wrap: anywhere; }
+.theme :global(.pcp-eyebrow) { color: #5c6862; font-size: 10px; letter-spacing: 1.6px; }
+.theme :global(.pcp-desc) { font-size: 15px; max-width: 750px; }
+.hierarchyKey { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 17px; font-size: 12px; color: #65716c; }
+.hierarchyKey span:first-child { color: #356b60; font-weight: 600; }
+.theme :global(.pcp-head-right) { justify-content: flex-start; max-width: none; padding: 0; gap: 8px; }
+.theme :global(.pcp-btn), .theme :global(.pcp-ab) { min-height: 40px; border-radius: 10px; font-size: 12px; }
+.theme :global(.pcp-btn-teal) { background: #d4f12c; color: #263026; border: 1px solid #c6df39; }
+.theme :global(.pcp-btn-ghost), .theme :global(.pcp-ab-g) { background: #fff; color: #35564a; border: 1px solid #dce3d7; }
+.theme :global(.pcp-btn-ghost:hover), .theme :global(.pcp-ab-g:hover) { background: #eef3e9; color: #22302e; border-color: #aebfae; }
+.theme :global(.pcp-ab-t) { background: #edf3e8; border-color: #cdddcf; color: #356b60; }
+.theme :global(.pcp-stats-row) { margin: 0 32px 24px; gap: 16px; border: 0; grid-template-columns: repeat(4,minmax(0,1fr)); }
+.theme :global(.pcp-stat-cell) { border: 1px solid #e4e8df; border-radius: 18px; padding: 22px; background: #fff; display: flex; flex-direction: column; align-items: flex-start; gap: 18px; box-shadow: 0 4px 20px #28342a04; }
+.theme :global(.pcp-stat-n) { font: normal 34px/1 Georgia,serif; }
+.theme :global(.pcp-stat-l) { margin-top: 8px; font-size: 12px; }
+.theme :global(.pcp-stat-icon) { border: 0; background: transparent; width: auto; height: auto; color: #456d63; }
+.theme :global(.pcp-stat-icon svg) { width: 21px; height: 21px; }
+.theme :global(.pcp-toolbar) { margin: 0 32px; padding: 14px; border: 1px solid #dfe5dc; border-radius: 14px; background: #fff; position: relative; top: auto; z-index: 2; grid-template-columns: minmax(200px,1fr) auto; gap: 12px; backdrop-filter: none; }
+.theme :global(.pcp-search-input) { min-height: 44px; background: #f8f9f6; font-size: 13px; padding-left: 34px; }
+.theme :global(.pcp-filter-pills) { grid-column: 1 / -1; order: 3; }
+.theme :global(.pcp-toolbar-right) { grid-column: 2; grid-row: 1; }
+.theme :global(.pcp-pill) { min-height: 38px; font-size: 12px; letter-spacing: 0; }
+.theme :global(.pcp-pill.on) { background: #e7efdc; color: #23473d; border-color: #cdddcf; }
+.filterCount { margin-left: 4px; font-size: 11px; }
+.directoryHeading { padding: 24px 32px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.directoryHeading h2 { font: normal 23px/1.3 Georgia,serif; margin: 0 0 5px; }
+.directoryHeading p, .directoryHeading > span { font-size: 12px; color: #65716c; }
+.theme :global(.pcp-org-list) { padding: 0 32px 40px; }
+.theme :global(.pcp-org-row) { background: #fff; border: 1px solid #dfe5dc; border-radius: 18px; margin-bottom: 14px; box-shadow: 0 4px 18px #28342a04; }
+.theme :global(.pcp-org-row.open) { border-color: #b9cabb; }
+.theme :global(.pcp-org-title) { background: transparent; }
+.theme :global(.pcp-org-hd) { padding: 22px; gap: 12px; grid-template-columns: 28px 40px minmax(0,1fr); cursor: default; }
+.theme :global(.pcp-org-chev) { width: 28px; min-height: 40px; background: transparent; border: 0; }
+.theme :global(.pcp-org-row.open .pcp-org-chev svg) { transform: rotate(180deg); }
+.theme :global(.pcp-org-ico) { width: 40px; height: 40px; background: #edf3e8; border: 1px solid #dce5d7; color: #356b60; }
+.theme :global(.pcp-org-ico svg) { width: 20px; height: 20px; }
+.theme :global(.pcp-org-name) { font: 600 17px/1.4 Arial, sans-serif; text-align: left; background: transparent; border: 0; color: #22302e; padding: 0; }
+.theme :global(.pcp-org-meta), .theme :global(.pcp-t-meta) { font: 12px/1.6 Arial,sans-serif; white-space: normal; overflow-wrap: anywhere; }
+.theme :global(.pcp-level-eyebrow) { font-size: 10px; opacity: 1; color: #65716c; letter-spacing: 1.1px; }
+.theme :global(.pcp-org-counts), .theme :global(.pcp-org-actions) { grid-column: 3; justify-content: flex-start; min-width: 0; }
+.theme :global(.pcp-mc) { font-size: 11px; color: #5c6862; background: #f4f6f0; border-color: #e1e6dc; padding: 5px 8px; }
+.theme :global(.pcp-status) { font-size: 10px; letter-spacing: .6px; padding: 6px 9px; }
+.theme :global(.pcp-org-overview) { padding: 0 24px 20px; border-bottom: 1px solid #e5e9e0; }
+.settingsDisclosure { border: 1px solid #dfe5dc; border-radius: 12px; padding: 16px; margin-bottom: 14px; background: #fafbf8; }
+.settingsDisclosure summary { cursor: pointer; font-weight: 600; font-size: 14px; color: #2c493f; }
+.settingsDisclosure summary span { display: block; font-size: 12px; font-weight: 400; margin: 4px 0 0 17px; color: #65716c; }
+.settingsDisclosure[open] summary { margin-bottom: 18px; }
+.theme :global(.pcp-card) { background: #f9faf7; border: 1px solid #e0e6db; border-radius: 13px; padding: 17px; }
+.theme :global(.pcp-team-card) { margin: 20px 24px; padding: 22px; background: #fff; border-left: 3px solid #c4d4ba; }
+.theme :global(.pcp-team-grid) { grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; gap: 12px; }
+.theme :global(.pcp-team-hd) { grid-template-columns: 28px 30px minmax(0,1fr); gap: 10px; cursor: default !important; }
+.theme :global(.pcp-t-right) { grid-column: 3; justify-content: flex-start; }
+.theme :global(.pcp-t-name) { background: transparent; border: 0; padding: 0; color: #22302e; font-size: 16px; text-align: left; font-weight: 600; }
+.disclosureButton { background: transparent; border: 0; min-height: 40px; display: flex; align-items: center; padding: 0; color: #65716c; }
+.theme :global(.pcp-card-title) { color: #35564a; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.theme :global(.pcp-pilot-card) { margin: 12px 0 0 18px; background: #f8faf5; }
+.theme :global(.pcp-modal) { width: min(760px,100vw); }
+.theme :global(.pcp-modal-title) { font: normal 24px/1.2 Georgia,serif; }
+.theme :global(.pcp-modal-tb) { padding: 18px 24px; gap: 14px; flex-wrap: wrap; }
+.theme :global(.pcp-modal-x) { min-width: 40px; min-height: 40px; }
+.theme :global(.pcp-modal-steps) { flex-wrap: wrap; padding: 12px 18px; gap: 6px; overflow: visible; }
+.theme :global(.pcp-ms) { padding: 10px; border-radius: 8px; font-size: 12px; flex: 1 0 29%; white-space: nowrap; }
+.theme :global(.pcp-ms.active) { background: #e7efdc; color: #23473d; }
+.theme :global(.pcp-finp) { min-height: 44px; background: #fff; color: #22302e; border: 1px solid #ced8c9; border-radius: 9px; }
+.theme :global(.pcp-flbl) { text-transform: none; letter-spacing: 0; font-size: 12px; color: #4f5f56; }
+.theme :global(.pcp-info-box) { background: #f0f5eb; color: #35564a; border-color: #d4dfcf; }
+.theme :global(.pcp-select option) { background: #fff; color: #22302e; }
+.theme :global(.pcp-message-error) { background: #fff1f1; color: #a32a38; }
+.theme :global(.pcp-message-success) { background: #edf4eb; color: #2f6a48; }
+.portal { background-color: transparent; }
+.portal input, .portal select, .portal textarea { color: #22302e; background: #fff; border-color: #ced8c9; }
+.portal input:focus, .portal select:focus, .portal textarea:focus { outline: 2px solid #356b60; outline-offset: 2px; }
+@media(min-width:1450px) {
+  .theme :global(.pcp-page-head) { grid-template-columns: minmax(0,1fr) auto; }
+  .theme :global(.pcp-head-right) { max-width: 340px; justify-content: flex-end; }
+}
+@media(max-width:1050px) {
+  .theme :global(.pcp-shell) { grid-template-columns: 210px minmax(0,1fr); }
+  .theme :global(.pcp-stats-row) { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .theme :global(.pcp-team-grid), .theme :global(.pcp-org-grid) { grid-template-columns: 1fr; }
+}
+@media(max-width:760px) {
+  .theme :global(.pcp-shell) { grid-template-columns: minmax(0,1fr); }
+  .sidebar { position: static; height: auto; padding: 18px; gap: 14px; border-right: 0; border-bottom: 1px solid #dfe5dc; }
+  .wordmark { font-size: 25px; padding: 0; }
+  .account, .sidebarFooter, .navLabel { display: none; }
+  .sidebar nav { display: flex; overflow-x: auto; gap: 6px; }
+  .navItem { width: auto; flex-shrink: 0; max-width: 240px; }
+  .navName { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .theme :global(.pcp-page-head) { padding: 26px 18px 22px; }
+  .theme :global(.pcp-stats-row) { margin: 0 18px 18px; gap: 10px; }
+  .theme :global(.pcp-stat-cell) { padding: 18px; gap: 12px; }
+  .theme :global(.pcp-toolbar) { margin: 0 18px; grid-template-columns: minmax(0,1fr); }
+  .theme :global(.pcp-toolbar-right) { grid-row: auto; grid-column: 1; order: 4; }
+  .theme :global(.pcp-filter-pills) { gap: 2px; }
+  .theme :global(.pcp-pill) { padding: 7px 9px; }
+  .directoryHeading { padding: 24px 18px 16px; align-items: flex-start; flex-direction: column; gap: 8px; }
+  .theme :global(.pcp-org-list) { padding: 0 18px 30px; }
+  .theme :global(.pcp-org-hd) { padding: 16px; grid-template-columns: 28px minmax(0,1fr); }
+  .theme :global(.pcp-org-ico) { display: none; }
+  .theme :global(.pcp-org-info) { grid-column: 2; grid-row: 1; }
+  .theme :global(.pcp-org-counts), .theme :global(.pcp-org-actions) { grid-column: 1 / -1; }
+  .theme :global(.pcp-org-actions .pcp-ab) { flex: 0 1 auto; }
+  .theme :global(.pcp-org-overview) { padding: 0 14px 16px; }
+  .theme :global(.pcp-team-card) { margin: 14px 10px; padding: 14px; }
+  .theme :global(.pcp-team-hd) { grid-template-columns: 24px minmax(0,1fr); }
+  .theme :global(.pcp-t-av) { display: none; }
+  .theme :global(.pcp-t-right) { grid-column: 1 / -1; }
+  .theme :global(.pcp-pilot-card) { margin-left: 0; padding: 12px; }
+  .theme :global(.pcp-modal-tb) { padding: 16px; }
+  .theme :global(.pcp-modal-body) { padding: 20px 16px; }
+  .theme :global(.pcp-modal-ft) { padding: 14px 16px; }
+  .theme :global(.pcp-ms) { flex-basis: 42%; }
+  .portal { padding: 10px !important; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .theme :global(*), .theme :global(*::before), .theme :global(*::after) { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .theme :global(.pcp-slide-up), .theme :global(.pcp-fade-in) { opacity: 1; }
+}
+.theme :global([class*="bg-[#090f1c]"]) { background: #fff; }
+.theme :global([class*="bg-[#1a1e24]"]), .theme :global([class*="bg-[#171b21]"]), .theme :global([class*="bg-[#0f1216]"]) { background: #fff; }
+.focusedWorkspace :global(.pcp-stats-row), .focusedWorkspace :global(.pcp-toolbar) { display: none; }
+.backRow { display: flex; justify-content: space-between; gap: 12px; padding: 0 32px; }
+@media(max-width:760px) { .backRow { padding: 0 18px; } }
+
+.workspace { background: #f7f8f5; min-height: 100vh; }
+.workspace > header { color: #22302e; }
+.workspace > header :global([class*="text-white"]), .workspace > header :global([class*="text-zinc-1"]), .workspace > header :global([class*="text-zinc-2"]) { color: #22302e; }
+.workspace > header :global([class*="text-zinc-4"]), .workspace > header :global([class*="text-zinc-5"]), .workspace > header :global([class*="text-zinc-7"]) { color: #65716c; }
+.workspace > header :global([class*="text-[#d7ff00]"]), .workspace > header :global([class*="text-emerald-"]) { color: #356b60; }
+.workspace > header :global([class*="bg-[#171b21]"]) { background: #fff; }
+.workspace > header :global([class*="border-zinc-"]) { border-color: #dfe5dc; }
+@media(max-width:760px) {
+  .theme :global(.pcp-head-right .pcp-btn) { flex: 1 1 25%; padding: 10px 8px; }
+  .theme :global(.pcp-head-right .pcp-btn-teal) { order: -1; flex-basis: 100%; }
+  .theme :global(.pcp-stat-cell) { flex-direction: row; align-items: center; padding: 15px; gap: 14px; }
+  .theme :global(.pcp-stat-n) { font-size: 28px; }
+  .theme :global(.pcp-stat-l) { margin-top: 5px; }
+}
+.theme :global(.pcp-modal-tb), .theme :global(.pcp-modal-ft) { flex-shrink: 0; }
+@media(max-width:760px) {
+  .theme :global(.pcp-modal-tb) { display: grid; grid-template-columns: minmax(0,1fr) 40px; gap: 8px; }
+  .theme :global(.pcp-modal-title) { grid-column: 1; grid-row: 1; font-size: 23px; }
+  .theme :global(.pcp-modal-x) { grid-column: 2; grid-row: 1; }
+  .theme :global(.pcp-modal-tb > .pcp-ab) { grid-column: 1 / -1; grid-row: 2; justify-self: start; padding: 0; min-height: 28px; }
+}
+.theme :global(.pcp-org-row.open), .theme :global(.pcp-org-row:hover) { background: #fff; }
+.theme :global(.pcp-org-row.open), .theme :global(.pcp-org-row:hover) { box-shadow: 0 4px 18px #28342a07; }
+.theme :global(.pcp-team-grid > .pcp-card[data-expanded="true"]) { grid-column: 1 / -1; }

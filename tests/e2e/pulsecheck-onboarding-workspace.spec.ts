@@ -578,10 +578,15 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
 
     await ensureAdminSession(page, '/admin/pulsecheckProvisioning');
-    await expect(page.getByRole('heading', { name: /PulseCheck Provisioning/i })).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/Connected Provisioning Map/i)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: /^Create Organization$/i })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: /^Create Team$/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Organizations', exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('navigation', { name: 'Organizations', exact: true })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Search organizations, teams, pilots, and cohorts' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Partner directory' })).toBeVisible();
+    await page.getByRole('button', { name: 'New Organization', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Provision organization', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save & Continue', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Close provisioning', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Provision organization', exact: true })).toBeHidden();
   });
 
   test('@smoke legacy roster migration surface loads', async ({ page }) => {

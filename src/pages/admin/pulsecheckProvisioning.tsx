@@ -1,3 +1,4 @@
+import ui from '../../components/admin/ProvisioningWorkspace.module.css';
 import ProgramProductConfiguration, { ProductConfigurationFields } from '../../components/admin/ProgramProductConfiguration';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -538,7 +539,7 @@ const PULSECHECK_ADMIN_TOUR_STEPS: GuidedTourStep[] = [
   {
     selector: '[data-tour="admin-provisioning-filters"]',
     title: 'Find the school quickly',
-    body: 'Use search and status filters to find the school, then expand the organization to review teams, links, support routing, and tracker status.',
+    body: 'Use search and status filters to find the school, then expand the organization to review teams, links, support routing, and program settings.',
     placement: 'bottom',
   },
   {
@@ -548,15 +549,15 @@ const PULSECHECK_ADMIN_TOUR_STEPS: GuidedTourStep[] = [
     placement: 'top',
   },
   {
-    selector: '[data-tour="admin-team-tracker"]',
-    title: 'Monitor launch readiness visually',
-    body: 'The tracker is intentionally simple: one progress bar, four status labels, and one dropdown per launch step.',
+    selector: '[data-tour="admin-organization-navigation"]',
+    title: 'Switch between organizations',
+    body: 'Use the sidebar to focus on one organization. All organizations returns you to the full directory.',
     placement: 'top',
   },
   {
-    selector: '[data-tour="admin-launch-day-link"]',
-    title: 'Use Launch-Day Mode in the room',
-    body: 'Open this during Meeting 3 to track athlete invites, setup, device status, and next action while the team is present.',
+    selector: '[data-tour="admin-provisioning-actions"]',
+    title: 'Continue setting up your program',
+    body: 'New Organization guides you through the organization, team, support route, admin activation, pilot, and cohort. Add Team and Add Pilot let you extend existing programs.',
     placement: 'left',
   },
 ];
@@ -686,14 +687,16 @@ const CollapsibleCard: React.FC<{
   id?: string;
   children: React.ReactNode;
 }> = ({ title, open, onToggle, preview, actions, className, id, children }) => (
-  <div id={id} className={className || 'pcp-card'} style={{ scrollMarginTop: 16 }}>
+  <div id={id} className={className || 'pcp-card'} data-expanded={open} style={{ scrollMarginTop: 16 }}>
     {/* Whole header row toggles (not just the title). `actions` stops propagation
         so its own buttons still work without collapsing the card. */}
     <div
       role="button"
+      aria-expanded={open}
       tabIndex={0}
       onClick={onToggle}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onToggle();
@@ -703,7 +706,7 @@ const CollapsibleCard: React.FC<{
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
         <ChevronDown
-          style={{ width: 16, height: 16, flexShrink: 0, color: 'rgba(255,255,255,0.5)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+          style={{ width: 16, height: 16, flexShrink: 0, color: '#65716c', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
         />
         <span className="pcp-card-title" style={{ marginBottom: 0 }}>{title}</span>
       </div>
@@ -712,7 +715,7 @@ const CollapsibleCard: React.FC<{
     {open ? (
       <div style={{ marginTop: 12 }}>{children}</div>
     ) : preview ? (
-      <div onClick={onToggle} style={{ marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)', cursor: 'pointer' }}>{preview}</div>
+      <div onClick={onToggle} style={{ marginTop: 6, fontSize: 12, color: '#65716c', cursor: 'pointer' }}>{preview}</div>
     ) : null}
   </div>
 );
@@ -827,6 +830,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [isProvisioningModalOpen, setIsProvisioningModalOpen] = useState(false);
   const [activeWizardStep, setActiveWizardStep] = useState<ProvisioningWizardStep>('org');
   const [organizationSearch, setOrganizationSearch] = useState('');
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(null);
   const [organizationStatusFilter, setOrganizationStatusFilter] = useState<DashboardStatusFilter>('all');
   const [expandedOrganizationIds, setExpandedOrganizationIds] = useState<string[]>([]);
   const [collapsedTeamIds, setCollapsedTeamIds] = useState<Set<string>>(() => new Set());
@@ -845,7 +849,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
       return next;
     });
   };
-  const [expandedTeamIds, setExpandedTeamIds] = useState<string[]>([]);
+  const [, setExpandedTeamIds] = useState<string[]>([]);
   const [expandedPilotIds, setExpandedPilotIds] = useState<string[]>([]);
   const [hasInitializedExpansionState, setHasInitializedExpansionState] = useState(false);
   const [activationDraft, setActivationDraft] = useState<{
@@ -1099,6 +1103,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     const normalizedSearch = organizationSearch.trim().toLowerCase();
 
     return organizationBundles.filter(({ organization, teams: bundledTeams }) => {
+      if (selectedOrganizationId && organization.id !== selectedOrganizationId) return false;
       if (
         organizationStatusFilter !== 'all' &&
         getOrganizationFilterStatus(organization.status) !== organizationStatusFilter
@@ -1132,7 +1137,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
       return searchDocument.includes(normalizedSearch);
     });
-  }, [organizationBundles, organizationSearch, organizationStatusFilter]);
+  }, [organizationBundles, organizationSearch, organizationStatusFilter, selectedOrganizationId]);
   const onboardingModalLinks = useMemo(() => {
     if (!onboardingModal) return [];
 
@@ -1360,6 +1365,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
     const focusTeam = params.get('focusTeam');
     if (!focusTeam) return;
     setIntakeFocusHandled(true);
+    const organizationId = teams.find((team) => team.id === focusTeam)?.organizationId;
+    if (organizationId) {
+      setSelectedOrganizationId(organizationId);
+      setExpandedOrganizationIds((current) => Array.from(new Set([...current, organizationId])));
+    }
 
     // Make sure the team card is expanded so the deep-link lands on its content.
     setCollapsedTeamIds((prev) => {
@@ -1391,7 +1401,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   useEffect(() => {
     if (hasInitializedExpansionState || loading) return;
 
-    setExpandedOrganizationIds(organizations.map((organization) => organization.id));
+    // Start with a scannable directory. Explicit selections and deep links open details.
     setExpandedTeamIds(teams.map((team) => team.id));
     setExpandedPilotIds(
       pilots
@@ -3096,20 +3106,32 @@ const PulseCheckProvisioningPage: React.FC = () => {
     toggleExpandedId(pilotId, setExpandedPilotIds);
   }, [toggleExpandedId]);
 
-  const handleToggleAllRows = useCallback(() => {
-    const shouldCollapseAll = expandedOrganizationIds.length === organizations.length && expandedTeamIds.length === teams.length;
-
-    if (shouldCollapseAll) {
-      setExpandedOrganizationIds([]);
-      setExpandedTeamIds([]);
-      setExpandedPilotIds([]);
-      return;
-    }
-
-    setExpandedOrganizationIds(organizations.map((organization) => organization.id));
-    setExpandedTeamIds(teams.map((team) => team.id));
-    setExpandedPilotIds(pilots.map((pilot) => pilot.id));
-  }, [expandedOrganizationIds.length, expandedTeamIds.length, organizations, pilots, teams]);
+  const allVisibleRowsExpanded = filteredOrganizationBundles.length > 0 && filteredOrganizationBundles.every(
+    ({ organization, teams: bundledTeams }) => expandedOrganizationIds.includes(organization.id) &&
+      bundledTeams.every(({ team, pilots: bundledPilots }) => !collapsedTeamIds.has(team.id) &&
+        bundledPilots.every(({ pilot }) => expandedPilotIds.includes(pilot.id)))
+  );
+  const handleToggleAllRows = () => {
+    const orgIds = filteredOrganizationBundles.map(({ organization }) => organization.id);
+    const teamIds = filteredOrganizationBundles.flatMap(({ teams }) => teams.map(({ team }) => team.id));
+    const pilotIds = filteredOrganizationBundles.flatMap(({ teams }) => teams.flatMap(({ pilots }) => pilots.map(({ pilot }) => pilot.id)));
+    setExpandedOrganizationIds((current) => allVisibleRowsExpanded ? current.filter((id) => !orgIds.includes(id)) : Array.from(new Set([...current, ...orgIds])));
+    setExpandedTeamIds((current) => allVisibleRowsExpanded ? current.filter((id) => !teamIds.includes(id)) : Array.from(new Set([...current, ...teamIds])));
+    setExpandedPilotIds((current) => allVisibleRowsExpanded ? current.filter((id) => !pilotIds.includes(id)) : Array.from(new Set([...current, ...pilotIds])));
+    setCollapsedTeamIds((current) => {
+      const next = new Set(current);
+      teamIds.forEach((id) => allVisibleRowsExpanded ? next.add(id) : next.delete(id));
+      return next;
+    });
+  };
+  const selectOrganization = (organizationId: string | null) => {
+    setSelectedOrganizationId(organizationId);
+    setOrganizationSearch('');
+    setOrganizationStatusFilter('all');
+    if (organizationId) setExpandedOrganizationIds((current) => Array.from(new Set([...current, organizationId])));
+    document.getElementById('organizations-directory')?.scrollIntoView({ block: 'start' });
+  };
+  const directoryOrganization = organizations.find((organization) => organization.id === selectedOrganizationId);
 
   const handleOpenProvisioningModal = useCallback(
     (
@@ -3121,6 +3143,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
         channel?: 'admin' | 'clinician';
       }
     ) => {
+      setSelectedOrganizationId(null);
       setIsProvisioningModalOpen(true);
       setActiveWizardStep(step);
       setSkipCohortForNow(false);
@@ -3370,19 +3393,50 @@ const PulseCheckProvisioningPage: React.FC = () => {
     .map((segment) => segment.charAt(0).toUpperCase())
     .join('');
 
+  const closeActiveDialogRef = useRef<() => void>(() => {});
+  closeActiveDialogRef.current = () => {
+    if (coachIntakeShareTeamId) setCoachIntakeShareTeamId(null);
+    else if (intakeModalTeamId) setIntakeModalTeamId(null);
+    else if (consentModalTeamId) setConsentModalTeamId(null);
+    else if (copyLinkModalTeamId) handleCloseCopyLinkModal();
+    else if (onboardingModal) handleCloseOnboardingModal();
+    else if (isProvisioningModalOpen) handleCloseProvisioningModal();
+  };
+  useEffect(() => {
+    if (!isProvisioningModalOpen && !onboardingModal && !copyLinkModalTeamId && !consentModalTeamId && !intakeModalTeamId && !coachIntakeShareTeamId) return;
+    const dialog = document.querySelector<HTMLElement>('[data-provisioning-dialog="active"]');
+    if (!dialog) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]'))
+      .filter((element) => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden');
+    (dialog.querySelector<HTMLElement>('[aria-label^="Close"]') || focusable()[0] || dialog).focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); closeActiveDialogRef.current(); }
+      if (event.key !== 'Tab') return;
+      const elements = focusable();
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (!first) { event.preventDefault(); dialog.focus(); return; }
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [isProvisioningModalOpen, onboardingModal, copyLinkModalTeamId, consentModalTeamId, intakeModalTeamId, coachIntakeShareTeamId]);
+
   return (
+    <div className={ui.workspace}>
     <AdminRouteGuard>
-      <div className="min-h-screen bg-[#05070c] text-white">
+      <div className={`${ui.theme} min-h-screen`}>
         <Head>
           <title>PulseCheck Provisioning | Pulse Admin</title>
           <meta name="robots" content="noindex,nofollow" />
-          <link rel="preconnect" href="https://fonts.googleapis.com" />
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-          <link
-            href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:opsz,wght@9..144,300..700&display=swap"
-            rel="stylesheet"
-          />
-          <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
         </Head>
         <style jsx global>{`
           .pcp-org-dashboard,
@@ -3390,28 +3444,28 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-org-dashboard *::before,
           .pcp-org-dashboard *::after { box-sizing: border-box; }
           .pcp-org-dashboard {
-            --bg: #07090f;
-            --teal: #00d4aa;
+            --bg: #f7f8f5;
+            --teal: #356b60;
             --teal-d: rgba(0, 212, 170, 0.1);
             --teal-b: rgba(0, 212, 170, 0.22);
-            --amber: #f5a623;
+            --amber: #895817;
             --amber-d: rgba(245, 166, 35, 0.1);
-            --green: #4ade80;
+            --green: #2f6a48;
             --green-d: rgba(74, 222, 128, 0.08);
-            --blue: #60a5fa;
+            --blue: #3c647d;
             --blue-d: rgba(96, 165, 250, 0.08);
-            --purple: #a78bfa;
+            --purple: #70558c;
             --purple-d: rgba(167, 139, 250, 0.08);
-            --mb: rgba(255, 255, 255, 0.07);
-            --glass: rgba(255, 255, 255, 0.028);
-            --glass2: rgba(255, 255, 255, 0.045);
-            --glassh: rgba(255, 255, 255, 0.055);
-            --t1: rgba(255, 255, 255, 0.95);
-            --t2: rgba(255, 255, 255, 0.52);
-            --t3: rgba(255, 255, 255, 0.28);
-            --fd: 'Switzer', sans-serif;
-            --fm: 'DM Mono', monospace;
-            --fb: 'Switzer', sans-serif;
+            --mb: rgba(34, 48, 46, 0.07);
+            --glass: rgba(34, 48, 46, 0.028);
+            --glass2: rgba(34, 48, 46, 0.045);
+            --glassh: rgba(34, 48, 46, 0.055);
+            --t1: #22302e;
+            --t2: #5c6862;
+            --t3: #65716c;
+            --fd: Arial, Helvetica, sans-serif;
+            --fm: Arial, Helvetica, sans-serif;
+            --fb: Arial, Helvetica, sans-serif;
             min-height: 100vh;
             background: var(--bg);
             color: var(--t1);
@@ -3430,7 +3484,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-a2 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(96, 165, 250, 0.04) 0%, transparent 70%); bottom: -100px; left: -100px; animation-delay: 0.5s; }
           .pcp-a3 { width: 350px; height: 350px; background: radial-gradient(circle, rgba(245, 166, 35, 0.03) 0%, transparent 70%); top: 50%; left: 35%; animation-delay: 0.9s; }
           @keyframes pcpAmbIn { to { opacity: 1; } }
-          .pcp-topbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 56px; border-bottom: 0.5px solid var(--mb); background: rgba(7, 9, 15, 0.75); backdrop-filter: blur(24px); position: sticky; top: 0; z-index: 200; }
+          .pcp-topbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 56px; border-bottom: 0.5px solid var(--mb); background: #fff; backdrop-filter: blur(24px); position: sticky; top: 0; z-index: 200; }
           .pcp-topbar-left { display: flex; align-items: center; gap: 14px; }
           .pcp-logo { display: flex; align-items: center; gap: 8px; font-family: var(--fd); font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
           .pcp-logo-dot { width: 8px; height: 8px; border-radius: 9999px; background: var(--teal); box-shadow: 0 0 12px rgba(0, 212, 170, 0.55); animation: pcpPulse 2.5s ease-in-out infinite; }
@@ -3438,42 +3492,42 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-divider { width: 0.5px; height: 20px; background: var(--mb); }
           .pcp-crumb { font-family: var(--fd); font-size: 12px; font-weight: 600; color: var(--t3); letter-spacing: 0.1em; text-transform: uppercase; }
           .pcp-admin-chip { display: flex; align-items: center; gap: 7px; padding: 4px 12px 4px 6px; border-radius: 9999px; background: var(--glass); border: 0.5px solid var(--mb); font-size: 12px; color: var(--t2); }
-          .pcp-av { width: 22px; height: 22px; border-radius: 9999px; background: linear-gradient(135deg, var(--teal), #0891b2); display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; text-transform: uppercase; }
+          .pcp-av { width: 22px; height: 22px; border-radius: 9999px; background: linear-gradient(135deg, var(--teal), #0891b2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--t1); text-transform: uppercase; }
           .pcp-sidebar { border-right: 0.5px solid var(--mb); padding: 24px 0; position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto; display: flex; flex-direction: column; }
           .pcp-sidebar::-webkit-scrollbar { display: none; }
           .pcp-nav-sec { margin-bottom: 22px; }
-          .pcp-nav-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t3); padding: 0 18px; margin-bottom: 4px; }
+          .pcp-nav-lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t3); padding: 0 18px; margin-bottom: 4px; }
           .pcp-nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 18px; font-size: 13px; color: var(--t2); position: relative; }
           .pcp-nav-item.active { color: var(--t1); }
           .pcp-nav-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 0 2px 2px 0; background: var(--teal); }
           .pcp-nav-item svg { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.55; }
           .pcp-nav-item.active svg { opacity: 1; color: var(--teal); }
-          .pcp-nav-badge { margin-left: auto; font-size: 10px; font-weight: 500; padding: 2px 6px; border-radius: 9999px; background: var(--teal-d); color: var(--teal); font-family: var(--fm); }
+          .pcp-nav-badge { margin-left: auto; font-size: 12px; font-weight: 500; padding: 2px 6px; border-radius: 9999px; background: var(--teal-d); color: var(--teal); font-family: var(--fm); }
           .pcp-lifecycle { padding: 12px 18px; margin-top: auto; border-top: 0.5px solid var(--mb); }
-          .pcp-lifecycle-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); margin-bottom: 8px; }
+          .pcp-lifecycle-lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); margin-bottom: 8px; }
           .pcp-lifecycle-row { display: flex; align-items: center; gap: 7px; padding: 4px 0; }
           .pcp-lifecycle-dot { width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; }
-          .pcp-lifecycle-name { font-size: 11px; color: var(--t3); }
-          .pcp-lifecycle-count { margin-left: auto; font-size: 10px; font-family: var(--fm); }
+          .pcp-lifecycle-name { font-size: 13px; color: var(--t3); }
+          .pcp-lifecycle-count { margin-left: auto; font-size: 12px; font-family: var(--fm); }
           .pcp-main { overflow-y: auto; display: flex; flex-direction: column; }
           .pcp-main::-webkit-scrollbar { width: 3px; }
           .pcp-main::-webkit-scrollbar-thumb { background: var(--mb); border-radius: 2px; }
           .pcp-page-head { padding: 30px 36px 24px; border-bottom: 0.5px solid var(--mb); display: grid; grid-template-columns: minmax(0, 1fr) max-content; align-items: flex-start; gap: 28px; background: radial-gradient(circle at 78% 12%, rgba(0, 212, 170, 0.045), transparent 36%); }
           .pcp-page-head-left { flex: 1; min-width: 0; }
-          .pcp-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--teal); margin-bottom: 4px; }
+          .pcp-eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--teal); margin-bottom: 4px; }
           .pcp-heading { font-family: var(--fd); font-size: 26px; font-weight: 700; letter-spacing: -0.4px; margin-bottom: 4px; }
           .pcp-desc { font-size: 13px; color: var(--t2); line-height: 1.55; max-width: 760px; }
           .pcp-page-context { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-          .pcp-context-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 9999px; background: rgba(255, 255, 255, 0.03); border: 0.5px solid rgba(255, 255, 255, 0.08); font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t2); }
-          .pcp-context-pill strong { font-family: var(--fm); font-size: 11px; color: var(--t1); letter-spacing: normal; text-transform: none; }
+          .pcp-context-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 9999px; background: rgba(34, 48, 46, 0.03); border: 0.5px solid rgba(34, 48, 46, 0.08); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t2); }
+          .pcp-context-pill strong { font-family: var(--fm); font-size: 13px; color: var(--t1); letter-spacing: normal; text-transform: none; }
           .pcp-context-dot { width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; }
           .pcp-head-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; flex-shrink: 0; padding-top: 4px; max-width: 620px; }
           .pcp-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 9px 16px; border-radius: 10px; border: none; font-size: 13px; font-weight: 650; cursor: pointer; transition: transform 0.12s, filter 0.12s, background 0.15s, border-color 0.15s; letter-spacing: 0; white-space: nowrap; }
           .pcp-btn:active { transform: scale(0.97); }
           .pcp-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
-          .pcp-btn-teal { background: var(--teal); color: #07090f; }
+          .pcp-btn-teal { background: var(--teal); color: #f7f8f5; }
           .pcp-btn-teal:hover { filter: brightness(1.08); }
-          .pcp-btn-ghost { background: rgba(255, 255, 255, 0.032); border: 0.5px solid rgba(255, 255, 255, 0.085); color: var(--t2); }
+          .pcp-btn-ghost { background: rgba(34, 48, 46, 0.032); border: 0.5px solid rgba(34, 48, 46, 0.085); color: var(--t2); }
           .pcp-btn-ghost:hover { background: var(--glassh); color: var(--t1); }
           .pcp-btn:disabled { cursor: not-allowed; opacity: 0.5; }
           .pcp-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 0.5px solid var(--mb); }
@@ -3486,8 +3540,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-si-a { background: var(--amber-d); border: 0.5px solid rgba(245, 166, 35, 0.2); color: var(--amber); }
           .pcp-si-p { background: var(--purple-d); border: 0.5px solid rgba(167, 139, 250, 0.2); color: var(--purple); }
           .pcp-stat-n { font-family: var(--fm); font-size: 20px; line-height: 1; }
-          .pcp-stat-l { font-size: 11px; color: var(--t3); margin-top: 2px; }
-          .pcp-toolbar { padding: 13px 36px; display: grid; grid-template-columns: minmax(260px, 420px) minmax(0, 1fr) max-content; align-items: center; gap: 12px; border-bottom: 0.5px solid var(--mb); position: sticky; top: 56px; z-index: 50; background: rgba(7, 9, 15, 0.88); backdrop-filter: blur(20px); }
+          .pcp-stat-l { font-size: 13px; color: var(--t3); margin-top: 2px; }
+          .pcp-toolbar { padding: 13px 36px; display: grid; grid-template-columns: minmax(260px, 420px) minmax(0, 1fr) max-content; align-items: center; gap: 12px; border-bottom: 0.5px solid var(--mb); position: sticky; top: 56px; z-index: 50; background: #f7f8f5; backdrop-filter: blur(20px); }
           .pcp-search-wrap { position: relative; min-width: 0; }
           .pcp-search-input { width: 100%; padding: 8px 12px 8px 32px; background: var(--glass); border: 0.5px solid var(--mb); border-radius: 9px; font-size: 13px; color: var(--t1); outline: none; transition: border-color 0.2s; }
           .pcp-search-input:focus { border-color: var(--teal-b); }
@@ -3495,7 +3549,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--t3); }
           .pcp-search-icon svg { width: 13px; height: 13px; }
           .pcp-filter-pills { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-          .pcp-pill { padding: 5px 12px; border-radius: 9999px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 0.5px solid transparent; color: var(--t3); background: transparent; }
+          .pcp-pill { padding: 5px 12px; border-radius: 9999px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 0.5px solid transparent; color: var(--t3); background: transparent; }
           .pcp-pill:hover { color: var(--t2); background: var(--glass); }
           .pcp-pill.on { color: var(--t1); background: var(--glass2); border-color: var(--mb); }
           .pcp-pill-prov.on { color: var(--amber); background: var(--amber-d); border-color: rgba(245, 166, 35, 0.2); }
@@ -3507,8 +3561,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-message-success { background: rgba(74, 222, 128, 0.08); border-color: rgba(74, 222, 128, 0.2); color: rgba(74, 222, 128, 0.9); }
           .pcp-message-error { background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.2); color: rgba(248, 113, 113, 0.95); }
           .pcp-org-list { padding: 12px 36px 40px; }
-          .pcp-org-row { border: 0.5px solid var(--mb); border-radius: 14px; margin-bottom: 10px; overflow: hidden; transition: border-color 0.2s, background 0.2s, box-shadow 0.2s; background: rgba(255, 255, 255, 0.012); }
-          .pcp-org-row:hover, .pcp-org-row.open { border-color: rgba(255, 255, 255, 0.11); background: rgba(255, 255, 255, 0.018); box-shadow: 0 18px 70px rgba(0, 0, 0, 0.18); }
+          .pcp-org-row { border: 0.5px solid var(--mb); border-radius: 14px; margin-bottom: 10px; overflow: hidden; transition: border-color 0.2s, background 0.2s, box-shadow 0.2s; background: rgba(34, 48, 46, 0.012); }
+          .pcp-org-row:hover, .pcp-org-row.open { border-color: rgba(34, 48, 46, 0.11); background: rgba(34, 48, 46, 0.018); box-shadow: 0 18px 70px rgba(0, 0, 0, 0.18); }
           .pcp-org-title { background: var(--glass); position: relative; }
           .pcp-org-status-tr { position: static; }
           .pcp-org-hd { display: grid; grid-template-columns: 42px 34px minmax(220px, 1fr) auto auto; align-items: center; column-gap: 12px; padding: 12px 16px 12px 0; cursor: pointer; user-select: none; min-height: 72px; transition: background 0.15s; }
@@ -3518,21 +3572,21 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-org-row.open .pcp-org-chev svg { transform: rotate(90deg); }
           .pcp-org-ico { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg, rgba(0, 212, 170, 0.14), rgba(0, 212, 170, 0.04)); border: 0.5px solid var(--teal-b); display: flex; align-items: center; justify-content: center; color: var(--teal); }
           .pcp-org-info { min-width: 0; padding: 0; }
-          .pcp-level-eyebrow { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--teal); opacity: 0.7; margin-bottom: 3px; }
+          .pcp-level-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--teal); opacity: 0.7; margin-bottom: 3px; }
           .pcp-org-name { font-size: 14px; font-weight: 650; letter-spacing: 0; margin-bottom: 3px; line-height: 1.25; }
-          .pcp-org-meta { font-size: 11px; color: var(--t3); font-family: var(--fm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+          .pcp-org-meta { font-size: 13px; color: var(--t3); font-family: var(--fm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
           .pcp-org-counts { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 5px; min-width: 0; }
-          .pcp-mc { display: inline-flex; align-items: center; line-height: 1; font-size: 10px; font-weight: 500; padding: 4px 7px; border-radius: 9999px; background: rgba(255, 255, 255, 0.04); border: 0.5px solid rgba(255, 255, 255, 0.07); color: var(--t3); font-family: var(--fm); white-space: nowrap; }
+          .pcp-mc { display: inline-flex; align-items: center; line-height: 1; font-size: 12px; font-weight: 500; padding: 4px 7px; border-radius: 9999px; background: rgba(34, 48, 46, 0.04); border: 0.5px solid rgba(34, 48, 46, 0.07); color: var(--t3); font-family: var(--fm); white-space: nowrap; }
           .pcp-org-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-left: 0; flex-wrap: wrap; min-width: 190px; }
-          .pcp-status { display: inline-flex; align-items: center; line-height: 1; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 9px; border-radius: 9999px; white-space: nowrap; }
+          .pcp-status { display: inline-flex; align-items: center; line-height: 1; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 4px 9px; border-radius: 9999px; white-space: nowrap; }
           .pcp-s-prov { background: var(--amber-d); border: 0.5px solid rgba(245, 166, 35, 0.22); color: var(--amber); }
           .pcp-s-ready { background: var(--blue-d); border: 0.5px solid rgba(96, 165, 250, 0.22); color: var(--blue); }
           .pcp-s-active { background: var(--green-d); border: 0.5px solid rgba(74, 222, 128, 0.22); color: var(--green); }
-          .pcp-s-done { background: rgba(255, 255, 255, 0.05); border: 0.5px solid rgba(255, 255, 255, 0.08); color: var(--t3); }
-          .pcp-ab { min-height: 28px; padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; transition: background 0.15s, color 0.15s, border-color 0.15s; border: none; white-space: nowrap; }
+          .pcp-s-done { background: rgba(34, 48, 46, 0.05); border: 0.5px solid rgba(34, 48, 46, 0.08); color: var(--t3); }
+          .pcp-ab { min-height: 28px; padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 5px; transition: background 0.15s, color 0.15s, border-color 0.15s; border: none; white-space: nowrap; }
           .pcp-ab svg { width: 11px; height: 11px; }
-          .pcp-ab-g { background: rgba(255, 255, 255, 0.075); color: rgba(255, 255, 255, 0.9); border: 0.5px solid rgba(255, 255, 255, 0.14); }
-          .pcp-ab-g:hover { background: rgba(255, 255, 255, 0.13); color: #fff; border-color: rgba(255, 255, 255, 0.22); }
+          .pcp-ab-g { background: rgba(34, 48, 46, 0.075); color: rgba(34, 48, 46, 0.9); border: 0.5px solid rgba(34, 48, 46, 0.14); }
+          .pcp-ab-g:hover { background: rgba(34, 48, 46, 0.13); color: var(--t1); border-color: rgba(34, 48, 46, 0.22); }
           .pcp-ab-t { background: var(--teal-d); color: var(--teal); border: 0.5px solid var(--teal-b); }
           .pcp-ab-t:hover { background: rgba(0, 212, 170, 0.16); }
           .pcp-ab:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -3540,48 +3594,48 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-org-row.open .pcp-org-body { display: block; }
           .pcp-team-row { border-top: 0.5px solid var(--mb); }
           .pcp-team-hd { display: grid; grid-template-columns: auto 26px minmax(0, 1fr) auto; align-items: center; column-gap: 9px; padding: 10px 14px 10px 0; cursor: pointer; user-select: none; min-height: 54px; transition: background 0.15s; }
-          .pcp-team-hd:hover { background: rgba(255, 255, 255, 0.018); }
+          .pcp-team-hd:hover { background: rgba(34, 48, 46, 0.018); }
           .pcp-t-indent { width: 42px; flex-shrink: 0; }
           .pcp-t-chev { width: 26px; height: 46px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
           .pcp-t-chev svg { width: 11px; height: 11px; color: var(--t3); transition: transform 0.2s; }
           .pcp-team-row.open .pcp-t-chev svg { transform: rotate(90deg); }
-          .pcp-t-vline { width: 1px; height: 28px; background: rgba(255, 255, 255, 0.07); margin-right: 10px; flex-shrink: 0; }
-          .pcp-t-av { width: 26px; height: 26px; border-radius: 7px; background: rgba(255, 255, 255, 0.04); border: 0.5px solid rgba(255, 255, 255, 0.07); display: flex; align-items: center; justify-content: center; color: var(--t3); }
+          .pcp-t-vline { width: 1px; height: 28px; background: rgba(34, 48, 46, 0.07); margin-right: 10px; flex-shrink: 0; }
+          .pcp-t-av { width: 26px; height: 26px; border-radius: 7px; background: rgba(34, 48, 46, 0.04); border: 0.5px solid rgba(34, 48, 46, 0.07); display: flex; align-items: center; justify-content: center; color: var(--t3); }
           .pcp-t-av svg { width: 12px; height: 12px; }
           .pcp-t-info { flex: 1; min-width: 0; }
           .pcp-t-name { font-size: 13px; font-weight: 600; }
-          .pcp-t-meta { font-size: 10px; color: var(--t3); font-family: var(--fm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .pcp-t-meta { font-size: 12px; color: var(--t3); font-family: var(--fm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .pcp-t-right { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; min-width: 0; }
           .pcp-team-body { display: none; }
           .pcp-team-row.open .pcp-team-body { display: block; }
-          .pcp-pilot-row { display: flex; align-items: center; padding: 0 16px 0 0; border-top: 0.5px solid rgba(255, 255, 255, 0.04); cursor: pointer; min-height: 38px; transition: background 0.15s; }
-          .pcp-pilot-row:hover { background: rgba(255, 255, 255, 0.015); }
+          .pcp-pilot-row { display: flex; align-items: center; padding: 0 16px 0 0; border-top: 0.5px solid rgba(34, 48, 46, 0.04); cursor: pointer; min-height: 38px; transition: background 0.15s; }
+          .pcp-pilot-row:hover { background: rgba(34, 48, 46, 0.015); }
           .pcp-pilot-row.open { background: rgba(0, 212, 170, 0.018); }
           .pcp-p-indent { width: 80px; flex-shrink: 0; }
-          .pcp-p-dot { width: 5px; height: 5px; border-radius: 9999px; background: rgba(255, 255, 255, 0.14); flex-shrink: 0; margin-right: 9px; }
+          .pcp-p-dot { width: 5px; height: 5px; border-radius: 9999px; background: rgba(34, 48, 46, 0.14); flex-shrink: 0; margin-right: 9px; }
           .pcp-p-info { flex: 1; min-width: 0; padding: 7px 0; }
           .pcp-p-name { font-size: 12px; font-weight: 600; }
-          .pcp-p-meta { font-size: 10px; color: var(--t3); font-family: var(--fm); margin-top: 1px; }
+          .pcp-p-meta { font-size: 12px; color: var(--t3); font-family: var(--fm); margin-top: 1px; }
           .pcp-p-right { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
           .pcp-p-chev svg { width: 10px; height: 10px; color: var(--t3); transition: transform 0.2s; }
           .pcp-pilot-row.open .pcp-p-chev svg { transform: rotate(90deg); }
-          .pcp-pilot-panel { display: none; padding: 10px 16px 12px 100px; border-top: 0.5px solid rgba(255, 255, 255, 0.04); background: rgba(0, 212, 170, 0.012); }
+          .pcp-pilot-panel { display: none; padding: 10px 16px 12px 100px; border-top: 0.5px solid rgba(34, 48, 46, 0.04); background: rgba(0, 212, 170, 0.012); }
           .pcp-pilot-panel.open { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-          .pcp-pp-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3); margin-bottom: 6px; }
-          .pcp-pilot-settings { grid-column: 1 / -1; padding: 11px 12px 12px; border-radius: 10px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.025); }
-          .pcp-pilot-settings-copy { font-size: 11px; color: var(--t2); line-height: 1.55; margin-bottom: 10px; max-width: 720px; }
+          .pcp-pp-lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3); margin-bottom: 6px; }
+          .pcp-pilot-settings { grid-column: 1 / -1; padding: 11px 12px 12px; border-radius: 10px; border: 0.5px solid rgba(34, 48, 46, 0.08); background: rgba(34, 48, 46, 0.025); }
+          .pcp-pilot-settings-copy { font-size: 13px; color: var(--t2); line-height: 1.55; margin-bottom: 10px; max-width: 720px; }
           .pcp-pilot-settings-grid { display: grid; grid-template-columns: minmax(200px, 240px) minmax(0, 1fr); gap: 12px; align-items: end; }
           .pcp-pilot-settings-actions { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
-          .pcp-pilot-settings-note { font-size: 11px; color: var(--t3); line-height: 1.5; }
+          .pcp-pilot-settings-note { font-size: 13px; color: var(--t3); line-height: 1.5; }
           .pcp-cohort-item,
-          .pcp-ob-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-radius: 8px; margin-bottom: 4px; background: rgba(255, 255, 255, 0.025); border: 0.5px solid rgba(255, 255, 255, 0.06); gap: 10px; }
-          .pcp-ci-name { font-size: 11px; font-weight: 500; }
-          .pcp-ci-meta { font-size: 9px; color: var(--t3); font-family: var(--fm); margin-top: 1px; }
-          .pcp-ob-type { font-size: 10px; font-weight: 600; color: var(--t2); }
-          .pcp-ob-val { font-size: 10px; color: var(--teal); font-family: var(--fm); margin-top: 1px; line-height: 1.5; }
-          .pcp-ob-empty { font-size: 10px; color: var(--t3); font-style: italic; margin-top: 1px; line-height: 1.5; }
-          .pcp-c-empty { font-size: 11px; color: var(--t3); font-style: italic; padding: 4px 0; }
-          .pcp-empty-panel { padding: 24px 18px; border-radius: 14px; border: 0.5px dashed rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.02); text-align: center; color: var(--t2); font-size: 12px; }
+          .pcp-ob-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-radius: 8px; margin-bottom: 4px; background: rgba(34, 48, 46, 0.025); border: 0.5px solid rgba(34, 48, 46, 0.06); gap: 10px; }
+          .pcp-ci-name { font-size: 13px; font-weight: 500; }
+          .pcp-ci-meta { font-size: 11px; color: var(--t3); font-family: var(--fm); margin-top: 1px; }
+          .pcp-ob-type { font-size: 12px; font-weight: 600; color: var(--t2); }
+          .pcp-ob-val { font-size: 12px; color: var(--teal); font-family: var(--fm); margin-top: 1px; line-height: 1.5; }
+          .pcp-ob-empty { font-size: 12px; color: var(--t3); font-style: italic; margin-top: 1px; line-height: 1.5; }
+          .pcp-c-empty { font-size: 13px; color: var(--t3); font-style: italic; padding: 4px 0; }
+          .pcp-empty-panel { padding: 24px 18px; border-radius: 14px; border: 0.5px dashed rgba(34, 48, 46, 0.1); background: rgba(34, 48, 46, 0.02); text-align: center; color: var(--t2); font-size: 12px; }
           .pcp-org-overview { padding: 16px 16px 16px 54px; }
           .pcp-org-grid,
           .pcp-team-grid { display: grid; gap: 12px; }
@@ -3591,19 +3645,19 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-pilot-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
           .pcp-team-shell { padding: 12px 0 4px 0; }
           .pcp-team-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.9fr); margin-bottom: 12px; }
-          .pcp-card { border-radius: 14px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); padding: 14px; }
-          .pcp-card-title { font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); margin-bottom: 10px; }
+          .pcp-card { border-radius: 14px; border: 0.5px solid rgba(34, 48, 46, 0.08); background: rgba(34, 48, 46, 0.02); padding: 14px; }
+          .pcp-card-title { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); margin-bottom: 10px; }
           .pcp-card-copy { font-size: 12px; color: var(--t2); line-height: 1.55; }
           .pcp-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-          .pcp-summary-item { padding: 11px 12px; border-radius: 10px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); }
-          .pcp-summary-kicker { font-size: 9px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); margin-bottom: 4px; }
+          .pcp-summary-item { padding: 11px 12px; border-radius: 10px; border: 0.5px solid rgba(34, 48, 46, 0.08); background: rgba(34, 48, 46, 0.02); }
+          .pcp-summary-kicker { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--t3); margin-bottom: 4px; }
           .pcp-summary-value { font-size: 12px; font-weight: 600; line-height: 1.45; }
-          .pcp-summary-subcopy { margin-top: 4px; font-size: 11px; color: var(--t2); line-height: 1.5; }
+          .pcp-summary-subcopy { margin-top: 4px; font-size: 13px; color: var(--t2); line-height: 1.5; }
           .pcp-preview-shell { display: flex; gap: 12px; align-items: center; }
-          .pcp-preview-image { width: 72px; height: 72px; border-radius: 16px; object-fit: cover; border: 0.5px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.04); flex-shrink: 0; }
+          .pcp-preview-image { width: 72px; height: 72px; border-radius: 16px; object-fit: cover; border: 0.5px solid rgba(34, 48, 46, 0.1); background: rgba(34, 48, 46, 0.04); flex-shrink: 0; }
           .pcp-preview-meta { min-width: 0; }
           .pcp-preview-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-          .pcp-preview-copy { font-size: 11px; color: var(--t2); line-height: 1.55; }
+          .pcp-preview-copy { font-size: 13px; color: var(--t2); line-height: 1.55; }
           .pcp-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
           .pcp-file-trigger input { display: none; }
           .pcp-card-stack { display: grid; gap: 10px; }
@@ -3613,52 +3667,52 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-tracker-icon { width: 30px; height: 30px; border-radius: 9px; background: var(--teal-d); border: 0.5px solid var(--teal-b); color: var(--teal); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
           .pcp-tracker-icon svg { width: 14px; height: 14px; }
           .pcp-tracker-title { font-size: 13px; font-weight: 700; letter-spacing: -0.1px; }
-          .pcp-tracker-copy { margin-top: 3px; max-width: 760px; font-size: 11px; color: var(--t2); line-height: 1.55; }
+          .pcp-tracker-copy { margin-top: 3px; max-width: 760px; font-size: 13px; color: var(--t2); line-height: 1.55; }
           .pcp-tracker-actions { display: flex; gap: 8px; flex-wrap: wrap; }
           .pcp-tracker-progress-shell { display: grid; gap: 8px; margin-bottom: 14px; }
-          .pcp-tracker-progress-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 11px; color: var(--t2); }
-          .pcp-tracker-progress-track { height: 6px; overflow: hidden; border-radius: 9999px; background: rgba(255, 255, 255, 0.07); }
-          .pcp-tracker-progress-bar { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--teal), #60a5fa); transition: width 0.2s ease; }
+          .pcp-tracker-progress-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--t2); }
+          .pcp-tracker-progress-track { height: 6px; overflow: hidden; border-radius: 9999px; background: rgba(34, 48, 46, 0.07); }
+          .pcp-tracker-progress-bar { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--teal), #3c647d); transition: width 0.2s ease; }
           .pcp-tracker-legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
-          .pcp-tracker-legend-item { border: 0.5px solid rgba(255, 255, 255, 0.08); border-radius: 10px; background: rgba(255, 255, 255, 0.02); padding: 8px 9px; min-width: 0; }
-          .pcp-tracker-legend-desc { margin-top: 5px; font-size: 10px; line-height: 1.35; color: var(--t3); }
+          .pcp-tracker-legend-item { border: 0.5px solid rgba(34, 48, 46, 0.08); border-radius: 10px; background: rgba(34, 48, 46, 0.02); padding: 8px 9px; min-width: 0; }
+          .pcp-tracker-legend-desc { margin-top: 5px; font-size: 12px; line-height: 1.35; color: var(--t3); }
           .pcp-tracker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-          .pcp-tracker-step { border: 0.5px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 10px; background: rgba(255, 255, 255, 0.022); display: grid; gap: 8px; }
+          .pcp-tracker-step { border: 0.5px solid rgba(34, 48, 46, 0.08); border-radius: 10px; padding: 10px; background: rgba(34, 48, 46, 0.022); display: grid; gap: 8px; }
           .pcp-tracker-step-main { display: flex; gap: 9px; align-items: flex-start; min-width: 0; }
-          .pcp-tracker-step-dot { width: 18px; height: 18px; border-radius: 9999px; border: 0.5px solid rgba(255, 255, 255, 0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; color: var(--t3); }
+          .pcp-tracker-step-dot { width: 18px; height: 18px; border-radius: 9999px; border: 0.5px solid rgba(34, 48, 46, 0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; color: var(--t3); }
           .pcp-tracker-step-dot svg { width: 10px; height: 10px; }
           .pcp-tracker-step-title { font-size: 12px; font-weight: 600; color: var(--t1); line-height: 1.35; }
-          .pcp-tracker-step-meta { margin-top: 3px; font-size: 10px; color: var(--t3); line-height: 1.4; }
-          .pcp-tracker-step-copy { font-size: 11px; color: var(--t2); line-height: 1.5; }
+          .pcp-tracker-step-meta { margin-top: 3px; font-size: 12px; color: var(--t3); line-height: 1.4; }
+          .pcp-tracker-step-copy { font-size: 13px; color: var(--t2); line-height: 1.5; }
           .pcp-tracker-step-footer { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
-          .pcp-tracker-select { min-width: 132px; padding: 6px 9px; border-radius: 8px; border: 0.5px solid var(--mb); background: rgba(0, 0, 0, 0.22); color: var(--t1); font-size: 11px; outline: none; }
-          .pcp-tracker-saving { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--teal); }
+          .pcp-tracker-select { min-width: 132px; padding: 6px 9px; border-radius: 8px; border: 0.5px solid var(--mb); background: #fff; color: var(--t1); font-size: 13px; outline: none; }
+          .pcp-tracker-saving { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--teal); }
           .pcp-tracker-saving svg { width: 11px; height: 11px; }
-          .pcp-tracker-status { border-radius: 9999px; padding: 3px 7px; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+          .pcp-tracker-status { border-radius: 9999px; padding: 3px 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
           .pcp-tracker-status-complete { background: var(--green-d); border: 0.5px solid rgba(74, 222, 128, 0.22); color: var(--green); }
           .pcp-tracker-status-progress { background: var(--blue-d); border: 0.5px solid rgba(96, 165, 250, 0.2); color: var(--blue); }
           .pcp-tracker-status-blocked { background: rgba(239, 68, 68, 0.09); border: 0.5px solid rgba(239, 68, 68, 0.22); color: rgba(248, 113, 113, 0.95); }
-          .pcp-tracker-status-pending { background: rgba(255, 255, 255, 0.045); border: 0.5px solid rgba(255, 255, 255, 0.08); color: var(--t3); }
+          .pcp-tracker-status-pending { background: rgba(34, 48, 46, 0.045); border: 0.5px solid rgba(34, 48, 46, 0.08); color: var(--t3); }
           @media (max-width: 980px) {
             .pcp-tracker-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           }
-          .pcp-link-card { padding: 11px 12px; border-radius: 10px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); display: flex; justify-content: space-between; gap: 12px; }
+          .pcp-link-card { padding: 11px 12px; border-radius: 10px; border: 0.5px solid rgba(34, 48, 46, 0.08); background: rgba(34, 48, 46, 0.02); display: flex; justify-content: space-between; gap: 12px; }
           .pcp-link-card-main { min-width: 0; }
-          .pcp-link-card-copy { font-size: 11px; color: var(--t2); line-height: 1.55; margin-top: 4px; }
+          .pcp-link-card-copy { font-size: 13px; color: var(--t2); line-height: 1.55; margin-top: 4px; }
           .pcp-commercial-shell { display: grid; gap: 10px; }
           .pcp-commercial-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-          .pcp-checkbox-row { display: flex; gap: 10px; padding: 11px 12px; border-radius: 10px; border: 0.5px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.02); }
-          .pcp-checkbox-row input { margin-top: 3px; accent-color: #00d4aa; }
-          .pcp-checkbox-copy { font-size: 11px; color: var(--t2); line-height: 1.55; }
+          .pcp-checkbox-row { display: flex; gap: 10px; padding: 11px 12px; border-radius: 10px; border: 0.5px solid rgba(34, 48, 46, 0.08); background: rgba(34, 48, 46, 0.02); }
+          .pcp-checkbox-row input { margin-top: 3px; accent-color: #356b60; }
+          .pcp-checkbox-copy { font-size: 13px; color: var(--t2); line-height: 1.55; }
           .pcp-commercial-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-          .pcp-commercial-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 76px; min-height: 76px; padding: 12px; border-radius: 9999px; border: 0.5px solid rgba(255, 255, 255, 0.1); background: rgba(255, 255, 255, 0.02); font-size: 10px; line-height: 1.35; text-transform: uppercase; letter-spacing: 0.12em; color: var(--t2); text-align: center; }
+          .pcp-commercial-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 76px; min-height: 76px; padding: 12px; border-radius: 9999px; border: 0.5px solid rgba(34, 48, 46, 0.1); background: rgba(34, 48, 46, 0.02); font-size: 12px; line-height: 1.35; text-transform: uppercase; letter-spacing: 0.12em; color: var(--t2); text-align: center; }
           .pcp-modal-bg { position: fixed; inset: 0; z-index: 500; background: rgba(7, 9, 15, 0.7); backdrop-filter: blur(8px); display: flex; align-items: flex-start; justify-content: flex-end; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
           .pcp-modal-bg.open { opacity: 1; pointer-events: all; }
-          .pcp-modal { width: 560px; height: 100vh; overflow-y: auto; background: rgba(10, 13, 22, 0.97); border-left: 0.5px solid var(--mb); display: flex; flex-direction: column; transform: translateX(40px); transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+          .pcp-modal { width: 560px; height: 100vh; overflow-y: auto; background: #fff; border-left: 0.5px solid var(--mb); display: flex; flex-direction: column; transform: translateX(40px); transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
           .pcp-modal-bg.open .pcp-modal { transform: translateX(0); }
           .pcp-modal::-webkit-scrollbar { width: 3px; }
           .pcp-modal::-webkit-scrollbar-thumb { background: var(--mb); border-radius: 2px; }
-          .pcp-modal-tb { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; min-height: 56px; border-bottom: 0.5px solid var(--mb); position: sticky; top: 0; background: rgba(10, 13, 22, 0.97); z-index: 10; }
+          .pcp-modal-tb { display: flex; align-items: center; justify-content: space-between; padding: 0 24px; min-height: 56px; border-bottom: 0.5px solid var(--mb); position: sticky; top: 0; background: #fff; z-index: 10; }
           .pcp-modal-title { font-family: var(--fd); font-size: 14px; font-weight: 700; }
           .pcp-modal-x { width: 28px; height: 28px; border-radius: 7px; background: var(--glass); border: 0.5px solid var(--mb); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.15s; color: var(--t2); }
           .pcp-modal-x:hover { background: var(--glassh); color: var(--t1); }
@@ -3668,8 +3722,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-ms { display: flex; align-items: center; gap: 6px; padding: 11px 14px; font-size: 12px; font-weight: 500; color: var(--t3); cursor: pointer; border-bottom: 1.5px solid transparent; white-space: nowrap; transition: color 0.15s, border-color 0.15s; flex-shrink: 0; background: transparent; border-left: none; border-right: none; border-top: none; }
           .pcp-ms.active { color: var(--t1); border-bottom-color: var(--teal); }
           .pcp-ms.done { color: var(--teal); }
-          .pcp-ms-num { width: 18px; height: 18px; border-radius: 9999px; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: rgba(255, 255, 255, 0.07); color: var(--t3); }
-          .pcp-ms.active .pcp-ms-num { background: var(--teal); color: #07090f; }
+          .pcp-ms-num { width: 18px; height: 18px; border-radius: 9999px; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: rgba(34, 48, 46, 0.07); color: var(--t3); }
+          .pcp-ms.active .pcp-ms-num { background: var(--teal); color: #f7f8f5; }
           .pcp-ms.done .pcp-ms-num { background: rgba(0, 212, 170, 0.15); color: var(--teal); }
           .pcp-modal-body { padding: 26px 24px; flex: 1; }
           .pcp-m-tab { display: none; }
@@ -3680,38 +3734,38 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-sec-tl { font-family: var(--fd); font-size: 13px; font-weight: 600; }
           .pcp-info-box,
           .pcp-warn-box { padding: 11px 13px; border-radius: 9px; font-size: 12px; line-height: 1.55; margin-bottom: 12px; }
-          .pcp-info-box { background: var(--teal-d); border: 0.5px solid var(--teal-b); color: rgba(0, 212, 170, 0.85); }
+          .pcp-info-box { background: var(--teal-d); border: 0.5px solid var(--teal-b); color: var(--teal); }
           .pcp-warn-box { background: var(--amber-d); border: 0.5px solid rgba(245, 166, 35, 0.22); color: var(--amber); }
           .pcp-fg { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
           .pcp-fg.pcp-c1 { grid-template-columns: 1fr; }
           .pcp-fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
           .pcp-fld.pcp-s2 { grid-column: 1 / -1; }
-          .pcp-flbl { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3); }
+          .pcp-flbl { font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t3); }
           .pcp-finp { width: 100%; max-width: 100%; box-sizing: border-box; background: var(--glass); border: 0.5px solid var(--mb); border-radius: 9px; padding: 8px 12px; font-size: 13px; color: var(--t1); outline: none; transition: border-color 0.2s, background 0.2s; }
           .pcp-finp:focus { border-color: var(--teal-b); background: var(--teal-d); }
           .pcp-finp::placeholder { color: var(--t3); }
           .pcp-finp:disabled { opacity: 0.5; cursor: not-allowed; }
           .pcp-finp.pcp-select { cursor: pointer; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
           .pcp-finp.pcp-textarea { resize: vertical; min-height: 76px; line-height: 1.55; }
-          .pcp-fhint { font-size: 11px; color: var(--t3); line-height: 1.45; }
+          .pcp-fhint { font-size: 13px; color: var(--t3); line-height: 1.45; }
           .pcp-toggle-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 13px; border-radius: 10px; background: var(--glass); border: 0.5px solid var(--mb); margin-bottom: 12px; }
-          .pcp-tt { width: 34px; height: 19px; border-radius: 9999px; background: rgba(255, 255, 255, 0.1); border: 0.5px solid var(--mb); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; margin-top: 1px; }
+          .pcp-tt { width: 34px; height: 19px; border-radius: 9999px; background: rgba(34, 48, 46, 0.1); border: 0.5px solid var(--mb); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; margin-top: 1px; }
           .pcp-tt.on { background: var(--teal); }
           .pcp-tk { position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 9999px; background: #fff; transition: transform 0.2s; }
           .pcp-tt.on .pcp-tk { transform: translateX(15px); }
           .pcp-t-lbl { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
-          .pcp-t-desc { font-size: 11px; color: var(--t2); line-height: 1.5; }
+          .pcp-t-desc { font-size: 13px; color: var(--t2); line-height: 1.5; }
           .pcp-route-mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
           .pcp-route-mode { border-radius: 10px; border: 0.5px solid var(--mb); background: var(--glass); color: var(--t2); padding: 12px 13px; text-align: left; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
           .pcp-route-mode.active { border-color: rgba(167, 139, 250, 0.35); background: rgba(167, 139, 250, 0.12); color: var(--t1); }
           .pcp-route-mode-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-          .pcp-route-mode-copy { font-size: 11px; color: var(--t2); line-height: 1.5; }
-          .pcp-clinician-card { border-radius: 10px; border: 0.5px solid var(--mb); background: rgba(255, 255, 255, 0.02); padding: 12px 13px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; }
+          .pcp-route-mode-copy { font-size: 13px; color: var(--t2); line-height: 1.5; }
+          .pcp-clinician-card { border-radius: 10px; border: 0.5px solid var(--mb); background: rgba(34, 48, 46, 0.02); padding: 12px 13px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; }
           .pcp-chip-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 18px; }
-          .pcp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 9999px; background: rgba(167, 139, 250, 0.12); border: 0.5px solid rgba(167, 139, 250, 0.22); color: #efe7ff; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+          .pcp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 9999px; background: rgba(167, 139, 250, 0.12); border: 0.5px solid rgba(167, 139, 250, 0.22); color: #70558c; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
           .pcp-chip button { background: transparent; border: none; color: inherit; cursor: pointer; display: inline-flex; align-items: center; }
           .pcp-chip-input { min-width: 180px; flex: 1; background: transparent; border: none; outline: none; color: var(--t1); font-size: 13px; }
-          .pcp-modal-ft { padding: 14px 24px; border-top: 0.5px solid var(--mb); display: flex; align-items: center; justify-content: space-between; position: sticky; bottom: 0; background: rgba(10, 13, 22, 0.97); z-index: 10; }
+          .pcp-modal-ft { padding: 14px 24px; border-top: 0.5px solid var(--mb); display: flex; align-items: center; justify-content: space-between; position: sticky; bottom: 0; background: #fff; z-index: 10; }
           .pcp-modal-ft-l { font-size: 12px; color: var(--t3); }
           .pcp-modal-ft-r { display: flex; gap: 8px; }
           .pcp-slide-up { opacity: 0; animation: pcpSlideUp 0.4s ease forwards; }
@@ -3784,29 +3838,22 @@ const PulseCheckProvisioningPage: React.FC = () => {
           }
         `}</style>
 
-        <div className="pcp-org-dashboard">
-          <div className="pcp-amb-layer">
-            <div className="pcp-amb pcp-a1" />
-            <div className="pcp-amb pcp-a2" />
-            <div className="pcp-amb pcp-a3" />
-          </div>
-
+        <div className={`pcp-org-dashboard ${directoryOrganization ? ui.focusedWorkspace : ''}`}>
           <div className="pcp-shell">
-            <header className="pcp-topbar">
-              <div className="pcp-topbar-left">
-                <div className="pcp-logo">
-                  <div className="pcp-logo-dot" />
-                  PulseCheck
-                </div>
-                <div className="pcp-divider" />
-                <span className="pcp-crumb">Admin</span>
+            <aside className={ui.sidebar} aria-label="Provisioning navigation">
+              <Link href="/admin" className={ui.wordmark}>PulseCheck<span>ADMIN WORKSPACE</span></Link>
+              <div className={ui.account}><span className="pcp-av">{adminInitials || 'PA'}</span><span>{currentUser?.displayName || currentUser?.email || 'Pulse Admin'}<small>Organization management</small></span></div>
+              <nav aria-label="Organizations" data-tour="admin-organization-navigation">
+                <button type="button" className={ui.navItem} aria-current={!selectedOrganizationId ? 'page' : undefined} onClick={() => selectOrganization(null)}><Building2 size={17} />All organizations<span>{organizations.length}</span></button>
+                <div className={ui.navLabel}>Your organizations</div>
+                {organizations.map((organization) => <button type="button" key={organization.id} className={ui.navItem} aria-current={selectedOrganizationId === organization.id ? 'page' : undefined} onClick={() => selectOrganization(organization.id)}><span className={ui.orgDot} /><span className={ui.navName}>{organization.displayName}</span></button>)}
+              </nav>
+              <div className={ui.sidebarFooter}>
+                <Link href="/coach/dashboard"><Users2 size={17} />Coach dashboard<ExternalLink size={13} /></Link>
+                <Link href="/admin/pulsecheckOnboardingOverview"><ClipboardList size={17} />Onboarding playbook</Link>
+                <button type="button" onClick={() => { selectOrganization(null); setAdminTourOpen(true); }}><Sparkles size={17} />Page walkthrough</button>
               </div>
-
-              <div className="pcp-admin-chip">
-                <div className="pcp-av">{adminInitials || 'PA'}</div>
-                <span>{currentUser?.email || 'unknown user'}</span>
-              </div>
-            </header>
+            </aside>
 
             <main className="pcp-main">
               <div
@@ -3815,38 +3862,16 @@ const PulseCheckProvisioningPage: React.FC = () => {
                 data-tour="admin-provisioning-header"
               >
                 <div className="pcp-page-head-left">
-                  <div className="pcp-eyebrow">PulseCheck Admin</div>
-                  <div className="pcp-heading">Organizations</div>
+                  <div className="pcp-eyebrow">Provisioning / {directoryOrganization ? 'Organization workspace' : 'Directory'}</div>
+                  <h1 className="pcp-heading">{directoryOrganization?.displayName || 'Organizations'}</h1>
                   <div className="pcp-desc">
-                    All partner organizations provisioned in PulseCheck. Each org holds teams, pilots, cohorts, support routes,
-                    and onboarding links inside one connected hierarchy.
+                    {directoryOrganization ? 'Manage this organization’s teams, onboarding, and program settings.' : 'Set up your partners. Keep teams, onboarding, and program settings in one place.'}
                   </div>
-                  <div className="pcp-page-context">
-                    <div className="pcp-context-pill">
-                      <Building2 />
-                      Organizations
-                      <strong>{mapSummary.organizationCount}</strong>
-                    </div>
-                    <div className="pcp-context-pill">
-                      <span className="pcp-context-dot" style={{ background: 'var(--amber)' }} />
-                      Provisioning
-                      <strong>{mapSummary.provisioningCount}</strong>
-                    </div>
-                    <div className="pcp-context-pill">
-                      <span className="pcp-context-dot" style={{ background: 'var(--blue)' }} />
-                      Ready
-                      <strong>{mapSummary.organizationReadyCount}</strong>
-                    </div>
-                    <div className="pcp-context-pill">
-                      <span className="pcp-context-dot" style={{ background: 'var(--green)' }} />
-                      Active
-                      <strong>{mapSummary.organizationActiveCount}</strong>
-                    </div>
-                  </div>
+                  <div className={ui.hierarchyKey} aria-label="Program structure"><span>Organization</span><span aria-hidden="true">/</span><span>Teams</span><span aria-hidden="true">/</span><span>Pilots</span><span aria-hidden="true">/</span><span>Cohorts</span></div>
                 </div>
 
                 <div className="pcp-head-right" data-tour="admin-provisioning-actions">
-                  <button type="button" className="pcp-btn pcp-btn-ghost" onClick={() => setAdminTourOpen(true)}>
+                  <button type="button" className="pcp-btn pcp-btn-ghost" onClick={() => { selectOrganization(null); setAdminTourOpen(true); }}>
                     <Sparkles />
                     Walkthrough
                   </button>
@@ -3903,7 +3928,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
                     className="pcp-search-input"
                     type="text"
                     value={organizationSearch}
-                    onChange={(event) => setOrganizationSearch(event.target.value)}
+                    onChange={(event) => { setOrganizationSearch(event.target.value); setSelectedOrganizationId(null); }}
+                    aria-label="Search organizations, teams, pilots, and cohorts"
                     placeholder="Search organizations, teams, pilots..."
                   />
                 </div>
@@ -3912,37 +3938,41 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   <button
                     type="button"
                     className={`pcp-pill ${organizationStatusFilter === 'all' ? 'on' : ''}`}
-                    onClick={() => setOrganizationStatusFilter('all')}
+                    aria-pressed={organizationStatusFilter === 'all'}
+                    onClick={() => { setOrganizationStatusFilter('all'); setSelectedOrganizationId(null); }}
                   >
-                    All
+                    All <span className={ui.filterCount}>{mapSummary.organizationCount}</span>
                   </button>
                   <button
                     type="button"
                     className={`pcp-pill pcp-pill-prov ${organizationStatusFilter === 'prov' ? 'on' : ''}`}
-                    onClick={() => setOrganizationStatusFilter('prov')}
+                    aria-pressed={organizationStatusFilter === 'prov'}
+                    onClick={() => { setOrganizationStatusFilter('prov'); setSelectedOrganizationId(null); }}
                   >
-                    Provisioning
+                    Provisioning <span className={ui.filterCount}>{mapSummary.provisioningCount}</span>
                   </button>
                   <button
                     type="button"
                     className={`pcp-pill pcp-pill-ready ${organizationStatusFilter === 'ready' ? 'on' : ''}`}
-                    onClick={() => setOrganizationStatusFilter('ready')}
+                    aria-pressed={organizationStatusFilter === 'ready'}
+                    onClick={() => { setOrganizationStatusFilter('ready'); setSelectedOrganizationId(null); }}
                   >
-                    Ready
+                    Ready <span className={ui.filterCount}>{mapSummary.organizationReadyCount}</span>
                   </button>
                   <button
                     type="button"
                     className={`pcp-pill pcp-pill-active ${organizationStatusFilter === 'active' ? 'on' : ''}`}
-                    onClick={() => setOrganizationStatusFilter('active')}
+                    aria-pressed={organizationStatusFilter === 'active'}
+                    onClick={() => { setOrganizationStatusFilter('active'); setSelectedOrganizationId(null); }}
                   >
-                    Active
+                    Active <span className={ui.filterCount}>{mapSummary.organizationActiveCount}</span>
                   </button>
                 </div>
 
                 <div className="pcp-toolbar-right">
                   <button type="button" className="pcp-btn pcp-btn-ghost" onClick={handleToggleAllRows}>
                     <ChevronDown />
-                    Toggle all
+                    {allVisibleRowsExpanded ? 'Collapse all' : 'Expand all'}
                   </button>
                 </div>
               </div>
@@ -3954,11 +3984,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
                 </div>
               ) : null}
 
+              {directoryOrganization && <div className={ui.backRow}><button type="button" className="pcp-btn pcp-btn-ghost" onClick={() => selectOrganization(null)}>← All organizations</button><button type="button" className="pcp-btn pcp-btn-ghost" onClick={handleToggleAllRows}>{allVisibleRowsExpanded ? 'Collapse all' : 'Expand all'}</button></div>}
+              <div className={ui.directoryHeading}><div><h2>{directoryOrganization ? 'Organization details' : 'Partner directory'}</h2><p>{directoryOrganization ? 'Open a section below to review or update its settings.' : 'Choose an organization to manage its teams and settings.'}</p></div><span role="status">{loading ? 'Loading…' : `${filteredOrganizationBundles.length} of ${organizations.length} organizations`}</span></div>
               <div id="organization-hierarchy" className="pcp-org-list scroll-mt-24" data-tour="admin-organization-list">
                 {loading ? (
                   <div className="pcp-empty-panel">Loading organizations and provisioning hierarchy...</div>
                 ) : filteredOrganizationBundles.length === 0 ? (
-                  <div className="pcp-empty-panel">No organizations match the current filters.</div>
+                  <div className="pcp-empty-panel"><p>No organizations match the current filters.</p><button type="button" className="pcp-btn pcp-btn-ghost" onClick={() => selectOrganization(null)}>Clear filters</button></div>
                 ) : (
                   filteredOrganizationBundles.map(({ organization, teams: bundledTeams }, organizationIndex) => {
                     const orgStatus = getOrganizationStatusDisplay(organization.status);
@@ -3982,15 +4014,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
                         style={{ animationDelay: `${0.14 + organizationIndex * 0.05}s` }}
                       >
                         <div className="pcp-org-title">
-                        <div className="pcp-org-hd" onClick={() => toggleOrganizationRow(organization.id)}>
-                          <div className="pcp-org-chev"><ChevronDown /></div>
+                        <div className="pcp-org-hd">
+                          <button type="button" className="pcp-org-chev" aria-expanded={organizationExpanded} aria-label={`${organizationExpanded ? 'Collapse' : 'Expand'} ${organization.displayName}`} onClick={() => toggleOrganizationRow(organization.id)}><ChevronDown /></button>
                           <div className="pcp-org-ico"><Building2 /></div>
                           <div className="pcp-org-info">
                             <div className="pcp-level-eyebrow">Organization</div>
-                            <div className="pcp-org-name">{organization.displayName}</div>
+                            <button type="button" className="pcp-org-name" aria-expanded={organizationExpanded} onClick={() => toggleOrganizationRow(organization.id)}>{organization.displayName}</button>
                             <div className="pcp-org-meta">
                               {[
-                                organization.productBrand === 'pulsecheck' ? 'PulseCheck' : 'AthleticMind',
+                                organization.productBrand === 'pulsecheck' ? 'PulseCheck' : organization.productBrand === 'athleticmind' ? 'AthleticMind' : 'Product not selected',
                                 formatEnumLabel(organization.organizationType),
                                 `${formatEnumLabel(organization.defaultStudyPosture).toLowerCase()} posture`,
                                 `clinician: ${formatEnumLabel(organization.defaultClinicianBridgeMode).toLowerCase()}`,
@@ -4032,7 +4064,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   });
                                 }}
                               >
-                                <MoreHorizontal />
+                                <MoreHorizontal /><span>Manage admins</span>
                               </button>
                             ) : null}
                           </div>
@@ -4040,11 +4072,13 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
                         {organizationExpanded ? (
                           <div className="pcp-org-overview">
+                            <details className={ui.settingsDisclosure}>
+                              <summary>Product, app appearance &amp; safety settings<span>Program identity, branding, and journal screening</span></summary>
                             <ProgramProductConfiguration configuration={organization} onSave={async (configuration) => {
                               await pulseCheckProvisioningService.updateOrganizationProductConfiguration(organization.id, configuration);
                               await loadData();
                             }} />
-                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14, fontSize: 13, color: 'rgba(255,255,255,0.78)' }}>
+                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14, fontSize: 13, color: '#22302e' }}>
                               <input
                                 type="checkbox"
                                 checked={organization.journalSafetyScreeningDisabled !== true}
@@ -4053,7 +4087,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   try {
                                     await pulseCheckProvisioningService.setOrganizationJournalSafetyScreening(organization.id, enabled);
                                     await loadData();
-                                  } catch (error) {
+                                  } catch (_error) {
                                     setMessage({ type: 'error', text: 'Journal safety screening could not be updated. Please try again.' });
                                   }
                                 }}
@@ -4062,6 +4096,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                 <strong>Journal safety screening:</strong> private journal entries are checked for safety and routed through Tier 2 and Tier 3. Turn off only with clinical sign-off for this organization.
                               </span>
                             </label>
+                            </details>
                             <div className="pcp-org-grid">
                               <div className="pcp-card">
                                 <button
@@ -4070,7 +4105,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%', background: 'transparent', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left' }}
                                 >
                                   <span className="pcp-card-title" style={{ marginBottom: 0 }}>Invite Artwork · Organization default</span>
-                                  <ChevronDown style={{ width: 16, height: 16, flexShrink: 0, color: 'rgba(255,255,255,0.5)', transform: orgArtworkOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                  <ChevronDown style={{ width: 16, height: 16, flexShrink: 0, color: '#65716c', transform: orgArtworkOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                 </button>
                                 {orgArtworkOpen ? (
                                 <div style={{ marginTop: 12 }}>
@@ -4107,7 +4142,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                 </div>
                                 </div>
                                 ) : (
-                                  <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                                  <div style={{ marginTop: 6, fontSize: 12, color: '#65716c' }}>
                                     Default invite image every team uses. Open to view or change.
                                   </div>
                                 )}
@@ -4120,7 +4155,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%', background: 'transparent', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left' }}
                                 >
                                   <span className="pcp-card-title" style={{ marginBottom: 0 }}>Organization Summary</span>
-                                  <ChevronDown style={{ width: 16, height: 16, flexShrink: 0, color: 'rgba(255,255,255,0.5)', transform: orgSummaryOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                                  <ChevronDown style={{ width: 16, height: 16, flexShrink: 0, color: '#65716c', transform: orgSummaryOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                                 </button>
                                 {orgSummaryOpen ? (
                                 <div className="pcp-summary-grid">
@@ -4159,7 +4194,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   </div>
                                 </div>
                                 ) : (
-                                  <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                                  <div style={{ marginTop: 6, fontSize: 12, color: '#65716c' }}>
                                     {organization.primaryCustomerAdminName || organization.primaryCustomerAdminEmail || 'No admin'} · {formatEnumLabel(organization.defaultStudyPosture)} · {orgStatus.label} · {bundledTeams.length} team{bundledTeams.length === 1 ? '' : 's'}
                                   </div>
                                 )}
@@ -4213,15 +4248,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   <div
                                     className="pcp-team-hd"
                                     style={{ cursor: 'pointer', padding: 0, minHeight: 0 }}
-                                    onClick={() => toggleTeamCollapsed(team.id)}
                                   >
+<button type="button" className={ui.disclosureButton} aria-expanded={!teamCollapsed} aria-label={`Toggle ${team.displayName}`} onClick={() => toggleTeamCollapsed(team.id)}>
                                     <ChevronDown
-                                      style={{ width: 16, height: 16, flexShrink: 0, marginRight: 10, color: 'rgba(255,255,255,0.5)', transform: teamCollapsed ? 'none' : 'rotate(180deg)', transition: 'transform 0.2s' }}
-                                    />
+                                      style={{ width: 16, height: 16, flexShrink: 0, marginRight: 10, color: '#65716c', transform: teamCollapsed ? 'none' : 'rotate(180deg)', transition: 'transform 0.2s' }}
+                                    /></button>
                                     <div className="pcp-t-av"><Users2 /></div>
                                     <div className="pcp-t-info">
                                       <div className="pcp-level-eyebrow">Team</div>
-                                      <div className="pcp-t-name">{team.displayName}</div>
+                                      <button type="button" className="pcp-t-name" aria-expanded={!teamCollapsed} onClick={() => toggleTeamCollapsed(team.id)}>{team.displayName}</button>
                                       <div className="pcp-t-meta">
                                         {[
                                           formatEnumLabel(team.teamType),
@@ -4262,7 +4297,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             <img
                                               src={teamPreviewImage}
                                               alt={`${team.displayName} invite artwork`}
-                                              style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }}
+                                              style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover', flexShrink: 0, border: '1px solid rgba(34,48,46,0.1)' }}
                                             />
                                             <div style={{ minWidth: 0, flex: 1 }}>
                                               <span
@@ -4274,14 +4309,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                   textTransform: 'uppercase',
                                                   padding: '3px 8px',
                                                   borderRadius: 999,
-                                                  border: team.invitePreviewImageUrl ? '1px solid rgba(0,212,170,0.35)' : '1px solid rgba(255,255,255,0.15)',
-                                                  background: team.invitePreviewImageUrl ? 'rgba(0,212,170,0.12)' : 'rgba(255,255,255,0.04)',
-                                                  color: team.invitePreviewImageUrl ? '#00d4aa' : 'rgba(255,255,255,0.55)',
+                                                  border: team.invitePreviewImageUrl ? '1px solid rgba(0,212,170,0.35)' : '1px solid rgba(34,48,46,0.15)',
+                                                  background: team.invitePreviewImageUrl ? 'rgba(0,212,170,0.12)' : 'rgba(34,48,46,0.04)',
+                                                  color: team.invitePreviewImageUrl ? '#356b60' : '#65716c',
                                                 }}
                                               >
                                                 {team.invitePreviewImageUrl ? 'Custom team image' : 'Inheriting org default'}
                                               </span>
-                                              <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.5, color: 'rgba(255,255,255,0.5)' }}>
+                                              <div style={{ marginTop: 6, fontSize: 12, lineHeight: 1.5, color: '#65716c' }}>
                                                 {team.invitePreviewImageUrl
                                                   ? 'Athletes on this team see this image instead of the organization default.'
                                                   : 'Athletes see the organization artwork above. Upload one to override it just for this team.'}
@@ -4353,11 +4388,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             return (
                                               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                                                 {displayedCode ? (
-                                                  <span style={{ fontFamily: 'monospace', fontSize: 18, letterSpacing: '0.2em', color: '#fff' }}>
+                                                  <span style={{ fontFamily: 'monospace', fontSize: 18, letterSpacing: '0.2em', color: '#22302e' }}>
                                                     {displayedCode}
                                                   </span>
                                                 ) : (
-                                                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>No code generated yet.</span>
+                                                  <span style={{ fontSize: 12, color: '#65716c' }}>No code generated yet.</span>
                                                 )}
                                                 <div style={{ display: 'flex', gap: 8 }}>
                                                   {displayedCode ? (
@@ -4405,7 +4440,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                         </CollapsibleCard>
 
                                         <CollapsibleCard
-                                          title="Team Commercial Config"
+                                          title="Access, billing & referrals"
                                           open={teamCommercialOpen}
                                           onToggle={() => toggleOrgCard(`${team.id}:commercial`)}
                                           preview={`${teamPlanBypass
@@ -4603,7 +4638,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 <label className="pcp-fld">
                                                   <span className="pcp-flbl">Athlete Monthly Price</span>
                                                   <div style={{ position: 'relative' }}>
-                                                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>
+                                                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#65716c', fontSize: 13 }}>
                                                       $
                                                     </span>
                                                     <input
@@ -4639,15 +4674,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                       return (
                                                         <>
                                                     <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                                                      <span style={{ color: 'rgba(255,255,255,0.52)' }}>PulseCheck 50%</span>
+                                                      <span style={{ color: '#65716c' }}>PulseCheck 50%</span>
                                                       <strong>{formatPulseCheckMonthlyPrice(platformShareCents)}</strong>
                                                     </span>
                                                     <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                                                      <span style={{ color: 'rgba(255,255,255,0.52)' }}>Coach before Stripe fees</span>
+                                                      <span style={{ color: '#65716c' }}>Coach before Stripe fees</span>
                                                       <strong>{formatPulseCheckMonthlyPrice(athleteSubscriptionPriceCents - platformShareCents)}</strong>
                                                     </span>
                                                     <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                                                      <span style={{ color: 'rgba(255,255,255,0.52)' }}>Coach after Stripe fees (estimated)</span>
+                                                      <span style={{ color: '#65716c' }}>Coach after Stripe fees (estimated)</span>
                                                       <strong>{formatPulseCheckMonthlyPrice(estimatedCoachAfterStripeFeesCents)}</strong>
                                                     </span>
                                                         </>
@@ -4803,7 +4838,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                         </CollapsibleCard>
 
                                         <CollapsibleCard
-                                          title="Support Route + Activation"
+                                          title="Support & admin activation"
                                           open={teamSupportOpen}
                                           onToggle={() => toggleOrgCard(`${team.id}:support`)}
                                           preview="Escalation routing + admin / clinician activation links. Open to manage."
@@ -4907,38 +4942,40 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
                                         {copyLinkModalTeamId === team.id && typeof document !== 'undefined' ? createPortal(
                                           <div
+                                            className={`${ui.theme} ${ui.portal}`}
+                                              data-provisioning-dialog="active" role="dialog" aria-modal="true" aria-label="Team configuration editor" tabIndex={-1}
                                             style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
                                             onClick={handleCloseCopyLinkModal}
                                           >
                                             <div
                                               onClick={(event) => event.stopPropagation()}
-                                              style={{ maxWidth: 420, width: '100%', background: '#0d0d12', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: 20 }}
+                                              style={{ maxWidth: 420, width: '100%', background: '#fff', border: '1px solid rgba(34,48,46,0.1)', borderRadius: 16, padding: 20 }}
                                             >
                                               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                                                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Copy activation link</div>
+                                                <div style={{ fontSize: 16, fontWeight: 700, color: '#22302e' }}>Copy activation link</div>
                                                 <button type="button" className="pcp-ab pcp-ab-t" aria-label="Close" onClick={handleCloseCopyLinkModal}><X /></button>
                                               </div>
-                                              <div style={{ marginTop: 6, fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.4 }}>
+                                              <div style={{ marginTop: 6, fontSize: 12.5, color: '#65716c', lineHeight: 1.4 }}>
                                                 Who is this link for? The page greets them by this name, and the email field is locked to what you enter here — it can only be redeemed as that person.
                                               </div>
                                               <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                                                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#65716c' }}>
                                                   <span>Coach name</span>
                                                   <input
                                                     value={copyLinkForm.name}
                                                     onChange={(event) => setCopyLinkForm((current) => ({ ...current, name: event.target.value }))}
                                                     placeholder="Jordan Lee"
-                                                    style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff', padding: '8px 10px', fontSize: 13 }}
+                                                    style={{ background: '#f4f6f1', border: '1px solid rgba(34,48,46,0.12)', borderRadius: 8, color: '#22302e', padding: '8px 10px', fontSize: 13 }}
                                                   />
                                                 </label>
-                                                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                                                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#65716c' }}>
                                                   <span>Coach email</span>
                                                   <input
                                                     type="email"
                                                     value={copyLinkForm.email}
                                                     onChange={(event) => setCopyLinkForm((current) => ({ ...current, email: event.target.value }))}
                                                     placeholder="coach@school.edu"
-                                                    style={{ background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff', padding: '8px 10px', fontSize: 13 }}
+                                                    style={{ background: '#f4f6f1', border: '1px solid rgba(34,48,46,0.12)', borderRadius: 8, color: '#22302e', padding: '8px 10px', fontSize: 13 }}
                                                   />
                                                 </label>
                                               </div>
@@ -4964,10 +5001,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                         const consentDirty = isTeamConsentDirty(team);
                                         const consentSaving = teamConsentSavingId === team.id;
                                         const consentInputStyle: React.CSSProperties = {
-                                          background: 'rgba(0,0,0,0.35)',
-                                          border: '1px solid rgba(255,255,255,0.12)',
+                                          background: '#f4f6f1',
+                                          border: '1px solid rgba(34,48,46,0.12)',
                                           borderRadius: 8,
-                                          color: '#fff',
+                                          color: '#22302e',
                                           padding: '8px 10px',
                                           fontSize: 13,
                                         };
@@ -4984,9 +5021,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             <div className="pcp-tracker-copy" style={{ marginTop: 0 }}>
                                               Choose the audience and purpose for each set of terms. Athletes decide separately about participation, health authorization, and research. Staff see staff responsibilities. A new version requires a new decision. This editor changes terms; participants make their own decisions.
                                             </div>
-                                            <div style={{ marginTop: 12, fontSize: 13, color: '#fff' }}>
+                                            <div style={{ marginTop: 12, fontSize: 13, color: '#22302e' }}>
                                               {consentDraft.length} consent{consentDraft.length === 1 ? '' : 's'}
-                                              {consentDirty ? <span style={{ color: 'rgba(255,255,255,0.55)' }}> · unsaved changes</span> : null}
+                                              {consentDirty ? <span style={{ color: '#65716c' }}> · unsaved changes</span> : null}
                                             </div>
                                             <div style={{ marginTop: 12 }}>
                                               <button type="button" className="pcp-ab pcp-ab-g" onClick={() => { setConsentModalIndex(0); setConsentModalTeamId(team.id); }}>Manage consents</button>
@@ -4999,27 +5036,29 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             const activeConsent = draft[activeIndex];
                                             return createPortal(
                                             <div
+                                              className={`${ui.theme} ${ui.portal}`}
+                                              data-provisioning-dialog="active" role="dialog" aria-modal="true" aria-label="Team configuration editor" tabIndex={-1}
                                               style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
                                               onClick={() => setConsentModalTeamId(null)}
                                             >
                                               <div
                                                 onClick={(event) => event.stopPropagation()}
-                                                style={{ maxWidth: 1080, width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', background: '#0d0d12', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, overflow: 'hidden' }}
+                                                style={{ maxWidth: 1080, width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid rgba(34,48,46,0.1)', borderRadius: 16, overflow: 'hidden' }}
                                               >
                                                 {/* HEADER */}
-                                                <div style={{ padding: 20, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+                                                <div style={{ padding: 20, borderBottom: '1px solid rgba(34,48,46,0.08)', flexShrink: 0 }}>
                                                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                                                    <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>Manage consents — {team.displayName ?? team.id}</div>
+                                                    <div style={{ fontSize: 16, fontWeight: 700, color: '#22302e', lineHeight: 1.3 }}>Manage consents — {team.displayName ?? team.id}</div>
                                                     <button type="button" className="pcp-ab pcp-ab-t" aria-label="Close" onClick={() => setConsentModalTeamId(null)}><X /></button>
                                                   </div>
-                                                  <div style={{ marginTop: 6, fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.4 }}>
+                                                  <div style={{ marginTop: 6, fontSize: 12.5, color: '#65716c', lineHeight: 1.4 }}>
                                                     Athletes accept these at intake; bumping a version re-prompts anyone who signed the old one.
                                                   </div>
                                                 </div>
 
                                                 {/* TABS — one per consent form */}
                                                 {draft.length > 0 ? (
-                                                  <div style={{ display: 'flex', overflowX: 'auto', whiteSpace: 'nowrap', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                                  <div style={{ display: 'flex', overflowX: 'auto', whiteSpace: 'nowrap', flexShrink: 0, borderBottom: '1px solid rgba(34,48,46,0.08)' }}>
                                                     {draft.map((consent, i) => {
                                                       const active = i === activeIndex;
                                                       const tabLabel = consent.title?.trim() ? consent.title : `Consent ${i + 1}`;
@@ -5038,7 +5077,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                             background: active ? 'rgba(167,139,250,0.14)' : 'transparent',
                                                             border: 'none',
                                                             borderBottom: active ? '2px solid #A78BFA' : '2px solid transparent',
-                                                            color: active ? '#fff' : 'rgba(255,255,255,0.5)',
+                                                            color: active ? '#22302e' : '#65716c',
                                                             fontSize: 13,
                                                             fontWeight: active ? 700 : 500,
                                                             cursor: 'pointer',
@@ -5057,7 +5096,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                   {draft.length === 0 || !activeConsent ? (
                                                     <div className="pcp-c-empty">No consents yet — add one or seed a preset.</div>
                                                   ) : (
-                                                    <div style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
+                                                    <div style={{ border: '1px solid rgba(34,48,46,0.1)', borderRadius: 12, padding: 12, background: 'rgba(34,48,46,0.02)' }}>
                                                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                                                         <input
                                                           value={activeConsent.title}
@@ -5090,12 +5129,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                         onChange={(event) => handleTeamConsentFieldChange(team, activeIndex, 'body', event.target.value)}
                                                         style={{ width: '100%', resize: 'vertical', ...consentInputStyle }}
                                                       />
-                                                      <div style={{ marginTop: 6, fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>id: {activeConsent.id}</div>
+                                                      <div style={{ marginTop: 6, fontSize: 11, color: '#65716c' }}>id: {activeConsent.id}</div>
                                                     </div>
                                                   )}
 
                                                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 12 }}>
-                                                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Seed preset:</span>
+                                                    <span style={{ fontSize: 12, color: '#65716c' }}>Seed preset:</span>
                                                     {(['operational', 'pilot', 'research'] as PulseCheckPilotStudyMode[]).map((mode) => (
                                                       <button key={mode} type="button" className="pcp-ab pcp-ab-t" onClick={() => handleSeedTeamConsents(team, mode)}>{mode}</button>
                                                     ))}
@@ -5103,7 +5142,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 </div>
 
                                                 {/* FOOTER */}
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 18, borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 18, borderTop: '1px solid rgba(34,48,46,0.08)', flexShrink: 0 }}>
                                                   <button type="button" className="pcp-ab pcp-ab-g" onClick={() => { const next = draft.length; handleAddTeamConsent(team); setConsentModalIndex(next); }}><Plus /> Add consent</button>
                                                   <div style={{ flex: 1 }} />
                                                   {consentDirty ? (
@@ -5120,24 +5159,26 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                           })() : null}
                                           {coachIntakeShareTeamId === team.id && typeof document !== 'undefined' ? createPortal(
                                             <div
+                                              className={`${ui.theme} ${ui.portal}`}
+                                              data-provisioning-dialog="active" role="dialog" aria-modal="true" aria-label="Team configuration editor" tabIndex={-1}
                                               style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
                                               onClick={() => setCoachIntakeShareTeamId(null)}
                                             >
                                               <div
                                                 onClick={(event) => event.stopPropagation()}
-                                                style={{ width: 'min(560px, 100%)', background: '#101017', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 18, boxShadow: '0 28px 90px rgba(0,0,0,0.5)', overflow: 'hidden' }}
+                                                style={{ width: 'min(560px, 100%)', background: '#fff', border: '1px solid rgba(34,48,46,0.12)', borderRadius: 18, boxShadow: '0 28px 90px rgba(0,0,0,0.5)', overflow: 'hidden' }}
                                               >
-                                                <div style={{ padding: 20, borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                                                <div style={{ padding: 20, borderBottom: '1px solid rgba(34,48,46,0.08)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                                                   <div>
-                                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Share coach intake</div>
-                                                    <div style={{ marginTop: 6, fontSize: 12.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.45 }}>
+                                                    <div style={{ fontSize: 16, fontWeight: 800, color: '#22302e' }}>Share coach intake</div>
+                                                    <div style={{ marginTop: 6, fontSize: 12.5, color: '#65716c', lineHeight: 1.45 }}>
                                                       Generate a private link for this coach email. Answers saved there will prefill the coach onboarding intake.
                                                     </div>
                                                   </div>
                                                   <button type="button" className="pcp-ab pcp-ab-t" aria-label="Close" onClick={() => setCoachIntakeShareTeamId(null)}><X /></button>
                                                 </div>
                                                 <div style={{ padding: 20, display: 'grid', gap: 14 }}>
-                                                  <label style={{ display: 'grid', gap: 8, fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                                                  <label style={{ display: 'grid', gap: 8, fontSize: 12, fontWeight: 700, color: '#65716c', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                                                     Coach email
                                                     <input
                                                       type="email"
@@ -5147,7 +5188,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                         setCoachIntakeShareUrl('');
                                                       }}
                                                       placeholder="coach@example.com"
-                                                      style={{ width: '100%', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff', padding: '12px 13px', fontSize: 14, letterSpacing: 0, textTransform: 'none' }}
+                                                      style={{ width: '100%', background: '#f4f6f1', border: '1px solid rgba(34,48,46,0.12)', borderRadius: 8, color: '#22302e', padding: '12px 13px', fontSize: 14, letterSpacing: 0, textTransform: 'none' }}
                                                     />
                                                   </label>
                                                   <button
@@ -5162,12 +5203,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                   </button>
                                                   {coachIntakeShareUrl ? (
                                                     <div style={{ display: 'grid', gap: 8 }}>
-                                                      <label style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Generated link</label>
+                                                      <label style={{ fontSize: 12, fontWeight: 700, color: '#65716c', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Generated link</label>
                                                       <div style={{ display: 'flex', gap: 8 }}>
                                                         <input
                                                           value={coachIntakeShareUrl}
                                                           readOnly
-                                                          style={{ flex: 1, minWidth: 0, background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#fff', padding: '12px 13px', fontSize: 13 }}
+                                                          style={{ flex: 1, minWidth: 0, background: '#f4f6f1', border: '1px solid rgba(34,48,46,0.12)', borderRadius: 8, color: '#22302e', padding: '12px 13px', fontSize: 13 }}
                                                           onFocus={(event) => event.currentTarget.select()}
                                                         />
                                                         <button
@@ -5197,10 +5238,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                           { kind: 'athlete', label: 'Athlete intake' },
                                         ];
                                         const fieldStyle: React.CSSProperties = {
-                                          background: 'rgba(0,0,0,0.35)',
-                                          border: '1px solid rgba(255,255,255,0.12)',
+                                          background: '#f4f6f1',
+                                          border: '1px solid rgba(34,48,46,0.12)',
                                           borderRadius: 8,
-                                          color: '#fff',
+                                          color: '#22302e',
                                           padding: '8px 10px',
                                           fontSize: 13,
                                         };
@@ -5223,10 +5264,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 const draft = getIntakeDraft(team, kind);
                                                 const dirty = isIntakeDirty(team, kind);
                                                 return (
-                                                  <div key={kind} style={{ fontSize: 13, color: '#fff' }}>
+                                                  <div key={kind} style={{ fontSize: 13, color: '#22302e' }}>
                                                     {label}
-                                                    <span style={{ color: 'rgba(255,255,255,0.4)' }}> · {draft.length} question{draft.length === 1 ? '' : 's'}</span>
-                                                    {dirty ? <span style={{ color: 'rgba(255,255,255,0.55)' }}> · unsaved changes</span> : null}
+                                                    <span style={{ color: '#65716c' }}> · {draft.length} question{draft.length === 1 ? '' : 's'}</span>
+                                                    {dirty ? <span style={{ color: '#65716c' }}> · unsaved changes</span> : null}
                                                   </div>
                                                 );
                                               })}
@@ -5243,26 +5284,28 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             const saving = teamIntakeSavingKey === `${team.id}:${kind}`;
                                             return createPortal(
                                             <div
+                                              className={`${ui.theme} ${ui.portal}`}
+                                              data-provisioning-dialog="active" role="dialog" aria-modal="true" aria-label="Team configuration editor" tabIndex={-1}
                                               style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
                                               onClick={() => setIntakeModalTeamId(null)}
                                             >
                                               <div
                                                 onClick={(event) => event.stopPropagation()}
-                                                style={{ maxWidth: 1080, width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', background: '#0d0d12', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, overflow: 'hidden' }}
+                                                style={{ maxWidth: 1080, width: '100%', maxHeight: '92vh', display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid rgba(34,48,46,0.1)', borderRadius: 16, overflow: 'hidden' }}
                                               >
                                                 {/* HEADER */}
-                                                <div style={{ padding: 20, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+                                                <div style={{ padding: 20, borderBottom: '1px solid rgba(34,48,46,0.08)', flexShrink: 0 }}>
                                                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                                                    <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>Manage intake — {team.displayName ?? team.id}</div>
+                                                    <div style={{ fontSize: 16, fontWeight: 700, color: '#22302e', lineHeight: 1.3 }}>Manage intake — {team.displayName ?? team.id}</div>
                                                     <button type="button" className="pcp-ab pcp-ab-t" aria-label="Close" onClick={() => setIntakeModalTeamId(null)}><X /></button>
                                                   </div>
-                                                  <div style={{ marginTop: 6, fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.4 }}>
+                                                  <div style={{ marginTop: 6, fontSize: 12.5, color: '#65716c', lineHeight: 1.4 }}>
                                                     Athletes answer during onboarding, alongside consent — asked once.
                                                   </div>
                                                 </div>
 
                                                 {/* TABS */}
-                                                <div style={{ display: 'flex', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                                                <div style={{ display: 'flex', flexShrink: 0, borderBottom: '1px solid rgba(34,48,46,0.08)' }}>
                                                   {intakeKinds.map(({ kind: tabKind, label }) => {
                                                     const active = intakeModalKind === tabKind;
                                                     const tabCount = getIntakeDraft(team, tabKind).length;
@@ -5282,7 +5325,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                           background: active ? 'rgba(167,139,250,0.14)' : 'transparent',
                                                           border: 'none',
                                                           borderBottom: active ? '2px solid #A78BFA' : '2px solid transparent',
-                                                          color: active ? '#fff' : 'rgba(255,255,255,0.5)',
+                                                          color: active ? '#22302e' : '#65716c',
                                                           fontSize: 13,
                                                           fontWeight: active ? 700 : 500,
                                                           cursor: 'pointer',
@@ -5295,8 +5338,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                           fontWeight: 600,
                                                           padding: '1px 7px',
                                                           borderRadius: 999,
-                                                          background: active ? 'rgba(167,139,250,0.3)' : 'rgba(255,255,255,0.08)',
-                                                          color: active ? '#fff' : 'rgba(255,255,255,0.55)',
+                                                          background: active ? 'rgba(167,139,250,0.3)' : 'rgba(34,48,46,0.08)',
+                                                          color: active ? '#22302e' : '#65716c',
                                                         }}>{tabCount}</span>
                                                         {tabDirty ? (
                                                           <span style={{ width: 6, height: 6, borderRadius: 999, background: '#A78BFA', display: 'inline-block' }} />
@@ -5309,7 +5352,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 {/* BODY (scrolling) */}
                                                 <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
                                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
-                                                    <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.45)' }}>{draft.length} question{draft.length === 1 ? '' : 's'}</div>
+                                                    <div style={{ fontSize: 12.5, color: '#65716c' }}>{draft.length} question{draft.length === 1 ? '' : 's'}</div>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                                       {kind === 'coach' ? (
                                                         <button type="button" className="pcp-ab pcp-ab-g" onClick={() => handleOpenCoachIntakeShare(team)}>
@@ -5326,9 +5369,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                   ) : (
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                                       {draft.map((question, index) => (
-                                                        <div key={question.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: 14 }}>
+                                                        <div key={question.id} style={{ background: 'rgba(34,48,46,0.03)', border: '1px solid rgba(34,48,46,0.08)', borderRadius: 12, padding: 14 }}>
                                                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                                            <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>Q{index + 1}</span>
+                                                            <span style={{ fontSize: 12, fontWeight: 600, color: '#65716c', letterSpacing: '0.04em' }}>Q{index + 1}</span>
                                                             <button type="button" className="pcp-ab pcp-ab-t" aria-label="Remove question" onClick={() => handleRemoveIntakeQuestion(team, kind, index)}><X /></button>
                                                           </div>
                                                           <textarea
@@ -5339,7 +5382,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                             style={{ width: '100%', resize: 'vertical', ...fieldStyle }}
                                                           />
                                                           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-                                                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#65716c' }}>
                                                               <span>Type</span>
                                                               <select
                                                                 value={question.type}
@@ -5352,7 +5395,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                                 <option value="yes_no">Yes / No</option>
                                                               </select>
                                                             </label>
-                                                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#65716c' }}>
                                                               <input type="checkbox" checked={!!question.required} onChange={(event) => updateIntakeQuestion(team, kind, index, (current) => ({ ...current, required: event.target.checked }))} />
                                                               Required
                                                             </label>
@@ -5381,7 +5424,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                 </div>
 
                                                 {/* FOOTER */}
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 18, borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 18, borderTop: '1px solid rgba(34,48,46,0.08)', flexShrink: 0 }}>
                                                   <button type="button" className="pcp-ab pcp-ab-g" onClick={() => handleAddIntakeQuestion(team, kind)}><Plus /> Add question</button>
                                                   <div style={{ flex: 1 }} />
                                                   {dirty ? (
@@ -5418,15 +5461,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             <div
                                               className="pcp-team-hd"
                                               style={{ cursor: 'pointer', padding: 0, minHeight: 0 }}
-                                              onClick={() => togglePilotRow(pilot.id)}
                                             >
+<button type="button" className={ui.disclosureButton} aria-expanded={pilotExpanded} aria-label={`Toggle ${pilot.name}`} onClick={() => togglePilotRow(pilot.id)}>
                                               <ChevronDown
-                                                style={{ width: 16, height: 16, flexShrink: 0, marginRight: 10, color: 'rgba(255,255,255,0.5)', transform: pilotExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
-                                              />
+                                                style={{ width: 16, height: 16, flexShrink: 0, marginRight: 10, color: '#65716c', transform: pilotExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}
+                                              /></button>
                                               <div className="pcp-t-av"><ClipboardList /></div>
                                               <div className="pcp-t-info">
                                                 <div className="pcp-level-eyebrow">Pilot</div>
-                                                <div className="pcp-t-name">{pilot.name}</div>
+                                                <button type="button" className="pcp-t-name" aria-expanded={pilotExpanded} onClick={() => togglePilotRow(pilot.id)}>{pilot.name}</button>
                                                 <div className="pcp-t-meta">
                                                   {[
                                                     toDateValue(pilot.startAt)?.toLocaleDateString() || 'not scheduled',
@@ -5678,16 +5721,16 @@ const PulseCheckProvisioningPage: React.FC = () => {
             </main>
           </div>
 
-          <div className={`pcp-modal-bg ${isProvisioningModalOpen ? 'open' : ''}`} onClick={handleCloseProvisioningModal}>
-            <div className="pcp-modal" onClick={(event) => event.stopPropagation()}>
+          <div className={`pcp-modal-bg ${isProvisioningModalOpen ? 'open' : ''}`} style={{ visibility: isProvisioningModalOpen ? 'visible' : 'hidden' }} onClick={handleCloseProvisioningModal}>
+            <div className="pcp-modal" data-provisioning-dialog={isProvisioningModalOpen ? "active" : undefined} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Provision organization" onClick={(event) => event.stopPropagation()}>
               <div className="pcp-modal-tb">
-                <div className="pcp-modal-title">Provision New Organization</div>
+                <div className="pcp-modal-title">{activeWizardStep === 'org' ? 'New organization' : currentWizardStepLabel}</div>
                 <button type="button" className="pcp-ab" disabled={orgSubmitting || teamSubmitting} onClick={() => {
                   localStorage.removeItem(draftKey);
                   provisioningOperations.current = { organization: '', team: '' };
                   setOrgForm(defaultOrganizationForm); setWizardOrganizationId(null); setTeamForm(defaultTeamForm); setActiveWizardStep('org');
                 }}>Start a separate organization</button>
-                <button type="button" className="pcp-modal-x" onClick={handleCloseProvisioningModal}>
+                <button type="button" className="pcp-modal-x" aria-label="Close provisioning" onClick={handleCloseProvisioningModal}>
                   <X />
                 </button>
               </div>
@@ -6628,7 +6671,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
           </div>
 
           {onboardingModal ? (
-            <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 px-4 py-4 sm:px-6 sm:py-6">
+            <div data-provisioning-dialog="active" role="dialog" aria-modal="true" aria-label="Manage onboarding links" tabIndex={-1} className="fixed inset-0 z-50 overflow-y-auto bg-black/70 px-4 py-4 sm:px-6 sm:py-6">
               <div className="flex min-h-full items-start justify-center">
                 <div className="my-auto flex w-full max-w-4xl max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-[28px] border border-zinc-800 bg-[#090f1c] p-5 shadow-2xl sm:p-6">
                 <div className="flex items-start justify-between gap-4">
@@ -7024,6 +7067,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
         />
       </div>
     </AdminRouteGuard>
+    </div>
   );
 };
 
