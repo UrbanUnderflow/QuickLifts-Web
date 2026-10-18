@@ -1,6 +1,6 @@
 import { saveAthleteConsentAtomically } from './consentSave';
 import { replaceInviteAtomically } from '../../../lib/pulsecheck/replaceInvite';
-import { normalizeProductBrand, validateProductBrand, normalizeAppBranding } from '../../../lib/pulsecheck/productConfig';
+import { normalizeProductBrand, validateProductBrand, normalizeAppExperience, resolveAppExperience, normalizeAppBranding } from '../../../lib/pulsecheck/productConfig';
 import { assertCurrentConsentDecisions, selectConsentDocumentsForProduct, consentCategory, consentDecisionComplete, researchEligible, staffConsentDocuments, type ConsentDecisions } from './consentPolicy';
 import { addDoc, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocFromServer, getDocs, getDocsFromServer, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders, isUsingDevFirebase } from '../config';
@@ -921,6 +921,7 @@ const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrgani
   productBrand: normalizeProductBrand(data.productBrand),
   configuredProductBrand: data.productBrand === 'athleticmind' || data.productBrand === 'pulsecheck' ? data.productBrand : undefined,
   appBranding: data.appBranding || {},
+  appExperience: resolveAppExperience(data.appExperience),
   displayName: data.displayName || '',
   legalName: data.legalName || '',
   organizationType: data.organizationType || '',
@@ -3200,6 +3201,7 @@ export const pulseCheckProvisioningService = {
     const payload = {
       productBrand: validateProductBrand(input.productBrand),
       appBranding: normalizeAppBranding(input.appBranding),
+      appExperience: normalizeAppExperience(input.appExperience),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
       organizationType: normalizeString(input.organizationType),
@@ -3237,6 +3239,7 @@ export const pulseCheckProvisioningService = {
     }
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedId), {
       ...(input.productBrand !== undefined ? { productBrand: validateProductBrand(input.productBrand) } : {}),
+      ...(input.appExperience !== undefined ? { appExperience: normalizeAppExperience(input.appExperience) } : {}),
       ...(input.appBranding !== undefined ? { appBranding: normalizeAppBranding(input.appBranding) } : {}),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
@@ -3873,14 +3876,16 @@ export const pulseCheckProvisioningService = {
     });
   },
 
-  async updateOrganizationProductConfiguration(organizationId: string, input: Pick<CreatePulseCheckOrganizationInput, 'productBrand' | 'appBranding'>): Promise<void> {
+  async updateOrganizationProductConfiguration(organizationId: string, input: Pick<CreatePulseCheckOrganizationInput, 'productBrand' | 'appBranding' | 'appExperience'>): Promise<void> {
     if (!normalizeString(organizationId)) throw new Error('Organization id is required.');
-    await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, organizationId), {
-      productBrand: validateProductBrand(input.productBrand),
-      ...(input.appBranding !== undefined ? { appBranding: normalizeAppBranding(input.appBranding) } : {}),
-      productConfigurationUpdatedBy: auth.currentUser?.uid || '',
-      updatedAt: serverTimestamp(),
+    const user = auth.currentUser;
+    if (!user) throw new Error('Sign in to update organization configuration.');
+    const response = await fetch('/api/admin/pulsecheck/organization-configuration', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...getFirebaseModeRequestHeaders(), Authorization: `Bearer ${await user.getIdToken()}` },
+      body: JSON.stringify({ organizationId, configuration: input }),
     });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Unable to save organization configuration.');
   },
 
   async setOrganizationJournalSafetyScreening(organizationId: string, enabled: boolean): Promise<void> {

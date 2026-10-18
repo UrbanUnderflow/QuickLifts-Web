@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createFirestoreAdminMock } = require('../firebase-admin/_runtimeHarness.cjs');
 const { loadAppBranding, createHandler } = require('../../../netlify/functions/get-pulsecheck-app-branding');
-const defaults = {appBranding:{pulsecheck:'pulsecheck',athleticmind:'athleticmind'}};
+const defaults = {appExperience:{ios:'standard'},appBranding:{pulsecheck:'pulsecheck',athleticmind:'athleticmind'}};
 function fixture({members,teams,orgs} = {}) {
   return createFirestoreAdminMock({collections:{
     'pulsecheck-team-memberships': members || [{id:'m',data:{userId:'user',teamId:'team',organizationId:'org',status:'active'}}],
@@ -11,7 +11,7 @@ function fixture({members,teams,orgs} = {}) {
   }}).db;
 }
 test('active organization app override is returned without product or clinical fields', async () => {
-  assert.deepEqual(await loadAppBranding(fixture(),'user'),{appBranding:{pulsecheck:'athleticmind',athleticmind:'athleticmind'}});
+  assert.deepEqual(await loadAppBranding(fixture(),'user'),{appExperience:{ios:'standard'},appBranding:{pulsecheck:'athleticmind',athleticmind:'athleticmind'}});
 });
 test('product profile alone never changes app identity', async () => {
   assert.deepEqual(await loadAppBranding(fixture({orgs:[{id:'org',data:{status:'active',productBrand:'athleticmind'}}]}),'user'),defaults);
@@ -41,6 +41,17 @@ test('endpoint requires auth, validates context and returns private no-store res
   const response=await handler(event);
   assert.equal(response.statusCode,200);
   assert.equal(response.headers['Cache-Control'],'no-store');
-  assert.deepEqual(JSON.parse(response.body),{appBranding:{pulsecheck:'athleticmind',athleticmind:'athleticmind'}});
+  assert.deepEqual(JSON.parse(response.body),{appExperience:{ios:'standard'},appBranding:{pulsecheck:'athleticmind',athleticmind:'athleticmind'}});
   assert.equal((await createHandler({authorize:async()=>{throw Error('expired')}})(event)).statusCode,401);
+});
+
+test('Clay appearance is independent of branding and requires one verified organization',async()=>{
+ const orgs=[{id:'org',data:{status:'active',productBrand:'pulsecheck',appExperience:{ios:'clay'}}}];
+ assert.deepEqual((await loadAppBranding(fixture({orgs}),'user','team')).appExperience,{ios:'clay'});
+ for(const value of [undefined,{ios:'unknown'},null])assert.deepEqual((await loadAppBranding(fixture({orgs:[{id:'org',data:{status:'active',appExperience:value}}]}),'user')).appExperience,{ios:'standard'});
+ const db=fixture({members:[{id:'m',data:{userId:'user',teamId:'team',organizationId:'org',status:'active'}},{id:'n',data:{userId:'user',teamId:'team2',organizationId:'org2',status:'active'}}],teams:[{id:'team',data:{organizationId:'org',status:'active'}},{id:'team2',data:{organizationId:'org2',status:'active'}}],orgs:[...orgs,{id:'org2',data:{status:'active'}}]});
+ assert.deepEqual((await loadAppBranding(db,'user')).appExperience,{ios:'standard'});
+ assert.deepEqual((await loadAppBranding(db,'user','team')).appExperience,{ios:'clay'});
+ await db.collection('account-closure-jobs').doc('user').set({status:'pending'});
+ await assert.rejects(loadAppBranding(db,'user','team'),e=>e.statusCode===403);
 });

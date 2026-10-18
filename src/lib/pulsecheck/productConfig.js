@@ -30,4 +30,11 @@ function normalizeAppBranding(value) {
   }
   return result;
 }
-module.exports = { PRODUCTS, validateProductBrand, normalizeAppBranding, normalizeProductBrand, resolveProductConfig, resolveAppBranding };
+// Presentation only: this setting never selects program processing or care routes.
+function resolveAppExperience(value) { return { ios: value?.ios === 'clay' ? 'clay' : 'standard' }; }
+function normalizeAppExperience(value) {
+  if (value === undefined) return { ios: 'standard' };
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => key !== 'ios') || !['standard', 'clay'].includes(value.ios)) throw new Error('Invalid iOS app appearance');
+  return { ios: value.ios };
+}
+module.exports = { resolveAppExperience, normalizeAppExperience, PRODUCTS, validateProductBrand, normalizeAppBranding, normalizeProductBrand, resolveProductConfig, resolveAppBranding };

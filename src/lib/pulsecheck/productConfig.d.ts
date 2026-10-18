@@ -9,3 +9,7 @@ export function resolveAppBranding(organization: OrganizationProductConfiguratio
 
 export function validateProductBrand(value: unknown): ProductBrand;
 export function normalizeAppBranding(value: unknown): Partial<Record<ProductBrand, ProductBrand>>;
+
+export type AppExperience = { ios: 'standard' | 'clay' };
+export function resolveAppExperience(value: unknown): AppExperience;
+export function normalizeAppExperience(value: unknown): AppExperience;

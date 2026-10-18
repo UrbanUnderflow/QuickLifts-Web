@@ -31,3 +31,11 @@ test('server routing rejects missing and invalid persisted product', async () =>
     await assert.rejects(resolveProgramProductConfig(db, { organizationId: 'org' }));
   }
 });
+
+test('iOS app experience validates writes and defaults invalid presentation reads',()=>{
+ const {normalizeAppExperience,resolveAppExperience}=require('../../src/lib/pulsecheck/productConfig');
+ assert.deepEqual(normalizeAppExperience({ios:'clay'}),{ios:'clay'});
+ assert.deepEqual(normalizeAppExperience(undefined),{ios:'standard'});
+ for(const value of [null,'clay',{}, {ios:'unknown'},{ios:'clay',productBrand:'athleticmind'}])assert.throws(()=>normalizeAppExperience(value));
+ assert.deepEqual(resolveAppExperience({ios:'unknown'}),{ios:'standard'});
+});

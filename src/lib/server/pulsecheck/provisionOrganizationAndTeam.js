@@ -1,4 +1,4 @@
-const { validateProductBrand, normalizeAppBranding } = require('../../pulsecheck/productConfig');
+const { validateProductBrand, normalizeAppExperience, resolveAppExperience, normalizeAppBranding } = require('../../pulsecheck/productConfig');
 const admin = require('firebase-admin');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
@@ -193,6 +193,7 @@ function buildProvisioningPayload(input) {
   const organizationPayload = {
     productBrand: validateProductBrand(input.organization.productBrand),
     appBranding: normalizeAppBranding(input.organization.appBranding),
+    appExperience: normalizeAppExperience(input.organization.appExperience),
     displayName: normalizeString(input.organization.displayName),
     legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
     organizationType: normalizeString(input.organization.organizationType) || 'other',
@@ -401,6 +402,7 @@ async function upsertPulseCheckOrganization({ adminApp, input }) {
   const organizationPayload = {
     productBrand: validateProductBrand(input.organization.productBrand),
     appBranding: normalizeAppBranding(input.organization.appBranding),
+    appExperience: normalizeAppExperience(input.organization.appExperience),
     displayName: normalizeString(input.organization.displayName),
     legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
     organizationType: normalizeString(input.organization.organizationType) || 'other',
@@ -438,6 +440,7 @@ async function upsertPulseCheckOrganization({ adminApp, input }) {
       productBrand: input.organization.productBrand === undefined
         ? (organizationData?.productBrand || organizationPayload.productBrand)
         : organizationPayload.productBrand,
+      appExperience: input.organization.appExperience === undefined ? resolveAppExperience(organizationData?.appExperience) : organizationPayload.appExperience,
       appBranding: input.organization.appBranding === undefined
         ? (organizationData?.appBranding || organizationPayload.appBranding)
         : organizationPayload.appBranding,
@@ -510,6 +513,7 @@ async function provisionPulseCheckOrganizationAndTeam({ adminApp, input }) {
       productBrand: input.organization.productBrand === undefined
         ? (organizationData?.productBrand || organizationPayload.productBrand)
         : organizationPayload.productBrand,
+      appExperience: input.organization.appExperience === undefined ? resolveAppExperience(organizationData?.appExperience) : organizationPayload.appExperience,
       appBranding: input.organization.appBranding === undefined
         ? (organizationData?.appBranding || organizationPayload.appBranding)
         : organizationPayload.appBranding,

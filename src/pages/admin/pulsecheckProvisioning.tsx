@@ -94,6 +94,7 @@ import {
 const defaultOrganizationForm: CreatePulseCheckOrganizationInput = {
   productBrand: undefined,
   appBranding: { pulsecheck: 'pulsecheck', athleticmind: 'athleticmind' },
+  appExperience: { ios: 'standard' },
   displayName: '',
   legalName: '',
   organizationType: 'athletic-department',

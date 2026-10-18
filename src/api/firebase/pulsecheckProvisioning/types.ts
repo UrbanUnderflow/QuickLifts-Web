@@ -524,6 +524,7 @@ export interface PulseCheckOrganizationImplementationMetadata {
   notes?: string;
 }
 
+export type PulseCheckAppExperience = { ios: 'standard' | 'clay' };
 export type PulseCheckProductBrand = 'athleticmind' | 'pulsecheck';
 export type PulseCheckAppBranding = Partial<Record<PulseCheckProductBrand, PulseCheckProductBrand>>;
 
@@ -532,6 +533,7 @@ export interface PulseCheckOrganization {
   configuredProductBrand?: PulseCheckProductBrand;
   productBrand?: PulseCheckProductBrand;
   appBranding?: PulseCheckAppBranding;
+  appExperience?: PulseCheckAppExperience;
   id: string;
   displayName: string;
   legalName: string;
@@ -558,6 +560,7 @@ export interface PulseCheckOrganization {
 export interface CreatePulseCheckOrganizationInput {
   productBrand?: PulseCheckProductBrand;
   appBranding?: PulseCheckAppBranding;
+  appExperience?: PulseCheckAppExperience;
   displayName: string;
   legalName: string;
   organizationType: string;

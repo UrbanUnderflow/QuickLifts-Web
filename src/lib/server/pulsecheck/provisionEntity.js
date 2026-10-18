@@ -1,5 +1,5 @@
 const { createHash } = require('crypto');
-const { validateProductBrand, normalizeAppBranding } = require('../../pulsecheck/productConfig');
+const { validateProductBrand, normalizeAppExperience, resolveAppExperience, normalizeAppBranding } = require('../../pulsecheck/productConfig');
 
 async function provisionEntity(db, { kind, operationId, actor, actorUid, payload }, timestamp) {
   if (!['organization', 'team'].includes(kind) || !/^[a-zA-Z0-9_-]{16,100}$/.test(operationId || '') || !actor) throw new Error('Valid provisioning operation required.');
@@ -10,6 +10,7 @@ async function provisionEntity(db, { kind, operationId, actor, actorUid, payload
   if (kind === 'organization') {
     data.productBrand = validateProductBrand(data.productBrand);
     data.appBranding = normalizeAppBranding(data.appBranding);
+    data.appExperience = normalizeAppExperience(data.appExperience);
   }
   const id = createHash('sha256').update(`${actorUid || actor.toLowerCase()}:${kind}:${operationId}`).digest('hex');
   const ref = db.collection(kind === 'organization' ? 'pulsecheck-organizations' : 'pulsecheck-teams').doc(id);

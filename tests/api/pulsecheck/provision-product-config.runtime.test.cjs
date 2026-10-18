@@ -17,3 +17,10 @@ test('provisioning rejects unsupported product and app identities', () => {
   assert.throws(() => buildProvisioningPayload(input({ productBrand: 'unknown' })));
   assert.throws(() => buildProvisioningPayload(input({ appBranding: { pulsecheck: 'unknown' } })));
 });
+test('paired provisioning stores visual experience independently and validates explicit choices',()=>{
+  const standard=buildProvisioningPayload(input({productBrand:'athleticmind'})).organizationPayload;
+  assert.deepEqual(standard.appExperience,{ios:'standard'});
+  const clay=buildProvisioningPayload(input({productBrand:'pulsecheck',appBranding:{pulsecheck:'athleticmind'},appExperience:{ios:'clay'}})).organizationPayload;
+  assert.deepEqual(clay.appExperience,{ios:'clay'});assert.equal(clay.productBrand,'pulsecheck');assert.equal(clay.appBranding.pulsecheck,'athleticmind');
+  assert.throws(()=>buildProvisioningPayload(input({productBrand:'pulsecheck',appExperience:{ios:'invalid'}})));
+});
