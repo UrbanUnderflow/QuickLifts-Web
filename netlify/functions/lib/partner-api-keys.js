@@ -122,6 +122,19 @@ async function approvePartnerAccessRequest(db, input) {
   });
   return { key: metadata(issued.record), secret: issued.secret };
 }
+async function revealPartnerKey(db, input) {
+  if (!KEY_ID.test(input.keyId || '') || !input.actorEmail) fail('invalid_key');
+  const now = nowValue(input.now);
+  return db.runTransaction(async tx => {
+    const saved = await tx.get(db.collection(COLLECTIONS.keys).doc(hash(input.keyId)));
+    if (!saved.exists) fail('key_not_found', 404);
+    const record = saved.data();
+    if (record.keyId !== input.keyId || !active(record) || !Number.isFinite(record.expiresAtMs) || record.expiresAtMs <= now) fail('key_not_active', 409);
+    const secret = decryptSecret(record, input.env);
+    writeAudit(tx, db, 'key_secret_accessed', { keyId: input.keyId, actorEmail: input.actorEmail }, now);
+    return { keyId: input.keyId, secret };
+  });
+}
 async function revokePartnerKey(db, input) {
   if (!KEY_ID.test(input.keyId || '') || !input.actorEmail) fail('invalid_key');
   const now = nowValue(input.now), ref = db.collection(COLLECTIONS.keys).doc(hash(input.keyId)); let result;
@@ -230,4 +243,4 @@ async function listPartnerAccess(db, { cursors = {} } = {}) {
   return { requests: requests.rows, keys: keys.rows.map(metadata), pagination: { requests: requests.page, keys: keys.page, organizations: organizations.page, teams: teams.page }, scopeOptions: { organizations: orgs.map(org => ({ id: org.id, name: org.name || org.displayName || org.id })), teams: teams.rows.filter(team => active(team)).map(team => ({ id: team.id, name: team.name || team.id, organizationId: team.organizationId })), apis: [SCOPE], environments: ['test', 'production'] } };
 }
 
-module.exports = { decryptPartnerKeySecret: decryptSecret, updatePartnerKeyGrants, normalizeGrants, COLLECTIONS, SCOPE, requestPartnerAccess, approvePartnerAccessRequest, rotatePartnerKey, revokePartnerKey, listPartnerAccess, authenticatePartnerRequest, revalidatePartnerPrincipal };
+module.exports = { revealPartnerKey, decryptPartnerKeySecret: decryptSecret, updatePartnerKeyGrants, normalizeGrants, COLLECTIONS, SCOPE, requestPartnerAccess, approvePartnerAccessRequest, rotatePartnerKey, revokePartnerKey, listPartnerAccess, authenticatePartnerRequest, revalidatePartnerPrincipal };

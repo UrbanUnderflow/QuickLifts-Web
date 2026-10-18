@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
 const root=path.resolve(__dirname,'../..');
 function harness(){const calls=[];let adminExists=true,configUnavailable=false;
- const lifecycle={};for(const name of ['approvePartnerAccessRequest','rotatePartnerKey','revokePartnerKey','listPartnerAccess','requestPartnerAccess','updatePartnerKeyGrants'])lifecycle[name]=async(db,input)=>{calls.push({name,input});return {status:'pending'};};
+ const lifecycle={};for(const name of ['revealPartnerKey','approvePartnerAccessRequest','rotatePartnerKey','revokePartnerKey','listPartnerAccess','requestPartnerAccess','updatePartnerKeyGrants'])lifecycle[name]=async(db,input)=>{calls.push({name,input});return {status:'pending'};};
  const admin={auth:()=>({verifyIdToken:async (token,checkRevoked)=>{assert.equal(checkRevoked,true);if(!['verified-token','unverified-token'].includes(token))throw Error('invalid');return {email:'real-admin@synthetic.example',uid:'verified-uid',email_verified:token==='verified-token'};}}),firestore:()=>({doc:()=>({get:async()=>({exists:adminExists,data:()=>({uid:'verified-uid'})})})})};
  const cache={};function load(file){file=path.resolve(root,file);if(cache[file])return cache[file].exports;const module={exports:{}};cache[file]=module;
  const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
@@ -19,3 +19,9 @@ test('routes allowlist input and derive admin actor and rate identity at trusted
 });
 
 test('configured runtime secret failure blocks key management without lifecycle fallback',async()=>{const h=harness();h.failConfig();const handler=h.load('src/pages/api/admin/partner-api-keys/index.ts').default,res=h.res();await handler({method:'POST',headers:{authorization:'Bearer verified-token'},query:{},body:{action:'approve'}},res);assert.equal(res.statusCode,503);assert.equal(res.data.error,'partner_runtime_config_unavailable');assert.equal(h.calls.length,0);});
+
+test('secret access requires admin authorization and cannot override actor or encryption settings',async()=>{const h=harness(),handler=h.load('src/pages/api/admin/partner-api-keys/index.ts').default;
+ for(const authorization of [undefined,'Bearer unverified-token','Bearer invalid']){const res=h.res();await handler({method:'POST',headers:{authorization},query:{},body:{action:'reveal',keyId:'synthetic-key'}},res);assert.equal(res.statusCode,401);}assert.equal(h.calls.length,0);
+ const res=h.res();await handler({method:'POST',headers:{authorization:'Bearer verified-token'},query:{},body:{action:'reveal',keyId:'synthetic-key',actorEmail:'spoof',env:{},now:1}},res);
+ assert.equal(res.statusCode,200);assert.deepEqual(h.calls,[{name:'revealPartnerKey',input:{keyId:'synthetic-key',actorEmail:'real-admin@synthetic.example'}}]);
+});

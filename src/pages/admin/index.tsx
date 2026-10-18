@@ -43,6 +43,12 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
 
 const adminCardsData = [
   {
+    title: "Partner API keys",
+    description: "Manage partner API credentials, developer access requests, and program access grants.",
+    icon: <ShieldCheck className="w-5 h-5" />,
+    link: "/admin/partner-api-keys"
+  },
+  {
     title: "Screen Demos",
     description: "Home for all demo screens — walk real PulseCheck UI flows end-to-end with no auth or data (coach onboarding, coach dashboard v2, and more).",
     icon: <MonitorPlay className="w-5 h-5" />,
