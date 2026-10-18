@@ -6,9 +6,10 @@ async function assertNonPulseToken(db, token) {
   const explicit = await db.collection('users').where('pulseCheckFcmToken','==',token).limit(1).get();
   const legacy = await db.collection('users').where('fcmToken','==',token).get();
   const pulse = !canonical.empty || !explicit.empty || legacy.docs.some(doc=>{
-    const user=doc.data();return user.pulseCheckPushTokenModelVersion===2 || user.notificationPlatform==='android' || user.pushTokenSourceApp==='pulsecheck' || user.accountClosureRequestedAt;
+    const user=doc.data();return user.pulseCheckPushTokenModelVersion===2 || user.pushTokenSourceApp==='pulsecheck' || user.accountClosureRequestedAt;
   });
   if(pulse)throw Object.assign(new Error('PulseCheck installation requires owned product delivery'),{code:'push/product-ownership-mismatch'});
+  if(legacy.empty || legacy.docs.length===0)throw Object.assign(new Error('No current recipient owns this token'),{code:'push/ownership-unavailable'});
 }
 async function sendNonPulsePush(db,messaging,message){await assertNonPulseToken(db,message.token);return messaging.send(message);}
 module.exports={assertNonPulseToken,sendNonPulsePush};
