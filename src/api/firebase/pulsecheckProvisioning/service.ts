@@ -1960,9 +1960,9 @@ export const pulseCheckProvisioningService = {
         && !team.archivedAt && !team.deletedAt && !organization.archivedAt && !organization.deletedAt);
     }
     let rosterDocs = self ? [self] : [];
-    if (adminSnapshot?.exists() || (staff && (!member.rosterVisibilityScope || member.rosterVisibilityScope === 'team'))) {
+    if (adminSnapshot?.exists() || (staff && member && (!member.rosterVisibilityScope || member.rosterVisibilityScope === 'team'))) {
       rosterDocs = (await getDocsFromServer(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('teamId', '==', normalizedTeamId)))).docs;
-    } else if (staff && member.rosterVisibilityScope === 'assigned') {
+    } else if (staff && member && member.rosterVisibilityScope === 'assigned') {
       const allowed = Array.isArray(member.allowedAthleteIds) ? member.allowedAthleteIds.filter((id: unknown) => typeof id === 'string') : [];
       for (let offset = 0; offset < allowed.length; offset += 30) {
         rosterDocs.push(...(await getDocsFromServer(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION),
