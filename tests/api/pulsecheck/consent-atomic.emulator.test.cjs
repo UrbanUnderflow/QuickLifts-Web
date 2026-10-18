@@ -95,3 +95,87 @@ test('optional revocation preserves earlier append-only history and does not cre
   await save(request); const state = await snapshot(); assert.equal(state.events.length, 2); assert.equal(state.member.athleteOnboarding.eligibleForResearchDataset, false);
   assert.equal(state.member.onboardingStatus, 'complete');
 });
+
+test('setup consent saves receipts without advancing an incomplete athlete or creating enrollment', async () => {
+  await db.doc('pulsecheck-teams/team').update({ status: 'ready-for-activation' });
+  await db.doc('pulsecheck-organizations/org').update({ status: 'provisioning' });
+  await db.doc('pulsecheck-pilots/pilot').update({ status: 'draft' });
+  await db.doc(memberPath).update({ onboardingStatus: 'pending-consent', 'athleteOnboarding.entryOnboardingStep': 'consent', 'athleteOnboarding.baselinePathStatus': 'pending' });
+  const beforeState = await snapshot();
+  const request = structuredClone(input); request.onboarding.intakeResponses = {}; request.onboarding.entryOnboardingStep = 'complete';
+  const result = await save(request); const state = await snapshot();
+  assert.equal(result.consentOnly, true); assert.equal(state.events.length, 1);
+  assert.equal(state.member.onboardingStatus, 'pending-consent');
+  assert.equal(state.member.athleteOnboarding.entryOnboardingStep, 'consent');
+  assert.equal(state.member.athleteOnboarding.baselinePathStatus, 'pending');
+  assert.equal(state.member.athleteOnboarding.intakeResponses, undefined);
+  assert.equal(state.member.athleteOnboarding.eligibleForResearchDataset, false);
+  assert.equal(state.member.phone, undefined); assert.equal(state.enrollment, undefined);
+  assert.deepEqual(state.user, beforeState.user);
+  assert.equal((await db.doc('pulsecheck-private-users/athlete').get()).exists, false);
+});
+
+test('setup consent refresh preserves completed onboarding and existing enrollment status', async () => {
+  await save();
+  await db.doc('pulsecheck-teams/team').update({ status: 'ready-for-activation' });
+  await db.doc('pulsecheck-organizations/org').update({ status: 'ready-for-activation' });
+  await db.doc('pulsecheck-pilots/pilot').update({ status: 'draft' });
+  await db.doc('pulsecheck-pilot-cohorts/cohort').set({ status: 'draft', pilotId: 'pilot', teamId: 'team', organizationId: 'org' });
+  await db.doc(memberPath).update({ 'athleteOnboarding.targetCohortId': 'cohort' });
+  await db.doc('pulsecheck-pilot-enrollments/pilot_athlete').update({ status: 'pending-consent' });
+  const beforeState = await snapshot();
+  const request = structuredClone(input); request.expectedContext.cohortId = 'cohort';
+  request.onboarding.consentDecisions['pulsecheck-health-authorization'].decision = 'accepted';
+  request.onboarding.consentDecisions['pulsecheck-health-authorization'].signedName = 'Synthetic Athlete';
+  request.profile.name = 'Should Not Change'; request.profile.phone = 'Should Not Change';
+  await save(request); const state = await snapshot();
+  assert.equal(state.events.length, 2); assert.equal(state.member.onboardingStatus, 'complete');
+  assert.equal(state.member.athleteOnboarding.entryOnboardingStep, 'complete');
+  assert.equal(state.enrollment.status, 'pending-consent');
+  assert.equal(state.enrollment.enrollmentMode, beforeState.enrollment.enrollmentMode);
+  assert.equal(state.member.phone, beforeState.member.phone); assert.deepEqual(state.user, beforeState.user);
+  assert.equal((await db.doc('pulsecheck-pilots/pilot').get()).data().status, 'draft');
+});
+
+for (const [path, statuses] of [
+  ['pulsecheck-teams/team', ['paused', 'archived', 'unknown', '']],
+  ['pulsecheck-organizations/org', ['implementation-hold', 'archived', 'unknown', '']],
+  ['pulsecheck-pilots/pilot', ['paused', 'completed', 'archived', 'provisioning', 'unknown', '']],
+]) test(`setup consent still rejects inactive or unknown states for ${path}`, async () => {
+  for (const status of statuses) {
+    await db.doc(path).update({ status }); const beforeState = await snapshot();
+    await assert.rejects(save(), e => e.code === 'PROGRAM_UNAVAILABLE');
+    assert.deepEqual(await snapshot(), beforeState);
+  }
+});
+
+test('every supported parent setup state accepts consent but revoked setup scope does not', async () => {
+  for (const status of ['draft', 'provisioning', 'ready-for-activation']) {
+    await db.doc('pulsecheck-teams/team').update({ status });
+    await db.doc('pulsecheck-organizations/org').update({ status });
+    assert.equal((await save()).consentOnly, true);
+  }
+  await db.doc('pulsecheck-teams/team').update({ revokedAt: 1 });
+  const beforeState = await snapshot(); await assert.rejects(save(), e => e.code === 'PROGRAM_UNAVAILABLE');
+  assert.deepEqual(await snapshot(), beforeState);
+});
+
+test('setup saves retain signature, current-document, cohort and ended-enrollment guards', async () => {
+  await db.doc('pulsecheck-teams/team').update({ status: 'draft' });
+  const unsigned = structuredClone(input); unsigned.onboarding.consentDecisions[input.expectedContext.documents[0].id].signedName = '';
+  await assert.rejects(save(unsigned), e => e.code === 'INVALID_DECISION');
+  const stale = structuredClone(input); stale.expectedContext.documents[0].body += ' changed';
+  await assert.rejects(save(stale), e => e.code === 'CONSENT_CONTEXT_CHANGED');
+  await db.doc('pulsecheck-pilot-cohorts/cohort').set({ status: 'paused', pilotId: 'pilot', teamId: 'team', organizationId: 'org' });
+  await db.doc(memberPath).update({ 'athleteOnboarding.targetCohortId': 'cohort' }); input.expectedContext.cohortId = 'cohort';
+  for (const status of ['paused', 'archived', 'unknown', '', 'provisioning']) {
+    await db.doc('pulsecheck-pilot-cohorts/cohort').update({ status });
+    await assert.rejects(save(), e => e.code === 'PROGRAM_UNAVAILABLE');
+  }
+  await db.doc('pulsecheck-pilot-cohorts/cohort').update({ status: 'draft' });
+  for (const status of ['withdrawn', 'ended', 'completed']) {
+    await db.doc('pulsecheck-pilot-enrollments/pilot_athlete').set({ status });
+    await assert.rejects(save(), e => e.code === 'ENROLLMENT_ENDED');
+  }
+  assert.equal((await snapshot()).events.length, 0);
+});

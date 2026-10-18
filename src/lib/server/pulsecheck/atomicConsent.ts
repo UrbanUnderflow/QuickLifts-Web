@@ -8,6 +8,9 @@ import { getCompletedBaselineEvidence } from '../../../api/firebase/pulsecheckPr
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 const object = (value: any): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 const active = (value: Record<string, any>, explicit = false) => (!explicit && !value.status || value.status === 'active') && !value.revokedAt && !value.archivedAt && !value.deletedAt;
+const parentConsentStatuses = new Set(['active', 'draft', 'provisioning', 'ready-for-activation']);
+const pilotConsentStatuses = new Set(['active', 'draft']);
+const consentScopeEligible = (value: Record<string, any>, statuses: Set<string>) => statuses.has(value.status) && !value.revokedAt && !value.archivedAt && !value.deletedAt;
 export class ConsentSaveError extends Error {
   constructor(public code: string, message: string, public status = 400) { super(message); }
 }
@@ -57,15 +60,16 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
       tx.get(db.collection('users').doc(uid)), tx.get(db.collection('athlete-mental-progress').doc(uid)),
     ]);
     const team = teamSnap.data() || {}, organization = orgSnap.data() || {}, user = userSnap.data() || {};
-    if (!teamSnap.exists || !orgSnap.exists || !active(team, true) || !active(organization, true) || team.organizationId !== organizationId
+    if (!teamSnap.exists || !orgSnap.exists || !consentScopeEligible(team, parentConsentStatuses) || !consentScopeEligible(organization, parentConsentStatuses) || team.organizationId !== organizationId
       || !['pulsecheck', 'athleticmind'].includes(organization.productBrand) || user.accountClosureRequestedAt || user.accountClosureStatus) {
       reject('PROGRAM_UNAVAILABLE', 'Your program could not be verified.', 403);
     }
     const pilotSnap = pilotId ? await tx.get(db.collection('pulsecheck-pilots').doc(pilotId)) : null;
     const cohortSnap = cohortId ? await tx.get(db.collection('pulsecheck-pilot-cohorts').doc(cohortId)) : null;
     const pilot = pilotSnap?.data() || {}, cohort = cohortSnap?.data() || {};
-    if (pilotId && (!pilotSnap?.exists || !active(pilot, true) || pilot.organizationId !== organizationId || pilot.teamId !== teamId)) reject('PROGRAM_UNAVAILABLE', 'Your pilot could not be verified.', 403);
-    if (cohortId && (!pilotId || !cohortSnap?.exists || !active(cohort, true) || cohort.pilotId !== pilotId || cohort.teamId !== teamId || cohort.organizationId !== organizationId)) reject('PROGRAM_UNAVAILABLE', 'Your cohort could not be verified.', 403);
+    if (pilotId && (!pilotSnap?.exists || !consentScopeEligible(pilot, pilotConsentStatuses) || pilot.organizationId !== organizationId || pilot.teamId !== teamId)) reject('PROGRAM_UNAVAILABLE', 'Your pilot could not be verified.', 403);
+    if (cohortId && (!pilotId || !cohortSnap?.exists || !consentScopeEligible(cohort, pilotConsentStatuses) || cohort.pilotId !== pilotId || cohort.teamId !== teamId || cohort.organizationId !== organizationId)) reject('PROGRAM_UNAVAILABLE', 'Your cohort could not be verified.', 403);
+    const consentOnly = team.status !== 'active' || organization.status !== 'active' || Boolean(pilotId && pilot.status !== 'active') || Boolean(cohortId && cohort.status !== 'active');
     const enrollmentRef = pilotId ? db.collection('pulsecheck-pilot-enrollments').doc(`${pilotId}_${uid}`) : null;
     const enrollmentSnap = enrollmentRef ? await tx.get(enrollmentRef) : null;
     const enrollment = enrollmentSnap?.data() || {};
@@ -98,7 +102,7 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
     if (complete && (!accepted || !documents.every(doc => consentDecisionComplete(doc, decisions, ids, versions)) || pilot.studyMode === 'research' && !['accepted', 'declined'].includes(researchStatus))) reject('CONSENT_INCOMPLETE', 'Review every current agreement and record your choices.');
     const intake = submitted.intakeResponses === undefined ? object(old.intakeResponses) : object(submitted.intakeResponses);
     const questions = Array.isArray(team.intake?.athlete?.questions) ? team.intake.athlete.questions : [];
-    if (complete && questions.some((q: any) => q.required && (intake[q.id] == null || typeof intake[q.id] === 'string' && !intake[q.id].trim() || Array.isArray(intake[q.id]) && !intake[q.id].length))) reject('INTAKE_INCOMPLETE', 'Answer the required team questions before continuing.');
+    if (!consentOnly && complete && questions.some((q: any) => q.required && (intake[q.id] == null || typeof intake[q.id] === 'string' && !intake[q.id].trim() || Array.isArray(intake[q.id]) && !intake[q.id].length))) reject('INTAKE_INCOMPLETE', 'Answer the required team questions before continuing.');
     if (Object.keys(intake).length > 200 || Buffer.byteLength(JSON.stringify(intake)) > 100000) reject('INVALID_REQUEST', 'The answers exceed the supported size.');
     const changed = stable(decisions) !== stable(object(old.consentDecisions));
     const now = timestamp();
@@ -119,6 +123,19 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
     const onboardingStatus = resolveTeamMembershipOnboardingStatus({ role: 'athlete', athleteOnboarding: next, studyMode: pilot.studyMode || 'operational' });
     const eventId = changed ? createHash('sha256').update(stable({ uid, membershipId, previous: old.lastConsentEventId || object(old.consentDecisions), decisions })).digest('hex') : null;
     if (eventId) tx.create(memberRef.collection('consent-events').doc(eventId), { actorUserId: uid, decisions, recordedAt: now });
+    // Setup programs may collect choices, but consent must not activate enrollment or advance onboarding.
+    if (consentOnly) {
+      const consentFields = {
+        consentPersistenceVersion: 2, requiredConsents: documents, consentDecisions: decisions,
+        completedConsentIds: ids, completedConsentVersions: versions, productConsentAccepted: accepted,
+        researchConsentStatus: researchStatus, eligibleForResearchDataset: false,
+        ...(complete ? { productConsentAcceptedAt: next.productConsentAcceptedAt, productConsentVersion: next.productConsentVersion } : {}),
+        ...(['accepted', 'declined'].includes(researchStatus) ? { researchConsentRespondedAt: next.researchConsentRespondedAt, researchConsentVersion: next.researchConsentVersion } : {}),
+      };
+      tx.update(memberRef, { athleteOnboarding: { ...old, ...consentFields, ...(eventId ? { lastConsentEventId: eventId } : {}) }, updatedAt: now });
+      if (enrollmentRef && enrollmentSnap?.exists) tx.set(enrollmentRef, { ...consentFields, updatedAt: now }, { merge: true });
+      return { success: true, teamMembershipId: membershipId, onboardingStatus: member.onboardingStatus || 'pending', eventId, consentOnly: true };
+    }
     tx.update(memberRef, { athleteOnboarding: { ...next, ...(eventId ? { lastConsentEventId: eventId } : {}) }, onboardingStatus, ...(text(profile.phone) ? { phone: text(profile.phone) } : {}), updatedAt: now });
     if (enrollmentRef) tx.set(enrollmentRef, {
       consentPersistenceVersion: 2, organizationId, teamId, pilotId, cohortId, userId: uid, teamMembershipId: membershipId, studyMode: pilot.studyMode || 'operational',
