@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 const SUPPORTED_FUNCTIONS = new Set([
+  'get-pulsecheck-app-branding',
   'pulsecheck-consent-save',
   'delete-account',
   'record-clinical-escalation',

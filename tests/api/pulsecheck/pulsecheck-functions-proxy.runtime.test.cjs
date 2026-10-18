@@ -356,3 +356,21 @@ test('PulseCheck function proxy rejects unsupported functions', async () => {
   assert.equal(response.statusCode, 404);
   assert.deepEqual(response.body, { error: 'Unsupported PulseCheck function: not-real' });
 });
+
+test('appearance proxy preserves authenticated team scope, environment and Clay response', async () => {
+  const originalFetch = global.fetch;
+  let call;
+  global.fetch = async (url, options) => {call = {url: String(url), options}; return {
+    status: 200, headers: new Headers({'content-type': 'application/json', 'cache-control': 'no-store'}),
+    arrayBuffer: async () => Buffer.from('{"appExperience":{"ios":"clay"}}'),
+  };};
+  try {
+    const response = createResponseRecorder();
+    await loadProxyModule().default({method: 'GET', query: {name: 'get-pulsecheck-app-branding', teamId: 'synthetic-team'}, headers: {authorization: 'Bearer synthetic-token', 'x-pulsecheck-firebase-mode': 'prod'}, body: undefined}, response);
+    assert.equal(response.statusCode, 200);
+    assert.equal(call.url, 'https://fitwithpulse.ai/.netlify/functions/get-pulsecheck-app-branding?teamId=synthetic-team');
+    assert.equal(call.options.headers.get('authorization'), 'Bearer synthetic-token');
+    assert.equal(call.options.headers.get('x-pulsecheck-firebase-mode'), 'prod');
+    assert.equal(String(response.body), '{"appExperience":{"ios":"clay"}}');
+  } finally {global.fetch = originalFetch;}
+});
