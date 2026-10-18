@@ -1,6 +1,6 @@
 # AuntEdna partner portal operations
 
-The dedicated portal is `/developer/api/partner/auntedna` on `https://fitwithpulse.ai`. Its server authorization is bound to partner `auntedna` and the existing production key `pk_14ea32e13ebfda899720bb9768dd3400`. It does not enable snapshot delivery or change program eligibility.
+The dedicated portal is `/developer/api/partner/auntedna` on `https://fitwithpulse.ai`. Its server authorization is bound to partner `auntedna`. The original production key `pk_14ea32e13ebfda899720bb9768dd3400` stores the portal password and session registry, with `portal.currentKeyId` pointing to its current credential after a partner rotation. An absent pointer uses the original key. It does not enable snapshot delivery or change program eligibility.
 
 ## Credential storage and recovery
 
@@ -12,7 +12,7 @@ The current portal password is held in the authorized operator's macOS login Key
 
 Use the server-only `configurePartnerPortal` helper in `netlify/functions/lib/partner-portal.js` from an authorized production administration context to replace a password. Supply the generated password only in process memory and secure it in the approved secrets manager first. Configuration creates a new credential version and clears all existing sessions while preserving the API key and its permissions.
 
-Use `disablePartnerPortal` to disable portal access and clear all sessions without revoking the signing key. Ordinary logout revokes the current session only. API key revocation, expiry, deletion, archival, or rotation blocks portal session and reveal requests immediately. Key rotation intentionally does not transfer portal access to the replacement key; explicitly review and update the bound key identity and configure its portal before restoring access.
+Use `disablePartnerPortal` to disable portal access and clear all sessions without revoking the signing key. Ordinary logout revokes the current session only. API key revocation, expiry, deletion, archival, or rotation blocks portal session and reveal requests immediately. Partner-initiated rotation atomically creates a replacement key, preserves its grants, scopes, rate limit and expiry, moves the portal pointer, and invalidates all sessions except the initiating session. The partner password stays the same. The partner confirms an overlap of 0–60 minutes (15 minutes by default), bounded by the old expiry, and must install both the new ID and secret. The response contains metadata only; Reveal/Copy retrieves the new secret separately. Expected-key matching prevents duplicate requests from rotating twice, and a one-minute cooldown limits repeat rotations. Admin-initiated rotation does not transfer portal access automatically; review the binding before restoring access.
 
 ## Session and response controls
 

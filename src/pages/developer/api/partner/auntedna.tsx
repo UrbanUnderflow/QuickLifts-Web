@@ -19,9 +19,12 @@ export default function AuntEdnaPartnerPortal() {
   const [checking, setChecking] = useState(true);
   const [password, setPassword] = useState('');
   const [secret, setSecret] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'login' | 'secret' | 'copy' | 'logout' | null>(null);
+  const [busy, setBusy] = useState<'login' | 'secret' | 'copy' | 'logout' | 'rotate' | null>(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [confirmRotation, setConfirmRotation] = useState(false);
+  const [overlapMinutes, setOverlapMinutes] = useState(15);
+  const [rotationNotice, setRotationNotice] = useState('');
   const generation = useRef(0);
   const clearSecret = useCallback(() => {generation.current += 1; setSecret(null); setCopied(false);}, []);
   const readSession = useCallback(async () => {
@@ -63,6 +66,22 @@ export default function AuntEdnaPartnerPortal() {
       else {await navigator.clipboard.writeText(data.secret); if (attempt === generation.current) setCopied(true);}
     } catch (failure) {if (attempt === generation.current) {clearSecret(); setError(failure instanceof Error ? failure.message : 'Could not access the secret key.');}} finally {setBusy(null);}
   };
+  const rotate = async () => {
+    if (!session || busy) return;
+    clearSecret(); setBusy('rotate'); setError(''); setRotationNotice('');
+    try {
+      const response = await fetch(`${API}/rotate`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({expectedKeyId: session.keyId, overlapMinutes}), cache: 'no-store'});
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 401) setSession(null);
+        if (data.error === 'credential_changed') { await readSession(); throw new Error('The key has already changed. Review the current key before rotating again.'); }
+        throw new Error(response.status === 429 ? 'Please wait one minute before rotating again.' : 'Could not rotate the key. Refresh to check the current key before trying again.');
+      }
+      setSession(data); setConfirmRotation(false);
+      setRotationNotice(`Key rotated. Copy the new Key ID and secret into your integration. The previous key stops working at ${new Date(data.previousKeyValidUntil).toLocaleString()}. Your portal password stays the same.`);
+    } catch (failure) {setError(failure instanceof Error ? failure.message : 'Could not rotate the key. Refresh to check its status.');}
+    finally {setBusy(null);}
+  };
   const logout = async () => {
     clearSecret(); setPassword(''); setBusy('logout'); setError('');
     try {const response = await fetch(`${API}/logout`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'}); if (!response.ok) throw new Error(); setSession(null);}
@@ -80,6 +99,19 @@ export default function AuntEdnaPartnerPortal() {
         <div className={styles.secretValue}><code aria-label={secret ? 'Revealed secret key' : 'Masked secret key'}>{secret || '••••••••••••••••••••••••••••••••'}</code></div>
         <div className={styles.actions}><button type="button" className={styles.primary} disabled={busy !== null} onClick={() => secret ? clearSecret() : void accessSecret('reveal')}>{secret ? <EyeOff size={16}/> : <Eye size={16}/>} {busy === 'secret' ? 'Loading…' : secret ? 'Hide' : 'Reveal'}</button><button type="button" className={styles.secondary} disabled={busy !== null} onClick={() => void accessSecret('copy')}>{copied ? <Check size={16}/> : <Copy size={16}/>} {busy === 'copy' ? 'Copying…' : copied ? 'Copied' : 'Copy'}</button><span className={styles.hint} role="status">{copied ? 'Secret key copied.' : secret ? 'The key hides automatically after one minute.' : 'Copy securely or reveal the key briefly.'}</span></div>
         <dl className={styles.metadata}><div><dt>Key ID</dt><dd><code>{session.keyId}</code></dd></div><div><dt>Expires</dt><dd>{new Date(session.expiresAt).toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'})}</dd></div></dl>
+        <div className={styles.rotation}>
+          <h3>Rotate your API key</h3>
+          <p className={styles.description}>Create a new Key ID and secret with the same access and expiry. Update both values in your integration before the previous key stops working. Other portal sessions will be signed out.</p>
+          {rotationNotice && <p role="status" className={styles.description}>{rotationNotice}</p>}
+          {!confirmRotation ? <button type="button" className={styles.secondary} disabled={busy !== null} onClick={() => {clearSecret(); setConfirmRotation(true);}}>Rotate key</button> : <div>
+            <label className={styles.rotationLabel} htmlFor="key-overlap">Keep the previous key working for</label>
+            <select id="key-overlap" className={styles.overlap} disabled={busy !== null} value={overlapMinutes} onChange={event => setOverlapMinutes(Number(event.target.value))}>
+              <option value={0}>Stop immediately</option><option value={5}>5 minutes</option><option value={15}>15 minutes</option><option value={30}>30 minutes</option><option value={60}>60 minutes</option>
+            </select>
+            <p className={styles.hint}>{overlapMinutes === 0 ? 'The current credential will stop working immediately.' : `You will have up to ${overlapMinutes} minutes to install the replacement credential, bounded by the current key’s expiry.`}</p>
+            <div className={styles.actions}><button type="button" className={styles.primary} disabled={busy !== null} onClick={() => void rotate()}>{busy === 'rotate' ? 'Rotating…' : 'Confirm rotation'}</button><button type="button" className={styles.secondary} disabled={busy !== null} onClick={() => setConfirmRotation(false)}>Cancel</button></div>
+          </div>}
+        </div>
       </section>
       <section aria-labelledby="partner-guides"><h2 id="partner-guides" className={styles.sectionTitle}>Integration guides</h2><div className={styles.guides}>
         <a href="/developer/api/auntedna"><h3>AuntEdna athlete baseline <ArrowUpRight size={20}/></h3><p>The 48-item Starting Point, question ownership, versioning, and delivery examples.</p><span>Open baseline guide</span></a>

@@ -146,21 +146,22 @@ async function revokePartnerKey(db, input) {
   });
   return { key: metadata(result) };
 }
-async function rotatePartnerKey(db, input) {
+async function rotatePartnerKeyInTransaction(tx, db, input) {
   const now = nowValue(input.now), overlap = input.overlapMinutes === undefined ? 0 : input.overlapMinutes;
   if (!KEY_ID.test(input.keyId || '') || !input.actorEmail || !Number.isInteger(overlap) || overlap < 0 || overlap > 60) fail('invalid_rotation');
   encryptionConfig(input.env); const ref = db.collection(COLLECTIONS.keys).doc(hash(input.keyId)); let issued;
-  await db.runTransaction(async tx => {
-    const saved = await tx.get(ref), old = saved.data();
-    if (!saved.exists || old.status !== 'active' || old.expiresAtMs <= now) fail('key_not_active', 409);
-    if (!await grantsValid(tx, db, normalizeGrants(old))) fail('invalid_saved_organization_or_team_scope');
-    issued = newKey({ ...old, partnerId: old.partnerId || `legacy-${hash(old.keyId).slice(0, 32)}`, partnerName: old.partnerName || 'Legacy partner', grants: normalizeGrants(old), actorEmail: input.actorEmail }, now, input.env); issued.record.replacesKeyId = old.keyId;
-    const expiry = Math.min(old.expiresAtMs, now + overlap * 60000);
-    tx.update(ref, { status: 'rotating', rotatedAt: new Date(now).toISOString(), expiresAt: new Date(expiry).toISOString(), expiresAtMs: expiry, replacementKeyId: issued.record.keyId });
-    tx.set(db.collection(COLLECTIONS.keys).doc(hash(issued.record.keyId)), issued.record);
-    writeAudit(tx, db, 'key_rotated', { keyId: old.keyId, replacementKeyId: issued.record.keyId, actorEmail: input.actorEmail, overlapMinutes: overlap }, now);
-  });
+  const saved = await tx.get(ref), old = saved.data();
+  if (!saved.exists || old.status !== 'active' || old.expiresAtMs <= now) fail('key_not_active', 409);
+  if (!await grantsValid(tx, db, normalizeGrants(old))) fail('invalid_saved_organization_or_team_scope');
+  issued = newKey({ ...old, partnerId: old.partnerId || `legacy-${hash(old.keyId).slice(0, 32)}`, partnerName: old.partnerName || 'Legacy partner', grants: normalizeGrants(old), actorEmail: input.actorEmail }, now, input.env); issued.record.replacesKeyId = old.keyId;
+  const expiry = Math.min(old.expiresAtMs, now + overlap * 60000);
+  tx.update(ref, { status: 'rotating', rotatedAt: new Date(now).toISOString(), expiresAt: new Date(expiry).toISOString(), expiresAtMs: expiry, replacementKeyId: issued.record.keyId });
+  tx.set(db.collection(COLLECTIONS.keys).doc(hash(issued.record.keyId)), issued.record);
+  writeAudit(tx, db, 'key_rotated', { keyId: old.keyId, replacementKeyId: issued.record.keyId, actorEmail: input.actorEmail, overlapMinutes: overlap }, now);
   return { key: metadata(issued.record), secret: issued.secret };
+}
+async function rotatePartnerKey(db, input) {
+  return db.runTransaction(tx => rotatePartnerKeyInTransaction(tx, db, input));
 }
 async function updatePartnerKeyGrants(db, input) {
   if (!KEY_ID.test(input.keyId || '') || !input.actorEmail) fail('invalid_key');
@@ -243,4 +244,4 @@ async function listPartnerAccess(db, { cursors = {} } = {}) {
   return { requests: requests.rows, keys: keys.rows.map(metadata), pagination: { requests: requests.page, keys: keys.page, organizations: organizations.page, teams: teams.page }, scopeOptions: { organizations: orgs.map(org => ({ id: org.id, name: org.name || org.displayName || org.id })), teams: teams.rows.filter(team => active(team)).map(team => ({ id: team.id, name: team.name || team.id, organizationId: team.organizationId })), apis: [SCOPE], environments: ['test', 'production'] } };
 }
 
-module.exports = { revealPartnerKey, decryptPartnerKeySecret: decryptSecret, updatePartnerKeyGrants, normalizeGrants, COLLECTIONS, SCOPE, requestPartnerAccess, approvePartnerAccessRequest, rotatePartnerKey, revokePartnerKey, listPartnerAccess, authenticatePartnerRequest, revalidatePartnerPrincipal };
+module.exports = { rotatePartnerKeyInTransaction, revealPartnerKey, decryptPartnerKeySecret: decryptSecret, updatePartnerKeyGrants, normalizeGrants, COLLECTIONS, SCOPE, requestPartnerAccess, approvePartnerAccessRequest, rotatePartnerKey, revokePartnerKey, listPartnerAccess, authenticatePartnerRequest, revalidatePartnerPrincipal };
