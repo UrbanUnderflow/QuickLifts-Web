@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     claimed = await db.runTransaction(async (tx) => {
       const current = (await tx.get(ref)).data();
       if (current?.jobId !== id || current.status !== 'queued') return false;
-      tx.update(ref, { status: 'processing' });
+      tx.update(ref, { status: 'processing', styleVersion: c.STYLE_VERSION, generationModel: c.GENERATION_SETTINGS.model, generationQuality: c.GENERATION_SETTINGS.quality, generationSize: c.GENERATION_SETTINGS.size });
       return true;
     });
     if (!claimed) {

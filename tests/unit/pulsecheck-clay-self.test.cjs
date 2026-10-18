@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const c = require('../../netlify/functions/lib/pulsecheck-clay-self');
+const sharp = require('sharp');
+const portrait = (left = 200, top = 200) => sharp({ create: { width: 1024, height: 1536, channels: 4, background: '#00000000' } }).composite([{ input: Buffer.from('<svg width="500" height="1000"><rect width="500" height="1000" fill="brown"/></svg>'), left, top }]).png().toBuffer();
 const jpeg = Buffer.from([255,216,255,224,0,4,255,217]);
 const photos = () => c.ROLES.map(role => ({ role, mimeType: 'image/jpeg', imageBase64: jpeg.toString('base64') }));
 test('requires precisely the three distinct guided references', () => {
@@ -33,10 +35,16 @@ test('authentication rejects missing and invalid tokens', async () => {
   await assert.rejects(c.authenticate({ headers: { authorization: 'Bearer invalid' } }, admin, {}), { statusCode: 401, message: 'Please sign in again.' });
 });
 test('real image edit sends all three references and returns generated PNG only', async () => {
-  const png = Buffer.from([137,80,78,71,13,10,26,10,1]);
+  const png = await portrait();
   const output = await c.editImages(c.parseImages({ images: photos() }), 'synthetic-test-key', async (url, options) => {
     assert.equal(url, 'https://api.openai.com/v1/images/edits');
-    assert.equal(options.body.getAll('image[]').length, 3);
+    assert.deepEqual(options.body.getAll('image[]').map(file => file.name), ['full_body.jpg', 'face.jpg', 'reference.jpg', 'style-only-basketball.png', 'style-only-athlete.png']);
+    assert.equal(options.body.get('quality'), 'high');
+    assert.equal(options.body.get('size'), '1024x1536');
+    const spec = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../netlify/functions/lib/clay-self-style/SCHEMATICS-v1.md'), 'utf8');
+    assert.equal(options.body.get('prompt'), spec);
+    assert.match(spec, /Images 4 and 5 are approved MATERIAL/);
+    assert.match(spec, /both shoes including/);
     assert.equal(options.body.get('model'), 'gpt-image-1.5');
     assert.equal(options.body.get('input_fidelity'), 'high');
     assert.equal(options.body.get('background'), 'transparent');
@@ -73,7 +81,7 @@ function harness() {
 test('owner-only lifecycle: create, background, preview, approve, restore, delete', async () => {
   const h = harness(), oldFetch = global.fetch, oldKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = 'synthetic-test';
-  const png = Buffer.from([137,80,78,71,13,10,26,10,1]);
+  const png = await portrait();
   global.fetch = async url => url.toString().includes('api.openai.com') ? { ok: true, json: async () => ({ data: [{ b64_json: png.toString('base64') }] }) } : { ok: true };
   try {
     const created = await h.api(h.event('POST', { action: 'generate', images: photos() }));
@@ -89,6 +97,10 @@ test('owner-only lifecycle: create, background, preview, approve, restore, delet
     h.setUID('athlete-a');
     await h.worker(h.event('POST', { jobId }));
     assert.equal(h.files.size, 1, 'reference photos erased after generation');
+    const saved = [...h.states.values()][0];
+    assert.equal(saved.styleVersion, 'clay-self-v1');
+    assert.equal(saved.generationQuality, 'high');
+    assert.equal(saved.generationSize, '1024x1536');
     const ready = JSON.parse((await h.api(h.event('GET', {}, { jobId }))).body);
     assert.equal(ready.status, 'ready');
     assert.match(ready.previewImageURL, /private.example/);
@@ -125,7 +137,7 @@ test('deleting during generation discards late provider output', async () => {
   global.fetch = async url => {
     if (!url.toString().includes('api.openai.com')) return { ok: true };
     await h.api(h.event('DELETE'));
-    return { ok: true, json: async () => ({ data: [{ b64_json: Buffer.from([137,80,78,71,13,10,26,10]).toString('base64') }] }) };
+    return { ok: true, json: async () => ({ data: [{ b64_json: (await portrait()).toString('base64') }] }) };
   };
   try {
     const { jobId } = JSON.parse((await h.api(h.event('POST', { action: 'generate', images: photos() }))).body);
@@ -159,4 +171,31 @@ test('storage selection respects explicit prod/dev configuration without crossin
     assert.equal(c.bucketFor(admin, app, 'dev'), 'synthetic-dev.appspot.com');
     assert.throws(() => c.bucketFor(admin, app), { statusCode: 500 });
   } finally { keys.forEach((key, index) => { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; }); }
+});
+
+test('framing gate rejects edge clipping, opaque backdrops, empty and malformed output', async () => {
+  await c.validatePortrait(await portrait());
+  await assert.rejects(c.validatePortrait(await portrait(0, 200)), { statusCode: 502 });
+  await assert.rejects(c.validatePortrait(await portrait(200, 0)), { statusCode: 502 });
+  for (const background of ['#ffffffff', '#00000000']) {
+    const png = await sharp({ create: { width: 1024, height: 1536, channels: 4, background } }).png().toBuffer();
+    await assert.rejects(c.validatePortrait(png), { statusCode: 502 });
+  }
+  await assert.rejects(c.validatePortrait(Buffer.from([137,80,78,71,13,10,26,10])), { statusCode: 502 });
+  const square = await sharp({ create: { width: 1024, height: 1024, channels: 4, background: '#ffffff00' } }).png().toBuffer();
+  await assert.rejects(c.validatePortrait(square), { statusCode: 502 });
+});
+
+test('worker rejects a clipped provider result and erases private source photos', async () => {
+  const h = harness(), oldFetch = global.fetch, oldKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = 'synthetic';
+  const png = await portrait(200, 0);
+  global.fetch = async url => url.toString().includes('api.openai.com') ? { ok: true, json: async () => ({ data: [{ b64_json: png.toString('base64') }] }) } : { ok: true };
+  try {
+    const { jobId } = JSON.parse((await h.api(h.event('POST', { action: 'generate', images: photos() }))).body);
+    await h.worker(h.event('POST', { jobId }));
+    assert.equal(h.files.size, 0);
+    assert.equal(JSON.parse((await h.api(h.event('GET', {}, { jobId }))).body).status, 'failed');
+    assert.equal((await h.api(h.event('POST', { action: 'approve', jobId }))).statusCode, 409);
+  } finally { global.fetch = oldFetch; if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey; }
 });
