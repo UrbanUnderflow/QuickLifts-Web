@@ -779,15 +779,15 @@
 
 # Keep the native image decoder and its Linux binaries in each Clay function.
 [functions.pulsecheck-clay-self]
+  node_bundler = "nft"
   external_node_modules = ["sharp"]
-  included_files = ["netlify/functions/**", "node_modules/sharp/**", "node_modules/@img/sharp-linux-x64/**", "node_modules/@img/sharp-libvips-linux-x64/**", "node_modules/color/**", "node_modules/color-string/**", "node_modules/color-convert/**", "node_modules/color-name/**", "node_modules/simple-swizzle/**", "node_modules/is-arrayish/**", "node_modules/detect-libc/**", "node_modules/semver/**"]
 
 [functions.pulsecheck-clay-self-background]
+  node_bundler = "nft"
   external_node_modules = ["sharp"]
-  included_files = ["netlify/functions/**", "node_modules/sharp/**", "node_modules/@img/sharp-linux-x64/**", "node_modules/@img/sharp-libvips-linux-x64/**", "node_modules/color/**", "node_modules/color-string/**", "node_modules/color-convert/**", "node_modules/color-name/**", "node_modules/simple-swizzle/**", "node_modules/is-arrayish/**", "node_modules/detect-libc/**", "node_modules/semver/**"]
 
 # Remove abandoned Clay Self reference photos after one hour.
 [functions.pulsecheck-clay-self-cleanup]
   schedule = "15 * * * *"
+  node_bundler = "nft"
   external_node_modules = ["sharp"]
-  included_files = ["netlify/functions/**", "node_modules/sharp/**", "node_modules/@img/sharp-linux-x64/**", "node_modules/@img/sharp-libvips-linux-x64/**", "node_modules/color/**", "node_modules/color-string/**", "node_modules/color-convert/**", "node_modules/color-name/**", "node_modules/simple-swizzle/**", "node_modules/is-arrayish/**", "node_modules/detect-libc/**", "node_modules/semver/**"]
