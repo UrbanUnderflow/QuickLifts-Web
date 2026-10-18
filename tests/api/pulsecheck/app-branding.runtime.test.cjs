@@ -55,3 +55,24 @@ test('Clay appearance is independent of branding and requires one verified organ
  await db.collection('account-closure-jobs').doc('user').set({status:'pending'});
  await assert.rejects(loadAppBranding(db,'user','team'),e=>e.statusCode===403);
 });
+function primaryFixture(coachMembers=[{teamId:'team',organizationId:'org',role:'coach'}],primaryCoachUserId='coach'){
+ const f=createFirestoreAdminMock({collections:{users:[{id:'user',data:{primaryCoachUserId}}],
+ 'pulsecheck-team-memberships':[{id:'a',data:{userId:'user',teamId:'team',organizationId:'org',role:'athlete',status:'active'}},{id:'b',data:{userId:'user',teamId:'team2',organizationId:'org2',role:'athlete',status:'active'}},...coachMembers.map((m,i)=>({id:`coach-${i}`,data:{userId:'coach',status:'active',...m}}))],
+ 'pulsecheck-teams':[{id:'team',data:{organizationId:'org',status:'active'}},{id:'team2',data:{organizationId:'org2',status:'active'}}],
+ 'pulsecheck-organizations':[{id:'org',data:{status:'active',appExperience:{ios:'clay'},appBranding:{pulsecheck:'athleticmind'}}},{id:'org2',data:{status:'active',appExperience:{ios:'standard'}}}]}});return f;
+}
+test('saved primary coach resolves appearance only across multiple organizations',async()=>{
+ const result=await loadAppBranding(primaryFixture().db,'user');assert.deepEqual(result.appExperience,{ios:'clay'});assert.deepEqual(result.appBranding,defaults.appBranding);
+ const selected=await loadAppBranding(primaryFixture().db,'user','team2');assert.deepEqual(selected.appExperience,{ios:'standard'});
+ const titled=primaryFixture([{teamId:'team',organizationId:'org',role:'performance-staff',title:'Head Coach'}]);assert.equal((await loadAppBranding(titled.db,'user')).appExperience.ios,'clay');
+});
+test('missing foreign revoked inactive mismatched or ambiguous primary coach defaults to standard',async()=>{
+ for(const f of [primaryFixture([],'' ),primaryFixture(undefined,'foreign'),primaryFixture([{teamId:'team',organizationId:'org',role:'coach',revokedAt:1}]),primaryFixture([{teamId:'team',organizationId:'org',role:'coach',status:'inactive'}]),primaryFixture([{teamId:'team',organizationId:'org2',role:'coach'}]),primaryFixture([{teamId:'team',organizationId:'org',role:'athlete',title:'Coach'}]),primaryFixture([{teamId:'team',organizationId:'org',role:'coach'},{teamId:'team2',organizationId:'org2',role:'coach'}])])assert.equal((await loadAppBranding(f.db,'user')).appExperience.ios,'standard');
+ const closed=primaryFixture();await closed.db.collection('account-closure-jobs').doc('coach').set({status:'pending'});assert.equal((await loadAppBranding(closed.db,'user')).appExperience.ios,'standard');
+});
+test('multiple verified shared teams in one organization remain unambiguous',async()=>{
+ const f=primaryFixture([{teamId:'team',organizationId:'org',role:'coach'},{teamId:'team3',organizationId:'org',role:'coach'}]);
+ await f.db.collection('pulsecheck-teams').doc('team3').set({organizationId:'org',status:'active'});await f.db.collection('pulsecheck-team-memberships').doc('c').set({userId:'user',teamId:'team3',organizationId:'org',role:'athlete',status:'active'});
+ assert.equal((await loadAppBranding(f.db,'user')).appExperience.ios,'clay');
+ await f.db.collection('pulsecheck-teams').doc('team').set({status:'archived'},{merge:true});await f.db.collection('pulsecheck-teams').doc('team3').set({status:'archived'},{merge:true});assert.equal((await loadAppBranding(f.db,'user')).appExperience.ios,'standard');
+});
