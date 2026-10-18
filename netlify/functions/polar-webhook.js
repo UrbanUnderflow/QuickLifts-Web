@@ -85,19 +85,14 @@ function asArray(value) {
 function extractEvents(payload) {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return [];
-  return [
+  const nested = [
     ...asArray(payload.events),
     ...asArray(payload.notifications),
     ...asArray(payload.data),
     ...asArray(payload.event),
-  ].filter(Boolean).length
-    ? [
-      ...asArray(payload.events),
-      ...asArray(payload.notifications),
-      ...asArray(payload.data),
-      ...asArray(payload.event),
-    ].filter(Boolean)
-    : [payload];
+  ].filter(value => value && typeof value === 'object');
+  // Polar's scalar `event` names the event type; it is not an event envelope.
+  return nested.length ? nested : [payload];
 }
 
 function firstString(...values) {
@@ -179,8 +174,11 @@ async function persistEventAndQueueSync({ event, index, rawBody, verification, h
   const eventRef = admin.firestore().collection(WEBHOOK_EVENTS_COLLECTION).doc(eventId);
   const connectionDoc = await findConnection({ polarUserId, memberId });
   const connection = connectionDoc?.data() || null;
-  const userId = connectionDoc?.id || connection?.userId || memberId || '';
-  const batch = userId ? accountOpenBatch(admin.firestore(), userId) : admin.firestore().batch();
+  const userId = connection?.userId || connectionDoc?.id || '';
+  // A removed connection cannot authorize retention of a new identifiable event.
+  // Acknowledge unmatched deliveries without storing payloads or external IDs.
+  if (!connectionDoc || !userId) return { matched: false, dropped: true };
+  const batch = accountOpenBatch(admin.firestore(), userId);
 
   batch.set(eventRef, {
     id: eventId,
@@ -224,7 +222,10 @@ async function persistEventAndQueueSync({ event, index, rawBody, verification, h
     }, { merge: true });
   }
 
-  await batch.commit();
+  try { await batch.commit(); } catch (error) {
+    if (error?.code === 'account_closing') return { matched: false, dropped: true };
+    throw error;
+  }
   return { eventId, jobId, matched: Boolean(connectionDoc), eventType, dateKey: dateKey || null };
 }
 
@@ -260,7 +261,7 @@ exports.handler = async (event) => {
     }
 
     return {
-      statusCode: 200,
+      statusCode: results.some(result => result.dropped) ? 202 : 200,
       headers: RESPONSE_HEADERS,
       body: JSON.stringify({
         ok: true,
@@ -283,6 +284,7 @@ exports.handler = async (event) => {
 };
 
 exports.__test = {
+  persistEventAndQueueSync,
   extractEvents,
   normalizeDateKey,
   normalizeEventType,

@@ -2194,8 +2194,10 @@ service cloud.firestore {
         && staff.teamId == teamId && athlete.teamId == teamId
         && staff.organizationId == orgId && athlete.organizationId == orgId
         && athlete.role == 'athlete' && staff.role != 'athlete'
-        && (staff.role == 'team-admin' || staff.role == 'coach'
-          || staff.get('staffCapabilities', []).hasAny(['admin', 'coaching', 'athletic_trainer']))
+        && (('staffCapabilities' in staff
+            && staff.staffCapabilities is list
+            && staff.staffCapabilities.hasAny(['admin', 'coaching', 'athletic_trainer']))
+          || (!('staffCapabilities' in staff) && staff.role in ['team-admin', 'coach']))
         && (staff.get('rosterVisibilityScope', 'team') == 'team'
           || (staff.get('rosterVisibilityScope', '') == 'assigned'
             && athleteId in staff.get('allowedAthleteIds', [])));

@@ -277,7 +277,10 @@ async function persistNotificationAndQueueSync({ notification, rawBody, verifica
   const connectionDoc = await findConnection(notification.healthUserId);
   const connection = connectionDoc?.data() || null;
   const userId = connection?.userId || (connectionDoc?.id ? connectionDoc.id.replace(/_google_health$/, '') : '');
-  const batch = userId ? accountOpenBatch(admin.firestore(), userId) : admin.firestore().batch();
+  // A removed connection cannot authorize retention of a new identifiable event.
+  // Acknowledge unmatched deliveries without storing payloads or external IDs.
+  if (!connectionDoc || !userId) return { matched: false, dropped: true };
+  const batch = accountOpenBatch(admin.firestore(), userId);
 
   batch.set(eventRef, {
     id: eventId,
@@ -328,7 +331,10 @@ async function persistNotificationAndQueueSync({ notification, rawBody, verifica
     }, { merge: true });
   }
 
-  await batch.commit();
+  try { await batch.commit(); } catch (error) {
+    if (error?.code === 'account_closing') return { matched: false, dropped: true };
+    throw error;
+  }
   return { eventId, jobId, matched: Boolean(connectionDoc), dataType: notification.dataType || null, dateKey: notification.dateKey || null };
 }
 
@@ -374,10 +380,10 @@ exports.handler = async (event) => {
       };
     }
 
-    await persistNotificationAndQueueSync({ notification, rawBody, verification, signatureVerification, signatureHeader });
+    const result = await persistNotificationAndQueueSync({ notification, rawBody, verification, signatureVerification, signatureHeader });
 
     return {
-      statusCode: 204,
+      statusCode: result.dropped ? 202 : 204,
       headers: RESPONSE_HEADERS,
       body: '',
     };
@@ -395,6 +401,7 @@ exports.handler = async (event) => {
 };
 
 exports.__test = {
+  persistNotificationAndQueueSync,
   civilDateToDateKey,
   parseTinkSignatureHeader,
   normalizeNotification,
