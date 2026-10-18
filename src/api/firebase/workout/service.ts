@@ -1777,17 +1777,9 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     }
 
     // 2) Find the user doc by username
-    const usersRef = collection(db, 'users');
-    const userQuery = query(usersRef, where('username', '==', username));
-    const userSnapshot = await getDocs(userQuery);
-
-    if (userSnapshot.empty) {
-      throw new Error('User not found');
-    }
-
-    const userDoc = userSnapshot.docs[0];
-    const userData = userDoc.data();
-    const userId = userDoc.id;
+    const userData = await userService.getUserByUsername(username);
+    if (!userData) throw new Error('User not found');
+    const userId = userData.id;
 
     // 3) Check if the challenge doc exists
     const challengeRef = doc(db, 'sweatlist-collection', challengeId);
@@ -1828,7 +1820,6 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       challenge: challengeForStorage,
       challengeId,
       userId,
-      fcmToken: userData.fcmToken || '',
       profileImage: userData.profileImage || {},
       progress: 0,
       completedWorkouts: [],
@@ -1838,7 +1829,6 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       },
       isCompleted: false,
       uid: userId,
-      location: userData.location || null,
       city: '',
       country: '',
       timezone: '',
@@ -1882,8 +1872,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
             id: userId,
             displayName: username,
             email: userData.email || '',
-            fcmToken: userData.fcmToken || '',
-            username: username,
+                  username: username,
             level: userData.level || 'novice',
             profileImage: userData.profileImage || { profileImageURL: '', imageOffsetWidth: 0, imageOffsetHeight: 0 }
           });

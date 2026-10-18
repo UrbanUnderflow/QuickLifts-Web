@@ -66,6 +66,33 @@ function resolvePulseCheckPushTarget(userData = {}) {
   return { token, eligible: true, reason: 'eligible' };
 }
 
+// Only canonical installation ownership can authorize a PulseCheck delivery.
+// Legacy profile tokens are deliberately not a fallback after account switches.
+async function loadPulseCheckPushTarget(db, userId) {
+  if (!db || !userId) return { eligible: false, token: '', reason: 'missing_owner' };
+  const user = await db.collection('users').doc(userId).get();
+  if (!user.exists || user.data()?.accountClosureRequestedAt) return { eligible: false, token: '', reason: 'account_closed' };
+  const snapshot = await db.collection('pulsecheck-push-installations').where('ownerUserId', '==', userId).get();
+  const entries = snapshot.docs.map(doc => doc.data()).filter(record =>
+    record.ownerUserId === userId && record.sourceApp === 'pulsecheck' && sanitizeName(record.token) && !record.revokedAt);
+  entries.sort((a, b) => (b.updatedAt?.toMillis?.() || 0) - (a.updatedAt?.toMillis?.() || 0));
+  const record = entries[0];
+  return record ? { eligible: true, token: record.token, platform: record.platform, userId, reason: 'eligible' }
+    : { eligible: false, token: '', reason: 'missing_owned_installation' };
+}
+
+function applyPulseCheckPushOwnership(message, target) {
+  message.data = { ...message.data, recipientUserId: target.userId };
+  if (target.platform === 'android') {
+    // Data-only delivery lets the app check the signed-in owner before displaying.
+    message.data = { ...message.data, title: message.notification?.title || message.data.title || '', body: message.notification?.body || message.data.body || '' };
+    delete message.notification;
+    message.android = { priority: 'high', ...(message.android || {}) };
+    delete message.android.notification;
+  }
+  return message;
+}
+
 function isBlockingOperationalStatus(value) {
   const normalized = sanitizeName(value).toLowerCase();
   return ['paused', 'withdrawn', 'watch_list', 'watchlist', 'restricted', 'restriction', 'manual_hold'].includes(normalized);
@@ -398,15 +425,18 @@ async function sendLoggedNoraPush({
     return { success: false, error: 'Missing FCM token' };
   }
 
-  const normalizedToken = fcmToken.trim();
-  const message = buildNoraPushMessage({
+  const target = await loadPulseCheckPushTarget(db, userId);
+  if (!target.eligible) return { success: false, error: target.reason };
+  const normalizedToken = target.token;
+  const message = applyPulseCheckPushOwnership(buildNoraPushMessage({
     fcmToken: normalizedToken,
     title,
     body,
     subtitle,
     data,
-  });
+  }), target);
 
+  const recipients = [{ userId, deliveryChannel: 'push' }];
   try {
     const recipients = [{
       userId,
@@ -487,6 +517,8 @@ async function sendLoggedNoraPush({
 }
 
 module.exports = {
+  loadPulseCheckPushTarget,
+  applyPulseCheckPushOwnership,
   buildCoachCheckInReminderMessage,
   buildNoraBiometricBriefNotification,
   buildNoraDailyReflectionNotification,

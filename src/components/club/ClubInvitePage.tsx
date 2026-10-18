@@ -13,7 +13,7 @@ export interface ClubInvite {
   accentColor: string;
   clubType: string;
   memberCount: number;
-  workoutsCompleted: number;
+  workoutsCompleted: number | null;
   creatorDisplayName: string;
   creatorUsername: string;
   creatorInitials: string;
@@ -139,7 +139,7 @@ const ClubInvitePage: React.FC<ClubInvitePageProps> = ({
   const accentColor = club.accentColor || '#FF6B35';
   const invitedByHandle = club.creatorUsername.startsWith('@') ? club.creatorUsername : `@${club.creatorUsername}`;
   const memberCountLabel = `${formatCount(club.memberCount)}+`;
-  const workoutsLabel = formatCount(club.workoutsCompleted);
+  const workoutsLabel = club.workoutsCompleted === null ? '—' : formatCount(club.workoutsCompleted);
   const stickyLabel = `Join ${club.name.replace(/\([^)]*\)/g, '').trim() || club.name}`;
   const openInviteDeepLink = club.openInviteDeepLink || club.inviteDeepLink;
 

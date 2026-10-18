@@ -388,7 +388,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const adminApp = getFirebaseAdminApp(forceDevFirebase);
-    const decoded = await admin.auth(adminApp).verifyIdToken(idToken);
+    const decoded = await admin.auth(adminApp).verifyIdToken(idToken, true);
     const userId = decoded.uid;
     const userEmail = normalizeEmail(decoded.email);
     if (!userEmail) {
@@ -400,6 +400,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const inviteRef = firestore.collection(INVITE_LINKS_COLLECTION).doc(token);
 
     const result = await firestore.runTransaction(async (transaction) => {
+      const closure = await transaction.get(firestore.collection('account-closure-jobs').doc(userId));
+      if (closure.exists) throw teamInviteRedemptionError('AUTH_INVALID');
       const inviteSnap = await transaction.get(inviteRef);
       if (!inviteSnap.exists) {
         throw teamInviteRedemptionError('INVITE_NOT_FOUND');
@@ -487,6 +489,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? firestore.collection(PILOT_ENROLLMENTS_COLLECTION).doc(buildPilotEnrollmentId(pilotId, userId))
         : null;
 
+      const privacyRef = firestore.collection('pulsecheck-private-users').doc(userId);
+      const privacySnap = await transaction.get(privacyRef);
+      const notificationRef = firestore.collection('pulsecheck-invite-accepted-outbox').doc(teamMembershipRef.id);
+      const notificationSnap = await transaction.get(notificationRef);
       const [organizationSnap, teamSnap] = await Promise.all([
         transaction.get(organizationRef),
         transaction.get(teamRef),
@@ -741,6 +747,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
       }
 
+      transaction.set(privacyRef, { userId, protected: true, createdAt: privacySnap.data()?.createdAt || now }, { merge: true });
+
       transaction.set(
         teamMembershipRef,
         {
@@ -875,6 +883,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             (teamMembershipRole === 'athlete' && Boolean(pilotId) && !hadExistingPilotEnrollment)
           : !hasActiveMatchingTeamMembership;
 
+      if (isNewJoin && teamMembershipRole === 'athlete' && invite.notifyCoachOnAccept === true && !notificationSnap.exists) {
+        transaction.set(notificationRef, { status: 'pending', membershipId: teamMembershipRef.id,
+          athleteUserId: userId, teamId, organizationId, inviteToken: token, createdAt: now, attempts: 0 });
+      }
+
       if (redemptionMode === 'general') {
         const grantedNewScopeAccess = isNewJoin;
         const shouldRepairInviteStatus = normalizeString(invite.status) !== 'active';
@@ -934,44 +947,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       };
     });
 
-    // The collection-wide Firebase membership trigger owns the internal company
-    // join alert. This route only sends the optional coach copy requested on the
-    // invite, and email failure must not fail redemption.
-    if (
-      result._isNewJoin &&
-      result.teamMembershipRole === 'athlete' &&
-      result._notifyCoachOnAccept &&
-      result._coachEmail
-    ) {
-      try {
-        const athleteName =
-          result._recipientName || normalizeString(decoded.name) || userEmail.split('@')[0] || 'An athlete';
-        const origin = normalizeString(req.headers.origin) || 'https://fitwithpulse.ai';
-        const functionUrl = `${origin}/.netlify/functions/send-pulsecheck-invite-accepted-email`;
-        void fetch(functionUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            athleteName,
-            athleteEmail: userEmail,
-            teamName: result.teamName,
-            organizationName: result.organizationName,
-            role: result.teamMembershipRole,
-            coachName: result._coachName,
-            coachEmail: result._coachEmail,
-            notifyCoach: result._notifyCoachOnAccept,
-            membershipId: result.teamMembershipId,
-            teamId: result.teamId,
-            athleteUserId: userId,
-          }),
-        }).catch((mailErr) => {
-          console.error('[pulsecheck-team-invite/redeem] accept email send failed:', mailErr);
-        });
-      } catch (mailErr) {
-        console.error('[pulsecheck-team-invite/redeem] accept email dispatch error:', mailErr);
-      }
-    }
-
+    // Notification intent is committed atomically with enrollment. A scheduled
+    // internal worker retries delivery; neither request Origin nor body recipients
+    // participate in destination selection.
     const {
       _isNewJoin,
       _recipientName,

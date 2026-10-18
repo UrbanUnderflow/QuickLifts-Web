@@ -1,53 +1,10 @@
-const { resolveProgramProductConfig } = require('./lib/program-product-config');
-// =============================================================================
-// Record Clinical Escalation — server-side Tier 3 routing fan-out.
-//
-// Endpoint: POST /.netlify/functions/record-clinical-escalation
-//
-// Body:
-//   {
-//     athleteUserId: string,
-//     teamId: string,
-//     organizationId?: string,
-//     pilotId?: string,
-//     tier: 1 | 2 | 3,
-//     signalSource: string,
-//     evidence: Array<{label, excerpt?, sourceRef?, confidence?}>,
-//     detectedAt?: number,        // unix seconds; defaults to now
-//     triggeredBySource: string,  // uid or service identifier
-//     dedupeWindowSeconds?: number
-//   }
-//
-// What it does, in order:
-//   1. Auth — requires Firebase ID token; the token uid must match
-//      `triggeredBySource` (for athlete-side calls) or carry an admin
-//      claim (for Pulse-side / inference-engine calls).
-//   2. Idempotency — same signal in the dedupe window short-circuits.
-//   3. Resolves the team's designated clinician (role: clinician + active).
-//   4. Writes the immutable escalation doc to `pulsecheck-clinical-escalations`.
-//   5. Tier 3 only:
-//        a. Sets `crisisWallActive: true` in the private athlete safety doc.
-//        b. Sends email to the clinician via Brevo.
-//        c. Sends SMS to the clinician via Twilio (when phone on file +
-//           Twilio creds present in env).
-//   6. Mirrors a row into the legacy `escalation-records` collection so
-//      the existing coach/admin escalation dashboard sees it.
-//
-// What it does NOT do:
-//   - Auto-call 988. Athletes call themselves from the crisis wall.
-//   - Auto-email anything to 988.
-//   - Page anyone other than the team's designated clinician.
-//
-// Idempotency:
-//   - Brevo dedupe key includes `escalationId` so a re-published call
-//     never sends a second email.
-//
-// Failure posture:
-//   - Email/SMS failures DO NOT roll back the escalation record. The
-//     audit trail captures the page attempt + delivery status. If both
-//     channels fail, the response is 502 with details so the caller can
-//     fall back to a phone call.
-// =============================================================================
+const { createHash, randomUUID } = require('node:crypto');
+const { athleteScope, responderAllowed } = require('./lib/clinical-responder-scope');
+// Tier 3 safety routing only. Active athlete/team/org and designated recipient
+// scope are rechecked server-side. PulseCheck provides resources; AthleticMind
+// pages its configured clinician. Routine requests use the canonical consent route.
+// Durable incident/stage claims preserve completed work and expose unknown provider
+// outcomes for reconciliation. A page receipt never claims delivered clinical care.
 
 const { admin, getFirebaseAdminApp, headers, initializeFirebaseAdmin } = require('./config/firebase');
 const { buildEmailDedupeKey, sendBrevoTransactionalEmail } = require('./utils/sendBrevoTransactionalEmail');
@@ -56,7 +13,6 @@ const { sendTwilioSms } = require('./utils/sendTwilioSms');
 const CLINICAL_ESCALATIONS_COLLECTION = 'pulsecheck-clinical-escalations';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
-const USERS_COLLECTION = 'users';
 const ATHLETE_SAFETY_STATE_COLLECTION = 'pulsecheck-athlete-safety-state';
 const LEGACY_ESCALATION_RECORDS_COLLECTION = 'escalation-records';
 
@@ -67,7 +23,7 @@ const DEFAULT_BREVO_SENDER_NAME = 'Pulse Sports Intelligence';
 const RESPONSE_HEADERS = {
   ...headers,
   'Content-Type': 'application/json',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': headers['Access-Control-Allow-Headers'] || 'Content-Type, Authorization, X-PulseCheck-Firebase-Mode',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -110,7 +66,7 @@ function isAdminClaim(claims) {
   return Boolean(claims.admin || claims.adminAccess || claims.role === 'admin');
 }
 
-async function requireFirebaseAuth(event) {
+async function requireFirebaseAuth(event, app) {
   const header = event?.headers?.authorization || event?.headers?.Authorization;
   if (!header || !header.startsWith('Bearer ')) {
     const error = new Error('Missing or malformed Authorization header');
@@ -118,7 +74,7 @@ async function requireFirebaseAuth(event) {
     throw error;
   }
   try {
-    return await admin.auth().verifyIdToken(header.slice(7).trim());
+    return await admin.auth(app).verifyIdToken(header.slice(7).trim(), true);
   } catch (verifyErr) {
     const error = new Error('Invalid Firebase ID token');
     error.statusCode = 401;
@@ -127,19 +83,7 @@ async function requireFirebaseAuth(event) {
   }
 }
 
-async function findActiveEscalationByDedupeKey(db, athleteUserId, dedupeKey) {
-  const snap = await db
-    .collection(CLINICAL_ESCALATIONS_COLLECTION)
-    .where('athleteUserId', '==', athleteUserId)
-    .where('dedupeKey', '==', dedupeKey)
-    .limit(1)
-    .get();
-  if (snap.empty) return null;
-  const docSnap = snap.docs[0];
-  return { id: docSnap.id, ...(docSnap.data() || {}) };
-}
-
-async function resolveDesignatedClinician(db, teamId) {
+async function resolveDesignatedClinician(db, teamId, scope, athleteUserId) {
   const snap = await db
     .collection(TEAM_MEMBERSHIPS_COLLECTION)
     .where('teamId', '==', teamId)
@@ -152,7 +96,7 @@ async function resolveDesignatedClinician(db, teamId) {
     const data = docSnap.data() || {};
     const email = normalizeString(data.email || data.workEmail).toLowerCase();
     const userId = normalizeString(data.userId);
-    if (!email || !userId) continue;
+    if (!email || !userId || !scope || !responderAllowed(data, scope, athleteUserId, teamId)) continue;
     candidates.push({
       userId,
       membershipId: docSnap.id,
@@ -169,34 +113,6 @@ async function resolveDesignatedClinician(db, teamId) {
     return a.addedAt - b.addedAt;
   });
   return candidates[0];
-}
-
-// The athlete's own contact phone (collected at intake) so the clinician can
-// place a welfare call. Stored on the athlete's team membership (membership.phone).
-async function resolveAthletePhone(db, teamId, athleteUserId) {
-  const snap = await db
-    .collection(TEAM_MEMBERSHIPS_COLLECTION)
-    .where('teamId', '==', teamId)
-    .where('userId', '==', athleteUserId)
-    .get();
-  for (const docSnap of snap.docs) {
-    const data = docSnap.data() || {};
-    const phone = normalizeString(data.phone);
-    if (phone) return phone;
-  }
-  return null;
-}
-
-async function resolveTeamMeta(db, teamId) {
-  const teamSnap = await db.collection(TEAMS_COLLECTION).doc(teamId).get();
-  if (!teamSnap.exists) {
-    return { displayName: 'this team', sportName: null };
-  }
-  const data = teamSnap.data() || {};
-  return {
-    displayName: normalizeString(data.displayName) || 'this team',
-    sportName: normalizeString(data.sportName) || null,
-  };
 }
 
 function buildClinicianEmail({
@@ -227,8 +143,7 @@ function buildClinicianEmail({
           <strong>Tier 3 athlete welfare alert.</strong> Pulse detected a critical-tier signal on an athlete on your team.
           You are receiving this because you are the designated clinician staff member for this team.
         </p>
-        <p>The athlete's app has been gated to a crisis-resource screen displaying 988, Crisis Text Line (741741), and 911.
-        The athlete will be informed that you have been notified.</p>
+        <p>Urgent resources include 988, Crisis Text Line (741741), and 911. Sign in to review the current safety and delivery status before responding.</p>
         <p><strong>Athlete:</strong> ${escapeHtml(athleteDisplayName || athleteUserId)}<br/>
         <strong>Athlete phone:</strong> ${
           athletePhone
@@ -271,10 +186,6 @@ function buildClinicianSms({
   ].join(' ');
 }
 
-async function sendClinicianSmsViaTwilio(phone, body) {
-  return sendTwilioSms({ to: phone, body });
-}
-
 async function setAthleteCrisisWall(db, athleteUserId, teamId, escalationId, reason) {
   await db.collection(ATHLETE_SAFETY_STATE_COLLECTION).doc(athleteUserId).set(
     {
@@ -289,19 +200,6 @@ async function setAthleteCrisisWall(db, athleteUserId, teamId, escalationId, rea
   );
 }
 
-async function mirrorToLegacyEscalationRecords(db, payload) {
-  return db.collection(LEGACY_ESCALATION_RECORDS_COLLECTION).add(
-    {
-      ...payload,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      classificationFamily: payload.tier >= 3 ? 'critical_safety' : 'care_escalation',
-      severity: payload.tier >= 3 ? 'critical' : 'high',
-      disposition: 'clinical_handoff',
-      status: 'active',
-    },
-  );
-}
-
 function getSiteUrl() {
   const raw = (process.env.NEXT_PUBLIC_SITE_URL || process.env.URL || '').replace(/\/+$/, '');
   return raw || 'https://fitwithpulse.ai';
@@ -311,287 +209,145 @@ function buildAcknowledgeUrl(escalationId) {
   return `${getSiteUrl()}/staff/clinical-escalations?ack=${encodeURIComponent(escalationId)}`;
 }
 
-exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: RESPONSE_HEADERS, body: '' };
+// A durable incident claim serializes all workers. An interrupted outbound stage is
+// unknown, never silently resent: providers without idempotency cannot guarantee exactly once.
+async function runIncident({ db, decoded, body, email = sendBrevoTransactionalEmail, sms = sendTwilioSms, now = nowSeconds, resumeId = null }) {
+  if ((await db.collection('account-closure-jobs').doc(decoded.uid).get()).exists) return json(403, { error: 'Account closure is in progress.' });
+  const athleteUserId = normalizeString(body.athleteUserId);
+  const teamId = normalizeString(body.teamId);
+  const signalSource = normalizeString(body.signalSource);
+  if (!athleteUserId || !teamId || !signalSource || [athleteUserId, teamId].some(id => id.length > 240 || id.includes('/')) || signalSource.length > 100) return json(400, { error: 'Athlete, team and signal source are required.' });
+  if (Number(body.tier) !== 3) return json(400, { error: 'This endpoint handles urgent Tier 3 safety only. Routine support requires the consent-based handoff.', code: 'ROUTINE_CONSENT_ROUTE_REQUIRED' });
+  if (decoded.uid !== athleteUserId && !isAdminClaim(decoded)) return json(403, { error: 'You may only record your own safety event.' });
+  const scope = await athleteScope(db, athleteUserId, teamId);
+  if (body.organizationId && body.organizationId !== scope.organizationId) return json(403, { error: 'Organization does not match current membership.' });
+  const hotlineOnly = scope.organization.productBrand === 'pulsecheck';
+  const clinician = hotlineOnly ? null : await resolveDesignatedClinician(db, teamId, scope, athleteUserId);
+  if (!hotlineOnly && !clinician) return json(409, { error: 'No active designated clinician covers this athlete.' });
+  const detectedAt = Number.isFinite(Number(body.detectedAt)) ? Number(body.detectedAt) : now();
+  if (!resumeId && Math.abs(detectedAt - now()) > 86400) return json(400, { error: 'Safety event time must be within the last day.' });
+  // A server-fixed window prevents clients disabling dedupe; team is part of identity.
+  const dedupeKey = buildDedupeKey(athleteUserId, `${teamId}|${signalSource}`, dayBucket(detectedAt, DEFAULT_DEDUPE_WINDOW_SECONDS));
+  const legacyKey = buildDedupeKey(athleteUserId, signalSource, dayBucket(detectedAt, DEFAULT_DEDUPE_WINDOW_SECONDS));
+  const legacy = await db.collection(CLINICAL_ESCALATIONS_COLLECTION).where('athleteUserId', '==', athleteUserId).where('dedupeKey', '==', legacyKey).limit(10).get();
+  const legacyRecord = legacy.docs.find(doc => doc.data().teamId === teamId);
+  const id = resumeId || legacyRecord?.id || createHash('sha256').update(dedupeKey).digest('hex');
+  const ref = db.collection(CLINICAL_ESCALATIONS_COLLECTION).doc(id);
+  const worker = randomUUID();
+  const claim = await db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const previous = snap.exists ? snap.data() : null;
+    if ((await tx.get(db.collection('account-closure-jobs').doc(decoded.uid))).exists) throw Object.assign(new Error('Account closure is in progress.'), { statusCode: 403 });
+    const currentScope = await athleteScope(db, athleteUserId, teamId, ref => tx.get(ref));
+    if (currentScope.organizationId !== scope.organizationId || currentScope.organization.productBrand !== scope.organization.productBrand) throw Object.assign(new Error('Program scope changed.'), { statusCode: 409 });
+    if (clinician) {
+      const currentResponder = await tx.get(db.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(clinician.membershipId));
+      if (!currentResponder.exists || !responderAllowed(currentResponder.data(), currentScope, athleteUserId, teamId)) throw Object.assign(new Error('Responder access changed.'), { statusCode: 403 });
+    }
+    if (resumeId && !previous) throw Object.assign(new Error('Incident unavailable.'), { statusCode: 404 });
+    if (previous?.leaseUntil > now()) return { busy: true, record: previous };
+    if (previous && (previous.supportRoute !== (hotlineOnly ? 'hotline' : 'clinician') || previous.pagedClinicianMembershipId !== (clinician?.membershipId || null))) {
+      return { conflict: true, record: previous }; // Program/recipient change never reroutes an existing incident.
+    }
+    const record = previous || { athleteUserId, teamId, organizationId: scope.organizationId,
+      productBrand: scope.organization.productBrand, supportRoute: hotlineOnly ? 'hotline' : 'clinician',
+      tier: 3, signalSource, detectedAt, recordedAt: admin.firestore.FieldValue.serverTimestamp(),
+      triggeredBySource: decoded.uid, dedupeKey, pagedClinicianMembershipId: clinician?.membershipId || null,
+      pagedClinicianUserId: clinician?.userId || null, deliveryStatus: 'pending', stages: {} };
+    tx.set(ref, { ...record, worker, leaseUntil: now() + 300 });
+    return { record, created: !previous };
+  });
+  if (claim.busy) return json(202, { success: false, recorded: true, escalationId: id, deliveryStatus: 'pending', retryable: true });
+  if (claim.conflict) return json(409, { success: false, recorded: true, escalationId: id, error: 'Incident route changed. Authorized reconciliation is required.' });
+  let record = claim.record;
+  const stages = { ...(record.stages || {}) };
+  if (!record.stages && !claim.created && !hotlineOnly) {
+    // Old rows predate durable stages. Known successful sends are retained;
+    // an absent receipt is ambiguous and must never be automatically resent.
+    for (const [name, result] of [['email', record.emailDelivery], ['sms', record.smsDelivery]]) {
+      stages[name] = { status: result?.success ? 'complete' : result?.skipped && name === 'sms' && !clinician.phone ? 'not_applicable' : 'unknown', providerId: result?.messageId || result?.messageSid || null };
+    }
   }
-  if (event.httpMethod !== 'POST') {
-    return json(405, { error: 'Method not allowed' });
+  const save = async patch => {
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (snap.data()?.worker !== worker) throw new Error('Incident lease changed; retry current state.');
+      const existing = snap.data();
+      const next = { ...patch };
+      if (next.deliveryStatus && ['clinician_acknowledged', 'resolved'].includes(existing.deliveryStatus)) next.deliveryStatus = existing.deliveryStatus;
+      tx.set(ref, next, { merge: true });
+    });
+  };
+  const stage = async (name, action, outbound = false) => {
+    if (stages[name]?.status === 'complete' || stages[name]?.status === 'not_applicable') return;
+    if (outbound && ['sending', 'unknown'].includes(stages[name]?.status)) {
+      stages[name] = { ...stages[name], status: 'unknown' };
+      await save({ stages }); return;
+    }
+    stages[name] = { status: outbound ? 'sending' : 'pending', attemptedAt: now() };
+    await save({ stages });
+    let result;
+    try { result = await action(); } catch { result = { success: false, outcomeUnknown: outbound, error: 'Stage could not be confirmed.' }; }
+    if (outbound && result?.success && !result.messageId && !result.messageSid) result = { outcomeUnknown: true };
+    stages[name] = { status: result?.success ? 'complete' : result?.outcomeUnknown ? 'unknown' : result?.notApplicable ? 'not_applicable' : 'failed',
+      attemptedAt: now(), providerId: result?.messageId || result?.messageSid || null };
+    await save({ stages });
+  };
+  try {
+    await stage('safety', async () => { await setAthleteCrisisWall(db, athleteUserId, teamId, id, signalSource); return { success: true }; });
+    if (!hotlineOnly) {
+      // Revalidate current tenant/responder authorization immediately before disclosure.
+      const freshScope = await athleteScope(db, athleteUserId, teamId);
+      const fresh = await db.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(clinician.membershipId).get();
+      if (!fresh.exists || !responderAllowed(fresh.data(), freshScope, athleteUserId, teamId)
+        || normalizeString(fresh.data().email || fresh.data().workEmail).toLowerCase() !== clinician.email
+        || (normalizeString(fresh.data().phone) || null) !== clinician.phone) throw Object.assign(new Error('Responder access changed.'), { statusCode: 403 });
+      const acknowledgeUrl = buildAcknowledgeUrl(id);
+      const emailCopy = buildClinicianEmail({ escalationId: id, athleteUserId, athleteDisplayName: null,
+        athletePhone: null, teamName: scope.team.displayName || 'Your team', evidence: [], detectedAt, acknowledgeUrl });
+      await stage('email', () => email({ toEmail: clinician.email, subject: emailCopy.subject, htmlContent: emailCopy.htmlContent,
+        sender: { email: process.env.BREVO_SENDER_EMAIL || DEFAULT_BREVO_SENDER_EMAIL, name: DEFAULT_BREVO_SENDER_NAME },
+        idempotencyKey: buildEmailDedupeKey(['clinical-escalation-v2', id, clinician.membershipId]), bypassDailyRecipientLimit: true }), true);
+      await stage('sms', () => clinician.phone ? sms({ to: clinician.phone, body: `PULSE urgent safety alert. Sign in to review and acknowledge: ${acknowledgeUrl}` }) : Promise.resolve({ notApplicable: true }), true);
+      // Mirror a minimal pointer only. No raw excerpts/consent summaries enter the legacy dashboard.
+      await stage('mirror', async () => { await db.collection(LEGACY_ESCALATION_RECORDS_COLLECTION).doc(`clinical-${id}`).set({
+        escalationId: id, userId: athleteUserId, athleteUserId, teamId, organizationId: scope.organizationId,
+        productBrand: record.productBrand, supportRoute: record.supportRoute, tier: 3,
+        classificationFamily: 'critical_safety', status: 'active', sourceType: 'clinical-responder',
+      }, { merge: true }); return { success: true }; });
+    }
+    const paged = stages.email?.status === 'complete' || stages.sms?.status === 'complete';
+    const attention = Object.values(stages).some(stage => ['failed', 'unknown', 'sending'].includes(stage.status));
+    const complete = stages.safety?.status === 'complete' && (hotlineOnly || paged) && !attention;
+    const deliveryStatus = record.acknowledgedAt ? 'clinician_acknowledged' : hotlineOnly ? (complete ? 'not_applicable' : 'failed') : paged ? 'clinician_paged' : 'failed';
+    await save({ stages, deliveryStatus, deliveryNeedsAttention: attention, leaseUntil: 0, worker: null });
+    return json(complete ? 200 : 502, { success: complete, recorded: !!claim.created, escalationId: id,
+      record: { id, athleteUserId, teamId, organizationId: scope.organizationId, tier: 3, signalSource, detectedAt, deliveryStatus, evidence: [] },
+      supportRoute: record.supportRoute, deliveryStatus, deliveryNeedsAttention: attention,
+      stageStatus: Object.fromEntries(Object.entries(stages).map(([key, value]) => [key, value.status])),
+      crisisWallActivated: stages.safety?.status === 'complete', providerConfirmed: false,
+      ...(hotlineOnly ? { hotlineResource: { name: '988 Suicide & Crisis Lifeline', phone: '988', url: 'https://988lifeline.org' } } : {}),
+      ...(!complete ? { error: 'Some safety delivery steps remain unconfirmed. Review status before retrying or using your backup protocol.' } : {}) });
+  } finally {
+    await save({ leaseUntil: 0, worker: null }).catch(() => {});
   }
-
+}
+exports.handler = async event => {
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: RESPONSE_HEADERS, body: '' };
+  if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });
   try {
     initializeFirebaseAdmin({ headers: event.headers || {} });
-    const adminApp = getFirebaseAdminApp({ headers: event.headers || {} });
-    const db = admin.firestore(adminApp);
-
-    const decoded = await requireFirebaseAuth(event);
-    const body = JSON.parse(event.body || '{}');
-
-    const athleteUserId = normalizeString(body.athleteUserId);
-    const teamId = normalizeString(body.teamId);
-    const tier = Number(body.tier);
-    const signalSource = normalizeString(body.signalSource);
-    const triggeredBySource = normalizeString(body.triggeredBySource);
-    const evidence = Array.isArray(body.evidence) ? body.evidence : [];
-    const detectedAt = Number.isFinite(Number(body.detectedAt)) ? Number(body.detectedAt) : nowSeconds();
-    const dedupeWindowSeconds = Number.isFinite(Number(body.dedupeWindowSeconds))
-      ? Number(body.dedupeWindowSeconds)
-      : DEFAULT_DEDUPE_WINDOW_SECONDS;
-
-    if (!athleteUserId || !teamId || ![1, 2, 3].includes(tier) || !signalSource || !triggeredBySource) {
-      return json(400, {
-        error: 'athleteUserId, teamId, tier (1|2|3), signalSource, and triggeredBySource are required.',
-      });
-    }
-
-    // Auth gate: caller must be the athlete in question OR an admin OR
-    // the inference engine service (identified by triggeredBySource starting with `service:`).
-    const callerIsAthlete = decoded.uid === athleteUserId;
-    const callerIsAdmin = isAdminClaim(decoded);
-    const callerIsServiceCallback = triggeredBySource.startsWith('service:') && callerIsAdmin;
-    if (!callerIsAthlete && !callerIsAdmin && !callerIsServiceCallback) {
-      return json(403, {
-        error: 'You may only record an escalation for yourself unless you are an admin or service principal.',
-      });
-    }
-
-    const dedupeKey = buildDedupeKey(athleteUserId, signalSource, dayBucket(detectedAt, dedupeWindowSeconds));
-    const existing = await findActiveEscalationByDedupeKey(db, athleteUserId, dedupeKey);
-    if (existing) {
-      return json(200, {
-        recorded: false,
-        record: existing,
-        dedupeReason: `Existing escalation ${existing.id} matched dedupeKey within the ${dedupeWindowSeconds}s window.`,
-      });
-    }
-
-    const product = await resolveProgramProductConfig(db, { teamId });
-    const hotlineOnly = product.escalationModel === '988';
-    const clinician = hotlineOnly ? null : await resolveDesignatedClinician(db, teamId);
-    const team = await resolveTeamMeta(db, teamId);
-
-    if (!clinician && !hotlineOnly) {
-      return json(409, {
-        error:
-          'Team has no active clinician membership with email on file. Tier 3 escalation routing requires a designated clinician staff member.',
-      });
-    }
-
-    // Fetch consent snapshot for audit
-    let consentSnapshot;
-    try {
-      const userSnap = await db.collection(USERS_COLLECTION).doc(athleteUserId).get();
-      if (userSnap.exists) {
-        const userData = userSnap.data() || {};
-        consentSnapshot = {
-          productConsentVersion: normalizeString(userData.productConsentVersion) || null,
-          completedConsentIds: Array.isArray(userData.completedConsentIds)
-            ? userData.completedConsentIds.slice(0, 10)
-            : [],
-        };
-      }
-    } catch (_) {
-      // Non-blocking: consent snapshot is best-effort
-    }
-
-    // Athlete display name for clinician copy
-    let athleteDisplayName = athleteUserId;
-    try {
-      const userSnap = await db.collection(USERS_COLLECTION).doc(athleteUserId).get();
-      if (userSnap.exists) {
-        const userData = userSnap.data() || {};
-        athleteDisplayName =
-          normalizeString(userData.displayName)
-          || normalizeString(`${userData.firstName || ''} ${userData.lastName || ''}`)
-          || athleteUserId;
-      }
-    } catch (_) {}
-
-    // Athlete's own contact phone (intake) so the clinician can place a welfare call.
-    let athletePhone = null;
-    try {
-      athletePhone = await resolveAthletePhone(db, teamId, athleteUserId);
-    } catch (_) {}
-
-    // 1. Write the immutable escalation doc
-    const escalationDoc = {
-      athleteUserId,
-      teamId,
-      organizationId: product.organizationId,
-      productBrand: product.brand,
-      supportRoute: hotlineOnly ? 'hotline' : 'clinician',
-      pilotId: normalizeString(body.pilotId) || null,
-      tier,
-      signalSource,
-      evidence,
-      detectedAt,
-      recordedAt: admin.firestore.FieldValue.serverTimestamp(),
-      deliveryStatus: hotlineOnly ? 'not_applicable' : 'pending',
-      dedupeKey,
-      triggeredBySource,
-      pagedClinicianMembershipId: clinician?.membershipId || null,
-      consentSnapshot: consentSnapshot || null,
-    };
-    const escalationRef = await db.collection(CLINICAL_ESCALATIONS_COLLECTION).add(escalationDoc);
-    const escalationId = escalationRef.id;
-    const acknowledgeUrl = buildAcknowledgeUrl(escalationId);
-    let crisisWallActivated = false;
-    let crisisWallError = null;
-
-    // 2. Tier 3 only: gate the athlete's app to the crisis wall
-    if (tier === 3) {
-      try {
-        await setAthleteCrisisWall(db, athleteUserId, teamId, escalationId, signalSource);
-        crisisWallActivated = true;
-      } catch (wallErr) {
-        console.error('[record-clinical-escalation] crisis wall set failed:', wallErr?.message || wallErr);
-        crisisWallError = wallErr?.message || 'Private athlete safety-state write failed.';
-        // Non-blocking for paging; the failed safety write remains visible in
-        // logs and must be reconciled before relying on the in-app wall.
-      }
-    }
-
-    if (hotlineOnly) {
-      return json(200, {
-        recorded: true,
-        record: { id: escalationId, ...escalationDoc },
-        supportRoute: 'hotline',
-        hotlineResource: { name: '988 Suicide & Crisis Lifeline', phone: '988', url: 'https://988lifeline.org' },
-        crisisWallActivated,
-        crisisWallError,
-        providerConfirmed: false,
-      });
-    }
-
-    // 3. Email the clinician
-    const emailCopy = buildClinicianEmail({
-      escalationId,
-      athleteUserId,
-      athleteDisplayName,
-      athletePhone,
-      teamName: team.displayName,
-      evidence,
-      detectedAt,
-      acknowledgeUrl,
-    });
-    const emailResult = await sendBrevoTransactionalEmail({
-      toEmail: clinician.email,
-      toName: clinician.displayName || clinician.email,
-      subject: emailCopy.subject,
-      htmlContent: emailCopy.htmlContent,
-      tags: ['clinical-escalation', `tier-${tier}`],
-      sender: {
-        email: process.env.BREVO_SENDER_EMAIL || DEFAULT_BREVO_SENDER_EMAIL,
-        name: process.env.BREVO_SENDER_NAME || DEFAULT_BREVO_SENDER_NAME,
-      },
-      headers: {
-        'X-Email-Type': 'clinical-escalation',
-        'X-Mailin-custom': JSON.stringify({
-          sequence: 'clinical-escalation-v1',
-          tier,
-          escalationId,
-          teamId,
-        }),
-      },
-      idempotencyKey: buildEmailDedupeKey(['clinical-escalation-v1', escalationId, clinician.email]),
-      idempotencyMetadata: {
-        sequence: 'clinical-escalation-v1',
-        escalationId,
-        teamId,
-        toEmail: clinician.email,
-      },
-      // Crisis pages bypass the daily recipient limit by design.
-      bypassDailyRecipientLimit: true,
-    });
-
-    // 4. SMS the clinician (when phone + Twilio available)
-    const smsBody = buildClinicianSms({
-      athleteDisplayName,
-      athleteUserId,
-      athletePhone,
-      teamName: team.displayName,
-      acknowledgeUrl,
-    });
-    const smsResult = clinician.phone
-      ? await sendClinicianSmsViaTwilio(clinician.phone, smsBody)
-      : { skipped: true, reason: 'No phone number on the clinician membership.' };
-
-    const deliveryStatus =
-      emailResult?.success ? 'clinician_paged' : (smsResult?.success ? 'clinician_paged' : 'failed');
-
-    await db.collection(CLINICAL_ESCALATIONS_COLLECTION).doc(escalationId).set(
-      {
-        deliveryStatus,
-        emailDelivery: emailResult || null,
-        smsDelivery: smsResult || null,
-      },
-      { merge: true },
-    );
-
-    // 5. Mirror into the legacy escalation-records collection so the
-    // existing coach/admin escalation dashboard surfaces it.
-    try {
-      const legacyRef = await mirrorToLegacyEscalationRecords(db, {
-        escalationId,
-        athleteUserId,
-        userId: athleteUserId,
-        teamId,
-        coachId: null,
-        tier,
-        signalSource,
-        evidence,
-      });
-      await db.collection(CLINICAL_ESCALATIONS_COLLECTION).doc(escalationId).set(
-        { legacyEscalationRecordId: legacyRef.id },
-        { merge: true },
-      );
-    } catch (mirrorErr) {
-      console.warn('[record-clinical-escalation] legacy mirror failed (non-blocking):', mirrorErr?.message || mirrorErr);
-    }
-
-    if (deliveryStatus === 'failed') {
-      return json(502, {
-        error: 'Both email and SMS failed to deliver. Phone the clinician directly.',
-        recorded: true,
-        escalationId,
-        emailDelivery: emailResult,
-        smsDelivery: smsResult,
-      });
-    }
-
-    if (tier === 3 && !crisisWallActivated) {
-      return json(502, {
-        error: 'The escalation was recorded and the clinician page was attempted, but the athlete safety state was not activated.',
-        recorded: true,
-        escalationId,
-        deliveryStatus,
-        crisisWallActivated: false,
-        safetyStateError: crisisWallError,
-      });
-    }
-
-    return json(200, {
-      recorded: true,
-      escalationId,
-      tier,
-      deliveryStatus,
-      clinician: {
-        membershipId: clinician.membershipId,
-        email: clinician.email,
-        phone: clinician.phone,
-      },
-      crisisWallActivated,
-    });
+    const app = getFirebaseAdminApp({ headers: event.headers || {} });
+    const db = admin.firestore(app);
+    const decoded = await requireFirebaseAuth(event, app);
+    return await runIncident({ db, decoded, body: JSON.parse(event.body || '{}') });
   } catch (error) {
-    console.error('[record-clinical-escalation] Unexpected error:', error);
-    const status = Number.isFinite(error?.statusCode) ? error.statusCode : 500;
-    return json(status, {
-      error: error?.message || 'Internal server error while recording clinical escalation.',
-    });
+    return json(error.statusCode || 500, { success: false, error: error.statusCode ? error.message : 'Safety event could not be confirmed. Retry or follow your backup protocol.' });
   }
 };
 
 exports._private = {
+  runIncident,
   buildDedupeKey,
   dayBucket,
   buildClinicianEmail,

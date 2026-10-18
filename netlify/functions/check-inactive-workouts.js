@@ -1,3 +1,4 @@
+const { sendNonPulsePush } = require('./lib/legacy-push-ownership');
 // netlify/functions/check-inactive-workouts.js
 
 const { admin, db, headers } = require('./config/firebase'); // Adjust path if needed
@@ -55,7 +56,7 @@ async function sendNotification(fcmToken, title, body, customData = {}) {
     };
 
     try {
-        const response = await messaging.send(message);
+        const response = await sendNonPulsePush(db, messaging, message);
         console.log(`Successfully sent notification to token starting with ${fcmToken.substring(0, 10)}...:`, response);
         return { success: true, message: 'Notification sent successfully.' };
     } catch (error) {

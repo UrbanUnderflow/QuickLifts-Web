@@ -6,7 +6,7 @@
  * Failures are logged and swallowed so a sync never fails because of this.
  */
 
-const { resolvePulseCheckFcmToken, sendLoggedNoraPush, loadPulseCheckNudgeSuppressionState } = require('../pulsecheck-notification-utils');
+const { loadPulseCheckPushTarget, sendLoggedNoraPush, loadPulseCheckNudgeSuppressionState } = require('../pulsecheck-notification-utils');
 
 const LEDGER_COLLECTION = 'pulsecheck-activity-records';
 const RECENT_WINDOW_MS = 12 * 60 * 60 * 1000;
@@ -43,7 +43,7 @@ async function nudgeForNewWhoopWorkouts({ firestore, messaging, userId, workouts
     if (suppression?.suppressed) { await remember(); return { sent: false, reason: 'suppressed' }; }
 
     const userDoc = await firestore.collection('users').doc(userId).get();
-    const fcmToken = resolvePulseCheckFcmToken(userDoc.exists ? userDoc.data() : {});
+    const fcmToken = (await loadPulseCheckPushTarget(firestore, userId)).token;
     if (!fcmToken || !messaging) { await remember(); return { sent: false, reason: 'no_push_target' }; }
 
     const result = await send({

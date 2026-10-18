@@ -1,3 +1,4 @@
+const { ownedPayload } = require('./utils/ownedPulsePush');
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const {
@@ -159,7 +160,7 @@ exports.sendCoachAthleteMessageNotification = functions.firestore
         }
       };
       
-      const response = await admin.messaging().sendEachForMulticast(payload);
+      const response = await admin.messaging().sendEach(targets.map(target => { const {tokens, ...message} = payload; return ownedPayload({...message,token:target.token},recipientId,target.platform); }));
       logPushSendFailures(
         'Coach-athlete message',
         recipientId,

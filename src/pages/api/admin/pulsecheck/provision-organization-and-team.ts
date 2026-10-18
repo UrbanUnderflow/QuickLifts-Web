@@ -27,9 +27,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const adminApp = getFirebaseAdminApp(forceDevFirebase);
+    const identity = await adminApp.auth().verifyIdToken((req.headers.authorization || '').slice(7), true);
     const result = await provisionPulseCheckOrganizationAndTeam({
       adminApp,
       input: {
+        actorUid: identity.uid,
         actorLabel: `api/admin/pulsecheck/provision-organization-and-team (${adminRequest.email})`,
         organization: payload.organization,
         team: payload.team,

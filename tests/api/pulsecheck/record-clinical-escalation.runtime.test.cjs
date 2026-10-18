@@ -118,7 +118,7 @@ test('record-clinical-escalation — resolveDesignatedClinician picks primary, f
             where() { return builder; },
             async get() {
               return {
-                docs: memberships.map((data, idx) => ({ id: `mem-${idx}`, data: () => data })),
+                docs: memberships.map((data, idx) => ({ id: `mem-${idx}`, data: () => ({ ...data, teamId: "team-1", organizationId: "org", role: "clinician", status: "active" }) })),
               };
             },
           };
@@ -130,7 +130,7 @@ test('record-clinical-escalation — resolveDesignatedClinician picks primary, f
 
   // Empty case: returns null
   let db = buildMockDb([]);
-  let result = await resolveDesignatedClinician(db, 'team-1');
+  let result = await resolveDesignatedClinician(db, 'team-1', { organizationId: 'org' }, 'athlete');
   assert.equal(result, null);
 
   // Skips entries with missing email
@@ -138,7 +138,7 @@ test('record-clinical-escalation — resolveDesignatedClinician picks primary, f
     { userId: 'u1', email: '', addedAt: 100 },
     { userId: 'u2', email: 'doc@example.com', addedAt: 200 },
   ]);
-  result = await resolveDesignatedClinician(db, 'team-1');
+  result = await resolveDesignatedClinician(db, 'team-1', { organizationId: 'org' }, 'athlete');
   assert.equal(result?.email, 'doc@example.com');
   assert.equal(result?.userId, 'u2');
 
@@ -147,7 +147,7 @@ test('record-clinical-escalation — resolveDesignatedClinician picks primary, f
     { userId: 'u1', email: 'first@example.com', addedAt: 100 },
     { userId: 'u2', email: 'primary@example.com', addedAt: 999, isPrimaryClinician: true },
   ]);
-  result = await resolveDesignatedClinician(db, 'team-1');
+  result = await resolveDesignatedClinician(db, 'team-1', { organizationId: 'org' }, 'athlete');
   assert.equal(result?.email, 'primary@example.com');
 
   // No primary: oldest addedAt wins
@@ -155,7 +155,7 @@ test('record-clinical-escalation — resolveDesignatedClinician picks primary, f
     { userId: 'u2', email: 'newer@example.com', addedAt: 999 },
     { userId: 'u1', email: 'older@example.com', addedAt: 100 },
   ]);
-  result = await resolveDesignatedClinician(db, 'team-1');
+  result = await resolveDesignatedClinician(db, 'team-1', { organizationId: 'org' }, 'athlete');
   assert.equal(result?.email, 'older@example.com');
 });
 

@@ -46,6 +46,7 @@ function compileTypeScriptRuntime({ cacheKey, entryPaths, assets = [] }) {
     '--moduleResolution', 'node',
     '--esModuleInterop',
     '--allowJs',
+    '--resolveJsonModule',
     '--skipLibCheck',
     '--pretty', 'false',
     '--outDir', outDir,
@@ -88,7 +89,7 @@ function clearCompiledRuntimeCache(compiled) {
   }
 
   for (const cacheKey of Object.keys(require.cache)) {
-    if (cacheKey.startsWith(compiled.outDir)) {
+    if (cacheKey.startsWith(compiled.outDir) || cacheKey.startsWith(fs.realpathSync(compiled.outDir))) {
       delete require.cache[cacheKey];
     }
   }

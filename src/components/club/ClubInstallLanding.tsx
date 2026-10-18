@@ -22,7 +22,7 @@ type ClubData = NonNullable<ClubLandingPageProps['clubData']>;
 type ClubInstallLandingProps = {
   clubData: ClubData;
   creatorData?: ClubLandingPageProps['creatorData'];
-  totalWorkoutsCompleted?: number;
+  totalWorkoutsCompleted?: number | null;
   allRounds?: RoundPreview[];
   pageUrl: string;
   sharedBy?: string | null;
@@ -103,7 +103,7 @@ const buildCreatorUsername = (creatorData?: ClubLandingPageProps['creatorData'],
 const ClubInstallLanding: React.FC<ClubInstallLandingProps> = ({
   clubData,
   creatorData,
-  totalWorkoutsCompleted = 0,
+  totalWorkoutsCompleted = null,
   allRounds = [],
   pageUrl,
   sharedBy,
@@ -131,10 +131,7 @@ const ClubInstallLanding: React.FC<ClubInstallLandingProps> = ({
     CLUB_TYPE_LABELS[clubData.clubType || ''] ||
     (typeof clubData.clubType === 'string' && clubData.clubType.trim()) ||
     'Track Club';
-  const workoutsCompleted = Math.max(
-    1,
-    totalWorkoutsCompleted || allRounds.reduce((count, round) => count + (round.workoutCount || 0), 0)
-  );
+  const workoutsCompleted = totalWorkoutsCompleted;
 
   const installFallbackPath = buildClubInstallPath(clubData.id, {
     sharedBy: sharedBy || undefined,

@@ -8,30 +8,9 @@ import {
   Phone,
   ShieldAlert,
 } from 'lucide-react';
-import {
-  collection,
-  doc,
-  getDoc,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-} from 'firebase/firestore';
 import { useUser, useUserLoading } from '../../hooks/useUser';
-import { db } from '../../api/firebase/config';
-import { adminMethods } from '../../api/firebase/admin/methods';
-import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import {
-  buildClinicalEscalationQueueQueryScopes,
-  buildClinicalEscalationTeamScope,
-  canAccessClinicalEscalationRecord,
-  hasClinicalEscalationMembershipAccess,
-  mergeClinicalEscalationTeamScopes,
-  type ClinicalEscalationTeamScope,
-} from '../../api/firebase/pulsecheckClinicalEscalationAccess';
-import {
-  CLINICAL_ESCALATIONS_COLLECTION,
+  clinicalResponderRequest,
   acknowledgeClinicalEscalation,
   resolveClinicalEscalation,
   type ClinicalEscalationRecord,
@@ -57,14 +36,8 @@ import CrisisResources from '../../components/clinical-escalation/CrisisResource
 // deep links.
 // =============================================================================
 
-const ACTIVE_QUEUE_STATUSES = [
-  'pending',
-  'clinician_paged',
-  'clinician_acknowledged',
-] satisfies EscalationDeliveryStatus[];
-const ACTIVE_QUEUE_LIMIT = 50;
-
 const STATUS_TONE: Record<EscalationDeliveryStatus, { label: string; className: string }> = {
+  not_applicable: { label: 'Resources only', className: 'text-zinc-300' },
   pending: { label: 'Pending', className: 'border-amber-700/50 bg-amber-950/30 text-amber-200' },
   clinician_paged: { label: 'Clinician paged', className: 'border-amber-700/50 bg-amber-950/30 text-amber-100' },
   clinician_acknowledged: {
@@ -92,11 +65,7 @@ const formatTimestamp = (value: unknown): string => {
   return new Date(ms).toLocaleString();
 };
 
-type PermissionState =
-  | { status: 'loading' }
-  | { status: 'denied'; reason: string }
-  | { status: 'granted'; isAdmin: true; clinicalScopes: 'all' }
-  | { status: 'granted'; isAdmin: false; clinicalScopes: ClinicalEscalationTeamScope[] };
+type PermissionState = { status: 'loading' | 'granted' } | { status: 'denied'; reason: string };
 
 const ClinicalEscalationsPage: React.FC = () => {
   const router = useRouter();
@@ -116,192 +85,28 @@ const ClinicalEscalationsPage: React.FC = () => {
 
   const ackParam = typeof router.query.ack === 'string' ? router.query.ack : '';
 
-  // Permission resolution: platform admin OR an active team membership with
-  // clinical access. For clinical staff, resolve the active athletes inside
-  // each roster scope before opening any escalation listeners.
+  // Server returns only the current designated responder's minimal projection.
   useEffect(() => {
     if (userLoading) return;
-    if (!currentUser?.id || !currentUser.email) {
-      setPermission({
-        status: 'denied',
-        reason: 'Sign in to a Pulse account that has been added as a clinician on a team.',
-      });
-      return;
-    }
-    let cancelled = false;
-    const run = async () => {
-      try {
-        const isAdmin = await adminMethods.isAdmin(currentUser.email);
-        if (cancelled) return;
-        if (isAdmin) {
-          setPermission({ status: 'granted', isAdmin: true, clinicalScopes: 'all' });
-          return;
-        }
-        const memberships = await pulseCheckProvisioningService.listUserTeamMemberships(currentUser.id);
-        if (cancelled) return;
-        const clinicalMembershipsByTeam = new Map(
-          memberships
-            .filter(hasClinicalEscalationMembershipAccess)
-            .map((membership) => [membership.teamId, membership] as const),
-        );
-        const clinicalMemberships = Array.from(clinicalMembershipsByTeam.values());
-        if (clinicalMemberships.length === 0) {
-          setPermission({
-            status: 'denied',
-            reason:
-              'This page is for Pulse admins and clinical team members. Your account does not have active clinical access on a team.',
-          });
-          return;
-        }
-
-        const scopes = await Promise.all(
-          clinicalMemberships.map(async (membership) =>
-            buildClinicalEscalationTeamScope(
-              membership,
-              await pulseCheckProvisioningService.listTeamMemberships(membership.teamId),
-            )),
-        );
-        if (cancelled) return;
-        setPermission({
-          status: 'granted',
-          isAdmin: false,
-          clinicalScopes: mergeClinicalEscalationTeamScopes(scopes),
-        });
-      } catch (err) {
-        if (!cancelled) {
-          setPermission({
-            status: 'denied',
-            reason: err instanceof Error ? err.message : 'Could not verify access.',
-          });
-        }
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentUser?.id, currentUser?.email, userLoading]);
-
-  // Live subscription to the active queue. Admins keep the full queue query.
-  // Clinical staff get one explicitly team-and-athlete-scoped query per active
-  // athlete so the potential result set satisfies the Firestore rule.
-  useEffect(() => {
-    if (permission.status !== 'granted') return;
-    setLoadingQueue(true);
-    const queryScopes = buildClinicalEscalationQueueQueryScopes(
-      permission.isAdmin,
-      permission.clinicalScopes === 'all' ? [] : permission.clinicalScopes,
-    );
-    if (queryScopes.length === 0) {
-      setQueue([]);
-      setLoadingQueue(false);
-      return;
-    }
-
-    const queueQueries = queryScopes.map((scope) => ({
-      key: scope.kind === 'admin'
-        ? 'admin'
-        : `${scope.teamId}:${scope.athleteUserId}`,
-      query: scope.kind === 'admin'
-        ? query(
-          collection(db, CLINICAL_ESCALATIONS_COLLECTION),
-          where('deliveryStatus', 'in', ACTIVE_QUEUE_STATUSES),
-          orderBy('detectedAt', 'desc'),
-          limit(ACTIVE_QUEUE_LIMIT),
-        )
-        : query(
-          collection(db, CLINICAL_ESCALATIONS_COLLECTION),
-          where('teamId', '==', scope.teamId),
-          where('athleteUserId', '==', scope.athleteUserId),
-          where('deliveryStatus', 'in', ACTIVE_QUEUE_STATUSES),
-          orderBy('detectedAt', 'desc'),
-          limit(ACTIVE_QUEUE_LIMIT),
-        ),
-    }));
-    const rowsByQuery = new Map<string, ClinicalEscalationRecord[]>();
-    const loadingQueries = new Set(queueQueries.map((entry) => entry.key));
-
-    const publishQueue = () => {
-      const rowsById = new Map<string, ClinicalEscalationRecord>();
-      for (const rows of rowsByQuery.values()) {
-        for (const row of rows) rowsById.set(row.id, row);
-      }
-      setQueue(
-        Array.from(rowsById.values())
-          .sort((left, right) => timestampToMillis(right.detectedAt) - timestampToMillis(left.detectedAt))
-          .slice(0, ACTIVE_QUEUE_LIMIT),
-      );
-    };
-    const finishLoadingQuery = (key: string) => {
-      loadingQueries.delete(key);
-      if (loadingQueries.size === 0) setLoadingQueue(false);
-    };
-
-    const unsubs = queueQueries.map((entry) =>
-      onSnapshot(
-        entry.query,
-        (snap) => {
-          rowsByQuery.set(
-            entry.key,
-            snap.docs.map((docSnap) => ({
-              ...(docSnap.data() as ClinicalEscalationRecord),
-              id: docSnap.id,
-            })),
-          );
-          publishQueue();
-          finishLoadingQuery(entry.key);
-        },
-        (err) => {
-          console.error(`[ClinicalEscalationsPage] queue listener ${entry.key} failed:`, err);
-          rowsByQuery.delete(entry.key);
-          publishQueue();
-          setError(err?.message || 'Could not load active escalations.');
-          finishLoadingQuery(entry.key);
-        },
-      ),
-    );
-    return () => unsubs.forEach((unsub) => unsub());
-  }, [permission]);
-
-  // Single-record load when arriving via ?ack=<id> deep link. Enforces
-  // the same team-scope permission so a clinician at School A can't open
-  // a record for School B by guessing the id.
-  useEffect(() => {
-    if (!router.isReady || !ackParam) return;
-    if (permission.status !== 'granted') return;
-    let cancelled = false;
+    if (!currentUser?.id) { setPermission({ status: 'denied', reason: 'Sign in as the designated clinician.' }); return; }
+    let active = true;
     const load = async () => {
-      setLoadingActive(true);
-      setError(null);
       try {
-        const snap = await getDoc(doc(db, CLINICAL_ESCALATIONS_COLLECTION, ackParam));
-        if (cancelled) return;
-        if (!snap.exists()) {
-          setError(`No escalation found for id ${ackParam}.`);
-          setActiveRecord(null);
-          return;
+        const payload = await clinicalResponderRequest({ action: 'list' });
+        if (!active) return;
+        setPermission({ status: 'granted' }); setQueue(payload.records || []); setError(null);
+        if (ackParam) {
+          const detail = await clinicalResponderRequest({ action: 'get', escalationId: ackParam });
+          if (active) setActiveRecord(detail.record || null);
         }
-        const record = { ...(snap.data() as ClinicalEscalationRecord), id: snap.id };
-        const allowed = permission.clinicalScopes;
-        if (allowed !== 'all' && !canAccessClinicalEscalationRecord(allowed, record)) {
-          setError('You do not have access to this escalation.');
-          setActiveRecord(null);
-          return;
-        }
-        setActiveRecord(record);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Could not load escalation.');
-        }
-      } finally {
-        if (!cancelled) setLoadingActive(false);
-      }
+      } catch (error) {
+        if (active) { setQueue([]); setActiveRecord(null); setError(error instanceof Error ? error.message : 'Could not verify responder access.'); setPermission({ status: 'granted' }); }
+      } finally { if (active) { setLoadingQueue(false); setLoadingActive(false); } }
     };
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [ackParam, router.isReady, permission]);
+    setLoadingActive(Boolean(ackParam)); void load();
+    const interval = window.setInterval(load, 30000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [currentUser?.id, userLoading, ackParam]);
 
   const handleAcknowledge = async (record: ClinicalEscalationRecord) => {
     if (!currentUser?.id) {
@@ -317,13 +122,21 @@ const ClinicalEscalationsPage: React.FC = () => {
         `Acknowledged. The escalation is on your queue until you mark it resolved. Reach out to the athlete or their emergency contact per your protocol.`,
       );
       // Refresh active record if loaded
-      const fresh = await getDoc(doc(db, CLINICAL_ESCALATIONS_COLLECTION, record.id));
-      if (fresh.exists()) {
-        setActiveRecord({ ...(fresh.data() as ClinicalEscalationRecord), id: fresh.id });
-      }
+      const fresh = await clinicalResponderRequest({ action: 'get', escalationId: record.id });
+      setActiveRecord(fresh.record || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not acknowledge escalation.');
     } finally {
+      setAckInProgress(false);
+    }
+  };
+
+  const handleRetry = async (record: ClinicalEscalationRecord) => {
+    setAckInProgress(true); setError(null);
+    try { await clinicalResponderRequest({ action: 'retry', escalationId: record.id }); setNotice('Confirmed failed steps were retried. Successful steps were preserved.'); }
+    catch (error) { setError(error instanceof Error ? error.message : 'Delivery remains unconfirmed.'); }
+    finally {
+      try { const fresh = await clinicalResponderRequest({ action: 'get', escalationId: record.id }); setActiveRecord(fresh.record || null); } catch { setActiveRecord(null); }
       setAckInProgress(false);
     }
   };
@@ -350,12 +163,10 @@ const ClinicalEscalationsPage: React.FC = () => {
       setNotice(
         result.providerConfirmed
           ? 'Resolved with the clinical provider. The athlete\'s protective state was not changed. Only a MANAS watch-list removal or authoritative care-state reconciliation can clear it.'
-          : 'Resolved in PulseCheck. No clinical provider case reference was available to confirm remotely. The athlete\'s protective state was not changed.',
+          : 'Response recorded as resolved in this queue. This does not confirm provider care or change the athlete’s protective state.',
       );
-      const fresh = await getDoc(doc(db, CLINICAL_ESCALATIONS_COLLECTION, record.id));
-      if (fresh.exists()) {
-        setActiveRecord({ ...(fresh.data() as ClinicalEscalationRecord), id: fresh.id });
-      }
+      const fresh = await clinicalResponderRequest({ action: 'get', escalationId: record.id });
+      setActiveRecord(fresh.record || null);
       setResolutionNote('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not resolve escalation.');
@@ -446,6 +257,7 @@ const ClinicalEscalationsPage: React.FC = () => {
                 <EscalationDetail
                   record={visibleRecord}
                   onAcknowledge={() => handleAcknowledge(visibleRecord)}
+                  onRetry={() => handleRetry(visibleRecord)}
                   onResolve={() => handleResolve(visibleRecord)}
                   ackInProgress={ackInProgress}
                   resolveInProgress={resolveInProgress}
@@ -540,6 +352,7 @@ const EscalationRow: React.FC<EscalationRowProps> = ({ record, onOpen, isOpen })
 interface EscalationDetailProps {
   record: ClinicalEscalationRecord;
   onAcknowledge: () => void;
+  onRetry: () => void;
   onResolve: () => void;
   ackInProgress: boolean;
   resolveInProgress: boolean;
@@ -550,6 +363,7 @@ interface EscalationDetailProps {
 const EscalationDetail: React.FC<EscalationDetailProps> = ({
   record,
   onAcknowledge,
+  onRetry,
   onResolve,
   ackInProgress,
   resolveInProgress,
@@ -563,7 +377,8 @@ const EscalationDetail: React.FC<EscalationDetailProps> = ({
   return (
     <div className="mt-4 space-y-5">
       <div className="grid gap-3 sm:grid-cols-3">
-        <DetailField label="Athlete" value={record.athleteUserId} />
+        <DetailField label="Athlete" value={record.athleteDisplayName || record.athleteUserId} />
+        <DetailField label="Contact phone" value={record.athletePhone || "Not on file"} />
         <DetailField label="Team" value={record.teamId} />
         <DetailField label="Tier" value={`Tier ${record.tier}`} />
         <DetailField label="Detected" value={formatTimestamp(record.detectedAt)} />
@@ -576,24 +391,11 @@ const EscalationDetail: React.FC<EscalationDetailProps> = ({
         </div>
       </div>
 
-      <div>
-        <p className="text-[10px] uppercase tracking-wide text-zinc-500">Signal evidence</p>
-        <ul className="mt-2 space-y-2">
-          {record.evidence.map((entry, idx) => (
-            <li
-              key={idx}
-              className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-2 text-xs text-zinc-200"
-            >
-              <p className="font-semibold">{entry.label}</p>
-              {entry.excerpt && (
-                <p className="mt-1 italic text-zinc-400">"{entry.excerpt}"</p>
-              )}
-              {entry.confidence && (
-                <p className="mt-1 text-[10px] text-zinc-500">confidence: {entry.confidence}</p>
-              )}
-            </li>
-          ))}
-        </ul>
+      <div className="rounded-lg border border-zinc-700 p-3 text-sm text-zinc-200">
+        <p>Delivery steps: {Object.entries(record.stageStatus || {}).map(([name, status]) => `${name}: ${status}`).join(' · ') || 'Legacy delivery state unavailable'}</p>
+        {record.deliveryNeedsAttention && <p className="mt-2 text-amber-200">Some steps failed or remain unconfirmed. Use your backup protocol. An unknown result requires provider reconciliation before another message is sent.</p>}
+        {record.deliveryNeedsAttention && <button className="mt-3 rounded border border-zinc-500 px-3 py-2" disabled={ackInProgress} onClick={onRetry}>Retry confirmed failed steps</button>}
+        <p className="mt-2">Acknowledgement records receipt. It does not confirm that care was delivered.</p>
       </div>
 
       {isAcknowledged && (
@@ -647,7 +449,7 @@ const EscalationDetail: React.FC<EscalationDetailProps> = ({
           <button
             type="button"
             onClick={onResolve}
-            disabled={resolveInProgress || !resolutionNote.trim()}
+            disabled={resolveInProgress || !isAcknowledged || !resolutionNote.trim()}
             className="inline-flex items-center gap-2 rounded-xl border border-emerald-700/60 bg-emerald-950/40 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-900/40 disabled:opacity-50"
           >
             {resolveInProgress ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}

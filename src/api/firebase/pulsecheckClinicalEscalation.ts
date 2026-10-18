@@ -1,38 +1,10 @@
-// =============================================================================
-// PulseCheck Clinical Escalation — Tier 3 routing layer.
-//
-// What this service does (and only does):
-//   1. Records an immutable Tier 3 escalation event in
-//      `pulsecheck-clinical-escalations`.
-//   2. Sets `crisisWallActive: true` in the athlete's private safety-state doc
-//      so authorized clients can gate the app to crisis resources.
-//   3. Fans out to the team's designated clinician staff member (email +
-//      SMS via Twilio when phone on file).
-//   4. Mirrors the event into the existing `escalation-records` collection
-//      so the coach/admin dashboard surfaces it.
-//
-// What this service does NOT do:
-//   - Auto-dial 988 (athlete must tap-to-call from the wall — never auto-call).
-//   - Send anything to 988 (the line takes person-in-crisis calls only).
-//   - Make a clinical decision. The Tier 3 signal comes upstream from
-//     existing detection; this service is routing + notification + audit.
-//
-// Liability posture:
-//   - Pulse is not a clinical service. The team's designated clinician
-//     applies clinical judgment and is the human in the loop.
-//   - Onboarding consent (v5+) explicitly authorizes this notification.
-//   - All actions are logged with timestamps to discharge documented duty.
-//
-// AuntEDNA path (future):
-//   - When AuntEDNA integration ships, escalations route through it and
-//     this interim service either delegates to AuntEDNA or hands off the
-//     athlete record after the on-staff clinician acknowledges. Either way
-//     the contract on this side stays the same — recordTier3Escalation()
-//     is the single entrypoint.
-// =============================================================================
+// Tier 3 safety routing and minimal responder queue clients. All recording,
+// acknowledgement and resolution go through authenticated server endpoints.
+// Participation, optional health authorization and routine event consent stay
+// separate from the configured urgent safety basis. Queue resolution records
+// the responder's action; it never clears protective state or proves provider care.
 
 import {
-  addDoc,
   collection,
   doc,
   getDocs,
@@ -41,7 +13,7 @@ import {
   setDoc,
   where,
 } from 'firebase/firestore';
-import { auth, db } from './config';
+import { auth, db, getFirebaseModeRequestHeaders } from './config';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Types
@@ -62,7 +34,8 @@ export type EscalationDeliveryStatus =
   | 'clinician_paged'
   | 'clinician_acknowledged'
   | 'resolved'
-  | 'failed';
+  | 'failed'
+  | 'not_applicable';
 
 export interface ClinicalEscalationEvidence {
   /** Plain-English label of the signal (reviewer/clinician facing only). */
@@ -95,6 +68,10 @@ export interface ClinicalEscalationRecord {
   resolvedByUserId?: string;
   resolutionNote?: string;
   deliveryStatus: EscalationDeliveryStatus;
+  deliveryNeedsAttention?: boolean;
+  stageStatus?: Record<string, string>;
+  athleteDisplayName?: string;
+  athletePhone?: string;
   /** Idempotency key (signal + window). */
   dedupeKey: string;
   /** Snapshot of the consent versions the athlete had accepted at trigger time. */
@@ -304,32 +281,7 @@ export const setAthleteCrisisWallActive = async (
 // Public entry — record a Tier 3 escalation
 // ──────────────────────────────────────────────────────────────────────────────
 
-const findExistingActiveRecordWithinWindow = async (
-  athleteUserId: string,
-  dedupeKey: string,
-): Promise<ClinicalEscalationRecord | null> => {
-  const snap = await getDocs(
-    query(
-      collection(db, CLINICAL_ESCALATIONS_COLLECTION),
-      where('athleteUserId', '==', athleteUserId),
-      where('dedupeKey', '==', dedupeKey),
-    ),
-  );
-  if (snap.empty) return null;
-  const docSnap = snap.docs[0];
-  return { ...(docSnap.data() as ClinicalEscalationRecord), id: docSnap.id };
-};
-
-/**
- * Records an immutable Tier 3 (or lower) clinical escalation. Idempotent
- * within the dedupe window: a same-signal trigger inside 60 minutes (by
- * default) doesn't create a second record or re-page.
- *
- * The Netlify function `record-clinical-escalation` is the recommended
- * server-side path for fan-out (email + SMS + crisis wall flag). This
- * client-side helper is also exported so the reviewer screen can record
- * a manual escalation without round-tripping through a function.
- */
+/** Tier 3-only server fan-out. Preview builds a local record without submitting. */
 export const recordClinicalEscalation = async (
   input: RecordClinicalEscalationInput,
 ): Promise<RecordClinicalEscalationResult> => {
@@ -343,18 +295,6 @@ export const recordClinicalEscalation = async (
     input.signalSource,
     dayBucket(detectedAt, dedupeWindowSeconds),
   );
-
-  // Idempotency check — same signal in the same window short-circuits.
-  if (!input.preview) {
-    const existing = await findExistingActiveRecordWithinWindow(athleteUserId, dedupeKey);
-    if (existing) {
-      return {
-        recorded: false,
-        record: existing,
-        dedupeReason: `Existing escalation ${existing.id} matched dedupeKey within the ${dedupeWindowSeconds}s window.`,
-      };
-    }
-  }
 
   const record: ClinicalEscalationRecord = {
     id: '', // assigned by Firestore
@@ -380,41 +320,22 @@ export const recordClinicalEscalation = async (
     };
   }
 
-  const docRef = await addDoc(collection(db, CLINICAL_ESCALATIONS_COLLECTION), stripUndefinedDeep(record));
+  if (input.tier !== 3) throw new Error('Routine support requires the consent-based handoff.');
+  const payload = await clinicalRequest(RECORD_CLINICAL_ESCALATION_FUNCTION_PATH, input);
+  return { recorded: payload.recorded === true, record: payload.record as ClinicalEscalationRecord };
 
-  return {
-    recorded: true,
-    record: { ...record, id: docRef.id },
-  };
 };
 
-/**
- * Acknowledge an escalation — called by the clinician via a magic-link
- * confirmation page (or the admin dashboard). Captures who and when so
- * the audit trail shows duty was discharged.
- */
+/** Records authenticated designated-responder receipt, separately from clinical care. */
 export const acknowledgeClinicalEscalation = async (
   escalationId: string,
   acknowledgedByUserId: string,
 ): Promise<void> => {
-  const scopedId = requireString(escalationId, 'escalationId');
-  const scopedUser = requireString(acknowledgedByUserId, 'acknowledgedByUserId');
-  await setDoc(
-    doc(db, CLINICAL_ESCALATIONS_COLLECTION, scopedId),
-    {
-      acknowledgedAt: serverTimestamp(),
-      acknowledgedByUserId: scopedUser,
-      deliveryStatus: 'clinician_acknowledged' as EscalationDeliveryStatus,
-    },
-    { merge: true },
-  );
+  if (auth.currentUser?.uid !== acknowledgedByUserId) throw new Error('Sign in as the responding clinician.');
+  await clinicalResponderRequest({ action: 'acknowledge', escalationId });
 };
 
-/**
- * Resolve an escalation — clinician (or admin) marks the provider case as
- * addressed. Resolution never clears the athlete's protective safety state;
- * that requires an authoritative watchlist-removal or care-state signal.
- */
+/** Records local responder resolution while preserving protective state and provider status. */
 export const resolveClinicalEscalation = async (
   escalationId: string,
   options: {
@@ -429,45 +350,9 @@ export const resolveClinicalEscalation = async (
   clearancePending: boolean;
   providerConfirmed: boolean;
 }> => {
-  const scopedId = requireString(escalationId, 'escalationId');
-  const scopedUser = requireString(options.resolvedByUserId, 'resolvedByUserId');
-  const athleteUserId = requireString(options.athleteUserId, 'athleteUserId');
-  const firebaseUser = auth.currentUser;
-  if (!firebaseUser) {
-    throw new Error('[ClinicalEscalation] Sign in is required to resolve an escalation.');
-  }
-  const idToken = await firebaseUser.getIdToken();
-  const response = await fetch(PULSECHECK_ESCALATION_FUNCTION_PATH, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${idToken}`,
-    },
-    body: JSON.stringify({
-      action: 'resolve',
-      escalationId: options.legacyEscalationRecordId || scopedId,
-      clinicalEscalationId: scopedId,
-      userId: athleteUserId,
-      resolvedBy: scopedUser,
-      resolutionNote: options.resolutionNote,
-    }),
-  });
-  const payload = await response.json().catch(() => ({})) as {
-    resolved?: boolean;
-    crisisWallCleared?: boolean;
-    clearancePending?: boolean;
-    providerConfirmed?: boolean;
-    error?: string;
-  };
-  if (!response.ok || payload.resolved !== true) {
-    throw new Error(payload.error || '[ClinicalEscalation] The escalation could not be resolved.');
-  }
-  return {
-    resolved: true,
-    crisisWallCleared: false,
-    clearancePending: payload.clearancePending !== false,
-    providerConfirmed: payload.providerConfirmed === true,
-  };
+  if (auth.currentUser?.uid !== options.resolvedByUserId) throw new Error('Sign in as the responding clinician.');
+  await clinicalResponderRequest({ action: 'resolve', escalationId, resolutionNote: options.resolutionNote });
+  return { resolved: true, crisisWallCleared: false, clearancePending: true, providerConfirmed: false };
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -522,3 +407,14 @@ export const pulsecheckClinicalEscalationService = {
   setAthleteCrisisWallActive,
   CANONICAL_CRISIS_RESOURCES,
 };
+
+async function clinicalRequest(path: string, body: unknown): Promise<any> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in is required.');
+  const response = await fetch(path, { method: 'POST', headers: { ...getFirebaseModeRequestHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}` }, body: JSON.stringify(body) });
+  const payload = await response.json();
+  if (!response.ok || response.status === 202) throw new Error(payload.error || 'Delivery is pending or unconfirmed. Review the safety status before retrying.');
+  return payload;
+}
+export const clinicalResponderRequest = (body: unknown): Promise<{ records?: ClinicalEscalationRecord[]; record?: ClinicalEscalationRecord }> =>
+  clinicalRequest('/.netlify/functions/clinical-responder', body);

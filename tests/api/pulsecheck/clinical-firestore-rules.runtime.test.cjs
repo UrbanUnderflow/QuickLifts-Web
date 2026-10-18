@@ -38,10 +38,10 @@ test('clinical and escalation collections cannot use the signed-in compatibility
   }
 });
 
-test('private athlete safety state is owner/admin/scoped-clinician readable and client-write-denied', () => {
+test('private athlete safety state is owner-only and client-write-denied', () => {
   assert.match(
     rules,
-    /match \/pulsecheck-athlete-safety-state\/\{athleteUserId\}[\s\S]*request\.auth\.uid == athleteUserId[\s\S]*pcCanAccessClinicalTeamAthlete\([\s\S]*resource\.data\.teamId[\s\S]*athleteUserId[\s\S]*allow create, update, delete: if false;/
+    /match \/pulsecheck-athlete-safety-state\/\{athleteUserId\}[\s\S]*allow read: if isSignedIn\(\) && request\.auth\.uid == athleteUserId;[\s\S]*allow write: if false;/
   );
 });
 
@@ -76,27 +76,8 @@ test('clinical audit collections are admin-readable and reject all client writes
   }
 });
 
-test('clinical escalation clients have bounded reads and acknowledgement-only writes', () => {
-  assert.match(
-    rules,
-    /function pcCanAccessClinicalEscalation\(data\)[\s\S]*pcCanAccessClinicalTeamAthlete/
-  );
-  assert.match(
-    rules,
-    /function pcClinicalEscalationAcknowledgementUpdateIsValid\(\)[\s\S]*affectedKeys\(\)\.hasOnly\(\[[\s\S]*'acknowledgedAt'[\s\S]*'acknowledgedByUserId'[\s\S]*'deliveryStatus'[\s\S]*request\.resource\.data\.acknowledgedByUserId == request\.auth\.uid/
-  );
-  assert.doesNotMatch(
-    rules,
-    /function pcClinicalEscalationResolutionUpdateIsValid\(/
-  );
-  assert.match(
-    rules,
-    /match \/pulsecheck-clinical-escalations\/\{escalationId\}[\s\S]*allow create: if false;[\s\S]*allow update: if pcClinicalEscalationAcknowledgementUpdateIsValid\(\)[\s\S]*allow delete: if false;/
-  );
-  assert.doesNotMatch(
-    rules,
-    /allow update: if[\s\S]{0,200}pcClinicalEscalationResolutionUpdateIsValid/
-  );
+test('raw clinical records deny client access; responder actions use the server', () => {
+  assert.match(rules, /match \/pulsecheck-clinical-escalations\/\{escalationId\}\s*\{\s*allow read, write: if false;/);
 });
 
 test('native acknowledgements are owner-bound, minimal, and append-only', () => {
@@ -106,7 +87,7 @@ test('native acknowledgements are owner-bound, minimal, and append-only', () => 
   );
   assert.match(
     rules,
-    /match \/athleteAcknowledgements\/\{acknowledgementId\}[\s\S]*allow create: if pcAthleteClinicalAcknowledgementCreateIsValid[\s\S]*allow read, update, delete: if false;/
+    /match \/athleteAcknowledgements\/\{acknowledgementId\}[\s\S]*allow create: if isSignedIn\(\)[\s\S]*request\.resource\.data\.athleteUserId == request\.auth\.uid[\s\S]*request\.resource\.data\.acknowledgedAt == request\.time;[\s\S]*allow read, update, delete: if false;/
   );
 });
 
@@ -140,19 +121,9 @@ test('escalation conditions remain admin-managed', () => {
   );
 });
 
-test('clinical staff queue queries constrain both team and athlete before reading', () => {
-  assert.match(
-    clinicalStaffPage,
-    /where\('teamId', '==', scope\.teamId\)[\s\S]*where\('athleteUserId', '==', scope\.athleteUserId\)/
-  );
-  assert.match(
-    clinicalStaffPage,
-    /buildClinicalEscalationQueueQueryScopes\([\s\S]*permission\.isAdmin/
-  );
-  assert.doesNotMatch(
-    clinicalStaffPage,
-    /\.filter\(\(row\) => allowed === 'all'/
-  );
+test('clinical staff queue uses the authenticated responder projection instead of direct Firestore reads', () => {
+  assert.match(clinicalStaffPage, /clinicalResponderRequest/);
+  assert.doesNotMatch(clinicalStaffPage, /from ['"]firebase\/firestore['"]/);
 });
 
 test('clinical queue composite indexes are checked in for admin and scoped queries', () => {

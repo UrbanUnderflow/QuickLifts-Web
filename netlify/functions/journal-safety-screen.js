@@ -19,7 +19,7 @@ const { initializeFirebaseAdmin, getFirebaseAdminApp, headers, admin } = require
 const { runtimeHelpers: chatRuntime } = require('./pulsecheck-chat');
 const { runtimeHelpers: escalationRuntime } = require('./pulsecheck-escalation');
 const { isTrueCareEscalationClassification } = require('./utils/pulsecheck-pilot-metrics');
-const { resolvePulseCheckFcmToken, sendLoggedNoraPush } = require('./pulsecheck-notification-utils');
+const { loadPulseCheckPushTarget, sendLoggedNoraPush } = require('./pulsecheck-notification-utils');
 
 const JOURNAL_COLLECTION = 'pulsecheck-evidence-journals';
 const SAFETY_STATE_COLLECTION = 'pulsecheck-athlete-safety-state';
@@ -81,7 +81,7 @@ function handoffWording(outcome) {
 async function sendNeutralPush({ db, messaging, userId, tier, escalationId }) {
   try {
     const userDoc = await db.collection('users').doc(userId).get();
-    const fcmToken = resolvePulseCheckFcmToken(userDoc.exists ? userDoc.data() : {});
+    const fcmToken = (await loadPulseCheckPushTarget(db, userId)).token;
     if (!fcmToken || !messaging) return { success: false, error: 'No push target' };
     const critical = tier === CriticalRisk;
     return await sendLoggedNoraPush({

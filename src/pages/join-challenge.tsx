@@ -284,23 +284,17 @@ export default function JoinChallengePage() {
       setUserError('');
       
       // Query for the user by username
-      const usersRef = collection(db, 'users');
-      const userQuery = query(usersRef, where('username', '==', username));
-      const userSnapshot = await getDocs(userQuery);
-      
-      if (userSnapshot.empty) {
+      const userData = await userService.getUserByUsername(username);
+      if (!userData) {
         setUserError('User not found');
         return null;
       }
-      
-      const userDoc = userSnapshot.docs[0];
-      const userData = userDoc.data();
-      
+
       return {
-        id: userDoc.id,
+        id: userData.id,
         username: userData.username || '',
         displayName: userData.displayName || userData.username || '',
-        email: userData.email || '',
+        email: '',
         profileImage: userData.profileImage || {},
       };
     } catch (err) {

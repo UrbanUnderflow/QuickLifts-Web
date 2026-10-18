@@ -1,3 +1,4 @@
+const {accountOpenSet} = require('./lib/account-closure-guard');
 const crypto = require('crypto');
 const { admin, headers } = require('./config/firebase');
 const { getSecretManagerSecret } = require('./google-secret-manager-utils');
@@ -433,7 +434,7 @@ async function ensureFreshGoogleHealthConnection(connectionRef, connection) {
     lastError: '',
   };
 
-  await connectionRef.set(update, { merge: true });
+  await accountOpenSet(admin.firestore(), connection.userId || connectionRef.id.replace(/_google_health$/, ''), connectionRef, update, { merge: true });
   return { ...connection, ...update };
 }
 

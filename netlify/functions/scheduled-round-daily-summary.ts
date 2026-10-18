@@ -1,3 +1,4 @@
+import { sendNonPulsePush } from './lib/legacy-push-ownership';
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 
@@ -215,7 +216,7 @@ async function sendNotification(
             },
         };
 
-        const messageId = await messaging.send(message);
+        const messageId = await sendNonPulsePush(await getFirestore(), messaging, message);
         return { success: true, messageId };
     } catch (error: any) {
         console.error(`Failed to send notification to token ${fcmToken.substring(0, 10)}...`, error.message);

@@ -28,7 +28,7 @@ type ClubData = NonNullable<ClubLandingPageProps['clubData']>;
 interface ClubPublicLandingProps {
   clubData: ClubData;
   creatorData?: ClubLandingPageProps['creatorData'];
-  totalWorkoutsCompleted?: number;
+  totalWorkoutsCompleted?: number | null;
   allRounds?: RoundPreview[];
   onJoin: () => void;
   isJoining?: boolean;
@@ -72,7 +72,7 @@ function useCountUp(end: number, duration: number, startOnView: boolean, inView:
 export const ClubPublicLanding: React.FC<ClubPublicLandingProps> = ({
   clubData,
   creatorData,
-  totalWorkoutsCompleted = 0,
+  totalWorkoutsCompleted = null,
   allRounds = [],
   onJoin,
   isJoining = false,
@@ -543,7 +543,7 @@ export const ClubPublicLanding: React.FC<ClubPublicLandingProps> = ({
                 </div>
                 <div>
                   <p className="text-4xl font-black md:text-5xl" style={{ color: accent }}>
-                    {countWorkouts.toLocaleString()}
+                    {totalWorkoutsCompleted === null ? '—' : countWorkouts.toLocaleString()}
                   </p>
                   <p className="mt-1 font-semibold uppercase tracking-wider text-gray-400">Workouts Completed</p>
                 </div>

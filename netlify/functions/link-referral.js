@@ -1,3 +1,4 @@
+const { sendNonPulsePush } = require('./lib/legacy-push-ownership');
 const { admin } = require('./config/firebase');
 
 const db = admin.firestore();
@@ -203,7 +204,7 @@ exports.handler = async (event, context) => {
           }
         };
 
-        await messaging.send(notificationPayload);
+        await sendNonPulsePush(db, messaging, notificationPayload);
         console.log(`✅ [Manual Referral] Successfully sent notification to ${referrerUsername} (${referrerId})`);
 
       } catch (notificationError) {

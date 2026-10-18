@@ -173,11 +173,7 @@ export const creatorPagesService = {
   },
 
   async findUserIdByUsername(username: string): Promise<string | null> {
-    const users = collection(db, 'users');
-    const q = query(users, where('username', '==', username));
-    const res = await getDocs(q);
-    if (res.empty) return null;
-    return res.docs[0].id;
+    return userService.getUserIdByUsername(username);
   },
 
   // Survey methods

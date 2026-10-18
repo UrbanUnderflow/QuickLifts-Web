@@ -1,3 +1,4 @@
+const {assertAccountOpen, accountOpenBatch, accountOpenSet} = require('./lib/account-closure-guard');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
   CONNECTIONS_COLLECTION,
@@ -1256,6 +1257,7 @@ function buildSnapshotArtifacts({
 }
 
 async function syncGoogleHealthSnapshotForConnection({ userId, timezone, requestedDateKey, connectionRef, connection }) {
+  await assertAccountOpen(admin.firestore(), userId);
   const { scope: teamScope } = await resolveUnambiguousAthleteScope(admin.firestore(), userId).catch((error) => {
     console.warn(`[google-health-sync] team-scope lookup failed for ${userId}:`, error?.message || error);
     return { scope: null };
@@ -1270,7 +1272,7 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
         identityName: identity.name || freshConnection.identityName || null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
-      await connectionRef.set(identityUpdate, { merge: true });
+      await accountOpenSet(admin.firestore(), userId, connectionRef, identityUpdate, { merge: true });
       freshConnection = { ...freshConnection, ...identityUpdate };
     }
   }
@@ -1318,7 +1320,7 @@ async function syncGoogleHealthSnapshotForConnection({ userId, timezone, request
     .filter(([domain, payload]) => hasMeasuredPayload(domain, payload))
     .map(([domain]) => domain);
 
-  const batch = firestore.batch();
+  const batch = accountOpenBatch(firestore, userId);
   batch.set(sourceStatusRef, sourceStatusDoc, { merge: true });
   batch.set(connectionRef, {
     lastSyncAttemptAt: admin.firestore.FieldValue.serverTimestamp(),

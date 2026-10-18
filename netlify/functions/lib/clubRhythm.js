@@ -1,3 +1,4 @@
+const { sendNonPulsePush } = require('./legacy-push-ownership');
 // Shared helpers for the FitClub "club rhythm" — the daily drop, the
 // nightly recap, and the host-megaphone broadcast. Pure data + push
 // plumbing so the scheduled functions and the HTTP fan-out stay small.
@@ -69,7 +70,7 @@ async function sendPushes(targets, { title, body, data = {}, dryRun }) {
       continue;
     }
     try {
-      await messaging.send({
+      await sendNonPulsePush(db, messaging, {
         token: t.token,
         notification: { title, body },
         data: { ...data },

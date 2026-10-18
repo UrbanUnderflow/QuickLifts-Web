@@ -438,6 +438,7 @@ export default function PulseCheckAthleteOnboardingPage() {
     const timeout = window.setTimeout(() => {
       progressSaveQueue.current = progressSaveQueue.current.then(() => pulseCheckProvisioningService.saveAthleteOnboardingProgress({
         teamMembershipId: membership.id,
+        expectedContext: { organizationId: membership.organizationId, teamId: membership.teamId, pilotId: membership.athleteOnboarding?.targetPilotId || '', cohortId: membership.athleteOnboarding?.targetCohortId || '', productBrand: verifiedProductBrand || '', documents: athleteConsents },
         entryOnboardingStep,
         entryOnboardingName: trimmedName,
         productConsentAccepted: consentAccepted,
@@ -547,6 +548,8 @@ export default function PulseCheckAthleteOnboardingPage() {
       await progressSaveQueue.current;
       await pulseCheckProvisioningService.completeAthleteOnboarding({
         teamMembershipId: membership.id,
+        expectedContext: { organizationId: membership.organizationId, teamId: membership.teamId, pilotId: membership.athleteOnboarding?.targetPilotId || '', cohortId: membership.athleteOnboarding?.targetCohortId || '', productBrand: verifiedProductBrand || '', documents: athleteConsents },
+        name: displayName.trim(),
         consentVersion: CONSENT_VERSION,
         baselinePathwayId: BASELINE_PATHWAY_ID,
         completedConsentIds,
@@ -562,13 +565,6 @@ export default function PulseCheckAthleteOnboardingPage() {
         phone: normalizePhoneToE164(phone),
       });
 
-      await userService.updateUser(currentUser.id, {
-        ...currentUser.toDictionary(),
-        displayName: displayName.trim(),
-        preferredName: displayName.trim(),
-        pulseCheckOnboardingComplete: true,
-        updatedAt: new Date(),
-      });
       const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
       userService.nonUICurrentUser = refreshedUser;
 

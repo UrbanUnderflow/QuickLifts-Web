@@ -92,7 +92,7 @@ import {
 } from '../../utils/pulsecheckCommercialization';
 
 const defaultOrganizationForm: CreatePulseCheckOrganizationInput = {
-  productBrand: 'athleticmind',
+  productBrand: undefined,
   appBranding: { pulsecheck: 'pulsecheck', athleticmind: 'athleticmind' },
   displayName: '',
   legalName: '',
@@ -757,6 +757,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
   // The org created during the current wizard run. When set, re-saving the org
   // step updates it instead of creating a duplicate (so Back → edit works).
   const [wizardOrganizationId, setWizardOrganizationId] = useState<string | null>(null);
+  const provisioningOperations = useRef({ organization: '', team: '' });
+  const draftKey = `pulsecheck-provisioning:${currentUser?.id || ''}:${JSON.stringify(getFirebaseModeRequestHeaders())}`;
   const [teamForm, setTeamForm] = useState<CreatePulseCheckTeamInput>(defaultTeamForm);
   const [pilotForm, setPilotForm] = useState<CreatePulseCheckPilotInput>(defaultPilotForm);
   const [cohortForm, setCohortForm] = useState<CreatePulseCheckPilotCohortInput>(defaultCohortForm);
@@ -1898,6 +1900,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
   const handleCreateOrganization = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!orgForm.productBrand) {
+      setMessage({ type: 'error', text: 'Select the program product before creating an organization.' });
+      return false;
+    }
     if (!orgForm.displayName.trim() || !orgForm.legalName.trim() || !orgForm.primaryCustomerAdminEmail?.trim()) {
       setMessage({ type: 'error', text: 'Display name, legal name, and customer admin email are required.' });
       return false;
@@ -1908,6 +1914,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     const isExistingOrg = Boolean(wizardOrganizationId);
 
     try {
+      saveProvisioningDraft();
       let organizationId = wizardOrganizationId || '';
       if (isExistingOrg) {
         // Already created this org earlier in the wizard — update it so going
@@ -1922,7 +1929,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
           ...orgForm,
           implementationOwnerUserId: currentUser?.id || '',
           implementationOwnerEmail: currentUser?.email || '',
-        });
+        }, provisioningOperations.current.organization);
+        saveProvisioningDraft(organizationId);
         setWizardOrganizationId(organizationId);
       }
 
@@ -1952,6 +1960,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
     }
   };
 
+  const saveProvisioningDraft = (organizationId = wizardOrganizationId) => {
+    if (!provisioningOperations.current.organization) provisioningOperations.current.organization = crypto.randomUUID();
+    if (!provisioningOperations.current.team) provisioningOperations.current.team = crypto.randomUUID();
+    localStorage.setItem(draftKey, JSON.stringify({ organizationId, orgForm, teamForm, operations: provisioningOperations.current }));
+  };
+
   const handleCreateTeam = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!teamForm.organizationId || !teamForm.displayName.trim() || !teamForm.sportOrProgram.trim()) {
@@ -1974,7 +1988,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
     setMessage(null);
 
     try {
-      const createdTeamId = await pulseCheckProvisioningService.createTeam(teamForm);
+      saveProvisioningDraft();
+      const createdTeamId = await pulseCheckProvisioningService.createTeam(teamForm, provisioningOperations.current.team);
       const selectedOrganizationId = teamForm.organizationId;
       const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId);
       setTeamForm({
@@ -2307,13 +2322,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
   const completeProvisioningWizard = useCallback(
     (successText: string) => {
+      localStorage.removeItem(draftKey);
+      provisioningOperations.current = { organization: '', team: '' };
       setIsProvisioningModalOpen(false);
       setActiveWizardStep('org');
       setSkipCohortForNow(false);
       setMessage({ type: 'success', text: successText });
       dispatch(showToast({ message: successText, type: 'success', duration: 3500 }));
     },
-    [dispatch]
+    [dispatch, draftKey]
   );
 
   const handleSaveTeamConsents = async (team: PulseCheckTeam) => {
@@ -3110,8 +3127,17 @@ const PulseCheckProvisioningPage: React.FC = () => {
       // Starting a brand-new organization wizard: reset the org form + tracked
       // id so it opens blank and the first save creates (not updates).
       if (step === 'org') {
-        setOrgForm(defaultOrganizationForm);
-        setWizardOrganizationId(null);
+        const saved = localStorage.getItem(draftKey);
+        try {
+          const draft = saved ? JSON.parse(saved) : null;
+          setOrgForm(draft?.orgForm || defaultOrganizationForm);
+          setWizardOrganizationId(draft?.organizationId || null);
+          if (draft?.teamForm) setTeamForm(draft.teamForm);
+          provisioningOperations.current = draft?.operations || { organization: '', team: '' };
+        } catch {
+          setOrgForm(defaultOrganizationForm); setWizardOrganizationId(null);
+          provisioningOperations.current = { organization: '', team: '' };
+        }
       }
 
       const nextOrganizationId = options?.organizationId;
@@ -3169,7 +3195,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
         }
       }
     },
-    [clinicianProfileById, organizations, pilots, teams]
+    [clinicianProfileById, organizations, pilots, teams, draftKey]
   );
 
   const handleCloseProvisioningModal = useCallback(() => {
@@ -5655,6 +5681,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
             <div className="pcp-modal" onClick={(event) => event.stopPropagation()}>
               <div className="pcp-modal-tb">
                 <div className="pcp-modal-title">Provision New Organization</div>
+                <button type="button" className="pcp-ab" disabled={orgSubmitting || teamSubmitting} onClick={() => {
+                  localStorage.removeItem(draftKey);
+                  provisioningOperations.current = { organization: '', team: '' };
+                  setOrgForm(defaultOrganizationForm); setWizardOrganizationId(null); setTeamForm(defaultTeamForm); setActiveWizardStep('org');
+                }}>Start a separate organization</button>
                 <button type="button" className="pcp-modal-x" onClick={handleCloseProvisioningModal}>
                   <X />
                 </button>

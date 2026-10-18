@@ -2,8 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { resolveProductConfig, resolveAppBranding, normalizeAppBranding, validateProductBrand } = require('../../src/lib/pulsecheck/productConfig');
 const { resolveProgramProductConfig, resolveIncidentSupportRoute } = require('../../netlify/functions/lib/program-product-config');
-test('program default is AthleticMind; app identities default independently', () => {
-  assert.equal(resolveProductConfig({}).brand, 'athleticmind');
+test('presentation fallback is PulseCheck; app identities default independently', () => {
+  assert.equal(resolveProductConfig({}).brand, 'pulsecheck');
   assert.equal(resolveProductConfig({ productBrand: 'pulsecheck' }).escalationModel, '988');
   assert.equal(resolveAppBranding({ productBrand: 'athleticmind' }, 'pulsecheck').brand, 'pulsecheck');
   assert.equal(resolveAppBranding({}, 'pulsecheck').escalationModel, undefined);
@@ -23,4 +23,11 @@ test('persisted team organization controls routing', async () => {
   assert.equal(resolveIncidentSupportRoute({ supportRoute: 'clinician' }, product), 'clinician');
   assert.equal(resolveIncidentSupportRoute({ clinicalReferenceId: 'open-case' }, product), 'clinician');
   assert.equal(resolveIncidentSupportRoute({ createdAt: 1 }, product), 'clinician');
+});
+
+test('server routing rejects missing and invalid persisted product', async () => {
+  for (const data of [null, {}, { productBrand: 'invalid' }]) {
+    const db = { collection: () => ({ doc: () => ({ get: async () => ({ exists: Boolean(data), data: () => data }) }) }) };
+    await assert.rejects(resolveProgramProductConfig(db, { organizationId: 'org' }));
+  }
 });

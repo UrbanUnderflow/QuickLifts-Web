@@ -1,3 +1,5 @@
+import { saveAthleteConsentAtomically } from './consentSave';
+import { replaceInviteAtomically } from '../../../lib/pulsecheck/replaceInvite';
 import { normalizeProductBrand, validateProductBrand, normalizeAppBranding } from '../../../lib/pulsecheck/productConfig';
 import { assertCurrentConsentDecisions, selectConsentDocumentsForProduct, consentCategory, consentDecisionComplete, researchEligible, staffConsentDocuments, type ConsentDecisions } from './consentPolicy';
 import { addDoc, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocFromServer, getDocs, getDocsFromServer, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
@@ -1749,6 +1751,28 @@ const removeAthleteFromTeamLocally = async (input: {
   });
 };
 
+async function replaceProvisioningInvite(payload: Record<string, any>, previousRefs: any[], reuse = false, replace = true): Promise<string> {
+  const scope = JSON.stringify([payload.inviteType, payload.teamId, payload.targetEmail?.toLowerCase() || '', payload.teamMembershipRole || '', payload.pilotId || '', payload.cohortId || '', payload.redemptionMode || '', payload.recipientName || '', payload.clinicianProfileId || '', replace ? '' : payload.token]);
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(scope));
+  const pointerKey = Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+  return replaceInviteAtomically({ runTransaction: (body: any) => runTransaction(db, body),
+    teamRef: doc(db, TEAMS_COLLECTION, payload.teamId), organizationRef: doc(db, ORGANIZATIONS_COLLECTION, payload.organizationId),
+    inviteRefFor: (id: string) => doc(db, INVITE_LINKS_COLLECTION, id), previousRefs, payload, pointerKey, reuse, timestamp: serverTimestamp() });
+}
+
+async function createProvisionedEntity(kind: 'organization' | 'team', payload: Record<string, unknown>, operationId: string): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in to provision a program.');
+  const { createdAt, updatedAt, ...data } = payload;
+  const response = await fetch('/api/admin/pulsecheck/provision-entity', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...getFirebaseModeRequestHeaders(), Authorization: `Bearer ${await user.getIdToken()}` },
+    body: JSON.stringify({ kind, payload: data, operationId }),
+  });
+  const result = await response.json();
+  if (!response.ok || !result.id) throw new Error(result.error || 'Unable to provision the program. Retry this saved draft.');
+  return result.id;
+}
+
 export const pulseCheckProvisioningService = {
   async listOrganizations(): Promise<PulseCheckOrganization[]> {
     const snapshot = await getDocs(collection(db, ORGANIZATIONS_COLLECTION));
@@ -2874,6 +2898,21 @@ export const pulseCheckProvisioningService = {
     const organizationRef = doc(db, ORGANIZATIONS_COLLECTION, organizationId);
     const organizationSnap = await getDoc(organizationRef);
     createdOrganization = !organizationSnap.exists();
+    if (!organizationSnap.exists() || !['pulsecheck', 'athleticmind'].includes(organizationSnap.data()?.productBrand)) {
+      throw new Error('First provision an organization with an explicit program product and assign this coach to its team, then migrate the roster.');
+    }
+    const migrationActor = auth.currentUser;
+    if (!migrationActor) throw new Error('Admin authentication required.');
+    const protectionResponse = await fetch('/api/admin/pulsecheck/protect-legacy-roster', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getFirebaseModeRequestHeaders(), Authorization: `Bearer ${await migrationActor.getIdToken()}` },
+      body: JSON.stringify({ coachId, organizationId }),
+    });
+    const protection = await protectionResponse.json();
+    if (!protectionResponse.ok || !Array.isArray(protection.protectedUserIds)
+      || ![coachId, ...candidate.athletes.map(athlete => athlete.athleteUserId)].every(uid => protection.protectedUserIds.includes(uid))) {
+      throw new Error(protection.error || 'The roster changed. Refresh it before migrating.');
+    }
 
     await setDoc(
       organizationRef,
@@ -3157,9 +3196,9 @@ export const pulseCheckProvisioningService = {
     return profileId;
   },
 
-  async createOrganization(input: CreatePulseCheckOrganizationInput): Promise<string> {
+  async createOrganization(input: CreatePulseCheckOrganizationInput, operationId = crypto.randomUUID()): Promise<string> {
     const payload = {
-      productBrand: validateProductBrand(input.productBrand === undefined ? 'athleticmind' : input.productBrand),
+      productBrand: validateProductBrand(input.productBrand),
       appBranding: normalizeAppBranding(input.appBranding),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
@@ -3188,8 +3227,7 @@ export const pulseCheckProvisioningService = {
       updatedAt: serverTimestamp(),
     };
 
-    const docRef = await addDoc(collection(db, ORGANIZATIONS_COLLECTION), payload);
-    return docRef.id;
+    return createProvisionedEntity('organization', payload, operationId);
   },
 
   async updateOrganization(organizationId: string, input: CreatePulseCheckOrganizationInput): Promise<void> {
@@ -3198,7 +3236,7 @@ export const pulseCheckProvisioningService = {
       throw new Error('Organization id is required.');
     }
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedId), {
-      ...(input.productBrand !== undefined ? { productBrand: validateProductBrand(input.productBrand === undefined ? 'athleticmind' : input.productBrand) } : {}),
+      ...(input.productBrand !== undefined ? { productBrand: validateProductBrand(input.productBrand) } : {}),
       ...(input.appBranding !== undefined ? { appBranding: normalizeAppBranding(input.appBranding) } : {}),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
@@ -3248,7 +3286,7 @@ export const pulseCheckProvisioningService = {
     });
   },
 
-  async createTeam(input: CreatePulseCheckTeamInput): Promise<string> {
+  async createTeam(input: CreatePulseCheckTeamInput, operationId = crypto.randomUUID()): Promise<string> {
     const configuredProductBrand = await readConfiguredOrganizationProduct(normalizeString(input.organizationId));
     const commercialConfig = normalizeTeamCommercialConfig(input.commercialConfig);
     const defaultEscalationRoute = normalizeTeamEscalationRoute(input.defaultEscalationRoute);
@@ -3312,8 +3350,7 @@ export const pulseCheckProvisioningService = {
       updatedAt: serverTimestamp(),
     };
 
-    const docRef = await addDoc(collection(db, TEAMS_COLLECTION), payload);
-    return docRef.id;
+    return createProvisionedEntity('team', payload, operationId);
   },
 
   async updateTeamRequiredConsents(
@@ -3587,49 +3624,7 @@ export const pulseCheckProvisioningService = {
       );
     });
 
-    await Promise.all(
-      linksToRevoke.map((snapshot) =>
-        updateDoc(snapshot.ref, {
-          status: 'revoked',
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-
-    const inviteDocRef = doc(db, INVITE_LINKS_COLLECTION, token);
-    const organizationRef = doc(db, ORGANIZATIONS_COLLECTION, payload.organizationId);
-    const teamRef = doc(db, TEAMS_COLLECTION, payload.teamId);
-    await runTransaction(db, async (transaction) => {
-      const [organizationSnap, teamSnap] = await Promise.all([
-        transaction.get(organizationRef),
-        transaction.get(teamRef),
-      ]);
-      if (!organizationSnap.exists()) {
-        throw new Error('Organization not found.');
-      }
-      if (!teamSnap.exists()) {
-        throw new Error('Team not found.');
-      }
-
-      transaction.set(inviteDocRef, payload);
-
-      // Regenerating an administrator link preserves every operational or held
-      // parent state. Only pre-activation records advance to the ready state.
-      if (shouldAdvancePulseCheckParentToReadyForActivation(organizationSnap.data().status)) {
-        transaction.update(organizationRef, {
-          status: 'ready-for-activation',
-          updatedAt: serverTimestamp(),
-        });
-      }
-      if (shouldAdvancePulseCheckParentToReadyForActivation(teamSnap.data().status)) {
-        transaction.update(teamRef, {
-          status: 'ready-for-activation',
-          updatedAt: serverTimestamp(),
-        });
-      }
-    });
-
-    return inviteDocRef.id;
+    return replaceProvisioningInvite(payload, linksToRevoke.map(snapshot => snapshot.ref));
   },
 
   async createClinicianOnboardingLink(input: {
@@ -3670,19 +3665,7 @@ export const pulseCheckProvisioningService = {
       );
     });
 
-    await Promise.all(
-      linksToRevoke.map((snapshot) =>
-        updateDoc(snapshot.ref, {
-          status: 'revoked',
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
-
-    const inviteDocRef = doc(db, INVITE_LINKS_COLLECTION, token);
-    await setDoc(inviteDocRef, payload);
-
-    return inviteDocRef.id;
+    return replaceProvisioningInvite(payload, linksToRevoke.map(snapshot => snapshot.ref));
   },
 
   async createTeamAccessInviteLink(input: CreatePulseCheckTeamAccessInviteInput): Promise<string> {
@@ -3848,51 +3831,6 @@ export const pulseCheckProvisioningService = {
           imageUrl: previewImageUrl,
         });
 
-    if (redemptionMode === 'general' && mostRecentMatchingLink) {
-      await updateDoc(mostRecentMatchingLink.ref, {
-        // Keep the persisted status shim at "active" so the current shipped iOS app continues to accept the reusable invite.
-        status: 'active',
-        redemptionMode,
-        organizationId: normalizedOrganizationId,
-        teamId: normalizedTeamId,
-        pilotId: normalizedPilotId,
-        pilotName: normalizeString(input.pilotName),
-        cohortId: normalizedCohortId,
-        cohortName: normalizeString(input.cohortName),
-        teamMembershipRole: normalizedRole,
-        staffCapabilities: normalizedStaffCapabilities,
-        targetEmail: normalizedTargetEmail,
-        recipientName: normalizeString(input.recipientName),
-        invitedTitle: normalizeString(input.invitedTitle),
-        athleteAge: normalizedAthleteAge,
-        athleteTrackOverride: normalizedAthleteTrackOverride,
-        prefilledProfileImageUrl: normalizeString(input.prefilledProfileImageUrl),
-        commercialSnapshot,
-        token,
-        activationUrl,
-        createdByUserId: normalizeString(input.createdByUserId),
-        createdByEmail: normalizeString(input.createdByEmail),
-        createdByName: normalizeString(input.createdByName),
-        notifyCoachOnAccept: !!input.notifyCoachOnAccept,
-        updatedAt: serverTimestamp(),
-      });
-
-      return mostRecentMatchingLink.id;
-    }
-
-    if (shouldRevokeExistingMatchingLinks && redemptionMode !== 'general') {
-      const linksToRevoke = matchingLinkSnapshots.filter((snapshot) => (snapshot.data() as Record<string, any>).status === 'active');
-
-      await Promise.all(
-        linksToRevoke.map((snapshot) =>
-          updateDoc(snapshot.ref, {
-            status: 'revoked',
-            updatedAt: serverTimestamp(),
-          })
-        )
-      );
-    }
-
     const payload = {
       inviteType: 'team-access',
       status: 'active',
@@ -3923,9 +3861,9 @@ export const pulseCheckProvisioningService = {
       updatedAt: serverTimestamp(),
     };
 
-    const inviteDocRef = doc(db, INVITE_LINKS_COLLECTION, token);
-    await setDoc(inviteDocRef, payload);
-    return inviteDocRef.id;
+    return replaceProvisioningInvite(payload,
+      (shouldRevokeExistingMatchingLinks || redemptionMode === 'general' ? matchingLinkSnapshots : []).map(snapshot => snapshot.ref),
+      redemptionMode === 'general', shouldRevokeExistingMatchingLinks || redemptionMode === 'general');
   },
 
   async updateOrganizationInvitePreviewImage(organizationId: string, invitePreviewImageUrl: string): Promise<void> {
@@ -3938,8 +3876,8 @@ export const pulseCheckProvisioningService = {
   async updateOrganizationProductConfiguration(organizationId: string, input: Pick<CreatePulseCheckOrganizationInput, 'productBrand' | 'appBranding'>): Promise<void> {
     if (!normalizeString(organizationId)) throw new Error('Organization id is required.');
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, organizationId), {
-      productBrand: validateProductBrand(input.productBrand === undefined ? 'athleticmind' : input.productBrand),
-      appBranding: normalizeAppBranding(input.appBranding),
+      productBrand: validateProductBrand(input.productBrand),
+      ...(input.appBranding !== undefined ? { appBranding: normalizeAppBranding(input.appBranding) } : {}),
       productConfigurationUpdatedBy: auth.currentUser?.uid || '',
       updatedAt: serverTimestamp(),
     });
@@ -3960,22 +3898,30 @@ export const pulseCheckProvisioningService = {
   },
 
   async savePostActivationSetup(input: SavePulseCheckPostActivationSetupInput): Promise<void> {
+    await runTransaction(db, async transaction => {
     const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
-    const consentMembership = await getDoc(membershipRef);
-    const consentTeam = await getDoc(doc(db, TEAMS_COLLECTION, consentMembership.data()?.teamId || input.teamMembershipId));
+    const consentMembership = await transaction.get(membershipRef);
+    const consentTeam = await transaction.get(doc(db, TEAMS_COLLECTION, consentMembership.data()?.teamId || input.teamMembershipId));
+    if (!consentMembership.exists() || consentMembership.data()?.userId !== auth.currentUser?.uid
+      || consentMembership.data()?.role === 'athlete' || consentMembership.data()?.revokedAt
+      || (consentMembership.data()?.status && consentMembership.data()?.status !== 'active')
+      || !consentTeam.exists() || consentTeam.data()?.organizationId !== consentMembership.data()?.organizationId) {
+      throw new Error('Active staff membership is required.');
+    }
     const staffDocs = staffConsentDocuments(normalizeConsentDocList(consentTeam.data()?.requiredConsents));
     const staffDecisions = validateConsentDecisions(input.consentDecisions, staffDocs);
     if (!staffDocs.every(doc => consentDecisionComplete(doc, staffDecisions))) throw new Error('Review and sign the current staff responsibilities.');
-    await setDoc(doc(collection(membershipRef, 'consent-events')), { actorUserId: auth.currentUser?.uid || '', decisions: staffDecisions, recordedAt: serverTimestamp() });
-    await updateDoc(membershipRef, { staffConsentDecisions: staffDecisions, staffConsentRecordedAt: serverTimestamp() });
+    if (JSON.stringify(staffDecisions) !== JSON.stringify(validateConsentDecisions(consentMembership.data()?.staffConsentDecisions, staffDocs))) {
+      transaction.set(doc(collection(membershipRef, 'consent-events')), { actorUserId: auth.currentUser?.uid || '', decisions: staffDecisions, recordedAt: serverTimestamp() });
+    }
+    transaction.update(membershipRef, { staffConsentDecisions: staffDecisions, staffConsentRecordedAt: serverTimestamp() });
 
     const smsEnabled = Boolean(input.notificationPreferences?.sms);
     const phone = normalizeString(input.phone);
-    await updateDoc(membershipRef, {
+    transaction.update(membershipRef, {
       title: normalizeString(input.title),
       // operatingRole is pre-assigned at provisioning/redeem; only overwrite if the
       // caller explicitly passes one (legacy path), otherwise leave it untouched.
-      ...(input.operatingRole ? { operatingRole: input.operatingRole } : {}),
       notificationPreferences: {
         ...defaultNotificationPreferences(),
         ...(input.notificationPreferences || {}),
@@ -3995,19 +3941,29 @@ export const pulseCheckProvisioningService = {
       postActivationCompletedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    });
   },
 
   async saveAdultMemberSetup(input: SavePulseCheckAdultMemberSetupInput): Promise<void> {
+    await runTransaction(db, async transaction => {
     const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
-    const consentMembership = await getDoc(membershipRef);
-    const consentTeam = await getDoc(doc(db, TEAMS_COLLECTION, consentMembership.data()?.teamId || input.teamMembershipId));
+    const consentMembership = await transaction.get(membershipRef);
+    const consentTeam = await transaction.get(doc(db, TEAMS_COLLECTION, consentMembership.data()?.teamId || input.teamMembershipId));
+    if (!consentMembership.exists() || consentMembership.data()?.userId !== auth.currentUser?.uid
+      || consentMembership.data()?.role === 'athlete' || consentMembership.data()?.revokedAt
+      || (consentMembership.data()?.status && consentMembership.data()?.status !== 'active')
+      || !consentTeam.exists() || consentTeam.data()?.organizationId !== consentMembership.data()?.organizationId) {
+      throw new Error('Active staff membership is required.');
+    }
     const staffDocs = staffConsentDocuments(normalizeConsentDocList(consentTeam.data()?.requiredConsents));
     const staffDecisions = validateConsentDecisions(input.consentDecisions, staffDocs);
     if (!staffDocs.every(doc => consentDecisionComplete(doc, staffDecisions))) throw new Error('Review and sign the current staff responsibilities.');
-    await setDoc(doc(collection(membershipRef, 'consent-events')), { actorUserId: auth.currentUser?.uid || '', decisions: staffDecisions, recordedAt: serverTimestamp() });
-    await updateDoc(membershipRef, { staffConsentDecisions: staffDecisions, staffConsentRecordedAt: serverTimestamp() });
+    if (JSON.stringify(staffDecisions) !== JSON.stringify(validateConsentDecisions(consentMembership.data()?.staffConsentDecisions, staffDocs))) {
+      transaction.set(doc(collection(membershipRef, 'consent-events')), { actorUserId: auth.currentUser?.uid || '', decisions: staffDecisions, recordedAt: serverTimestamp() });
+    }
+    transaction.update(membershipRef, { staffConsentDecisions: staffDecisions, staffConsentRecordedAt: serverTimestamp() });
 
-    await updateDoc(membershipRef, {
+    transaction.update(membershipRef, {
       title: normalizeString(input.title),
       notificationPreferences: {
         ...defaultNotificationPreferences(),
@@ -4016,349 +3972,22 @@ export const pulseCheckProvisioningService = {
       onboardingStatus: 'complete',
       updatedAt: serverTimestamp(),
     });
+    });
   },
 
   async completeAthleteOnboarding(input: CompletePulseCheckAthleteOnboardingInput): Promise<void> {
-    const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
-    const membershipSnap = await getDocFromServer(membershipRef);
-    const currentData = membershipSnap.exists() ? (membershipSnap.data() as Record<string, any>) : {};
-    if (!membershipSnap.exists() || currentData.userId !== auth.currentUser?.uid || currentData.role !== 'athlete'
-      || currentData.revokedAt || (currentData.status && currentData.status !== 'active')) {
-      throw new Error('Active athlete membership is required.');
-    }
-    const currentAthleteOnboarding = (currentData.athleteOnboarding || {}) as Record<string, any>;
-    const nextResearchConsentStatus = input.researchConsentStatus || currentAthleteOnboarding.researchConsentStatus || 'not-required';
-
-    const pilotId = normalizeString(currentAthleteOnboarding.targetPilotId);
-    const userId = normalizeString(currentData.userId);
-    const pilotSnap = pilotId ? await getDocFromServer(doc(db, PILOTS_COLLECTION, pilotId)) : null;
-    const pilotStudyMode = pilotSnap?.exists() ? ((pilotSnap.data()?.studyMode as PulseCheckPilotStudyMode) || 'operational') : null;
-    const teamId = normalizeString(currentData.teamId);
-    const teamSnap = teamId ? await getDocFromServer(doc(db, TEAMS_COLLECTION, teamId)) : null;
-    if (!teamSnap?.exists() || !currentData.organizationId || currentData.organizationId !== teamSnap.data()?.organizationId
-      || (pilotId && (!pilotSnap?.exists() || pilotSnap.data()?.organizationId !== currentData.organizationId))) {
-      throw new Error('Your team requirements could not be verified. Please retry.');
-    }
-    const requiredConsents = resolveEffectiveRequiredConsents(
-      teamSnap?.exists() ? teamSnap.data()?.requiredConsents : undefined,
-      pilotSnap?.exists() ? toPilot(pilotSnap.id, pilotSnap.data() as Record<string, any>) : null,
-      await readConfiguredOrganizationProduct(teamSnap?.exists()
-        && (currentData.organizationId && currentData.organizationId === teamSnap.data()?.organizationId)
-        ? normalizeString(teamSnap.data()?.organizationId) : '')
-    );
-    const completedConsentVersions = buildCompletedConsentVersions({
-      completedConsentIds: input.completedConsentIds ?? currentAthleteOnboarding.completedConsentIds,
-      completedConsentVersions: input.completedConsentVersions ?? currentAthleteOnboarding.completedConsentVersions,
-      requiredConsents,
-      previouslyRequiredConsents: currentAthleteOnboarding.requiredConsents,
-      defaultToLatest: Array.isArray(input.completedConsentIds),
-    });
-    const completedConsentIds = completedConsentIdsFromVersions(completedConsentVersions, requiredConsents);
-    assertCurrentConsentDecisions(input.consentDecisions, currentAthleteOnboarding.consentDecisions, requiredConsents);
-    const consentDecisions = validateConsentDecisions(input.consentDecisions ?? currentAthleteOnboarding.consentDecisions, requiredConsents);
-    const nextEligibleForDataset = researchEligible(requiredConsents, consentDecisions, nextResearchConsentStatus, completedConsentIds, completedConsentVersions);
-    const pilotEnrollmentRef = pilotId && userId
-      ? doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId))
-      : null;
-    const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await getDocFromServer(pilotEnrollmentRef) : null;
-    const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists()
-      ? (existingPilotEnrollmentSnap.data() as Record<string, any>)
-      : {};
-    const progressSnap = userId ? await getDocFromServer(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, userId)) : null;
-    const progress = progressSnap?.exists() ? (progressSnap.data() as AthleteMentalProgress) : null;
-    const baselineState = preserveCompletedBaselineState({
-      athleteOnboarding: currentAthleteOnboarding,
-      progress,
-      fallbackPathwayId: input.baselinePathwayId,
-      defaultIncompleteStatus: 'ready',
-    });
-    const nextAthleteOnboarding = {
-      ...defaultAthleteOnboardingState(),
-      ...currentAthleteOnboarding,
-      productConsentAccepted: true,
-      productConsentAcceptedAt: serverTimestamp(),
-      productConsentVersion: normalizeString(input.consentVersion),
-      researchConsentStatus: nextResearchConsentStatus,
-      researchConsentVersion:
-        nextResearchConsentStatus === 'accepted' || nextResearchConsentStatus === 'declined'
-          ? normalizeString(input.researchConsentVersion)
-          : normalizeString(currentAthleteOnboarding.researchConsentVersion),
-      researchConsentRespondedAt:
-        nextResearchConsentStatus === 'accepted' || nextResearchConsentStatus === 'declined'
-          ? serverTimestamp()
-          : currentAthleteOnboarding.researchConsentRespondedAt || null,
-      eligibleForResearchDataset: nextEligibleForDataset,
-      enrollmentMode:
-        nextResearchConsentStatus === 'accepted'
-          ? 'research'
-          : currentAthleteOnboarding.targetPilotId
-            ? 'pilot'
-            : currentAthleteOnboarding.enrollmentMode || 'product-only',
-      requiredConsents,
-      completedConsentIds,
-      completedConsentVersions,
-      consentDecisions,
-      entryOnboardingStep: 'complete',
-      baselinePathStatus: baselineState.baselinePathStatus,
-      baselinePathwayId: baselineState.baselinePathwayId,
-      intakeResponses: normalizeIntakeResponses(input.intakeResponses ?? currentAthleteOnboarding.intakeResponses),
-      intakeFormVersion: normalizeString(input.intakeFormVersion) || normalizeString(currentAthleteOnboarding.intakeFormVersion),
-      intakeCompletedAt: serverTimestamp(),
-    };
-    if (!requiredConsents.every(doc => consentDecisionComplete(doc, consentDecisions, completedConsentIds, completedConsentVersions))) throw new Error('Review the current agreements and record each choice.');
-    const nextMembershipOnboardingStatus = resolveTeamMembershipOnboardingStatus({
-      role: 'athlete',
-      athleteOnboarding: nextAthleteOnboarding,
-      studyMode: pilotStudyMode,
-    });
-    const nextPilotEnrollmentStatus = resolvePilotEnrollmentStatus({
-      athleteOnboarding: nextAthleteOnboarding,
-      studyMode: pilotStudyMode,
-    });
-
-    if (input.consentDecisions && JSON.stringify(consentDecisions) !== JSON.stringify(currentAthleteOnboarding.consentDecisions || {})) {
-      await setDoc(doc(collection(membershipRef, 'consent-events')), { actorUserId: auth.currentUser?.uid || '', decisions: consentDecisions, recordedAt: serverTimestamp() });
-    }
-    await updateDoc(membershipRef, {
-      athleteOnboarding: nextAthleteOnboarding,
-      onboardingStatus: nextMembershipOnboardingStatus,
-      // E.164 contact phone for clinician welfare checks (collected at intake).
-      ...(normalizeString(input.phone) ? { phone: normalizeString(input.phone) } : {}),
-      updatedAt: serverTimestamp(),
-    });
-
-    if (pilotId && userId && pilotEnrollmentRef) {
-      await setDoc(
-        pilotEnrollmentRef,
-        {
-          organizationId: normalizeString(currentData.organizationId),
-          teamId: normalizeString(currentData.teamId),
-          pilotId,
-          cohortId: normalizeString(currentAthleteOnboarding.targetCohortId),
-          userId,
-          teamMembershipId: normalizeString(input.teamMembershipId),
-          studyMode: pilotStudyMode || 'operational',
-          enrollmentMode: nextResearchConsentStatus === 'accepted' ? 'research' : 'pilot',
-          status: nextPilotEnrollmentStatus,
-          productConsentAccepted: true,
-          productConsentAcceptedAt: serverTimestamp(),
-          productConsentVersion: normalizeString(input.consentVersion),
-          researchConsentStatus: nextResearchConsentStatus,
-          researchConsentVersion:
-            nextResearchConsentStatus === 'accepted' || nextResearchConsentStatus === 'declined'
-              ? normalizeString(input.researchConsentVersion)
-              : normalizeString(existingPilotEnrollment.researchConsentVersion),
-          researchConsentRespondedAt:
-            nextResearchConsentStatus === 'accepted' || nextResearchConsentStatus === 'declined'
-              ? serverTimestamp()
-              : existingPilotEnrollment.researchConsentRespondedAt || null,
-          requiredConsentIds: requiredConsents.filter(consent => consentCategory(consent) === 'participation').map((consent) => consent.id),
-          completedConsentIds,
-          completedConsentVersions,
-          consentDecisions,
-          eligibleForResearchDataset: nextEligibleForDataset,
-          grantedByInviteToken: normalizeString(existingPilotEnrollment.grantedByInviteToken || currentData.grantedByInviteToken),
-          createdAt: existingPilotEnrollment.createdAt || serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      if (nextPilotEnrollmentStatus === 'active') {
-        try {
-          await triggerPilotAthleteOutcomeBackfill({
-            pilotId,
-            athleteId: userId,
-            pilotEnrollmentId: buildPilotEnrollmentId(pilotId, userId),
-            teamMembershipId: normalizeString(input.teamMembershipId),
-            lookbackDays: 14,
-            source: 'complete_athlete_onboarding',
-            actorRole: 'athlete',
-          });
-        } catch (backfillError) {
-          console.warn('[pulseCheckProvisioningService] Automatic athlete outcome backfill failed after onboarding completion:', backfillError);
-        }
-      }
+    const result = await saveAthleteConsentAtomically('complete', input);
+    if (result.onboardingStatus === 'complete' && input.expectedContext.pilotId && auth.currentUser) {
+      try {
+        await triggerPilotAthleteOutcomeBackfill({ pilotId: input.expectedContext.pilotId,
+          athleteId: auth.currentUser.uid, pilotEnrollmentId: buildPilotEnrollmentId(input.expectedContext.pilotId, auth.currentUser.uid),
+          teamMembershipId: input.teamMembershipId, lookbackDays: 14, source: 'complete_athlete_onboarding', actorRole: 'athlete' });
+      } catch { console.warn('[pulseCheckProvisioningService] Outcome backfill pending after saved onboarding.'); }
     }
   },
 
   async saveAthleteOnboardingProgress(input: SavePulseCheckAthleteOnboardingProgressInput): Promise<void> {
-    const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
-    const membershipSnap = await getDocFromServer(membershipRef);
-    const currentData = membershipSnap.exists() ? (membershipSnap.data() as Record<string, any>) : {};
-    if (!membershipSnap.exists() || currentData.userId !== auth.currentUser?.uid || currentData.role !== 'athlete'
-      || currentData.revokedAt || (currentData.status && currentData.status !== 'active')) {
-      throw new Error('Active athlete membership is required.');
-    }
-    const currentAthleteOnboarding = (currentData.athleteOnboarding || {}) as Record<string, any>;
-    const nextResearchConsentStatus = input.researchConsentStatus || currentAthleteOnboarding.researchConsentStatus || 'not-required';
-    const pilotId = normalizeString(currentAthleteOnboarding.targetPilotId);
-    const userId = normalizeString(currentData.userId);
-    const pilotSnap = pilotId ? await getDocFromServer(doc(db, PILOTS_COLLECTION, pilotId)) : null;
-    const pilotStudyMode = pilotSnap?.exists() ? ((pilotSnap.data()?.studyMode as PulseCheckPilotStudyMode) || 'operational') : null;
-    const teamId = normalizeString(currentData.teamId);
-    const teamSnap = teamId ? await getDocFromServer(doc(db, TEAMS_COLLECTION, teamId)) : null;
-    if (!teamSnap?.exists() || !currentData.organizationId || currentData.organizationId !== teamSnap.data()?.organizationId
-      || (pilotId && (!pilotSnap?.exists() || pilotSnap.data()?.organizationId !== currentData.organizationId))) {
-      throw new Error('Your team requirements could not be verified. Please retry.');
-    }
-    const requiredConsents = resolveEffectiveRequiredConsents(
-      teamSnap?.exists() ? teamSnap.data()?.requiredConsents : undefined,
-      pilotSnap?.exists() ? toPilot(pilotSnap.id, pilotSnap.data() as Record<string, any>) : null,
-      await readConfiguredOrganizationProduct(teamSnap?.exists()
-        && (currentData.organizationId && currentData.organizationId === teamSnap.data()?.organizationId)
-        ? normalizeString(teamSnap.data()?.organizationId) : '')
-    );
-    const completedConsentVersions = buildCompletedConsentVersions({
-      completedConsentIds: input.completedConsentIds ?? currentAthleteOnboarding.completedConsentIds,
-      completedConsentVersions: input.completedConsentVersions ?? currentAthleteOnboarding.completedConsentVersions,
-      requiredConsents,
-      previouslyRequiredConsents: currentAthleteOnboarding.requiredConsents,
-      defaultToLatest: Array.isArray(input.completedConsentIds),
-    });
-    const completedConsentIds = completedConsentIdsFromVersions(completedConsentVersions, requiredConsents);
-    assertCurrentConsentDecisions(input.consentDecisions, currentAthleteOnboarding.consentDecisions, requiredConsents);
-    const consentDecisions = validateConsentDecisions(input.consentDecisions ?? currentAthleteOnboarding.consentDecisions, requiredConsents);
-    const nextEligibleForDataset = researchEligible(requiredConsents, consentDecisions, nextResearchConsentStatus, completedConsentIds, completedConsentVersions);
-    const pilotEnrollmentRef = pilotId && userId
-      ? doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId))
-      : null;
-    const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await getDocFromServer(pilotEnrollmentRef) : null;
-    const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists()
-      ? (existingPilotEnrollmentSnap.data() as Record<string, any>)
-      : {};
-    const progressSnap = userId ? await getDocFromServer(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, userId)) : null;
-    const progress = progressSnap?.exists() ? (progressSnap.data() as AthleteMentalProgress) : null;
-    const baselineState = preserveCompletedBaselineState({
-      athleteOnboarding: currentAthleteOnboarding,
-      progress,
-      fallbackPathwayId: currentAthleteOnboarding.baselinePathwayId,
-      defaultIncompleteStatus: 'pending',
-    });
-    const nextAthleteOnboarding = {
-      ...defaultAthleteOnboardingState(),
-      ...currentAthleteOnboarding,
-      entryOnboardingStep:
-        currentAthleteOnboarding.entryOnboardingStep === 'complete'
-          ? 'complete'
-          : input.entryOnboardingStep,
-      ...(typeof input.entryOnboardingName === 'string'
-        ? { entryOnboardingName: normalizeString(input.entryOnboardingName) }
-        : {}),
-      ...(typeof input.productConsentAccepted === 'boolean'
-        ? { productConsentAccepted: input.productConsentAccepted }
-        : {}),
-      ...(typeof input.researchConsentStatus === 'string'
-        ? {
-            researchConsentStatus: nextResearchConsentStatus,
-            researchConsentRespondedAt:
-              nextResearchConsentStatus === 'accepted' || nextResearchConsentStatus === 'declined'
-                ? serverTimestamp()
-                : currentAthleteOnboarding.researchConsentRespondedAt || null,
-            eligibleForResearchDataset: nextEligibleForDataset,
-            enrollmentMode:
-              nextResearchConsentStatus === 'accepted'
-                ? 'research'
-                : currentAthleteOnboarding.targetPilotId
-                  ? 'pilot'
-                  : currentAthleteOnboarding.enrollmentMode || 'product-only',
-          }
-        : {}),
-      requiredConsents,
-      completedConsentIds,
-      completedConsentVersions,
-      consentDecisions,
-      baselinePathStatus: baselineState.baselinePathStatus,
-      baselinePathwayId: baselineState.baselinePathwayId,
-      ...(input.intakeResponses && input.productConsentAccepted
-        ? {
-            intakeResponses: normalizeIntakeResponses(input.intakeResponses),
-            intakeFormVersion: normalizeString(input.intakeFormVersion) || normalizeString(currentAthleteOnboarding.intakeFormVersion),
-          }
-        : {}),
-    };
-    const nextMembershipOnboardingStatus = resolveTeamMembershipOnboardingStatus({
-      role: 'athlete',
-      athleteOnboarding: nextAthleteOnboarding,
-      studyMode: pilotStudyMode,
-    });
-    const nextPilotEnrollmentStatus = resolvePilotEnrollmentStatus({
-      athleteOnboarding: nextAthleteOnboarding,
-      studyMode: pilotStudyMode,
-    });
-
-    if (input.consentDecisions && JSON.stringify(consentDecisions) !== JSON.stringify(currentAthleteOnboarding.consentDecisions || {})) {
-      await setDoc(doc(collection(membershipRef, 'consent-events')), { actorUserId: auth.currentUser?.uid || '', decisions: consentDecisions, recordedAt: serverTimestamp() });
-    }
-    await updateDoc(membershipRef, {
-      athleteOnboarding: nextAthleteOnboarding,
-      onboardingStatus: nextMembershipOnboardingStatus,
-      // E.164 contact phone for clinician welfare checks (collected at intake).
-      ...(normalizeString(input.phone) ? { phone: normalizeString(input.phone) } : {}),
-      updatedAt: serverTimestamp(),
-    });
-
-    if (pilotId && userId && pilotEnrollmentRef) {
-      await setDoc(
-        pilotEnrollmentRef,
-        {
-          organizationId: normalizeString(currentData.organizationId),
-          teamId: normalizeString(currentData.teamId),
-          pilotId,
-          cohortId: normalizeString(currentAthleteOnboarding.targetCohortId),
-          userId,
-          teamMembershipId: normalizeString(input.teamMembershipId),
-          studyMode: pilotStudyMode || 'operational',
-          enrollmentMode:
-            nextResearchConsentStatus === 'accepted'
-              ? 'research'
-              : currentAthleteOnboarding.targetPilotId
-                ? 'pilot'
-                : 'pilot',
-          researchConsentStatus: nextResearchConsentStatus,
-          researchConsentVersion:
-            input.researchConsentStatus && (nextResearchConsentStatus === 'accepted' || nextResearchConsentStatus === 'declined')
-              ? normalizeString(currentAthleteOnboarding.researchConsentVersion)
-              : normalizeString(existingPilotEnrollment.researchConsentVersion),
-          researchConsentRespondedAt:
-            input.researchConsentStatus && (nextResearchConsentStatus === 'accepted' || nextResearchConsentStatus === 'declined')
-              ? serverTimestamp()
-              : existingPilotEnrollment.researchConsentRespondedAt || currentAthleteOnboarding.researchConsentRespondedAt || null,
-          eligibleForResearchDataset: nextEligibleForDataset,
-          status: nextPilotEnrollmentStatus,
-          productConsentAccepted:
-            typeof input.productConsentAccepted === 'boolean'
-              ? input.productConsentAccepted
-              : Boolean(existingPilotEnrollment.productConsentAccepted),
-          productConsentAcceptedAt: existingPilotEnrollment.productConsentAcceptedAt || null,
-          productConsentVersion: normalizeString(existingPilotEnrollment.productConsentVersion),
-          requiredConsentIds: requiredConsents.filter(consent => consentCategory(consent) === 'participation').map((consent) => consent.id),
-          completedConsentIds,
-          completedConsentVersions,
-          consentDecisions,
-          grantedByInviteToken: normalizeString(existingPilotEnrollment.grantedByInviteToken || currentData.grantedByInviteToken),
-          createdAt: existingPilotEnrollment.createdAt || serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      if (nextPilotEnrollmentStatus === 'active') {
-        try {
-          await triggerPilotAthleteOutcomeBackfill({
-            pilotId,
-            athleteId: userId,
-            pilotEnrollmentId: buildPilotEnrollmentId(pilotId, userId),
-            teamMembershipId: normalizeString(input.teamMembershipId),
-            lookbackDays: 14,
-            source: 'save_onboarding_progress',
-            actorRole: 'athlete',
-          });
-        } catch (backfillError) {
-          console.warn('[pulseCheckProvisioningService] Automatic athlete outcome backfill failed after onboarding progress save:', backfillError);
-        }
-      }
-    }
+    await saveAthleteConsentAtomically('progress', input);
   },
 
   async updateAthleteBaselineStatus(input: {

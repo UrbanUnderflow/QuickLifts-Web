@@ -14,7 +14,7 @@ export interface RoundPreview {
 export interface ClubLandingPageProps {
   clubData?: any | null;
   creatorData?: any | null;
-  totalWorkoutsCompleted?: number;
+  totalWorkoutsCompleted?: number | null;
   allRounds?: RoundPreview[];
   error?: string | null;
 }
@@ -76,7 +76,7 @@ export const fetchClubLandingPageProps = async ({
       landingPageConfig: club.landingPageConfig || null,
     };
 
-    let totalWorkoutsCompleted = 0;
+    let totalWorkoutsCompleted: number | null = null;
     let allRounds: RoundPreview[] = [];
 
     try {

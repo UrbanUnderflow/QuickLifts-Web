@@ -9,6 +9,7 @@ const provisioningInput = (commercialConfig) => ({
   actorLabel: 'commercial-config-test',
   organization: {
     id: 'org-1',
+    productBrand: 'pulsecheck',
     displayName: 'Test Organization',
   },
   team: {

@@ -88,6 +88,7 @@ function createClinicalRuntimeDb(initialRecord = {}) {
       status: 'active',
       defaultEscalationRoute: 'clinician',
     },
+    organization: { productBrand: 'athleticmind', status: 'active' },
     teamMemberships: [],
     notifications: [],
     notificationLogs: [],

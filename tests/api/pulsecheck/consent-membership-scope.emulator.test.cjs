@@ -36,3 +36,64 @@ test('consent evidence remains signer-owned append-only',async()=>{const db=auth
 test('active team manager provisions membership, revoked manager cannot',async()=>{const payload={userId:'new-athlete',teamId:'a',organizationId:'a',role:'athlete',status:'active'};await assertSucceeds(setDoc(member(auth('manager'),'a_new-athlete'),payload));await env.withSecurityRulesDisabled(c=>updateDoc(member(c.firestore(),'a_manager'),{revokedAt:1}));await assertFails(setDoc(member(auth('manager'),'a_newer'),{...payload,userId:'newer'}))});
 
 test('staff owner can finish profile setup without changing access grants',async()=>{const db=auth('coach');await assertSucceeds(updateDoc(member(db,'a_coach'),{title:'Coach',notificationPreferences:{email:true},onboardingStatus:'complete',updatedAt:serverTimestamp()}));await assertFails(updateDoc(member(db,'a_coach'),{title:'Coach',staffCapabilities:['admin']}))});
+
+test('migrated consent cannot be rewritten or downgraded by a legacy client; baseline remains writable',async()=>{
+ await env.withSecurityRulesDisabled(c=>updateDoc(member(c.firestore(),'a_athlete'),{'athleteOnboarding.consentPersistenceVersion':2,'athleteOnboarding.targetPilotId':'p'}));
+ const db=auth('athlete');
+ await assertFails(updateDoc(member(db,'a_athlete'),{'athleteOnboarding.consentDecisions':{}}));
+ await assertFails(updateDoc(member(db,'a_athlete'),{'athleteOnboarding.consentPersistenceVersion':0}));
+ await assertFails(updateDoc(member(db,'a_athlete'),{'athleteOnboarding.targetPilotId':'foreign'}));
+ await assertSucceeds(updateDoc(member(db,'a_athlete'),{'athleteOnboarding.baselinePathStatus':'complete'}));
+});
+test('closure tombstone stops stale token membership and generic writes',async()=>{
+ await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'account-closure-jobs','athlete'),{status:'queued'}));
+ await assertFails(getDoc(member(auth('athlete'),'a_athlete')));
+ await assertFails(updateDoc(member(auth('athlete'),'a_athlete'),{phone:'+12025550123'}));
+ await assertFails(setDoc(doc(auth('athlete'),'arbitrary-legacy-data','fixture'),{userId:'athlete'}));
+});
+test('private outbox and closure and privacy markers cannot fall through generic access',async()=>{
+ for(const collectionName of ['account-closure-jobs','pulsecheck-invite-accepted-outbox','pulsecheck-private-users']){
+  await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),collectionName,'athlete'),{userId:'athlete'}));
+  await assertFails(getDoc(doc(auth('stranger'),collectionName,'athlete')));
+  await assertFails(setDoc(doc(auth('stranger'),collectionName,'forged'),{userId:'stranger'}));
+ }
+});
+test('protected root profile is owner/admin only; unrelated public profile behavior stays unchanged',async()=>{
+ await env.withSecurityRulesDisabled(async c=>{const db=c.firestore();await setDoc(doc(db,'users','athlete'),{displayName:'Synthetic',fcmToken:'private-fixture'});await setDoc(doc(db,'pulsecheck-private-users','athlete'),{userId:'athlete'});await setDoc(doc(db,'users','public-fixture'),{displayName:'Public Fixture'});});
+ await assertSucceeds(getDoc(doc(auth('athlete'),'users','athlete')));
+ await assertSucceeds(getDoc(doc(auth('platform'),'users','athlete')));
+ await assertFails(getDoc(doc(auth('peer'),'users','athlete')));
+ await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),'users','athlete')));
+ await assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(),'users','public-fixture')));
+});
+test('raw clinical records deny clients; athlete acknowledgement is append-only and own safety state readable',async()=>{
+ await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'pulsecheck-clinical-escalations','incident'),{athleteUserId:'athlete',teamId:'a',tier:3});await setDoc(doc(c.firestore(),'pulsecheck-athlete-safety-state','athlete'),{active:true});});
+ for(const user of ['athlete','coach','platform','stranger']) await assertFails(getDoc(doc(auth(user),'pulsecheck-clinical-escalations','incident')));
+ const ack=doc(auth('athlete'),'pulsecheck-clinical-escalations/incident/athleteAcknowledgements/fixture');
+ await assertSucceeds(setDoc(ack,{athleteUserId:'athlete',acknowledgedAt:serverTimestamp()}));await assertFails(updateDoc(ack,{athleteUserId:'other'}));
+ await assertFails(setDoc(doc(auth('peer'),'pulsecheck-clinical-escalations/incident/athleteAcknowledgements/foreign'),{athleteUserId:'peer',acknowledgedAt:serverTimestamp()}));
+ await assertSucceeds(getDoc(doc(auth('athlete'),'pulsecheck-athlete-safety-state','athlete')));await assertFails(getDoc(doc(auth('coach'),'pulsecheck-athlete-safety-state','athlete')));
+});
+test('canonical push token account switch blocks old owner read/delete and other users listing',async()=>{
+ const id='synthetic-installation-123456';const claim=user=>({ownerUserId:user,installationId:id,token:'synthetic-token-'+user,sourceApp:'pulsecheck',platform:'android',createdAt:serverTimestamp(),updatedAt:serverTimestamp()});
+ await assertSucceeds(setDoc(doc(auth('athlete'),'pulsecheck-push-installations',id),claim('athlete')));
+ await assertSucceeds(setDoc(doc(auth('peer'),'pulsecheck-push-installations',id),claim('peer')));
+ await assertFails(deleteDoc(doc(auth('athlete'),'pulsecheck-push-installations',id)));
+ await assertFails(getDoc(doc(auth('athlete'),'pulsecheck-push-installations',id)));
+ await assertSucceeds(getDoc(doc(auth('peer'),'pulsecheck-push-installations',id)));
+ await assertFails(getDocs(collection(auth('stranger'),'pulsecheck-push-installations')));
+ await assertFails(setDoc(doc(auth('stranger'),'users/athlete/pulsecheckPushTokens/'+id),claim('athlete')));
+});
+test('pilot consent summaries deny peers and migrated records deny direct overwrite',async()=>{
+ await env.withSecurityRulesDisabled(c=>setDoc(doc(c.firestore(),'pulsecheck-pilot-enrollments','p_athlete'),{userId:'athlete',teamId:'a',organizationId:'a',pilotId:'p',cohortId:'',teamMembershipId:'a_athlete',status:'active',consentPersistenceVersion:2}));
+ await assertSucceeds(getDoc(doc(auth('athlete'),'pulsecheck-pilot-enrollments','p_athlete')));
+ await assertFails(getDoc(doc(auth('peer'),'pulsecheck-pilot-enrollments','p_athlete')));
+ await assertFails(updateDoc(doc(auth('athlete'),'pulsecheck-pilot-enrollments','p_athlete'),{consentDecisions:{}}));
+});
+
+test('sparse legacy profile permits own preferences but blocks peers and protected fields',async()=>{
+ await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'users','athlete'),{displayName:'Synthetic'});await setDoc(doc(c.firestore(),'pulsecheck-private-users','athlete'),{userId:'athlete'});});
+ await assertSucceeds(updateDoc(doc(auth('athlete'),'users','athlete'),{preferredName:'Fixture',dailyReflectionPreferences:{enabled:false},pulseCheckPushTokenModelVersion:2}));
+ await assertFails(updateDoc(doc(auth('peer'),'users','athlete'),{preferredName:'Forged'}));
+ for(const patch of [{pulseCheckOnboardingComplete:true},{creator:true},{lifetimePulsePoints:100},{crisisWallActive:false},{email:'forged@example.test'}]) await assertFails(updateDoc(doc(auth('athlete'),'users','athlete'),patch));
+});

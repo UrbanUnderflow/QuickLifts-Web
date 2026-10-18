@@ -2,7 +2,7 @@ import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import {
   loadPulseCheckNudgeSuppressionState,
-  resolvePulseCheckPushTarget,
+  loadPulseCheckPushTarget,
 } from './pulsecheck-notification-utils';
 
 /**
@@ -87,8 +87,8 @@ const sendNotification = async (
   try {
     const message = {
       token: fcmToken,
-      notification: { title, body },
-      data,
+      ...(data._pushPlatform === "android" ? {} : { notification: { title, body } }),
+      data: { ...data, title, body },
       apns: { payload: { aps: { sound: 'default', badge: 1 } } },
     };
     const messageId = await messaging.send(message);
@@ -181,7 +181,7 @@ export const handler: Handler = async () => {
     if (!userSnap.exists) continue;
     const userData = userSnap.data() as Record<string, unknown> | undefined;
     if (!userData) continue;
-    const target = resolvePulseCheckPushTarget(userData);
+    const target = await loadPulseCheckPushTarget(db, m.userId);
     if (!target?.token) continue;
 
     if (isMiddayWindow) {
@@ -194,6 +194,7 @@ export const handler: Handler = async () => {
           title,
           body,
           {
+            recipientUserId: m.userId, _pushPlatform: target.platform || '',
             type: 'curriculum_reminder',
             cadence: 'midday',
             assignmentId: String(simAssignment.id || ''),
@@ -218,6 +219,7 @@ export const handler: Handler = async () => {
           title,
           body,
           {
+            recipientUserId: m.userId, _pushPlatform: target.platform || '',
             type: 'curriculum_reminder',
             cadence: 'evening',
             assignmentId: String(target1.id || ''),

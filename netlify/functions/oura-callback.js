@@ -1,3 +1,4 @@
+const {assertAccountOpen, accountOpenSet} = require('./lib/account-closure-guard');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
   CONNECTIONS_COLLECTION,
@@ -148,6 +149,7 @@ exports.handler = async (event) => {
       ? stateData.requestedScopes
       : [];
     const now = Date.now();
+    await assertAccountOpen(db, stateData.userId);
     const connectionRef = db.collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(stateData.userId));
     const payload = {
       provider: 'oura',
@@ -169,7 +171,7 @@ exports.handler = async (event) => {
       lastErrorAt: null,
     };
 
-    await connectionRef.set(payload, { merge: true });
+    await accountOpenSet(db, stateData.userId, connectionRef, payload, { merge: true });
     await db.collection(OAUTH_STATES_COLLECTION).doc(stateToken).set(
       {
         result: 'connected',
@@ -196,8 +198,8 @@ exports.handler = async (event) => {
       statusCode: 500,
     });
 
-    if (stateData?.userId) {
-      await db.collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(stateData.userId)).set(
+    if (stateData?.userId && error?.code !== 'account_closing') {
+      await accountOpenSet(db, stateData.userId, db.collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(stateData.userId)),
         {
           provider: 'oura',
           userId: stateData.userId,

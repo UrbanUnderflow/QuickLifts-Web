@@ -75,7 +75,7 @@ async function sendTwilioSms({ to, body }) {
     }
     return { skipped: false, success: true, messageSid: data.sid || null };
   } catch (error) {
-    return { skipped: false, success: false, error: error?.message || String(error) };
+    return { skipped: false, success: false, outcomeUnknown: true, error: error?.message || String(error) };
   }
 }
 

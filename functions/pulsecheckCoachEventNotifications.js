@@ -1,3 +1,4 @@
+const {ownedPayload} = require('./utils/ownedPulsePush');
 const {onDocumentCreated, onDocumentUpdated} = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const {
@@ -353,7 +354,8 @@ async function sendPulseCheckPushToUser({
     },
   };
 
-  const response = await admin.messaging().sendEachForMulticast(payload);
+  const {tokens: ignoredTokens, ...basePayload} = payload;
+  const response = await admin.messaging().sendEach(targets.map(target => ownedPayload({...basePayload, token:target.token}, recipientId, target.platform)));
   logPushSendFailures(
     'PulseCheck team leaderboard',
     recipientId,
@@ -510,7 +512,8 @@ exports.onCoachNotificationCreated = onDocumentCreated(
       },
     };
 
-    const response = await admin.messaging().sendEachForMulticast(payload);
+    const {tokens: ignoredTokens, ...basePayload} = payload;
+    const response = await admin.messaging().sendEach(targets.map(target => ownedPayload({...basePayload, token:target.token}, coachId, target.platform)));
     logPushSendFailures(
       'PulseCheck coach event',
       coachId,

@@ -1,3 +1,4 @@
+const { sendNonPulsePush } = require('./lib/legacy-push-ownership');
 const { db, admin } = require('./config/firebase');
 
 // Define the notification sender function
@@ -25,7 +26,7 @@ async function sendCustomNotification(fcmToken, title, body, customData) {
   };
 
   try {
-    const response = await messaging.send(message);
+    const response = await sendNonPulsePush(db, messaging, message);
     console.log('Successfully sent notification:', response);
     return { success: true, message: 'Notification sent successfully.' };
   } catch (error) {

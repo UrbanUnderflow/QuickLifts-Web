@@ -1,3 +1,4 @@
+import { loadPulseCheckPushTarget } from './pulsecheck-notification-utils';
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import { loadPulseCheckNudgeSuppressionState } from './pulsecheck-notification-utils';
@@ -90,8 +91,8 @@ async function sendNotification(
   try {
     const message = {
       token: fcmToken,
-      notification: { title, body },
-      data,
+      ...(data._pushPlatform === "android" ? {} : { notification: { title, body } }),
+      data: { ...data, title, body },
       apns: {
         payload: {
           aps: {
@@ -174,7 +175,7 @@ export const handler: Handler = async (event) => {
     
     const usersSnap = await db
       .collection('users')
-      .where('fcmToken', '!=', null)
+      .where('pulseCheckPushTokenModelVersion', '==', 2)
       .limit(BATCH_LIMIT)
       .get();
 
@@ -187,6 +188,7 @@ export const handler: Handler = async (event) => {
 
     const { title, body } = getCheckInMessage(checkInType);
     const notificationData = {
+      recipientUserId: userId, _pushPlatform: target.platform || '',
       type: 'MENTAL_CHECKIN',
       checkInType,
       timestamp: String(Date.now()),
@@ -201,7 +203,8 @@ export const handler: Handler = async (event) => {
     for (const userDoc of usersSnap.docs) {
       const userId = userDoc.id;
       const userData = userDoc.data();
-      const fcmToken = userData.fcmToken;
+      const target = await loadPulseCheckPushTarget(db, userId);
+    const fcmToken = target.token;
 
       if (!fcmToken || typeof fcmToken !== 'string') {
         continue;
@@ -228,7 +231,7 @@ export const handler: Handler = async (event) => {
         continue;
       }
 
-      const result = await sendNotification(messaging, fcmToken, title, body, notificationData);
+      const result = await sendNotification(messaging, fcmToken, title, body, { ...notificationData, recipientUserId: userId, _pushPlatform: target.platform || "" });
       recipients.push({
         userId,
         username: String(userData.username || ''),
@@ -318,7 +321,8 @@ export const manualHandler: Handler = async (event) => {
     }
 
     const userData = userDoc.data();
-    const fcmToken = userData?.fcmToken;
+    const target = await loadPulseCheckPushTarget(db, userId);
+    const fcmToken = target.token;
 
     if (!fcmToken) {
       return {
@@ -329,6 +333,7 @@ export const manualHandler: Handler = async (event) => {
 
     const { title, body } = getCheckInMessage(checkInType);
     const result = await sendNotification(messaging, fcmToken, title, body, {
+      recipientUserId: userId, _pushPlatform: target.platform || '',
       type: 'MENTAL_CHECKIN',
       checkInType,
       timestamp: String(Date.now()),

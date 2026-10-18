@@ -100,14 +100,14 @@ async function sendTeamPaymentFailureNotifications({
     },
     push: async () => {
       if (suppressed) return suppression;
-      const { resolvePulseCheckPushTarget, buildNoraPushMessage } = require('../pulsecheck-notification-utils');
-      const target = resolvePulseCheckPushTarget(user);
+      const { loadPulseCheckPushTarget, buildNoraPushMessage } = require('../pulsecheck-notification-utils');
+      const target = await loadPulseCheckPushTarget(database, userId);
       if (!target.eligible) return { success: true, unavailable: true, reason: target.reason };
       const message = buildNoraPushMessage({
         fcmToken: target.token,
         title: `${teamName}: payment update`,
         body: 'Your team payment needs attention. Tap to review and complete it securely.',
-        data: { type: 'payment_failed', screen: 'team_billing', webUrl: paymentUrl, url: paymentUrl, teamId },
+        data: { recipientUserId: userId, type: 'payment_failed', screen: 'team_billing', webUrl: paymentUrl, url: paymentUrl, teamId },
       });
       // Android must receive data in the background so its billing click handler runs.
       message.data.title = message.notification.title;

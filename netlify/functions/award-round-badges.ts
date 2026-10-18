@@ -1,3 +1,4 @@
+import { sendNonPulsePush } from './lib/legacy-push-ownership';
 import type { Handler } from "@netlify/functions";
 import { getFirestore, initAdmin } from "./utils/getServiceAccount";
 
@@ -228,7 +229,7 @@ export const handler: Handler = async () => {
                                 : rank === 2
                                     ? "🥈 Runner Up"
                                     : "🥉 Third Place";
-                        await messaging.send({
+                        await sendNonPulsePush(db, messaging, {
                             token: p.fcmToken,
                             notification: {
                                 title: `${rankLabel}!`,

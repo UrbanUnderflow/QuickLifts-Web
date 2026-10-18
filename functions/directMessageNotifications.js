@@ -1,3 +1,4 @@
+const { sendNonPulseMulticast } = require('./utils/legacyPushOwnership');
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 
@@ -94,7 +95,7 @@ exports.sendDirectMessageNotification = onDocumentCreated(`${chatsCollection}/{c
     // --- Send Notifications ---
     console.log(`Sending direct message notification to ${recipientTokens.length} tokens for chat ${chatId}.`);
     try {
-        const response = await messaging.sendMulticast(message);
+        const response = await sendNonPulseMulticast(db, messaging, message);
         
         // Log multicast notification
         await logMulticastNotification({

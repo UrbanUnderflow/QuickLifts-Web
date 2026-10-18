@@ -110,36 +110,17 @@ test('clinical escalation — required fields are validated', async () => {
   );
 });
 
-test('default pilot consent doc — v6 preserves with crisis-handoff language', async () => {
+test('current product terms separate participation from optional health authorization', async () => {
   const { types } = await loadModules();
-  const pilotConsents = types.getDefaultPulseCheckRequiredConsents('pilot');
-  const participation = pilotConsents.find((c) => c.id === 'pulsecheck-pilot-participation-notice-v1');
-  assert.ok(participation, 'participation notice must be present');
-  assert.equal(participation?.version, 'v6', 'participation notice version must be v6 preserves');
-  assert.ok(
-    participation?.body.includes('critical-tier'),
-    'participation notice must mention critical-tier',
-  );
-  assert.ok(
-    participation?.body.includes('988'),
-    'participation notice must explicitly call out 988',
-  );
-  assert.ok(
-    participation?.body.includes('clinician staff member'),
-    'participation notice must reference the team clinician staff member',
-  );
-  assert.ok(
-    participation?.body.toLowerCase().includes('not initiate contact'),
-    'participation notice must clarify Pulse does not initiate emergency contact',
-  );
-});
-
-test('default pilot consent doc — privacy notice v6 preserves with crisis-tier sharing language', async () => {
-  const { types } = await loadModules();
-  const pilotConsents = types.getDefaultPulseCheckRequiredConsents('pilot');
-  const privacy = pilotConsents.find((c) => c.id === 'pulsecheck-pilot-privacy-and-data-use-v1');
-  assert.ok(privacy);
-  assert.equal(privacy?.version, 'v6');
-  assert.ok(privacy?.body.includes('Crisis-tier escalation sharing'));
-  assert.ok(privacy?.body.includes('clinician staff member'));
+  for (const brand of ['pulsecheck', 'athleticmind'] as const) {
+    const docs = types.getDefaultPulseCheckRequiredConsents('pilot', brand);
+    const participation = docs.find(doc => doc.category === 'participation');
+    const health = docs.find(doc => doc.category === 'health_authorization');
+    assert.ok(participation && health);
+    assert.notEqual(participation.id, health.id);
+    assert.equal(health.version, brand === 'pulsecheck' ? 'v1-pulsecheck' : 'v1');
+    assert.ok(health.body.includes('Tier 2 support also asks for your event-specific choice.'));
+    assert.ok(health.body.includes('Urgent safety events follow the approved institutional protocol'));
+    assert.equal(/AuntEdna/.test(health.body), brand === 'athleticmind');
+  }
 });

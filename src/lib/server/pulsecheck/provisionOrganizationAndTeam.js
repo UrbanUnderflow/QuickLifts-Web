@@ -191,7 +191,7 @@ function buildProvisioningPayload(input) {
   );
 
   const organizationPayload = {
-    productBrand: validateProductBrand(input.organization.productBrand === undefined ? 'athleticmind' : input.organization.productBrand),
+    productBrand: validateProductBrand(input.organization.productBrand),
     appBranding: normalizeAppBranding(input.organization.appBranding),
     displayName: normalizeString(input.organization.displayName),
     legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
@@ -302,6 +302,7 @@ function buildCanaryProvisioningInput(params = {}) {
     actorLabel,
     organization: {
       id: organizationId,
+      productBrand: 'pulsecheck',
       displayName: 'Revival Strength / Functional Bodybuilding',
       legalName: 'Revival Strength / Functional Bodybuilding',
       organizationType: 'brand',
@@ -398,7 +399,7 @@ async function upsertPulseCheckOrganization({ adminApp, input }) {
   }
 
   const organizationPayload = {
-    productBrand: validateProductBrand(input.organization.productBrand === undefined ? 'athleticmind' : input.organization.productBrand),
+    productBrand: validateProductBrand(input.organization.productBrand),
     appBranding: normalizeAppBranding(input.organization.appBranding),
     displayName: normalizeString(input.organization.displayName),
     legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
@@ -490,6 +491,7 @@ async function provisionPulseCheckOrganizationAndTeam({ adminApp, input }) {
   const teamRef = firestore.collection(TEAMS_COLLECTION).doc(teamId);
 
   const result = await firestore.runTransaction(async (transaction) => {
+    if (input.actorUid && (await transaction.get(firestore.collection('account-closure-jobs').doc(input.actorUid))).exists) throw new Error('Account closure is pending.');
     const [organizationSnap, teamSnap] = await Promise.all([
       transaction.get(organizationRef),
       transaction.get(teamRef),

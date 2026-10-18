@@ -1,3 +1,4 @@
+const { loadOwnedPulseTarget, sendOwnedPulsePush } = require('./utils/ownedPulsePush');
 /**
  * Daily Check-In Notifications
  * 
@@ -104,7 +105,7 @@ async function sendReflectionNotification(userId, fcmToken, prompt) {
   };
 
   try {
-    const response = await messaging.send(message);
+    const response = await sendOwnedPulsePush(userId, message);
     console.log(`✅ Sent daily reflection to ${userId}: ${response}`);
     
     // Log the notification
@@ -160,7 +161,8 @@ async function getUsersForCurrentHour() {
     const userData = doc.data();
     const prefs = userData.dailyReflectionPreferences;
     
-    const pulseCheckPushTarget = resolvePulseCheckPushTarget(userData);
+    const owned = await loadOwnedPulseTarget(doc.id);
+    const pulseCheckPushTarget = {eligible: !!owned, token: owned?.token};
     if (!prefs || !pulseCheckPushTarget.eligible) continue;
     
     const userTimezone = prefs.timezone || 'America/New_York';
@@ -272,7 +274,8 @@ exports.sendTestReflectionNotification = require('firebase-functions').https.onR
     }
     
     const userData = userDoc.data();
-    const pulseCheckPushTarget = resolvePulseCheckPushTarget(userData);
+    const owned = await loadOwnedPulseTarget(doc.id);
+    const pulseCheckPushTarget = {eligible: !!owned, token: owned?.token};
     
     if (!pulseCheckPushTarget.eligible) {
       res.status(400).json({ error: `User is not eligible for Pulse Check push: ${pulseCheckPushTarget.reason}` });

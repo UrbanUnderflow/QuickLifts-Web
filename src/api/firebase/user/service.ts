@@ -1,3 +1,4 @@
+import { fetchPublicProfile, fetchPublicDirectory, fetchPublicWorkoutCounts } from './publicProfile';
 import { User, FollowRequest } from './types';
 import { isUserDictionaryLike, normalizeUserCreatePayload, normalizeUserPatch } from './writeContract';
 import { Workout } from '../workout';
@@ -22,40 +23,15 @@ class UserService {
   }
 
   async fetchUserFromFirestore(userId: string): Promise<User | null> {
-    console.log('fetchUserFromFirestore called for userId:', userId);
-    const userRef = doc(db, 'users', userId);
-    const userDoc = await getDoc(userRef);
-
-    if (!userDoc.exists()) {
-      console.log(`User document not found for userId: ${userId}`);
-      return null;
+    try {
+      const snapshot = await getDoc(doc(db, 'users', userId));
+      return snapshot.exists() ? new User(userId, snapshot.data()) : null;
+    } catch (error) {
+      // A protected cohort profile exposes only intentionally public identity.
+      if ((error as { code?: string }).code !== 'permission-denied') throw error;
+      const profile = await fetchPublicProfile(userId);
+      return profile ? new User(userId, profile) : null;
     }
-
-    const userData = userDoc.data();
-    
-    // Log full user data for debugging
-    console.log('Raw user data structure:', userData);
-    
-    // Special handling for creator object 
-    if (userData.creator) {
-      // Log the raw creator object structure and key values
-      console.log('Raw creator object keys:', userData.creator);
-      
-      // Specifically check for the stripeAccountId
-      const rawStripeAccountId = userData.creator.stripeAccountId;
-      console.log(`Raw stripeAccountId in Firestore: ${rawStripeAccountId} (${typeof rawStripeAccountId})`);
-      
-      // Ensure we preserve the stripeAccountId exactly as it comes from Firestore
-      if (rawStripeAccountId) {
-        console.log('★ Found valid stripeAccountId in Firestore:', rawStripeAccountId);
-      } else {
-        console.log('✖ No stripeAccountId found in Firestore');
-      }
-    } else {
-      console.log('No creator object found in user data');
-    }
-
-    return new User(userId, userData);
   }
 
   private async releaseDeletedEmailSuppression(userId: string, email: string): Promise<void> {
@@ -118,38 +94,15 @@ class UserService {
   }
 
   async getUsersByIds(ids: string[]): Promise<User[]> {
-    if (!ids.length) return [];
-    const users: User[] = [];
-    const chunkSize = 10; // Firestore 'in' queries support up to 10 values
-    for (let i = 0; i < ids.length; i += chunkSize) {
-      const chunk = ids.slice(i, i + chunkSize);
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where(documentId(), 'in', chunk));
-      const querySnapshot = await getDocs(q);
-      querySnapshot.docs.forEach(doc => {
-        users.push(new User(doc.id, { ...doc.data(), id: doc.id }));
-      });
-    }
-    return users;
+    const users = await Promise.all(ids.map(id => this.fetchUserFromFirestore(id)));
+    return users.filter((user): user is User => user !== null);
   }
 
   async getUserById(userId: string): Promise<User> {
-    try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      if (!userDoc.exists()) {
-        throw new Error('User not found');
-      }
-   
-      return new User(userDoc.id, {
-        id: userDoc.id,
-        ...userDoc.data()
-      });
-   
-    } catch (error) {
-      console.error('Error getting user by ID:', error);
-      throw error;
-    }
-   }
+    const user = await this.fetchUserFromFirestore(userId);
+    if (!user) throw new Error('User not found');
+    return user;
+  }
 
   /**
    * Increment the user's workoutCount by 1 (call when a new workout summary is saved).
@@ -176,24 +129,11 @@ class UserService {
   }
 
   /**
-   * Returns workoutCount for each userId. Used for club total workouts. Missing or invalid counts are 0.
+   * Returns workoutCount for each userId. Used for club total workouts. Missing or invalid counts are omitted (unavailable).
    * Batches reads (up to 30 per query) to avoid limit issues.
    */
   async getWorkoutCounts(userIds: string[]): Promise<Record<string, number>> {
-    const result: Record<string, number> = {};
-    if (userIds.length === 0) return result;
-    const CHUNK = 30;
-    for (let i = 0; i < userIds.length; i += CHUNK) {
-      const chunk = userIds.slice(i, i + CHUNK);
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where(documentId(), 'in', chunk));
-      const snapshot = await getDocs(q);
-      snapshot.docs.forEach((d) => {
-        const data = d.data();
-        result[d.id] = typeof data.workoutCount === 'number' ? data.workoutCount : 0;
-      });
-    }
-    return result;
+    return fetchPublicWorkoutCounts(userIds);
   }
 
    async deleteUserVideo(exerciseId: string): Promise<void> {
@@ -806,109 +746,46 @@ class UserService {
    * @param username The username to search for
    * @returns Promise resolving to the user ID or null if not found
    */
-   async getUserIdByUsername(username: string): Promise<string | null> {
-    try {
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('username', '==', username), limit(1));
-      
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
-        const userDoc = querySnapshot.docs[0];
-        return userDoc.id;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error fetching user ID by username:', error);
-      return null;
-    }
+  async getUserIdByUsername(username: string): Promise<string | null> {
+    return (await this.getUserByUsername(username))?.id || null;
+  }
+
+  async getPublicUserPage(cursor?: string): Promise<{users: User[]; nextCursor: string | null}> {
+    const page = await fetchPublicDirectory('directory', undefined, cursor);
+    return {users: page.profiles.map(profile => new User(profile.id, profile)).filter(user => user.profileImage?.profileImageURL), nextCursor: page.nextCursor};
   }
 
   async getAllUsers(): Promise<User[]> {
-    try {
-      const usersRef = collection(db, 'users');
-      const querySnapshot = await getDocs(usersRef);
-      
-      return querySnapshot.docs
-        .map(doc => new User(doc.id, { ...doc.data(), id: doc.id }))
-        .filter(user => user.profileImage?.profileImageURL); // Only return users with profile images
-        
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      return [];
-    }
+    const users: User[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await this.getPublicUserPage(cursor);
+      users.push(...page.users);
+      cursor = page.nextCursor || undefined;
+    } while (cursor);
+    return users;
   }
 
-  // In userService
   async getUserByUsername(username: string): Promise<User | null> {
-    try {      
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('username', '==', username));
-      
-      const querySnapshot = await getDocs(q);
-            
-      if (querySnapshot.empty) {
-        return null;
-      }
-
-      const userData = querySnapshot.docs[0].data();
-      
-      return new User(querySnapshot.docs[0].id, { id: querySnapshot.docs[0].id, ...userData });
-    } catch (error) {
-      throw error;
-    }
+    const profile = (await fetchPublicDirectory('username', username)).profiles[0];
+    // Own/admin full reads remain available, protected cross-user reads are projected.
+    return profile ? this.fetchUserFromFirestore(profile.id) : null;
   }
 
   async fetchFeaturedUsers(): Promise<User[]> {
-    try {
-      // Create a query against the users collection
-      const usersRef = collection(db, 'users');
-      const q = query(
-        usersRef,
-        where('videoCount', '>', 0) // Only fetch users with videos
-      );
-
-      const querySnapshot = await getDocs(q);
-      
-      // Map the documents to User objects
-      const users = querySnapshot.docs
-      .map(doc => {
-            const data = doc.data();
-            return new User(doc.id, { id: doc.id, ...data });
-        })
-        // Filter out users without profile images
-        .filter(user => user.profileImage?.profileImageURL)
-        // Shuffle the results
-        .sort(() => Math.random() - 0.5);
-
-      return users;
-    } catch (error) {
-      console.error('Error fetching users with videos:', error);
-      return [];
-    }
+    const profiles: Record<string, any>[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await fetchPublicDirectory('featured', undefined, cursor);
+      profiles.push(...page.profiles);
+      cursor = page.nextCursor || undefined;
+    } while (cursor);
+    return profiles.map(profile => new User(profile.id, profile)).filter(user => user.profileImage?.profileImageURL).sort(() => Math.random() - 0.5);
   }
 
   async queryUsers(searchQuery: string): Promise<User[]> {
-    try {
-      const usersRef = collection(db, 'users');
-      const q = query(
-        usersRef,
-        where('username', '>=', searchQuery.toLowerCase()),
-        where('username', '<=', searchQuery.toLowerCase() + '\uf8ff'),
-        limit(10)
-      );
-
-      const querySnapshot = await getDocs(q);
-      
-      return querySnapshot.docs
-        .map(doc => new User(doc.id, { ...doc.data(), id: doc.id }))
-        .filter(user => user.profileImage?.profileImageURL); // Only return users with profile images
-        
-    } catch (error) {
-      console.error('Error querying users:', error);
-      return [];
-    }
+    const page = await fetchPublicDirectory('search', searchQuery);
+    return page.profiles.map(profile => new User(profile.id, profile)).filter(user => user.profileImage?.profileImageURL);
   }
 
   /**

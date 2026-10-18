@@ -44,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const adminApp = getFirebaseAdminApp(forceDevFirebase);
-    const decoded = await admin.auth(adminApp).verifyIdToken(idToken);
+    const decoded = await admin.auth(adminApp).verifyIdToken(idToken, true);
     const userId = decoded.uid;
     const userEmail = normalizeEmail(decoded.email);
     if (!userEmail) {
@@ -97,6 +97,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     };
 
     const result = await firestore.runTransaction(async (transaction) => {
+      const privacyRef = firestore.collection('pulsecheck-private-users').doc(userId);
+      const [privacySnap, closureSnap] = await Promise.all([
+        transaction.get(privacyRef),
+        transaction.get(firestore.collection('account-closure-jobs').doc(userId)),
+      ]);
+      if (closureSnap.exists) throw new Error('Account closure prevents enrollment.');
       const [membershipSnap, userSnap] = await Promise.all([
         transaction.get(teamMembershipRef),
         transaction.get(userRef),
@@ -109,6 +115,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         && existingMembership.revokedAt == null
         && existingMembership.archivedAt == null
         && existingMembership.deletedAt == null;
+
+      transaction.set(privacyRef, {
+        userId,
+        protected: true,
+        createdAt: privacySnap.exists ? privacySnap.data()?.createdAt || now : now,
+      }, { merge: true });
 
       if (!alreadyActiveMember) {
         transaction.set(

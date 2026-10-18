@@ -1,3 +1,4 @@
+const { sendNonPulseMulticast } = require('./utils/legacyPushOwnership');
 // --- Imports for newer SDK ---
 // Use v2 for HTTPS and Firestore triggers as recommended for newer projects
 // const {onRequest} = require("firebase-functions/v2/https"); // Example for HTTPS
@@ -204,7 +205,7 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
         };
 
         console.log(`Sending NEW_PARTICIPANT notification via sendEachForMulticast to ${eligibleTokens.length} tokens.`);
-        const response = await messaging.sendEachForMulticast(message);
+        const response = await sendNonPulseMulticast(db, messaging, message);
         sentCount = response.successCount;
         failedCount = response.failureCount;
         
@@ -454,7 +455,7 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
                         }
                     };
                     console.log(`Sending ${dataPayload.type} notification via sendEachForMulticast to ${eligibleTokens.length} tokens.`);
-                    const response = await messaging.sendEachForMulticast(message);
+                    const response = await sendNonPulseMulticast(db, messaging, message);
                     sentCount = response.successCount;
                     failedCount = response.failureCount;
                     console.log(`Finished sending ${dataPayload.type} notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${missingTokenCount}.`);
@@ -718,7 +719,7 @@ exports.sendWorkoutStartNotification = onDocumentWritten("users/{userId}/workout
           };
 
           console.log(`Sending WORKOUT_STARTED notification via sendEachForMulticast to ${eligibleTokens.length} tokens.`);
-          const response = await messaging.sendEachForMulticast(message);
+          const response = await sendNonPulseMulticast(db, messaging, message);
           sentCount = response.successCount;
           failedCount = response.failureCount;
           
@@ -877,7 +878,7 @@ exports.onMainChallengeStatusChange = onDocumentUpdated(`sweatlist-collection/{s
                     }
                 };
                 console.log(`Sending ${dataPayload.type} notification via sendEachForMulticast to ${eligibleTokens.length} tokens.`);
-                const response = await messaging.sendEachForMulticast(message);
+                const response = await sendNonPulseMulticast(db, messaging, message);
                 sentCount = response.successCount;
                 failedCount = response.failureCount;
                 
@@ -1381,7 +1382,7 @@ exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{da
       };
 
       console.log(`Sending CHAIN_REACTION notification via sendEachForMulticast to ${eligibleTokens.length} tokens.`);
-      const response = await messaging.sendEachForMulticast(message);
+      const response = await sendNonPulseMulticast(db, messaging, message);
       sentCount = response.successCount;
       failedCount = response.failureCount;
       

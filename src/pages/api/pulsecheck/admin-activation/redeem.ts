@@ -170,7 +170,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const notificationEmailInput = normalizeEmail(req.body?.notificationEmail);
 
   try {
-    const decoded = await admin.auth().verifyIdToken(idToken);
+    const decoded = await admin.auth().verifyIdToken(idToken, true);
     const userId = decoded.uid;
     const userEmail = normalizeEmail(decoded.email);
     if (!userEmail) {
@@ -182,6 +182,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const inviteRef = firestore.collection(INVITE_LINKS_COLLECTION).doc(token);
 
     const result = await firestore.runTransaction(async (transaction) => {
+      const privacyRef = firestore.collection('pulsecheck-private-users').doc(userId);
+      const [privacySnap, closureSnap] = await Promise.all([
+        transaction.get(privacyRef),
+        transaction.get(firestore.collection('account-closure-jobs').doc(userId)),
+      ]);
+      if (closureSnap.exists) throw new Error('Account closure prevents enrollment.');
       const inviteSnap = await transaction.get(inviteRef);
       if (!inviteSnap.exists) {
         throw new Error('Invite not found.');
@@ -280,6 +286,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : firestore.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(`${teamId}_${userId}`);
       const reservedOrganizationMembership = (reservedOrganizationMembershipDoc?.data() || {}) as Record<string, any>;
       const reservedTeamMembership = (reservedTeamMembershipDoc?.data() || {}) as Record<string, any>;
+
+      transaction.set(privacyRef, {
+        userId,
+        protected: true,
+        createdAt: privacySnap.exists ? privacySnap.data()?.createdAt || now : now,
+      }, { merge: true });
 
       transaction.set(
         organizationMembershipRef,

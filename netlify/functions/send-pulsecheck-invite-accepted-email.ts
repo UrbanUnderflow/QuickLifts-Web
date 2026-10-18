@@ -5,34 +5,10 @@ import {
 } from './utils/emailSequenceHelpers';
 import { escapeHtml } from '../../src/lib/emails/pulsecheckAthleteInviteEmail';
 
-/**
- * send-pulsecheck-invite-accepted-email
- *
- * Sends the optional coach copy when an athlete accepts a PulseCheck team
- * invite. The collection-wide Firebase membership trigger owns the internal
- * info@fitwithpulse.ai join alert so every join path is covered once.
- *
- * POST body:
- *   athleteName      (required) – who accepted
- *   teamName         (required) – team they joined
- *   athleteEmail     (optional) – the athlete's email
- *   organizationName (optional) – org context
- *   role             (optional) – membership role (athlete)
- *   coachName        (optional) – the inviting coach's display name
- *   coachEmail       (optional) – the inviting coach's email
- *   notifyCoach      (optional, bool) – opt-in to email the coach
- *   membershipId     (optional) – stable team membership id for deduplication
- *   teamId           (optional) – team id for deduplication and logging
- *   athleteUserId    (optional) – athlete id for deduplication and logging
- *
- * Never throws to the caller in a way that blocks redemption — the caller
- * fires-and-forgets and ignores the response.
- */
+const { verifyFirebaseUser } = require('./lib/pulsecheck-coach-services');
+const { COLLECTION, processInviteAcceptedOutbox } = require('./lib/invite-accepted-outbox');
 
-const INTERNAL_TEAM_JOIN_EMAIL = 'info@fitwithpulse.ai';
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function renderInviteAcceptedEmail(opts: {
+export function renderInviteAcceptedEmail(opts: {
   athleteName: string;
   athleteEmail?: string;
   teamName: string;
@@ -160,107 +136,32 @@ export const handler: Handler = async (event) => {
     return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ success: false, error: 'Method not allowed' }) };
   }
 
-  let body: any;
   try {
-    body = JSON.parse(event.body || '{}');
-  } catch {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ success: false, error: 'Invalid JSON body' }) };
-  }
-
-  const athleteName = (body.athleteName || '').trim();
-  const teamName = (body.teamName || '').trim();
-  const athleteEmail = (body.athleteEmail || '').trim();
-  const organizationName = (body.organizationName || '').trim();
-  const role = (body.role || '').trim();
-  const coachName = (body.coachName || '').trim();
-  const coachEmail = (body.coachEmail || '').trim();
-  const notifyCoach = body.notifyCoach === true;
-  const membershipId = (body.membershipId || '').trim();
-  const teamId = (body.teamId || '').trim();
-  const athleteUserId = (body.athleteUserId || '').trim();
-
-  if (!athleteName || !teamName) {
-    return {
-      statusCode: 400,
-      headers: corsHeaders,
-      body: JSON.stringify({ success: false, error: 'Missing required fields: athleteName, teamName' }),
-    };
-  }
-
-  const shouldNotifyCoach =
-    notifyCoach &&
-    !!coachEmail &&
-    EMAIL_REGEX.test(coachEmail) &&
-    coachEmail.toLowerCase() !== INTERNAL_TEAM_JOIN_EMAIL;
-
-  if (!shouldNotifyCoach) {
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ success: true, skipped: true, reason: 'coach-notification-not-requested' }),
-    };
-  }
-
-  try {
-    const { subject, html } = renderInviteAcceptedEmail({
-      athleteName,
-      athleteEmail,
-      teamName,
-      organizationName,
-      role,
-      coachName,
-    });
-
-    const result = await sendBrevoTransactionalEmail({
-      toEmail: coachEmail,
-      toName: coachName || coachEmail,
-      subject,
-      htmlContent: html,
-      tags: ['pulsecheck', 'team-invite', 'invite-accepted', 'coach-notification'],
-      sender: {
-        email: process.env.BREVO_SENDER_EMAIL || 'hello@fitwithpulse.ai',
-        name: 'PulseCheck',
-      },
-      replyTo: { email: 'hello@fitwithpulse.ai', name: 'PulseCheck' },
-      headers: {
-        'X-Mailin-custom': JSON.stringify({
-          emailType: 'pulsecheck-invite-accepted',
-          organizationName: organizationName || null,
-          teamName: teamName || null,
-          notifiedCoach: true,
-          membershipId: membershipId || null,
-          teamId: teamId || null,
-          athleteUserId: athleteUserId || null,
-        }),
-      },
-      idempotencyKey: buildEmailDedupeKey([
-        'pulsecheck-invite-accepted-coach-v1',
-        membershipId || teamId,
-        athleteUserId || athleteEmail || athleteName,
-        coachEmail.toLowerCase(),
-      ]),
-      idempotencyMetadata: {
-        product: 'pulsecheck',
-        emailType: 'pulsecheck-invite-accepted-coach',
-        membershipId: membershipId || null,
-        teamId: teamId || null,
-        athleteUserId: athleteUserId || null,
-      },
-      bypassDailyRecipientLimit: true,
-    });
-
-    if (!result.success) {
-      return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ success: false, error: result.error }) };
-    }
-
-    console.log('[send-pulsecheck-invite-accepted-email] Coach copy sent for:', athleteName, 'team:', teamName, 'coach:', coachEmail, 'messageId:', result.messageId);
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ success: true, skipped: result.skipped || false, messageId: result.messageId }),
-    };
+    const identity = await verifyFirebaseUser(event, { authErrorMessage: 'Sign in to retry an enrollment notification.' });
+    const token = (event.headers.authorization || event.headers.Authorization || '').replace(/^Bearer\s+/i, '');
+    await identity.app.auth().verifyIdToken(token, true);
+    if ((await identity.app.firestore().collection('account-closure-jobs').doc(identity.userId).get()).exists) return { statusCode: 403, body: JSON.stringify({ error: 'Account closure is pending.' }) };
+    const body = JSON.parse(event.body || '{}');
+    const membershipId = typeof body.membershipId === 'string' ? body.membershipId : '';
+    if (!membershipId || membershipId.includes('/')) return { statusCode: 400, body: JSON.stringify({ error: 'Membership required.' }) };
+    const database = identity.app.firestore();
+    const job = await database.collection(COLLECTION).doc(membershipId).get();
+    if (!job.exists || job.data()?.athleteUserId !== identity.userId) return { statusCode: 403, body: JSON.stringify({ error: 'Enrollment notification unavailable.' }) };
+    const result = await processInviteAcceptedOutbox(database, membershipId, sendCommittedInviteNotification, Date.now(), (uid: string) => identity.app.auth().getUser(uid));
+    return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ success: true, ...result }) };
   } catch (error: any) {
-    console.error('[send-pulsecheck-invite-accepted-email] Error:', error);
-    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ success: false, error: error.message || 'Internal error' }) };
+    return { statusCode: error.statusCode === 401 || String(error.code || '').startsWith('auth/') ? 401 : 503, headers: corsHeaders, body: JSON.stringify({ error: 'Enrollment notification unavailable.' }) };
   }
 };
+
+export async function sendCommittedInviteNotification(input: any) {
+  const { subject, html } = renderInviteAcceptedEmail(input);
+  const result = await sendBrevoTransactionalEmail({
+    toEmail: input.coachEmail, toName: input.coachName || input.coachEmail,
+    subject, htmlContent: html, tags: ['pulsecheck', 'invite-accepted'],
+    sender: { email: process.env.BREVO_SENDER_EMAIL || 'hello@fitwithpulse.ai', name: 'PulseCheck' },
+    idempotencyKey: buildEmailDedupeKey(['pulsecheck-committed-invite-v2', input.id]),
+    failClosedOnSuppressionError: true,
+  });
+  return { ...result, retrySafe: result.error === 'Brevo not configured' || result.error === 'Unable to verify email suppression. Sending stopped for review.' };
+}

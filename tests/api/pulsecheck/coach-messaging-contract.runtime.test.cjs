@@ -185,15 +185,15 @@ test('newest token claim suppresses stale cross-account message previews', () =>
   assert.deepEqual(resolved.targets, []);
 });
 
-test('legacy push fallback is exact-source only and fails closed after migration', () => {
+test('legacy profile tokens cannot authorize delivery without an owned installation', () => {
   const legacyUser = {
     pulseCheckFcmToken: 'legacy-token',
     pushTokenSourceApp: 'pulsecheck',
   };
-  assert.equal(resolvePulseCheckPushTargets({
+  assert.deepEqual(resolvePulseCheckPushTargets({
     recipientId: 'athlete-1',
     userData: legacyUser,
-  }).targets[0].token, 'legacy-token');
+  }).targets, []);
 
   assert.deepEqual(resolvePulseCheckPushTargets({
     recipientId: 'athlete-1',
@@ -351,7 +351,7 @@ test('notification trigger validates the shared contract before push', () => {
   assert.match(source, /resolveCoachAthleteMessageEnvelope/);
   assert.match(source, /if \(!envelope\)/);
   assert.match(source, /buildCoachAthletePushData/);
-  assert.match(source, /sendEachForMulticast/);
+  assert.match(source, /sendEach\(/);
   assert.match(source, /loadPulseCheckPushTargets/);
   assert.match(pushTargetsSource, /pulsecheckPushTokens/);
   assert.match(pushTargetsSource, /pulsecheck-push-installations/);
@@ -361,3 +361,9 @@ test('notification trigger validates the shared contract before push', () => {
   assert.match(source, /resolvePulseCheckSenderName/);
   assert.match(indexSource, /exports\.sendCoachAthleteMessageNotification/);
 });
+
+ test('Firebase Android coach delivery carries recipient and cannot render before owner check',()=>{
+ const {ownedPayload}=require('../../../functions/utils/ownedPulsePush');
+ const message=ownedPayload({notification:{title:'Message',body:'Private'},android:{notification:{sound:'default'}},data:{}},'athlete-1','android');
+ assert.equal(message.notification,undefined);assert.equal(message.android.notification,undefined);assert.equal(message.data.recipientUserId,'athlete-1');assert.equal(message.data.body,'Private');
+ });

@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { initializeFirebaseAdmin } = require('./config/firebase');
-const { resolvePulseCheckPushTarget } = require('./pulsecheck-notification-utils');
+const { loadPulseCheckPushTarget } = require('./pulsecheck-notification-utils');
 const profileSnapshotRuntime = require('../../src/api/firebase/mentaltraining/profileSnapshotRuntime.js');
 
 const COLLECTION = 'vision-pro-trial-sessions';
@@ -1266,7 +1266,7 @@ async function sendVisionProQueuedNotification(admin, db, {
   }
 
   const userData = userSnap.data() || {};
-  const pushTarget = resolvePulseCheckPushTarget(userData);
+  const pushTarget = await loadPulseCheckPushTarget(db, athleteUserId);
   if (!pushTarget.eligible || !pushTarget.token) {
     return;
   }

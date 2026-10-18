@@ -1,3 +1,4 @@
+import { loadPulseCheckPushTarget } from './pulsecheck-notification-utils';
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import { loadPulseCheckNudgeSuppressionState } from './pulsecheck-notification-utils';
@@ -73,8 +74,8 @@ async function sendNotification(
   try {
     const message = {
       token: fcmToken,
-      notification: { title, body },
-      data,
+      ...(data._pushPlatform === "android" ? {} : { notification: { title, body } }),
+      data: { ...data, title, body },
       apns: {
         payload: {
           aps: {
@@ -107,7 +108,7 @@ export const handler: Handler = async () => {
   console.log('[scheduled-mental-assignment-reminder] Run start', { runId });
 
   // Users with tokens (filter reminder settings in code to avoid index headaches)
-  const usersSnap = await db.collection('users').where('fcmToken', '!=', null).limit(BATCH_LIMIT).get();
+  const usersSnap = await db.collection('users').where('pulseCheckPushTokenModelVersion', '==', 2).limit(BATCH_LIMIT).get();
   if (usersSnap.empty) {
     console.log('[scheduled-mental-assignment-reminder] No users with fcmToken');
     return { statusCode: 200, body: JSON.stringify({ success: true, processed: 0 }) };
@@ -129,7 +130,8 @@ export const handler: Handler = async () => {
     processed++;
     const userId = userDoc.id;
     const userData = userDoc.data() || {};
-    const fcmToken = userData.fcmToken;
+    const target = await loadPulseCheckPushTarget(db, userId);
+    const fcmToken = target.token;
     if (!fcmToken || typeof fcmToken !== 'string') continue;
 
     const prefs = userData.mentalTrainingPreferences?.assignmentReminders;
@@ -238,7 +240,7 @@ export const handler: Handler = async () => {
       localDate: localDateStr,
     };
 
-    const result = await sendNotification(messaging, fcmToken, title, body, data);
+    const result = await sendNotification(messaging, fcmToken, title, body, { ...data, recipientUserId: userId, _pushPlatform: target.platform || "" });
     recipients.push({
       userId,
       username: String(userData.username || ''),

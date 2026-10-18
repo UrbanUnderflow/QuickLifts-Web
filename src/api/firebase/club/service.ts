@@ -660,23 +660,15 @@ class ClubService {
 
   /**
    * Returns the sum of completed workouts by all active club members.
-   * Uses each user's workoutCount when present; falls back to subcollection count for users without it (e.g. before backfill).
+   * Uses only published counts; returns unavailable when any member count is absent.
    */
-  async getTotalWorkoutsCompletedByMembers(clubId: string): Promise<number> {
+  async getTotalWorkoutsCompletedByMembers(clubId: string): Promise<number | null> {
     const members = await this.getClubMembers(clubId);
     if (members.length === 0) return 0;
     const userIds = members.map((m) => m.userId);
     const counts = await userService.getWorkoutCounts(userIds);
-    const withFallback = { ...counts };
-    await Promise.all(
-      userIds.map(async (uid) => {
-        if (withFallback[uid] === undefined || withFallback[uid] === 0) {
-          const subCount = await workoutService.getWorkoutSummaryCount(uid);
-          if (subCount > 0) withFallback[uid] = subCount;
-        }
-      })
-    );
-    return Object.values(withFallback).reduce((a, b) => a + b, 0);
+    if (userIds.some(uid => counts[uid] === undefined)) return null;
+    return userIds.reduce((total, uid) => total + counts[uid], 0);
   }
 
   /**

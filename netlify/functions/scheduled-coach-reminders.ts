@@ -4,7 +4,7 @@ import {
   buildCoachCheckInReminderMessage,
   loadPulseCheckNudgeSuppressionState,
   resolveAthleteFirstName,
-  resolvePulseCheckPushTarget,
+  loadPulseCheckPushTarget,
   sendLoggedNoraPush,
 } from './pulsecheck-notification-utils';
 
@@ -365,7 +365,7 @@ export const handler: Handler = async () => {
         continue;
       }
 
-      const target = resolvePulseCheckPushTarget(userData);
+      const target = await loadPulseCheckPushTarget(db, athleteId);
       if (!target?.eligible || !target.token) {
         summary.skippedNoPushTarget += 1;
         continue;

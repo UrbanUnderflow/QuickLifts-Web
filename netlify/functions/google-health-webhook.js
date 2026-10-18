@@ -1,3 +1,4 @@
+const {accountOpenBatch} = require('./lib/account-closure-guard');
 const crypto = require('crypto');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const { RESPONSE_HEADERS } = require('./google-health-utils');
@@ -276,7 +277,7 @@ async function persistNotificationAndQueueSync({ notification, rawBody, verifica
   const connectionDoc = await findConnection(notification.healthUserId);
   const connection = connectionDoc?.data() || null;
   const userId = connection?.userId || (connectionDoc?.id ? connectionDoc.id.replace(/_google_health$/, '') : '');
-  const batch = admin.firestore().batch();
+  const batch = userId ? accountOpenBatch(admin.firestore(), userId) : admin.firestore().batch();
 
   batch.set(eventRef, {
     id: eventId,

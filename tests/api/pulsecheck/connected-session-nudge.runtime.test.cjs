@@ -8,7 +8,7 @@ const nudgePath = path.join(repoRoot, 'netlify/functions/utils/connected-session
 function load({ suppressed = false } = {}) {
   delete require.cache[nudgePath];
   require.cache[utilsPath] = { id: utilsPath, filename: utilsPath, loaded: true, exports: {
-    resolvePulseCheckFcmToken: () => 'token', sendLoggedNoraPush: async () => ({ success: true }),
+    loadPulseCheckPushTarget: async () => ({token:'token',eligible:true}), sendLoggedNoraPush: async () => ({ success: true }),
     loadPulseCheckNudgeSuppressionState: async () => ({ suppressed }),
   } };
   return require(nudgePath);

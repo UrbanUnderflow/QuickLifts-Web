@@ -10,7 +10,7 @@ import {
 import { getConversationBranch } from '../../src/api/firebase/adaptiveFramingLayer/service';
 import {
   loadPulseCheckNudgeSuppressionState,
-  resolvePulseCheckPushTarget,
+  loadPulseCheckPushTarget,
 } from './pulsecheck-notification-utils';
 
 /**
@@ -51,8 +51,8 @@ const sendPush = async (
   try {
     const messageId = await messaging.send({
       token: fcmToken,
-      notification: { title, body },
-      data,
+      ...(data._pushPlatform === "android" ? {} : { notification: { title, body } }),
+      data: { ...data, title, body },
       apns: { payload: { aps: { sound: 'default', badge: 1 } } },
     });
     return { success: true, messageId };
@@ -162,10 +162,11 @@ export const handler: Handler = async () => {
       if (!userSnap.exists) continue;
       const userData = userSnap.data() as Record<string, unknown> | undefined;
       if (!userData) continue;
-      const target = resolvePulseCheckPushTarget(userData);
+      const target = await loadPulseCheckPushTarget(db, m.userId);
       if (!target?.token) continue;
       const opener = conversation.turns[0];
       const result = await sendPush(messaging, target.token, 'Nora', opener.text, {
+        recipientUserId: m.userId, _pushPlatform: target.platform || "",
         type: 'nora_conversation',
         conversationId: conversation.id,
         trigger: candidate.trigger,

@@ -1,3 +1,4 @@
+const { loadOwnedPulseTarget, sendOwnedPulsePush } = require('./utils/ownedPulsePush');
 /**
  * Mental Curriculum Notifications
  * 
@@ -87,7 +88,7 @@ async function sendNotificationToUser(userId, title, body, dataPayload = {}, not
       return { success: false, reason: 'user_not_found' };
     }
 
-    const fcmToken = userDoc.data().fcmToken;
+    const fcmToken = (await loadOwnedPulseTarget(userId))?.token;
     if (!fcmToken) {
       console.log(`User ${userId} has no FCM token`);
       return { success: false, reason: 'no_token' };
@@ -116,7 +117,7 @@ async function sendNotificationToUser(userId, title, body, dataPayload = {}, not
       }
     };
 
-    const response = await messaging.send(message);
+    const response = await sendOwnedPulsePush(userId, message);
     console.log(`Sent ${notificationType} notification to ${userId}: ${response}`);
     return { success: true, messageId: response };
   } catch (error) {

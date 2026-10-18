@@ -1,3 +1,4 @@
+const { sendNonPulsePush } = require('./utils/legacyPushOwnership');
 const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');
 
@@ -222,7 +223,7 @@ async function sendNotificationWithLogging(
   let logId;
 
   try {
-    const response = await messaging.send(message);
+    const response = await sendNonPulsePush(admin.firestore(), messaging, message);
     console.log(`Successfully sent ${notificationType} notification:`, response);
     
     // Log successful notification

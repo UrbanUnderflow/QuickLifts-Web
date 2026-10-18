@@ -1,3 +1,4 @@
+import { fetchPublicProfile } from '../user/publicProfile';
 import { doc, documentId, getDoc, setDoc, collection, query, where, getDocs, deleteDoc, orderBy, limit, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders } from '../config';
 import { CoachModel, CoachFirestoreData } from '../../../types/Coach';
@@ -1054,11 +1055,8 @@ class CoachService {
         const athleteUserId = connection.athleteMembership.userId;
 
         // Fetch user profile for each athlete
-        const userRef = doc(db, 'users', athleteUserId);
-        const userDoc = await getDoc(userRef);
-        
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
+        const userData = await fetchPublicProfile(athleteUserId);
+        if (userData) {
           
           // Get additional stats (conversations, sessions, etc.)
           // Defensive: ensure we have a valid instance context; fallback to singleton

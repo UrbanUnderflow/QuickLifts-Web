@@ -4,7 +4,8 @@ const PRODUCTS = Object.freeze({
   pulsecheck: Object.freeze({ brand: 'pulsecheck', displayName: 'PulseCheck', escalationModel: '988' }),
 });
 function normalizeProductBrand(value) {
-  return value === 'pulsecheck' ? 'pulsecheck' : 'athleticmind';
+  // Presentation fallback only. Server routing requires validated persisted configuration.
+  return value === 'athleticmind' ? 'athleticmind' : 'pulsecheck';
 }
 function resolveProductConfig(organization) {
   return PRODUCTS[normalizeProductBrand(organization?.productBrand)];

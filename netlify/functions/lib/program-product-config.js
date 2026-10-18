@@ -1,10 +1,11 @@
-const { resolveProductConfig } = require('../../../src/lib/pulsecheck/productConfig');
+const { resolveProductConfig, validateProductBrand } = require('../../../src/lib/pulsecheck/productConfig');
 
 /** Use persisted team/org records, never a client supplied brand or care model. */
 async function resolveProgramProductConfig(db, { teamId, team, organizationId } = {}) {
   if (!team && teamId) {
     const snapshot = await db.collection('pulsecheck-teams').doc(teamId).get();
-    team = snapshot.exists ? snapshot.data() : null;
+    if (!snapshot.exists) throw Object.assign(new Error('Program team configuration is required.'), { statusCode: 409 });
+    team = snapshot.data();
   }
   const resolvedOrganizationId = team?.organizationId || organizationId || null;
   let organization = null;
@@ -12,6 +13,8 @@ async function resolveProgramProductConfig(db, { teamId, team, organizationId } 
     const snapshot = await db.collection('pulsecheck-organizations').doc(resolvedOrganizationId).get();
     organization = snapshot.exists ? snapshot.data() : null;
   }
+  if (!organization) throw Object.assign(new Error('Program product configuration is required.'), { statusCode: 409 });
+  validateProductBrand(organization.productBrand);
   return { ...resolveProductConfig(organization), organizationId: resolvedOrganizationId };
 }
 function resolveIncidentSupportRoute(record, product, legacyRoute = 'clinician') {

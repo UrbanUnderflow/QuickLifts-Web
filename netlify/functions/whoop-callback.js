@@ -1,3 +1,4 @@
+const {assertAccountOpen, accountOpenSet} = require('./lib/account-closure-guard');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
   CONNECTIONS_COLLECTION,
@@ -113,9 +114,10 @@ exports.handler = async (event) => {
         ? stateData.requestedScopes
         : [];
     const now = Date.now();
+    await assertAccountOpen(db, stateData.userId);
     const connectionRef = db.collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(stateData.userId));
 
-    await connectionRef.set({
+    await accountOpenSet(db, stateData.userId, connectionRef, {
       provider: 'whoop',
       userId: stateData.userId,
       status: 'connected',
@@ -152,8 +154,8 @@ exports.handler = async (event) => {
       message: 'We could not finish the WHOOP connection right now.',
       statusCode: 500,
     });
-    if (stateData?.userId) {
-      await db.collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(stateData.userId)).set({
+    if (stateData?.userId && error?.code !== 'account_closing') {
+      await accountOpenSet(db, stateData.userId, db.collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(stateData.userId)), {
         provider: 'whoop',
         userId: stateData.userId,
         status: 'error',

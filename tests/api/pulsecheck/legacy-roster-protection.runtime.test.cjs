@@ -1,0 +1,7 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const {createFirestoreAdminMock}=require('../firebase-admin/_runtimeHarness.cjs');
+const {protectLegacyRoster}=require('../../../src/lib/server/pulsecheck/protectLegacyRoster');
+const input={coachId:'coach',organizationId:'org',actorUid:'admin'};
+function fixture(product='pulsecheck',closed=false){return createFirestoreAdminMock({collections:{'pulsecheck-organizations':[{id:'org',data:{status:'active',productBrand:product}}],coachAthletes:[{id:'link',data:{coachId:'coach',athleteUserId:'athlete'}},{id:'inactive',data:{coachId:'coach',athleteUserId:'removed',status:'disconnected'}},{id:'foreign',data:{coachId:'other',athleteUserId:'foreign'}}],'account-closure-jobs':closed?[{id:'athlete',data:{status:'pending'}}]:[]}});}
+test('protection derives active roster, preserves marker creation time and excludes unrelated IDs',async()=>{const f=fixture();await protectLegacyRoster(f.db,input,1);await protectLegacyRoster(f.db,input,2);assert.equal(f.getDocument('pulsecheck-private-users/athlete').createdAt,1);assert.equal(f.getDocument('pulsecheck-private-users/coach').protected,true);assert.equal(f.getDocument('pulsecheck-private-users/foreign'),undefined);assert.equal(f.getDocument('pulsecheck-private-users/removed'),undefined);});
+test('missing product and closure reject before any markers',async()=>{for(const f of [fixture(''),fixture('pulsecheck',true)]){await assert.rejects(protectLegacyRoster(f.db,input,1));assert.equal(f.getDocument('pulsecheck-private-users/coach'),undefined);}});

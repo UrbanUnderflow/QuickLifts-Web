@@ -1,3 +1,4 @@
+const {assertAccountOpen, accountOpenBatch} = require('./lib/account-closure-guard');
 const { nudgeForNewWhoopWorkouts } = require('./utils/connected-session-nudge');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
@@ -698,6 +699,7 @@ function buildWhoopSnapshotArtifacts({
 
 async function syncWhoopForConnection({ firestore, connectionRef, connection, dateKey, timezone }) {
   const userId = connection.userId;
+  await assertAccountOpen(firestore, userId);
   const freshConnection = await ensureFreshAccessToken({ firestore, connectionRef, connection });
   const syncAt = Math.round(Date.now() / 1000);
   const whoopData = await fetchWhoopData(freshConnection.accessToken, { dateKey, timezone });
@@ -735,7 +737,7 @@ async function syncWhoopForConnection({ firestore, connectionRef, connection, da
     previousSourceStatus: existingSourceStatusSnap.exists ? existingSourceStatusSnap.data() : {},
   });
 
-  const batch = firestore.batch();
+  const batch = accountOpenBatch(firestore, userId);
   batch.set(sourceStatusRef, sourceStatusDoc, { merge: true });
   batch.set(firestore.collection(HEALTH_CONTEXT_COLLECTIONS.sourceStatus).doc(userId), {
     sourceStatuses: {

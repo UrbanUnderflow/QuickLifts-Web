@@ -8,6 +8,7 @@ const { sendTeamPaymentFailureNotifications, deliverChannel, LEASE_MS } = requir
 function fixture() {
   const records = new Map([
     ['users/athlete', { email: 'athlete@example.test', pulseCheckFcmToken: 'pulse-token', pushTokenSourceApp: 'pulsecheck' }],
+    ['pulsecheck-push-installations/device', {ownerUserId:'athlete',token:'pulse-token',sourceApp:'pulsecheck',platform:'android'}],
     ['pulsecheck-teams/team', { name: 'Building Bodies <Team>' }],
   ]);
   const ref = (path) => ({
@@ -17,7 +18,7 @@ function fixture() {
   });
   let queue = Promise.resolve();
   const database = {
-    collection: (collection) => ({ doc: (id) => ref(`${collection}/${id}`) }),
+    collection: (collection) => ({ doc: (id) => ref(`${collection}/${id}`), where: (field, op, value) => ({get: async()=>({docs:[...records.entries()].filter(([key,data])=>key.startsWith(collection+'/')&&data[field]===value).map(([,data])=>({data:()=>data}))})}) }),
     runTransaction: (callback) => {
       const result = queue.then(() => callback({ get: (r) => r.get(), set: (r, data) => r.set(data) }));
       queue = result.catch(() => {});
@@ -104,10 +105,10 @@ test('already paid or void invoices do not send', async () => {
 
 test('missing push token stays observable and can send on a later retry', async () => {
   const f = fixture();
-  delete f.records.get('users/athlete').pulseCheckFcmToken;
+  f.records.delete('pulsecheck-push-installations/device');
   await sendTeamPaymentFailureNotifications(f.args);
   assert.equal(f.records.get('pulsecheck-team-payment-notifications/in_test_push').status, 'unavailable');
-  f.records.get('users/athlete').pulseCheckFcmToken = 'new-token';
+  f.records.set('pulsecheck-push-installations/device',{ownerUserId:'athlete',token:'new-token',sourceApp:'pulsecheck',platform:'android'});
   await sendTeamPaymentFailureNotifications(f.args);
   assert.equal(f.emails.length, 1);
   assert.equal(f.pushes.length, 1);

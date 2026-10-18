@@ -1,6 +1,6 @@
 const { admin, headers, initializeFirebaseAdmin } = require('./config/firebase');
 const {
-  resolvePulseCheckPushTarget,
+  loadPulseCheckPushTarget,
   sendLoggedNoraPush,
 } = require('./pulsecheck-notification-utils');
 
@@ -114,7 +114,7 @@ exports.handler = async (event) => {
     }
 
     const userData = userDoc.data() || {};
-    const pushTarget = resolvePulseCheckPushTarget(userData);
+    const pushTarget = await loadPulseCheckPushTarget(db, athleteId);
     if (!pushTarget.eligible || !pushTarget.token) {
       return {
         statusCode: 400,

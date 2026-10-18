@@ -1,3 +1,5 @@
+const { loadPulseCheckPushTarget, applyPulseCheckPushOwnership } = require('./pulsecheck-notification-utils');
+const { assertNonPulseToken } = require('./lib/legacy-push-ownership');
 const { db, headers, admin } = require('./config/firebase');
 
 const SEARCH_LIMIT = 10;
@@ -208,7 +210,7 @@ async function sendNotificationWithLogging({
   };
 
   try {
-    const messageId = await messaging.send(message);
+    const messageId = await messaging.send(dataPayload._pushPlatform === 'android' ? applyPulseCheckPushOwnership(message, { platform: 'android', userId: dataPayload.recipientUserId }) : message);
     await logNotification({
       fcmToken,
       title,
@@ -310,7 +312,7 @@ async function handleSend(event) {
   }
 
   const userData = userDoc.data() || {};
-  const scopedToken = resolveScopedFcmToken(userData, productScope);
+  const scopedToken = productScope === 'pulsecheck' ? await loadPulseCheckPushTarget(db, userId) : resolveScopedFcmToken(userData, productScope);
   if (!scopedToken.token) {
     return {
       statusCode: 400,
@@ -325,6 +327,11 @@ async function handleSend(event) {
     };
   }
   const fcmToken = scopedToken.token;
+  if (productScope !== 'pulsecheck') await assertNonPulseToken(db, fcmToken);
+  if (productScope === 'pulsecheck') {
+    dataPayload.recipientUserId = userId;
+    dataPayload._pushPlatform = scopedToken.platform || '';
+  }
 
   const notificationType = String(dataPayload.type || notificationId || 'ADMIN_NOTIFICATION_TEST');
   const result = await sendNotificationWithLogging({

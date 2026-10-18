@@ -90,10 +90,12 @@ const loadRuntime = ({
   decoded = {},
   authError = null,
   transactionError = null,
+  closure = null,
 } = {}) => {
   const firebase = createFirestoreAdminMock({
     collections: {
       'pulsecheck-invite-links': records(invite, 'invite-1'),
+      'account-closure-jobs': records(closure, 'athlete-1'),
       'pulsecheck-organizations': records(organization, 'org-1'),
       'pulsecheck-teams': records(team, 'team-1'),
       'pulsecheck-pilots': records(pilot, 'pilot-1'),
@@ -142,6 +144,7 @@ const loadRuntime = ({
     },
   });
 
+  handlerModule.default.firebaseFixture = firebase;
   return handlerModule.default;
 };
 
@@ -421,4 +424,33 @@ test('the stable error contract does not change a successful redemption response
   assert.equal(response.body.teamMembershipRole, 'athlete');
   assert.equal('code' in response.body, false);
   assert.equal('error' in response.body, false);
+});
+
+test('notification intent commits with enrollment, forged Origin is unused and replay retains one job', async () => {
+  const handler = loadRuntime({ invite: baseInvite({ notifyCoachOnAccept: true, createdByUserId: 'coach-1', createdByEmail: 'coach@example.test' }) });
+  const originalFetch = global.fetch;
+  let networkCalls = 0;
+  global.fetch = async () => { networkCalls++; throw new Error('Unexpected external delivery'); };
+  try {
+    for (let i = 0; i < 2; i++) {
+      const req = request(); req.headers.origin = 'https://attacker.example.test';
+      const response = createNextApiResponseRecorder();
+      await handler(req, response);
+      assert.equal(response.statusCode, 200);
+    }
+    const jobs = handler.firebaseFixture.writes.sets.filter(row => row.path.startsWith('pulsecheck-invite-accepted-outbox/'));
+    assert.equal(jobs.length, 1);
+    assert.equal(jobs[0].data.status, 'pending');
+    assert.equal(jobs[0].data.athleteUserId, 'athlete-1');
+    assert.equal(jobs[0].data.coachEmail, undefined);
+    assert.equal(networkCalls, 0);
+  } finally { global.fetch = originalFetch; }
+});
+
+test('account closure tombstone prevents redemption before any write', async () => {
+  const handler = loadRuntime({ closure: { status: 'pending' } });
+  const response = createNextApiResponseRecorder();
+  await handler(request(), response);
+  assert.equal(response.statusCode, 401);
+  assert.equal(handler.firebaseFixture.writes.sets.length, 0);
 });

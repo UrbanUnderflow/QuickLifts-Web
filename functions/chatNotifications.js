@@ -1,3 +1,4 @@
+const { sendNonPulseMulticast } = require('./utils/legacyPushOwnership');
 // --- Imports for newer SDK ---
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
@@ -77,7 +78,7 @@ async function sendMulticastNotification(
 
   try {
     console.log(`Sending ${notificationType} notification via sendEachForMulticast to ${tokens.length} tokens.`);
-    const response = await messaging.sendEachForMulticast(message);
+    const response = await sendNonPulseMulticast(db, messaging, message);
 
     // Log multicast notification
     await logMulticastNotification({

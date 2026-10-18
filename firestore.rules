@@ -2,7 +2,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() {
-      return request.auth != null && request.auth.uid != 'nora-local-synthetic-tester';
+      return request.auth != null && request.auth.uid != 'nora-local-synthetic-tester'
+        && !exists(/databases/$(database)/documents/account-closure-jobs/$(request.auth.uid));
     }
 
     function hasEmail() {
@@ -155,7 +156,7 @@ service cloud.firestore {
     function isExplicitlyRuledCollection(collectionName) {
       // Staff reports are accessible only through role-checked server APIs.
 
-      return collectionName == 'coach-team-insight-reports' || collectionName in ['groupMeetBookingSettings', 'groupMeetBookings', 'groupMeetBookingLimits'] || collectionName == 'pulsecheck-restricted-questionnaire-submissions' || collectionName.matches('nora-red-team-.*') || collectionName in [
+      return collectionName in ['pulsecheck-private-users', 'account-closure-jobs', 'pulsecheck-invite-accepted-outbox', 'pulsecheck-clinical-escalations', 'pulsecheck-athlete-safety-state', 'pulsecheck-push-installations', 'pulsecheck-pilot-enrollments'] || collectionName == 'coach-team-insight-reports' || collectionName in ['groupMeetBookingSettings', 'groupMeetBookings', 'groupMeetBookingLimits'] || collectionName == 'pulsecheck-restricted-questionnaire-submissions' || collectionName.matches('nora-red-team-.*') || collectionName in [
         'admin-settings',
         'conversations',
         'conversationSummaries',
@@ -1362,40 +1363,23 @@ service cloud.firestore {
     }
 
     function isCanonicalRootUserUpdate(userId) {
-      return isSignedIn()
-        && request.auth.uid == userId
-        && request.resource.data.id == resource.data.id
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.lifetimePulsePoints == resource.data.lifetimePulsePoints
-        && request.resource.data.categoryPoints == resource.data.categoryPoints
-        && request.resource.data.creator == resource.data.creator
-        && !changesServerOwnedClinicalStateFields()
-        && (
-          (
-            !('stripeCustomerIds' in resource.data)
-            && !('stripeCustomerIds' in request.resource.data)
-          )
-          || (
-            'stripeCustomerIds' in resource.data
-            && request.resource.data.stripeCustomerIds
-              == resource.data.stripeCustomerIds
-          )
-        )
-        && (request.resource.data.username == resource.data.username || isValidUsernameValue(request.resource.data.username))
-        && (request.resource.data.displayName == resource.data.displayName || isNonEmptyString(request.resource.data.displayName))
-        && (request.resource.data.birthdate == resource.data.birthdate || request.resource.data.birthdate == null || request.resource.data.birthdate is timestamp || request.resource.data.birthdate is number)
-        && (request.resource.data.profileImage == resource.data.profileImage || isValidProfileImageValue(request.resource.data.profileImage))
-        && (
-          request.resource.data.registrationComplete == resource.data.registrationComplete
-          || request.resource.data.registrationComplete == true
-          || request.resource.data.registrationComplete == null
-        )
-        && (request.resource.data.level == resource.data.level || isValidUserLevelValue(request.resource.data.level))
-        && (request.resource.data.subscriptionType == resource.data.subscriptionType || isValidSubscriptionTypeValue(request.resource.data.subscriptionType))
-        && (request.resource.data.subscriptionPlatform == resource.data.subscriptionPlatform || isValidSubscriptionPlatformValue(request.resource.data.subscriptionPlatform))
-        && (request.resource.data.checkinsPrivacy == resource.data.checkinsPrivacy || isValidCheckinsPrivacyValue(request.resource.data.checkinsPrivacy))
-        && preservesOrValidlyUpdatesLegalAcceptance();
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return isSignedIn() && request.auth.uid == userId
+        && (!changed.hasAny(['pulseCheckOnboardingComplete']) || !exists(/databases/$(database)/documents/pulsecheck-private-users/$(userId)))
+        && !changed.hasAny(['id', 'createdAt', 'lifetimePulsePoints', 'categoryPoints', 'creator', 'stripeCustomerIds',
+          'clinicalCareState', 'crisisWallActive', 'crisisWallActivatedAt', 'crisisWallActiveEscalationId',
+          'crisisWallClearReason', 'crisisWallClearedAt', 'crisisWallClearedByUserId', 'crisisWallReason'])
+        && (!changed.hasAny(['email']) || request.resource.data.get('email', null) == request.auth.token.get('email', null))
+        && (!changed.hasAny(['username']) || isValidUsernameValue(request.resource.data.get('username', null)))
+        && (!changed.hasAny(['displayName']) || isNonEmptyString(request.resource.data.get('displayName', null)))
+        && (!changed.hasAny(['birthdate']) || request.resource.data.get('birthdate', null) == null || request.resource.data.birthdate is timestamp || request.resource.data.birthdate is number)
+        && (!changed.hasAny(['profileImage']) || isValidProfileImageValue(request.resource.data.get('profileImage', null)))
+        && (!changed.hasAny(['registrationComplete']) || request.resource.data.get('registrationComplete', null) == true || request.resource.data.get('registrationComplete', null) == null)
+        && (!changed.hasAny(['level']) || isValidUserLevelValue(request.resource.data.get('level', null)))
+        && (!changed.hasAny(['subscriptionType']) || isValidSubscriptionTypeValue(request.resource.data.get('subscriptionType', null)))
+        && (!changed.hasAny(['subscriptionPlatform']) || isValidSubscriptionPlatformValue(request.resource.data.get('subscriptionPlatform', null)))
+        && (!changed.hasAny(['checkinsPrivacy']) || isValidCheckinsPrivacyValue(request.resource.data.get('checkinsPrivacy', null)))
+        && (!changed.hasAny(['legalAcceptance']) || isValidLegalAcceptanceValue(request.resource.data.get('legalAcceptance', null)));
     }
 
     function isSafeOwnPulseCheckPushMetadataUpdate(userId) {
@@ -1788,7 +1772,8 @@ service cloud.firestore {
           ])
         );
 
-      allow read: if true;
+      allow read: if !exists(/databases/$(database)/documents/pulsecheck-private-users/$(userId))
+        || (isSignedIn() && (request.auth.uid == userId || isAdminUser()));
     }
 
     // Each app installation owns one token document under the signed-in user.
@@ -2175,52 +2160,51 @@ service cloud.firestore {
     // outside the publicly readable root user document. The athlete, a
     // platform admin, and explicitly scoped clinical staff may read it. All
     // browser/mobile writes are denied; trusted services use the Admin SDK.
-    match /pulsecheck-athlete-safety-state/{athleteUserId} {
-      // Emergency state is private. Routine alert permission does not reveal it.
-      allow read: if isSignedIn() && request.auth.uid == athleteUserId;
-      allow create, update, delete: if false;
-    }
+
 
     // Clinical escalation records are created by trusted services. Admins and
     // scoped clinical-team members may read them. Client writes are limited to
     // acknowledgement. Resolution must use the authenticated server route so
     // linked provider confirmation runs before local state closes.
-    match /pulsecheck-clinical-escalations/{escalationId} {
-      allow read: if pcCanAccessClinicalEscalation(resource.data)
-        || (isSignedIn() && pcPrivateRecordRequiresOwner(resource.data)
-          && resource.data.athleteUserId == request.auth.uid);
-      allow create: if false;
-      allow update: if pcClinicalEscalationAcknowledgementUpdateIsValid();
-      allow delete: if false;
 
-      match /athleteAcknowledgements/{acknowledgementId} {
-        allow create: if pcAthleteClinicalAcknowledgementCreateIsValid(
-          escalationId
-        );
-        allow read, update, delete: if false;
-      }
-    }
 
     // Safety records are authored by trusted services. Athletes can read their
     // own record. Scoped staff reads require active care/coaching access, with
     // tier-three details limited to care/admin capability.
+    // Raw escalation evidence is private; ordinary care requires current tenant scope.
+    function pcEscalationActive(data) {
+      return data.get('status', '') == 'active'
+        && data.get('revokedAt', null) == null && data.get('archivedAt', null) == null
+        && data.get('deletedAt', null) == null && data.get('revoked', false) == false;
+    }
+    function pcEscalationCareAccess(data, athleteId) {
+      let teamId = data.get('teamId', '');
+      let orgId = data.get('organizationId', '');
+      let team = get(/databases/$(database)/documents/pulsecheck-teams/$(teamId)).data;
+      let org = get(/databases/$(database)/documents/pulsecheck-organizations/$(orgId)).data;
+      let staff = get(/databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + request.auth.uid)).data;
+      let athlete = get(/databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + athleteId)).data;
+      return data.get('tier', 0) != 3 && data.get('tier', 0) != '3'
+        && data.get('classificationFamily', '') != 'critical_safety'
+        && data.get('productBrand', '') != 'athleticmind'
+        && org.get('productBrand', '') == 'pulsecheck'
+        && team.organizationId == orgId && pcEscalationActive(team) && pcEscalationActive(org)
+        && pcEscalationActive(staff) && pcEscalationActive(athlete)
+        && staff.userId == request.auth.uid && athlete.userId == athleteId
+        && staff.teamId == teamId && athlete.teamId == teamId
+        && staff.organizationId == orgId && athlete.organizationId == orgId
+        && athlete.role == 'athlete' && staff.role != 'athlete'
+        && (staff.role == 'team-admin' || staff.role == 'coach'
+          || staff.get('staffCapabilities', []).hasAny(['admin', 'coaching', 'athletic_trainer']))
+        && (staff.get('rosterVisibilityScope', 'team') == 'team'
+          || (staff.get('rosterVisibilityScope', '') == 'assigned'
+            && athleteId in staff.get('allowedAthleteIds', [])));
+    }
     match /escalation-records/{escalationId} {
-      function canReadPrivateRecord(data) {
-        let athleteId = data.get('userId', data.get('athleteId', ''));
-        return isSignedIn() && (
-          athleteId == request.auth.uid
-          || (!pcPrivateRecordRequiresOwner(data) && (
-            isAdminUser()
-            || (data.get('teamId', '') is string && data.get('organizationId', '') is string
-              && data.organizationId == get(pcTeamPath(data.teamId)).data.organizationId
-              && pcCanAccessCareTeamAthlete(data.teamId, athleteId))
-          ))
-        );
-      }
-      allow read: if canReadPrivateRecord(resource.data);
-      allow create: if isAdminUser() && !pcPrivateRecordRequiresOwner(request.resource.data);
-      allow update: if isAdminUser() && !pcPrivateRecordRequiresOwner(resource.data) && !pcPrivateRecordRequiresOwner(request.resource.data);
-      allow delete: if isAdminUser() && !pcPrivateRecordRequiresOwner(resource.data);
+      allow read: if isSignedIn() && (
+        resource.data.get('userId', resource.data.get('athleteId', resource.data.get('athleteUserId', ''))) == request.auth.uid
+        || pcEscalationCareAccess(resource.data, resource.data.get('userId', resource.data.get('athleteId', resource.data.get('athleteUserId', '')))));
+      allow write: if false;
     }
 
     // Train Nora knowledge vault. Modern records are scoped to one active
@@ -2924,9 +2908,19 @@ service cloud.firestore {
         && request.resource.data.teamId == resource.data.teamId
         && request.resource.data.organizationId == resource.data.organizationId;
     }
+    function pcConsentOwnerStateIsSafe() {
+      let before = resource.data.get('athleteOnboarding', {});
+      let after = request.resource.data.get('athleteOnboarding', {});
+      return after.get('targetPilotId', '') == before.get('targetPilotId', '')
+        && after.get('targetCohortId', '') == before.get('targetCohortId', '')
+        && after.get('consentPersistenceVersion', 0) == before.get('consentPersistenceVersion', 0)
+        && (before.get('consentPersistenceVersion', 0) < 2
+          || (after.diff(before).affectedKeys().hasOnly(['baselinePathStatus', 'baselinePathwayId'])
+            && request.resource.data.get('onboardingStatus', '') == resource.data.get('onboardingStatus', '')));
+    }
     function pcConsentOwnUpdate() {
       return isSignedIn() && resource.data.userId == request.auth.uid
-        && pcConsentSameIdentity()
+        && pcConsentSameIdentity() && pcConsentOwnerStateIsSafe()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'athleteAge', 'athleteOnboarding', 'coachIntakeCompletedAt',
           'coachIntakeFormVersion', 'coachIntakeResponses', 'notificationPreferences',
@@ -2994,51 +2988,7 @@ service cloud.firestore {
     // Enrollment identity and lifecycle state must not fall through to the
     // generic signed-in write rule. Athletes may maintain only their own
     // enrollment while their team membership is active; removals are server-owned.
-    match /pulsecheck-pilot-enrollments/{enrollmentId} {
-      allow read: if isAdminUser()
-        || (
-          isSignedIn()
-          && (
-            resource.data.userId == request.auth.uid
-            || pcIsTeamStaff(resource.data.teamId)
-          )
-        );
-      allow create: if isAdminUser()
-        || (
-          pcOwnPilotEnrollmentCreateIsValid(request.resource.data, enrollmentId)
-          && pcTeamScopedDataIsActive(request.resource.data)
-        );
-      allow update: if isAdminUser()
-        || (
-          isSignedIn()
-          && resource.data.userId == request.auth.uid
-          && pcOwnPilotEnrollmentUpdateIsValid(request.resource.data, enrollmentId)
-        );
-      allow delete: if isAdminUser();
 
-      match /{document=**} {
-        allow read: if isAdminUser()
-          || (
-            isSignedIn()
-            && (
-              get(/databases/$(database)/documents/pulsecheck-pilot-enrollments/$(enrollmentId)).data.userId == request.auth.uid
-              || pcIsTeamStaff(
-                get(/databases/$(database)/documents/pulsecheck-pilot-enrollments/$(enrollmentId)).data.teamId
-              )
-            )
-          );
-        allow create, update: if isAdminUser()
-          || (
-            isSignedIn()
-            && get(/databases/$(database)/documents/pulsecheck-pilot-enrollments/$(enrollmentId)).data.userId == request.auth.uid
-            && pcUserHasActiveAthleteMembership(
-              get(/databases/$(database)/documents/pulsecheck-pilot-enrollments/$(enrollmentId)).data.teamId,
-              request.auth.uid
-            )
-          );
-        allow delete: if isAdminUser();
-      }
-    }
 
     // Immutable lifecycle/audit records are written only through trusted Admin
     // SDK routes. Platform admins can read them for operational review.
@@ -3158,15 +3108,15 @@ service cloud.firestore {
 
     // Nora text persistence is mediated by the authenticated server storage policy.
     match /conversations/{conversationId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow write: if false;
     }
     match /conversationSummaries/{conversationId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow write: if false;
     }
     match /user-mental-notes/{userId}/notes/{noteId} {
-      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow read, delete: if isSignedIn() && request.auth.uid == userId;
       allow create, update: if false;
     }
 
@@ -3506,5 +3456,43 @@ service cloud.firestore {
         && !isExplicitlyRuledCollection(collectionName)
         && (!(collectionName in ['sim-assignments', 'mental-exercise-assignments']) || (resource.data.get('source', '') != 'standalone_reservation' && !pcLegacyOwnerEnrolled(resource.data) && !pcLegacyExecuting(resource.data)));
     }
+    // Durable closure and delivery state are owned exclusively by trusted services.
+    match /pulsecheck-private-users/{document=**} { allow read, write: if false; }
+    match /account-closure-jobs/{document=**} { allow read, write: if false; }
+    match /pulsecheck-invite-accepted-outbox/{document=**} { allow read, write: if false; }
+    // Responder projection and acknowledgement use authenticated server routes.
+    match /pulsecheck-clinical-escalations/{escalationId} {
+      allow read, write: if false;
+      match /athleteAcknowledgements/{acknowledgementId} {
+        allow create: if isSignedIn()
+          && get(/databases/$(database)/documents/pulsecheck-clinical-escalations/$(escalationId)).data.athleteUserId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['athleteUserId', 'acknowledgedAt'])
+          && request.resource.data.athleteUserId == request.auth.uid
+          && request.resource.data.acknowledgedAt == request.time;
+        allow read, update, delete: if false;
+      }
+    }
+    match /pulsecheck-athlete-safety-state/{athleteUserId} {
+      allow read: if isSignedIn() && request.auth.uid == athleteUserId;
+      allow write: if false;
+    }
+    match /pulsecheck-pilot-enrollments/{enrollmentId} {
+      allow read: if isAdminUser() || (isSignedIn() && resource.data.userId == request.auth.uid)
+        || pcConsentCanReadMember(resource.data);
+      allow create, delete: if isAdminUser();
+      allow update: if isAdminUser() || (isSignedIn() && resource.data.userId == request.auth.uid
+        && resource.data.get('status', 'pending-consent') in ['active', 'pending-consent']
+        && pcConsentActive(get(/databases/$(database)/documents/pulsecheck-team-memberships/$(resource.data.teamMembershipId)).data)
+        && get(/databases/$(database)/documents/pulsecheck-team-memberships/$(resource.data.teamMembershipId)).data.userId == request.auth.uid
+        && resource.data.get('consentPersistenceVersion', 0) < 2
+        && request.resource.data.get('consentPersistenceVersion', 0) < 2
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.teamId == resource.data.teamId
+        && request.resource.data.organizationId == resource.data.organizationId
+        && request.resource.data.pilotId == resource.data.pilotId
+        && request.resource.data.get('cohortId', '') == resource.data.get('cohortId', '')
+        && request.resource.data.teamMembershipId == resource.data.teamMembershipId);
+    }
+
   }
 }

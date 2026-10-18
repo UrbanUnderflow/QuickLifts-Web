@@ -96,29 +96,12 @@ function collectPulseCheckPushCandidateTokens({
         candidates.push({
           token: normalized.token,
           source: 'installation',
+          platform: normalized.platform,
           installationId: normalized.installationId,
           documentId: normalized.documentId,
         });
       }
     });
-  } else {
-    const token = normalizeString(userData.pulseCheckFcmToken);
-    const sourceApp = normalizeString(userData.pushTokenSourceApp).toLowerCase();
-    const declaredOwner = normalizeString(
-      userData.pulseCheckFcmTokenOwnerUserId
-    );
-    if (
-      token
-      && sourceApp === 'pulsecheck'
-      && (!declaredOwner || declaredOwner === normalizedRecipientId)
-    ) {
-      candidates.push({
-        token,
-        source: 'legacy',
-        installationId: '',
-        documentId: '',
-      });
-    }
   }
 
   return {
@@ -201,6 +184,7 @@ function resolvePulseCheckPushTargets({
     const currentTarget = targetsByToken.get(candidate.token) || {
       token: candidate.token,
       source: candidate.source,
+      platform: candidate.platform,
       installations: [],
     };
     if (candidate.source === 'installation') {

@@ -1,3 +1,4 @@
+import { fetchPublicProfile } from '../user/publicProfile';
 import { emptyPracticeBacklog, summarizePracticeBacklog } from './practiceBacklog';
 import {
   collection,
@@ -1452,14 +1453,18 @@ async function loadAthleteProfileSummary(
   const fallbackResult = { profile: summary, canReceivePulseCheckPush: false };
 
   try {
-    const userSnap = await getDoc(doc(db, 'users', athleteId));
-    if (!userSnap.exists()) {
+    let userData: Record<string, any> | null;
+    try {
+      const snapshot = await getDoc(doc(db, 'users', athleteId));
+      userData = snapshot.exists() ? snapshot.data() : null;
+    } catch (error) {
+      if ((error as {code?: string}).code !== 'permission-denied') throw error;
+      userData = await fetchPublicProfile(athleteId);
+    }
+    if (!userData) {
       return fallbackResult;
     }
 
-    const userData = userSnap.data() as Record<string, any>;
-    const pulseCheckFcmToken = normalizeString(userData.pulseCheckFcmToken);
-    const pushTokenSourceApp = normalizeString(userData.pushTokenSourceApp).toLowerCase();
 
     return {
       profile: {
@@ -1471,7 +1476,7 @@ async function loadAthleteProfileSummary(
         bio: normalizeString(userData.bio),
         accountCreatedAt: toTimeValue(userData.createdAt),
       },
-      canReceivePulseCheckPush: Boolean(pulseCheckFcmToken && pushTokenSourceApp === 'pulsecheck'),
+      canReceivePulseCheckPush: Boolean(normalizeString(userData.pulseCheckFcmToken) && normalizeString(userData.pushTokenSourceApp).toLowerCase() === 'pulsecheck'),
     };
   } catch (error) {
     console.warn('[pulsecheckPilotDashboard] Failed to load athlete profile summary:', athleteId, error);

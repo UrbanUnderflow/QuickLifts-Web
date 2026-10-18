@@ -1,3 +1,4 @@
+const { sendNonPulsePush } = require('./lib/legacy-push-ownership');
 const crypto = require('crypto');
 const { db, admin } = require('./config/firebase');
 
@@ -329,7 +330,7 @@ async function sendNotification(fcmToken, title, body, customData = {}, recipien
   }
 
   try {
-    const response = await messaging.send(message);
+    const response = await sendNonPulsePush(db, messaging, message);
     console.log('Successfully sent notification:', response);
 
     // Log success to Firestore for the Notification Logs dashboard

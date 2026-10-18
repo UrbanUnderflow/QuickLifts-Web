@@ -1,3 +1,4 @@
+const {assertAccountOpen, accountOpenBatch, accountOpenSet} = require('./lib/account-closure-guard');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
   CONNECTIONS_COLLECTION,
@@ -12,7 +13,7 @@ const { resolveUnambiguousAthleteScope } = require('./lib/pulsecheck-athlete-tea
 const {
   buildNoraBiometricBriefNotification,
   resolveAthleteFirstName,
-  resolvePulseCheckPushTarget,
+  loadPulseCheckPushTarget,
   loadPulseCheckNudgeSuppressionState,
   sendLoggedNoraPush,
 } = require('./pulsecheck-notification-utils');
@@ -546,7 +547,7 @@ async function ensureFreshAccessToken(connectionRef, connection) {
     lastErrorAt: null,
   };
 
-  await connectionRef.set(
+  await accountOpenSet(admin.firestore(), connection.userId || connectionRef.id, connectionRef,
     {
       accessToken: nextConnection.accessToken,
       refreshToken: nextConnection.refreshToken,
@@ -900,7 +901,7 @@ async function maybeSendBiometricBriefReadyNotification({
   }
 
   const userData = userSnap.data() || {};
-  const pushTarget = resolvePulseCheckPushTarget(userData);
+  const pushTarget = await loadPulseCheckPushTarget(db, userId);
   if (!pushTarget.eligible) {
     return { success: false, reason: pushTarget.reason };
   }
@@ -1021,6 +1022,7 @@ exports.__test = {
 };
 
 async function syncOuraForUser({userId,body,sendNotification=false}) {
+  await assertAccountOpen(admin.firestore(), userId);
     const timezone = resolveTimeZone(body.timezone);
     const includeDebug = body.includeDebug === true;
     const requestedDateKey = typeof body.snapshotDateKey === 'string' && isValidDateKey(body.snapshotDateKey)
@@ -1078,7 +1080,7 @@ async function syncOuraForUser({userId,body,sendNotification=false}) {
     });
 
     const sourceStatusRef = admin.firestore().collection(HEALTH_CONTEXT_COLLECTIONS.sourceStatus).doc(sourceStatusDoc.id);
-    const batch = admin.firestore().batch();
+    const batch = accountOpenBatch(admin.firestore(), userId);
     batch.set(sourceStatusRef, sourceStatusDoc, { merge: true });
 
     if (!hasPayload) {

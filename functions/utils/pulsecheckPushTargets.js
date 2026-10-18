@@ -22,6 +22,7 @@ const chunk = (values, size) => {
 
 async function loadPulseCheckPushTargets(recipientId, userRef, userData = {}) {
   const db = getDb();
+  if (userData.accountClosureRequestedAt || (await db.collection('account-closure-jobs').doc(recipientId).get()).exists) return { modelEnabled: true, targets: [] };
   const tokenSnapshot = await userRef
     .collection(PUSH_TOKEN_SUBCOLLECTION)
     .limit(MAX_PUSH_INSTALLATIONS)

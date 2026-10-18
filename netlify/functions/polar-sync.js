@@ -1,3 +1,4 @@
+const {assertAccountOpen, accountOpenBatch} = require('./lib/account-closure-guard');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
   CONNECTIONS_COLLECTION,
@@ -841,6 +842,7 @@ function buildSnapshotArtifacts({ userId, dateKey, timezone, syncAt, sourceStatu
 }
 
 async function syncPolarSnapshotForConnection({ userId, timezone, requestedDateKey, connectionRef, connection }) {
+  await assertAccountOpen(admin.firestore(), userId);
   // Resolved once per sync — not fatal if it fails or is ambiguous
   // (multi-team athlete, or no active team): records still get written,
   // just without the team-scoped fields, matching prior behavior.
@@ -869,7 +871,7 @@ async function syncPolarSnapshotForConnection({ userId, timezone, requestedDateK
   const sourceStatusDoc = buildSourceStatusDocument({ userId, hasPayload, observedAt, syncAt, lastError: null });
 
   const firestore = admin.firestore();
-  const batch = firestore.batch();
+  const batch = accountOpenBatch(firestore, userId);
   batch.set(firestore.collection(HEALTH_CONTEXT_COLLECTIONS.sourceStatus).doc(sourceStatusDoc.id), sourceStatusDoc, { merge: true });
   batch.set(connectionRef, {
     lastSyncAttemptAt: admin.firestore.FieldValue.serverTimestamp(),

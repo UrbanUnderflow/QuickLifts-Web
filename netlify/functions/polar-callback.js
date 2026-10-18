@@ -1,3 +1,4 @@
+const {assertAccountOpen, accountOpenSet} = require('./lib/account-closure-guard');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
   CONNECTIONS_COLLECTION,
@@ -105,6 +106,7 @@ exports.handler = async (event) => {
     const tokenData = await exchangeCodeForToken({ code, redirectUri: stateData.redirectUri || getRedirectUri() });
     const registration = await registerPolarUser(tokenData.access_token || '', stateData.userId);
     const now = Date.now();
+    await assertAccountOpen(db, stateData.userId);
     const connectionRef = db.collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(stateData.userId));
     const payload = {
       provider: 'polar',
@@ -131,7 +133,7 @@ exports.handler = async (event) => {
       lastErrorAt: null,
     };
 
-    await connectionRef.set(payload, { merge: true });
+    await accountOpenSet(db, stateData.userId, connectionRef, payload, { merge: true });
     await db.collection(OAUTH_STATES_COLLECTION).doc(stateToken).set({ result: 'connected', completedAt: now }, { merge: true });
 
     return buildHtmlResponse(200, redirectHtml({
@@ -146,8 +148,8 @@ exports.handler = async (event) => {
       message: 'We could not finish the Polar connection right now.',
       statusCode: 500,
     });
-    if (stateData?.userId) {
-      await db.collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(stateData.userId)).set({
+    if (stateData?.userId && error?.code !== 'account_closing') {
+      await accountOpenSet(db, stateData.userId, db.collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(stateData.userId)), {
         provider: 'polar',
         userId: stateData.userId,
         status: 'error',

@@ -1,3 +1,4 @@
+const {accountOpenBatch} = require('./lib/account-closure-guard');
 const crypto = require('crypto');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const { RESPONSE_HEADERS } = require('./polar-utils');
@@ -179,7 +180,7 @@ async function persistEventAndQueueSync({ event, index, rawBody, verification, h
   const connectionDoc = await findConnection({ polarUserId, memberId });
   const connection = connectionDoc?.data() || null;
   const userId = connectionDoc?.id || connection?.userId || memberId || '';
-  const batch = admin.firestore().batch();
+  const batch = userId ? accountOpenBatch(admin.firestore(), userId) : admin.firestore().batch();
 
   batch.set(eventRef, {
     id: eventId,

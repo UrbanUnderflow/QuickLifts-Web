@@ -1121,7 +1121,18 @@ export interface SavePulseCheckAdultMemberSetupInput {
   notificationPreferences: PulseCheckNotificationPreferences;
 }
 
+export interface PulseCheckConsentSaveContext {
+  organizationId: string;
+  teamId: string;
+  pilotId: string;
+  cohortId: string;
+  productBrand: string;
+  documents: PulseCheckRequiredConsentDocument[];
+}
+
 export interface CompletePulseCheckAthleteOnboardingInput {
+  expectedContext: PulseCheckConsentSaveContext;
+  name?: string;
   consentDecisions?: ConsentDecisions;
   teamMembershipId: string;
   consentVersion: string;
@@ -1138,6 +1149,7 @@ export interface CompletePulseCheckAthleteOnboardingInput {
 }
 
 export interface SavePulseCheckAthleteOnboardingProgressInput {
+  expectedContext: PulseCheckConsentSaveContext;
   consentDecisions?: ConsentDecisions;
   teamMembershipId: string;
   entryOnboardingStep: PulseCheckAthleteEntryOnboardingStep;

@@ -1,3 +1,4 @@
+const {accountOpenSet} = require('./lib/account-closure-guard');
 const { schedule } = require('@netlify/functions');
 const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const { CONNECTIONS_COLLECTION } = require('./polar-utils');
@@ -57,7 +58,7 @@ async function runScheduledPolarEndOfDaySync(now = new Date()) {
         connectionRef,
         connection,
       });
-      await connectionRef.set({
+      await accountOpenSet(db, userId, connectionRef, {
         lastEndOfDaySnapshotDateKey: snapshotDateKey,
         lastEndOfDaySyncAt: admin.firestore.FieldValue.serverTimestamp(),
         lastEndOfDaySyncStatus: result.status,
@@ -65,7 +66,8 @@ async function runScheduledPolarEndOfDaySync(now = new Date()) {
       }, { merge: true });
       results.push({ userId, status: result.status, snapshotDateKey, timezone });
     } catch (error) {
-      await db.collection(CONNECTIONS_COLLECTION).doc(doc.id).set({
+      if (error?.code === 'account_closing') { results.push({userId, status:'account_closed'}); continue; }
+      await accountOpenSet(db, userId, db.collection(CONNECTIONS_COLLECTION).doc(doc.id), {
         lastEndOfDaySyncAt: admin.firestore.FieldValue.serverTimestamp(),
         lastEndOfDaySyncStatus: 'error',
         lastEndOfDaySyncError: error?.message || 'Polar end-of-day sync failed',

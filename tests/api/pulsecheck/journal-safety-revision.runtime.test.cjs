@@ -65,7 +65,7 @@ function loadModules({ classification = { tier: 0 }, created = { escalationId: '
   stub(modulePaths.escalation, { runtimeHelpers: { createEscalationFromTrustedRuntime: async (body) => { escalations.push(body); await onEscalate(); return created; } } });
   stub(modulePaths.metrics, { isTrueCareEscalationClassification: (value) => Number(value?.tier || 0) >= 2 });
   stub(modulePaths.notifications, {
-    resolvePulseCheckFcmToken: () => 'token-1',
+    loadPulseCheckPushTarget: async () => ({token:'token-1',eligible:true}),
     sendLoggedNoraPush: async (message) => { pushes.push(message); return { success: true }; },
   });
   return { screen: require(modulePaths.screen), guide: require(modulePaths.guide), pushes, escalations };

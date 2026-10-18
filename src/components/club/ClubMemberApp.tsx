@@ -65,7 +65,7 @@ interface ClubMemberAppProps {
   clubData: ClubData;
   creatorData?: ClubLandingPageProps['creatorData'];
   currentUser: User;
-  totalWorkoutsCompleted?: number;
+  totalWorkoutsCompleted?: number | null;
   allRounds?: RoundPreview[];
   isCreator?: boolean;
   onLeave?: () => Promise<void> | void;
@@ -525,7 +525,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   clubData,
   creatorData,
   currentUser,
-  totalWorkoutsCompleted = 0,
+  totalWorkoutsCompleted = null,
   allRounds = [],
   isCreator = false,
   onLeave,
@@ -1536,7 +1536,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
           <div className="grid gap-3 border-t border-white/8 px-4 py-4 sm:grid-cols-3 sm:px-6">
             {[
               { label: 'Members', value: activeMemberCount },
-              { label: 'Workouts', value: totalWorkoutsCompleted },
+              { label: 'Workouts', value: totalWorkoutsCompleted ?? '—' },
               { label: 'Programs', value: totalProgramCount },
             ].map((stat) => (
               <div
@@ -1903,7 +1903,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
                       </div>
                       <div className="hidden text-right sm:block">
                         <div className="text-lg font-black" style={{ color: accent }}>
-                          {memberWorkoutCounts[member.userId] || 0}
+                          {memberWorkoutCounts[member.userId] ?? '—'}
                         </div>
                         <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Workouts</div>
                       </div>

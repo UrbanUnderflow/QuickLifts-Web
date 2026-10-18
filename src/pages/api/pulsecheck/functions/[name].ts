@@ -1,6 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 const SUPPORTED_FUNCTIONS = new Set([
+  'pulsecheck-consent-save',
+  'delete-account',
+  'record-clinical-escalation',
+  'clinical-responder',
   'submit-pulsecheck-checkin',
   'get-pulsecheck-team-standings',
   'get-pulsecheck-team-showing-up-history',
@@ -61,27 +65,9 @@ function normalizeQueryValue(value: string | string[] | undefined) {
   return value;
 }
 
-function resolveSiteOrigin(req: NextApiRequest) {
-  const forwardedProto = req.headers['x-forwarded-proto'];
-  const forwardedHost = req.headers['x-forwarded-host'];
-  const host = typeof forwardedHost === 'string' && forwardedHost.trim()
-    ? forwardedHost
-    : typeof req.headers.host === 'string' && req.headers.host.trim()
-      ? req.headers.host
-      : 'fitwithpulse.ai';
-
-  const normalizedHost = host.toLowerCase();
-  if (
-    normalizedHost.startsWith('localhost:')
-    || normalizedHost.startsWith('127.0.0.1:')
-    || normalizedHost.startsWith('0.0.0.0:')
-  ) {
-    return (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
-  }
-
-  const protocol = typeof forwardedProto === 'string' && forwardedProto.trim() ? forwardedProto : 'https';
-
-  return `${protocol}://${host}`;
+function resolveSiteOrigin(_req: NextApiRequest) {
+  // Forward credentials only to the configured deployment, never a caller-supplied host.
+  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
 }
 
 async function proxyNetlifyFunction(name: string, req: NextApiRequest, res: NextApiResponse) {
