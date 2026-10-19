@@ -809,3 +809,7 @@
   external_node_modules = ["sharp"]
   schedule = "35 * * * *"
 
+
+# Team report delivery is configured in Provisioning.
+[functions.scheduled-coach-participation-reports]
+  schedule = "*/5 * * * *"

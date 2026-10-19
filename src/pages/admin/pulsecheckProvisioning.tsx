@@ -1,3 +1,4 @@
+import TeamReportDelivery from '../../components/admin/TeamReportDelivery';
 import ui from '../../components/admin/ProvisioningWorkspace.module.css';
 import ProgramProductConfiguration, { ProductConfigurationFields } from '../../components/admin/ProgramProductConfiguration';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -4287,6 +4288,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   <div className="pcp-team-body" style={{ display: 'block', marginTop: 12 }}>
                                     <div className="pcp-team-shell">
                                       <div className="pcp-team-grid">
+                                        <CollapsibleCard
+                                          title="Coach report delivery"
+                                          open={expandedOrgCardKeys.has(`${team.id}:reports`)}
+                                          onToggle={() => toggleOrgCard(`${team.id}:reports`)}
+                                          preview="Daily participation and Monday weekly reports."
+                                        >
+                                          {expandedOrgCardKeys.has(`${team.id}:reports`) ? <TeamReportDelivery teamId={team.id} /> : null}
+                                        </CollapsibleCard>
                                         <CollapsibleCard
                                           title="Invite Artwork · This team"
                                           open={teamArtworkOpen}
