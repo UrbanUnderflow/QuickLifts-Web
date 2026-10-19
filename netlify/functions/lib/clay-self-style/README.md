@@ -1,6 +1,6 @@
 # Clay Self style bundle
 
-`SCHEMATICS-v1.md` is loaded into the image-edit prompt at runtime. Both PNG files
+`SCHEMATICS-v2.md` is loaded into the image-edit prompt at runtime. Both PNG files
 are appended after the three identity photos, in basketball/athlete order.
 These are approved illustration references copied from PulseCheck assets
 `ClayIntroBasketball` and `ClayDemoAthlete`. They establish material and sculptural
@@ -55,3 +55,8 @@ The override does not bypass concurrent-job protection or ownership checks.
 Edge failures record only the numeric maximum outer-edge alpha (0–255), without
 pixels or image content, so faint-fringe and substantive clipping can be
 distinguished operationally. This metric does not determine missing anatomy.
+
+Version 2 makes photo 3 the authoritative sporting-uniform reference; photo 1
+provides proportions and identity cues, and photo 2 provides facial detail. It
+strengthens broad handmade surface relief on the face and uniform, preserving
+natural body proportions. Version 1 is retained as an archived prior contract.

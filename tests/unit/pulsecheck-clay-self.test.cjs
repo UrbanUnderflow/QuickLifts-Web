@@ -41,10 +41,15 @@ test('real image edit sends all three references and returns generated PNG only'
     assert.deepEqual(options.body.getAll('image[]').map(file => file.name), ['full_body.jpg', 'face.jpg', 'reference.jpg', 'style-only-basketball.png', 'style-only-athlete.png']);
     assert.equal(options.body.get('quality'), 'high');
     assert.equal(options.body.get('size'), '1024x1536');
-    const spec = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../netlify/functions/lib/clay-self-style/SCHEMATICS-v1.md'), 'utf8');
+    const spec = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../netlify/functions/lib/clay-self-style/SCHEMATICS-v2.md'), 'utf8');
     assert.equal(options.body.get('prompt'), spec);
     assert.match(spec, /Images 4 and 5 are approved MATERIAL/);
     assert.match(spec, /both shoes including/);
+    assert.match(spec, /Image 3 is the AUTHORITATIVE sporting-uniform and clothing reference/);
+    assert.match(spec, /Image 3 wins every wardrobe conflict/);
+    assert.match(spec, /Never take garments or shirtlessness from image 1/);
+    assert.match(spec, /face must be as visibly sculpted as/);
+    assert.match(spec, /Do not inflate muscles/);
     assert.equal(options.body.get('model'), 'gpt-image-1.5');
     assert.equal(options.body.get('input_fidelity'), 'high');
     assert.equal(options.body.get('background'), 'transparent');
@@ -98,7 +103,7 @@ test('owner-only lifecycle: create, background, preview, approve, restore, delet
     await h.worker(h.event('POST', { jobId }));
     assert.equal(h.files.size, 1, 'reference photos erased after generation');
     const saved = [...h.states.values()][0];
-    assert.equal(saved.styleVersion, 'clay-self-v1');
+    assert.equal(saved.styleVersion, 'clay-self-v2');
     assert.equal(saved.successfulCount, 1);
     await h.worker(h.event('POST', { jobId }));
     assert.equal([...h.states.values()][0].successfulCount, 1, 'duplicate completion is not counted twice');
