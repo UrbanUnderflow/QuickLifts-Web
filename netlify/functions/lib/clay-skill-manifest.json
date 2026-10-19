@@ -1,0 +1,404 @@
+{
+  "version": "clay-skills-v2",
+  "skills": {
+    "breathing-478": {
+      "name": "4-7-8 Relaxation Breathing",
+      "composition": "Seated on a low teal bench, shoulders soft, one hand at the upper chest, eyes closed; roomy quiet composition.",
+      "reference": "breathing-478.png"
+    },
+    "breathing-activation": {
+      "name": "Activation Breathing",
+      "composition": "Standing upright beside the bench in a ready stance, eyes open and chest gently lifted; a compact rising clay arc suggests readiness.",
+      "reference": "breathing-activation.png"
+    },
+    "breathing-box": {
+      "name": "Box Breathing",
+      "composition": "Seated upright, both hands on thighs; four softly squared clay forms make a restrained square rhythm beside the athlete.",
+      "reference": "breathing-box.png"
+    },
+    "breathing-physiological-sigh": {
+      "name": "Double-Breath Reset",
+      "composition": "Seated close three-quarter view, hand resting on chest, shoulders releasing; two small clay arcs gather into one longer curve.",
+      "reference": "breathing-physiological-sigh.png"
+    },
+    "breathing-recovery": {
+      "name": "Recovery Breathing",
+      "composition": "Seated after practice, feet grounded and hands relaxed; one long, low clay curve and warmer softer light.",
+      "reference": "breathing-recovery.png"
+    },
+    "confidence-affirmations": {
+      "name": "Sport-Specific Affirmations",
+      "composition": "Athlete calmly facing a small rounded clay reflection panel, hand resting on chest; no text, no exaggerated heroic pose.",
+      "reference": "confidence-affirmations.png"
+    },
+    "confidence-evidence-journal": {
+      "name": "Evidence Journal",
+      "composition": "Athlete seated with a blank clay notebook, holding a clay pencil and looking down at it.",
+      "reference": "confidence-evidence-journal.png"
+    },
+    "confidence-inventory": {
+      "name": "Confidence Inventory",
+      "composition": "Athlete seated beside three small clay tokens representing remembered strengths, arranging them thoughtfully.",
+      "reference": "confidence-inventory.png"
+    },
+    "confidence-power-pose": {
+      "name": "Power Posing",
+      "composition": "Athlete standing comfortably upright, shoulders open, feet grounded and hands at hips; natural proportions and no trophy.",
+      "reference": "confidence-power-pose.png"
+    },
+    "decision-brake-point": {
+      "name": "Brake Point",
+      "composition": "Athlete poised beside a clay cue lane, one hand paused before a marker; a visible gap expresses withholding a response.",
+      "reference": "decision-brake-point.png"
+    },
+    "brake-point-branch-fakeout-brake-point": {
+      "name": "Fakeout Brake Point",
+      "composition": "Athlete poised beside a clay cue lane, one hand paused before a marker; a visible gap expresses withholding a response. Variant: This variant sharpens response control inside Brake Point by making the athlete resist convincing false triggers.",
+      "reference": "brake-point-branch-fakeout-brake-point.png"
+    },
+    "brake-point-branch-false-start-brake-point": {
+      "name": "False-Start Brake Point",
+      "composition": "Athlete poised beside a clay cue lane, one hand paused before a marker; a visible gap expresses withholding a response. Variant: This variant sharpens response control inside Brake Point by making the athlete resist convincing false triggers.",
+      "reference": "brake-point-branch-false-start-brake-point.png"
+    },
+    "brake-point-branch-go-no-go-brake-point": {
+      "name": "Go/No-Go Brake Point",
+      "composition": "Athlete poised beside a clay cue lane, one hand paused before a marker; a visible gap expresses withholding a response. Variant: This variant sharpens response control inside Brake Point by making the athlete resist convincing false triggers.",
+      "reference": "brake-point-branch-go-no-go-brake-point.png"
+    },
+    "brake-point-branch-high-stakes-inhibition-brake-point": {
+      "name": "High-Stakes Inhibition Brake Point",
+      "composition": "Athlete poised beside a clay cue lane, one hand paused before a marker; a visible gap expresses withholding a response. Variant: This variant applies a distinct expression of Brake Point while preserving the family mechanism of cancel or inhibit the wrong action when the stop signal appears.",
+      "reference": "brake-point-branch-high-stakes-inhibition-brake-point.png"
+    },
+    "brake-point-branch-immersive-spatial-brake": {
+      "name": "Immersive Spatial Brake",
+      "composition": "Athlete poised beside a clay cue lane, one hand paused before a marker; a visible gap expresses withholding a response. Variant: This variant raises transfer fidelity by expressing Brake Point inside a more immersive environment while keeping cancel or inhibit the wrong action when the stop signal appears intact.",
+      "reference": "brake-point-branch-immersive-spatial-brake.png"
+    },
+    "brake-point-branch-spatial-cancel-brake-point": {
+      "name": "Spatial Cancel Brake Point",
+      "composition": "Athlete poised beside a clay cue lane, one hand paused before a marker; a visible gap expresses withholding a response. Variant: This variant applies a distinct expression of Brake Point while preserving the family mechanism of cancel or inhibit the wrong action when the stop signal appears.",
+      "reference": "brake-point-branch-spatial-cancel-brake-point.png"
+    },
+    "decision-sequence-shift": {
+      "name": "Sequence Shift",
+      "composition": "Athlete arranging three colored clay cue tiles along two curved paths, turning toward a changed sequence.",
+      "reference": "decision-sequence-shift.png"
+    },
+    "sequence-shift-branch-dual-rule-sequence-shift": {
+      "name": "Dual-Rule Sequence Shift",
+      "composition": "Athlete arranging three colored clay cue tiles along two curved paths, turning toward a changed sequence. Variant: This variant applies a distinct expression of Sequence Shift while preserving the family mechanism of update immediately to the new rule when the sequence or rule changes.",
+      "reference": "sequence-shift-branch-dual-rule-sequence-shift.png"
+    },
+    "sequence-shift-branch-late-audible-sequence-shift": {
+      "name": "Late-Audible Sequence Shift",
+      "composition": "Athlete arranging three colored clay cue tiles along two curved paths, turning toward a changed sequence. Variant: This variant expresses Sequence Shift under accumulating fatigue or late-session load while preserving the parent mechanism.",
+      "reference": "sequence-shift-branch-late-audible-sequence-shift.png"
+    },
+    "sequence-shift-branch-pattern-change-sequence-shift": {
+      "name": "Pattern-Change Sequence Shift",
+      "composition": "Athlete arranging three colored clay cue tiles along two curved paths, turning toward a changed sequence. Variant: This variant applies a distinct expression of Sequence Shift while preserving the family mechanism of update immediately to the new rule when the sequence or rule changes.",
+      "reference": "sequence-shift-branch-pattern-change-sequence-shift.png"
+    },
+    "sequence-shift-branch-sequence-memory-sequence-shift": {
+      "name": "Sequence-Memory Sequence Shift",
+      "composition": "Athlete arranging three colored clay cue tiles along two curved paths, turning toward a changed sequence. Variant: This variant expresses Sequence Shift through memory-linked rule updates so the athlete must hold the active rule, detect the change, and abandon the old pattern quickly.",
+      "reference": "sequence-shift-branch-sequence-memory-sequence-shift.png"
+    },
+    "sequence-shift-branch-sport-playbook-sequence-shift": {
+      "name": "Sport-Playbook Sequence Shift",
+      "composition": "Athlete arranging three colored clay cue tiles along two curved paths, turning toward a changed sequence. Variant: This variant localizes Sequence Shift to a sport-recognizable situation without changing the parent-family mechanism.",
+      "reference": "sequence-shift-branch-sport-playbook-sequence-shift.png"
+    },
+    "sequence-shift-library-audible": {
+      "name": "Audible",
+      "composition": "Athlete arranging three colored clay cue tiles along two curved paths, turning toward a changed sequence. Variant: This variant applies a distinct expression of Sequence Shift while preserving the family mechanism of update immediately to the new rule when the sequence or rule changes.",
+      "reference": "sequence-shift-library-audible.png"
+    },
+    "sequence-shift-library-rule-break": {
+      "name": "Rule Break",
+      "composition": "Athlete arranging three colored clay cue tiles along two curved paths, turning toward a changed sequence. Variant: This variant applies a distinct expression of Sequence Shift while preserving the family mechanism of update immediately to the new rule when the sequence or rule changes.",
+      "reference": "sequence-shift-library-rule-break.png"
+    },
+    "decision-signal-window": {
+      "name": "Signal Window",
+      "composition": "Athlete looking through a simple clay frame toward one clear cue among two quieter alternatives.",
+      "reference": "decision-signal-window.png"
+    },
+    "signal-window-branch-ambiguous-cue-signal-window": {
+      "name": "Ambiguous Cue Signal Window",
+      "composition": "Athlete looking through a simple clay frame toward one clear cue among two quieter alternatives. Variant: This variant adds interpretive or psychological load to Signal Window without replacing the core family mechanism.",
+      "reference": "signal-window-branch-ambiguous-cue-signal-window.png"
+    },
+    "signal-window-branch-decoy-cue-signal-window": {
+      "name": "Decoy Cue Signal Window",
+      "composition": "Athlete looking through a simple clay frame toward one clear cue among two quieter alternatives. Variant: This variant sharpens response control inside Signal Window by making the athlete resist convincing false triggers.",
+      "reference": "signal-window-branch-decoy-cue-signal-window.png"
+    },
+    "signal-window-branch-field-read-trial-signal-window": {
+      "name": "Field-Read Trial Signal Window",
+      "composition": "Athlete looking through a simple clay frame toward one clear cue among two quieter alternatives. Variant: This variant packages Signal Window as a standardized comparison-grade assessment while preserving identify and commit to the correct cue before the decision window closes.",
+      "reference": "signal-window-branch-field-read-trial-signal-window.png"
+    },
+    "signal-window-branch-rapid-recognition-signal-window": {
+      "name": "Rapid Recognition Signal Window",
+      "composition": "Athlete looking through a simple clay frame toward one clear cue among two quieter alternatives. Variant: This variant expresses Signal Window through compressed cue exposure and earlier commitment pressure while preserving the same cue-discrimination mechanic.",
+      "reference": "signal-window-branch-rapid-recognition-signal-window.png"
+    },
+    "signal-window-branch-shot-clock-signal-window": {
+      "name": "Shot-Clock Signal Window",
+      "composition": "Athlete looking through a simple clay frame toward one clear cue among two quieter alternatives. Variant: This variant expresses Signal Window through shot-clock pressure and late-clock game framing while preserving the same cue-discrimination mechanic.",
+      "reference": "signal-window-branch-shot-clock-signal-window.png"
+    },
+    "focus-3-second-reset": {
+      "name": "Reset",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting.",
+      "reference": "focus-3-second-reset.png"
+    },
+    "reset-branch-audio-disruption-reset": {
+      "name": "Audio Disruption Reset",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant expresses Reset through crowd, whistle, buzzer, and startle-like sound disruptions while preserving the same recovery mechanic.",
+      "reference": "reset-branch-audio-disruption-reset.png"
+    },
+    "reset-branch-cognitive-provocation-reset": {
+      "name": "Cognitive-Provocation Reset",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant expresses Reset through provocative language, evaluative cues, and psychological disruption without changing the reset mechanic.",
+      "reference": "reset-branch-cognitive-provocation-reset.png"
+    },
+    "reset-branch-combined-channel-reset": {
+      "name": "Combined-Channel Reset",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant layers visual, audio, and cognitive disruptions together while preserving the same Reset reset target.",
+      "reference": "reset-branch-combined-channel-reset.png"
+    },
+    "reset-branch-extended-trial-reset": {
+      "name": "Extended Trial Reset",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant packages Reset as a standardized comparison-grade assessment while preserving disruption -> reset -> rapid re-engagement to the same primary task.",
+      "reference": "reset-branch-extended-trial-reset.png"
+    },
+    "reset-branch-immersive-reset-chamber": {
+      "name": "Immersive Reset Chamber",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant raises Reset transfer fidelity through immersive environmental presentation while keeping the same reset target and scoring model.",
+      "reference": "reset-branch-immersive-reset-chamber.png"
+    },
+    "reset-branch-short-daily-reset": {
+      "name": "Short Daily Reset",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant compresses Reset into the fastest useful daily rep while preserving disruption -> reset -> rapid re-engagement to the same primary task.",
+      "reference": "reset-branch-short-daily-reset.png"
+    },
+    "reset-branch-visual-disruption-reset": {
+      "name": "Visual Disruption Reset",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant expresses Reset through screen-based visual interruptions while preserving the same disruption -> reset -> re-engagement mechanic.",
+      "reference": "reset-branch-visual-disruption-reset.png"
+    },
+    "reset-library-recovery-chain": {
+      "name": "Recovery Chain",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant applies a distinct expression of Reset while preserving the family mechanism of disruption -> reset -> rapid re-engagement to the same primary task.",
+      "reference": "reset-library-recovery-chain.png"
+    },
+    "reset-library-reset-chamber": {
+      "name": "Reset Chamber",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant raises transfer fidelity by expressing Reset inside a more immersive environment while keeping disruption -> reset -> rapid re-engagement to the same primary task intact.",
+      "reference": "reset-library-reset-chamber.png"
+    },
+    "reset-library-reset-window": {
+      "name": "Reset Window",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant applies a distinct expression of Reset while preserving the family mechanism of disruption -> reset -> rapid re-engagement to the same primary task.",
+      "reference": "reset-library-reset-window.png"
+    },
+    "reset-library-restart": {
+      "name": "Restart",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant applies a distinct expression of Reset while preserving the family mechanism of disruption -> reset -> rapid re-engagement to the same primary task.",
+      "reference": "reset-library-restart.png"
+    },
+    "reset-library-second-chance": {
+      "name": "Second Chance",
+      "composition": "Athlete returning to a simple starting marker after an interrupted action; a small clay return arc suggests resetting. Variant: This variant expresses Reset through immediate recovery after an initially missed re-entry, forcing the athlete to reclaim the same target without spiraling.",
+      "reference": "reset-library-second-chance.png"
+    },
+    "focus-body-scan": {
+      "name": "Body Scan Awareness",
+      "composition": "Seated athlete with hands on thighs and grounded feet; small softly raised clay markers follow shoulders, hands and feet.",
+      "reference": "focus-body-scan.png"
+    },
+    "focus-cue-word": {
+      "name": "Anchor Word",
+      "composition": "Athlete lightly touching a small unlettered clay token beside the chest while focusing forward; visual anchor, no written word.",
+      "reference": "focus-cue-word.png"
+    },
+    "focus-endurance-lock": {
+      "name": "Endurance Lock",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained.",
+      "reference": "focus-endurance-lock.png"
+    },
+    "endurance-lock-branch-clutter-fatigue-endurance-lock": {
+      "name": "Clutter-Fatigue Endurance Lock",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant emphasizes visual interference inside Endurance Lock while preserving the parent-family mechanism.",
+      "reference": "endurance-lock-branch-clutter-fatigue-endurance-lock.png"
+    },
+    "endurance-lock-branch-late-pressure-endurance-lock": {
+      "name": "Late-Pressure Endurance Lock",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant expresses Endurance Lock through accumulating fatigue plus late-session stakes while preserving the same sustained-execution mechanism.",
+      "reference": "endurance-lock-branch-late-pressure-endurance-lock.png"
+    },
+    "endurance-lock-branch-long-reset-endurance-lock": {
+      "name": "Long-Reset Endurance Lock",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant expresses Endurance Lock under accumulating fatigue or late-session load while preserving the parent mechanism.",
+      "reference": "endurance-lock-branch-long-reset-endurance-lock.png"
+    },
+    "endurance-lock-branch-sustained-focus-endurance-lock": {
+      "name": "Sustained-Focus Endurance Lock",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant expresses Endurance Lock through stable sustained-focus demands so the athlete must preserve clean execution over extended duration without late collapse.",
+      "reference": "endurance-lock-branch-sustained-focus-endurance-lock.png"
+    },
+    "endurance-lock-branch-trial-only-fatigability-probe": {
+      "name": "Trial-Only Fatigability Probe",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant packages Endurance Lock as a standardized comparison-grade assessment while preserving preserve clean execution as time, monotony, and fatigue load accumulate.",
+      "reference": "endurance-lock-branch-trial-only-fatigability-probe.png"
+    },
+    "endurance-lock-library-burn-rate": {
+      "name": "Burn Rate",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant expresses Endurance Lock under accumulating fatigue or late-session load while preserving the parent mechanism.",
+      "reference": "endurance-lock-library-burn-rate.png"
+    },
+    "endurance-lock-library-fatigue-filter": {
+      "name": "Fatigue Filter",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant expresses Endurance Lock under accumulating fatigue or late-session load while preserving the parent mechanism.",
+      "reference": "endurance-lock-library-fatigue-filter.png"
+    },
+    "endurance-lock-library-grind-line": {
+      "name": "Grind Line",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant applies a distinct expression of Endurance Lock while preserving the family mechanism of preserve clean execution as time, monotony, and fatigue load accumulate.",
+      "reference": "endurance-lock-library-grind-line.png"
+    },
+    "endurance-lock-library-late-clock": {
+      "name": "Late Clock",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant expresses Endurance Lock under accumulating fatigue or late-session load while preserving the parent mechanism.",
+      "reference": "endurance-lock-library-late-clock.png"
+    },
+    "endurance-lock-library-long-reset": {
+      "name": "Long Reset",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant expresses Endurance Lock under accumulating fatigue or late-session load while preserving the parent mechanism.",
+      "reference": "endurance-lock-library-long-reset.png"
+    },
+    "endurance-lock-library-sharpness-drop": {
+      "name": "Sharpness Drop",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant applies a distinct expression of Endurance Lock while preserving the family mechanism of preserve clean execution as time, monotony, and fatigue load accumulate.",
+      "reference": "endurance-lock-library-sharpness-drop.png"
+    },
+    "endurance-lock-library-stay-clean": {
+      "name": "Stay Clean",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant applies a distinct expression of Endurance Lock while preserving the family mechanism of preserve clean execution as time, monotony, and fatigue load accumulate.",
+      "reference": "endurance-lock-library-stay-clean.png"
+    },
+    "endurance-lock-library-volatility-curve": {
+      "name": "Volatility Curve",
+      "composition": "Athlete calmly attending to a repeated line of clay cues extending into space, posture steady and unstrained. Variant: This variant applies a distinct expression of Endurance Lock while preserving the family mechanism of preserve clean execution as time, monotony, and fatigue load accumulate.",
+      "reference": "endurance-lock-library-volatility-curve.png"
+    },
+    "focus-noise-gate": {
+      "name": "Noise Gate",
+      "composition": "Athlete facing one clear central cue; irregular peripheral clay forms suggest competing distractions without crowding the face.",
+      "reference": "focus-noise-gate.png"
+    },
+    "noise-gate-branch-crowd-noise-noise-gate": {
+      "name": "Crowd-Noise Noise Gate",
+      "composition": "Athlete facing one clear central cue; irregular peripheral clay forms suggest competing distractions without crowding the face. Variant: This variant expresses Noise Gate through crowd, commentary, and environmental sound while preserving the same target-selection rule.",
+      "reference": "noise-gate-branch-crowd-noise-noise-gate.png"
+    },
+    "noise-gate-branch-mixed-channel-noise-gate": {
+      "name": "Mixed-Channel Noise Gate",
+      "composition": "Athlete facing one clear central cue; irregular peripheral clay forms suggest competing distractions without crowding the face. Variant: This variant stacks visual and audio distractors inside Noise Gate while preserving the same target-filtering mechanic.",
+      "reference": "noise-gate-branch-mixed-channel-noise-gate.png"
+    },
+    "noise-gate-branch-peripheral-bait-noise-gate": {
+      "name": "Peripheral Bait Noise Gate",
+      "composition": "Athlete facing one clear central cue; irregular peripheral clay forms suggest competing distractions without crowding the face. Variant: This variant stresses Noise Gate through peripheral lure stimuli that compete for attention while the true target remains central.",
+      "reference": "noise-gate-branch-peripheral-bait-noise-gate.png"
+    },
+    "noise-gate-branch-visual-clutter-noise-gate": {
+      "name": "Visual Clutter Noise Gate",
+      "composition": "Athlete facing one clear central cue; irregular peripheral clay forms suggest competing distractions without crowding the face. Variant: This variant expresses Noise Gate through heavy visual clutter while preserving the same selective-attention mechanic.",
+      "reference": "noise-gate-branch-visual-clutter-noise-gate.png"
+    },
+    "noise-gate-library-channel-filter": {
+      "name": "Channel Filter",
+      "composition": "Athlete facing one clear central cue; irregular peripheral clay forms suggest competing distractions without crowding the face. Variant: This variant applies a distinct expression of Noise Gate while preserving the family mechanism of maintain the live cue while filtering irrelevant noise.",
+      "reference": "noise-gate-library-channel-filter.png"
+    },
+    "noise-gate-library-crowd-control": {
+      "name": "Crowd Control",
+      "composition": "Athlete facing one clear central cue; irregular peripheral clay forms suggest competing distractions without crowding the face. Variant: This variant emphasizes auditory interference inside Noise Gate while preserving the parent-family mechanism.",
+      "reference": "noise-gate-library-crowd-control.png"
+    },
+    "noise-gate-library-spotlight": {
+      "name": "Spotlight",
+      "composition": "Athlete facing one clear central cue; irregular peripheral clay forms suggest competing distractions without crowding the face. Variant: This variant emphasizes visual interference inside Noise Gate while preserving the parent-family mechanism.",
+      "reference": "noise-gate-library-spotlight.png"
+    },
+    "noise-gate-library-tunnel-line": {
+      "name": "Tunnel Line",
+      "composition": "Athlete facing one clear central cue; irregular peripheral clay forms suggest competing distractions without crowding the face. Variant: This variant raises transfer fidelity by expressing Noise Gate inside a more immersive environment while keeping maintain the live cue while filtering irrelevant noise intact.",
+      "reference": "noise-gate-library-tunnel-line.png"
+    },
+    "focus-single-point": {
+      "name": "Single-Point Focus",
+      "composition": "Athlete with steady gaze on one small clay target at eye level, generous empty space around that target.",
+      "reference": "focus-single-point.png"
+    },
+    "mindset-growth": {
+      "name": "Growth Mindset Self-Talk",
+      "composition": "Athlete reflecting beside an imperfect and a refined clay practice mark, holding one small tool; gentle learning rather than victory.",
+      "reference": "mindset-growth.png"
+    },
+    "mindset-nerves-excitement": {
+      "name": "Nerves to Excitement Reframe",
+      "composition": "Athlete upright near the practice boundary, attentive expression, hands relaxed; a tangled small clay line opening into an upward curve.",
+      "reference": "mindset-nerves-excitement.png"
+    },
+    "mindset-pressure-privilege": {
+      "name": "Pressure to Privilege Reframe",
+      "composition": "Athlete looking toward an open court-like doorway from the sideline, shoulders relaxed; invitation and readiness.",
+      "reference": "mindset-pressure-privilege.png"
+    },
+    "mindset-process-focus": {
+      "name": "Process Over Outcome",
+      "composition": "Athlete focusing on the next of three small stepping markers; distant outcome area remains visually quiet.",
+      "reference": "mindset-process-focus.png"
+    },
+    "viz-adversity-response": {
+      "name": "Adversity Response Imagery",
+      "composition": "Athlete seated in imagery practice; an abstract broken clay path reconnects ahead, with no duplicated person.",
+      "reference": "viz-adversity-response.png"
+    },
+    "viz-competition-walkthrough": {
+      "name": "Competition Walkthrough",
+      "composition": "Athlete seated eyes closed beside a miniature clay route through a simple sport setting.",
+      "reference": "viz-competition-walkthrough.png"
+    },
+    "viz-highlight-reel": {
+      "name": "Highlight Reel",
+      "composition": "Athlete seated with three small curved unlettered clay frames nearby, suggesting remembered moments without extra people.",
+      "reference": "viz-highlight-reel.png"
+    },
+    "viz-perfect-execution": {
+      "name": "Perfect Execution Replay",
+      "composition": "Athlete seated eyes closed, one clean clay motion arc in the scene suggests a rehearsed skill trajectory.",
+      "reference": "viz-perfect-execution.png"
+    }
+  },
+  "aliases": {
+    "protocol-physiological-sigh": "breathing-physiological-sigh",
+    "protocol-box-breathing": "breathing-box",
+    "protocol-body-scan-reset": "focus-body-scan",
+    "protocol-nerves-to-excitement": "mindset-nerves-excitement",
+    "protocol-activation-breathing": "breathing-activation",
+    "protocol-cue-word-anchoring": "focus-cue-word",
+    "protocol-perfect-execution-replay": "viz-perfect-execution",
+    "protocol-power-pose": "confidence-power-pose",
+    "protocol-recovery-breathing": "breathing-recovery",
+    "protocol-478-breathing": "breathing-478",
+    "protocol-process-over-outcome": "mindset-process-focus",
+    "protocol-evidence-journal": "confidence-evidence-journal"
+  }
+}

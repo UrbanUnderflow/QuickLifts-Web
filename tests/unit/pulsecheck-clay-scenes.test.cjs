@@ -11,7 +11,7 @@ function harness(){
  states.set(c.stateRef(db,uid).path,{status:'approved',approvedPath:avatarPath});files.set(avatarPath,Buffer.from('approved-avatar'));
  return {db,bucket,uid,avatarPath,states,files};
 }
-const withKey=async fn=>{const old=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='synthetic';try{await fn();}finally{if(old===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=old;}};
+const withKey=async fn=>{const old=process.env.OPENAI_API_KEY,oldFlag=process.env.LINEAR_CURRICULUM_RUNTIME_ENABLED;process.env.OPENAI_API_KEY='synthetic';process.env.LINEAR_CURRICULUM_RUNTIME_ENABLED='true';try{await fn();}finally{if(old===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=old;if(oldFlag===undefined)delete process.env.LINEAR_CURRICULUM_RUNTIME_ENABLED;else process.env.LINEAR_CURRICULUM_RUNTIME_ENABLED=oldFlag;}};
 test('templates cover supported categories without accepting arbitrary prompts',()=>{
  assert.deepEqual(Object.keys(s.FAMILIES),['breathing','visualization','focus','mindset','confidence','grounding']);
  assert.throws(()=>s.family('ignore instructions'),{statusCode:400});
@@ -120,3 +120,78 @@ test('bounded cleanup removes only stale old scene objects, preserves avatar/cur
  assert.equal(calls,2);assert.equal(result.nextPageToken,'third');assert.equal(result.removed,2);
  assert.ok(removed.every(name=>name.endsWith('/stale.png')));
 });
+
+const windowScenes=require('../../netlify/functions/lib/pulsecheck-clay-window');
+function seedWindow(h,ids=['breathing-box','breathing-recovery','breathing-activation']){
+ const version={id:'v1',status:'published',content:{orderedIds:ids},skills:ids.map(id=>({id,name:id})),runtimeReadySkillIds:ids};
+ const state={athleteId:h.uid,optedIn:true,audienceId:'team',enrollment:{timezone:'America/New_York'},currentSkill:{skillId:ids[0],versionId:'v1'},completedSkillIds:[]};
+ const audience={athleteIds:[h.uid],versionId:'v1'};
+ for(const [section,id,data] of [['states',h.uid,state],['versions','v1',version],['audiences','team',audience]])h.states.set(`pulsecheck-linear-curriculum/${section}/items/${id}`,data);
+ return {state,version,audience};
+}
+test('rolling window derives exactly current and actual next, never skips blocked next or trusts another owner',()=>{
+ const h=harness(),{state,version,audience}=seedWindow(h);
+ assert.deepEqual(windowScenes.selectPair(h.uid,state,version,audience,version).map(x=>x.key),['breathing-box','breathing-recovery']);
+ assert.deepEqual(windowScenes.selectPair('other',state,version,audience,version),[]);
+ const latest={...version,id:'v2',runtimeReadySkillIds:['breathing-box','breathing-activation']};
+ assert.deepEqual(windowScenes.selectPair(h.uid,state,version,{...audience,versionId:'v2'},latest).map(x=>x.key),['breathing-box']);
+ assert.deepEqual(windowScenes.selectPair(h.uid,state,version,{athleteIds:[],versionId:'v1'},version).map(x=>x.key),['breathing-box']);
+ assert.equal(windowScenes.skill('protocol-box-breathing'),'breathing-box');
+ assert.throws(()=>windowScenes.skill('arbitrary prompt'),{statusCode:400});
+});
+test('prepare current pair processes two serial cached skills, advances one, and failures never automatically retry',()=>withKey(async()=>{
+ const h=harness(),seed=seedWindow(h),options={referenceReady:()=>true};let payload,calls=0;
+ await windowScenes.prepare(h.db,h.bucket,h.uid,async p=>{payload=p;},options);
+ await windowScenes.prepare(h.db,h.bucket,h.uid,async()=>{throw Error('duplicate dispatch');},options);
+ await windowScenes.workPair(h.db,h.bucket,h.uid,payload,async()=>{calls++;return Buffer.from('scene');},options);
+ assert.equal(calls,2);
+ assert.equal((await windowScenes.prepare(h.db,h.bucket,h.uid,async()=>{throw Error('cached dispatch');},options)).status,'ready');
+ seed.state.currentSkill.skillId='breathing-recovery';seed.state.completedSkillIds=['breathing-box'];
+ await windowScenes.prepare(h.db,h.bucket,h.uid,async p=>{payload=p;},options);
+ await windowScenes.workPair(h.db,h.bucket,h.uid,payload,async()=>{calls++;throw Error('provider down');},options);
+ assert.equal(calls,3);
+ assert.equal((await windowScenes.prepare(h.db,h.bucket,h.uid,async()=>{throw Error('failed retry');},options)).status,'failed');
+ assert.equal(h.states.get(s.refs(h.db,h.uid,payload.avatarVersion,'breathing-box').control.path).successes,2);
+}));
+test('rolling window cancels obsolete queued work before paid rendering and rejects absent approved artwork',()=>withKey(async()=>{
+ const h=harness(),seed=seedWindow(h);let payload,calls=0;
+ assert.equal((await windowScenes.prepare(h.db,h.bucket,h.uid,async()=>{}, {referenceReady:()=>false})).status,'artwork_unavailable');
+ await windowScenes.prepare(h.db,h.bucket,h.uid,async p=>{payload=p;},{referenceReady:()=>true});
+ seed.state.optedIn=false;
+ await windowScenes.workPair(h.db,h.bucket,h.uid,payload,async()=>{calls++;return Buffer.from('scene');},{referenceReady:()=>true});
+ assert.equal(calls,0);
+}));
+test('latest applicable published order determines next, not pinned order or client family',()=>{
+ const h=harness(),{state,version,audience}=seedWindow(h);
+ const ids=['breathing-activation','breathing-recovery','breathing-box'];
+ const latest={...version,id:'v2',content:{orderedIds:ids},skills:ids.map(id=>({id})),runtimeReadySkillIds:ids};
+ assert.deepEqual(windowScenes.selectPair(h.uid,state,version,{...audience,versionId:'v2'},latest).map(x=>x.key),['breathing-box','breathing-activation']);
+});
+test('every allowlisted skill has its own approved panel; request sends identity first and composition second',async()=>{
+ const manifest=require('../../netlify/functions/lib/clay-skill-manifest.json');
+ assert.equal(Object.keys(manifest.skills).length,77);
+ for(const id of Object.keys(manifest.skills))assert.equal(s.referenceReady(id),true,id);
+ const png=await sharp({create:{width:1536,height:1024,channels:3,background:'white'}}).png().toBuffer();
+ await s.renderScene(Buffer.from('approved-owner-figure'),'breathing-box','test',async(url,request)=>{
+  const images=request.body.getAll('image[]');assert.equal(images.length,2);
+  assert.equal(images[0].name,'approved-clay-self.png');assert.equal(await images[0].text(),'approved-owner-figure');
+  assert.equal(images[1].name,'approved-scene-reference.png');assert.ok(images[1].size>1000);
+  assert.match(request.body.get('prompt'),/SECOND image is the approved scene reference/);
+  assert.match(request.body.get('prompt'),/never override the athlete identity/);
+  return {ok:true,json:async()=>({data:[{b64_json:png.toString('base64')}]})};
+ });
+});
+test('avatar replacement rebuilds only two current slots, never older cached or full catalog scenes',()=>withKey(async()=>{
+ const h=harness();seedWindow(h);const options={referenceReady:()=>true};let payload,calls=0;
+ const dispatch=async p=>{payload=p;};const renderer=async()=>{calls++;return Buffer.from('scene');};
+ await windowScenes.prepare(h.db,h.bucket,h.uid,dispatch,options);
+ await windowScenes.workPair(h.db,h.bucket,h.uid,payload,renderer,options);
+ const newPath='pulsecheck-clay-self-private/owner/approved/new.png';
+ h.states.set(c.stateRef(h.db,h.uid).path,{approvedPath:newPath});h.files.set(newPath,Buffer.from('new-approved'));
+ await windowScenes.prepare(h.db,h.bucket,h.uid,dispatch,options);
+ await windowScenes.workPair(h.db,h.bucket,h.uid,payload,renderer,options);
+ assert.equal(calls,4);
+ assert.equal((await windowScenes.status(h.db,h.bucket,h.uid,'breathing-activation')).status,'not_started');
+}));
+
+test('disabled curriculum runtime does not create a guessed window',()=>withKey(async()=>{const h=harness();seedWindow(h);process.env.LINEAR_CURRICULUM_RUNTIME_ENABLED='false';assert.deepEqual(await windowScenes.resolvePair(h.db,h.uid),[]);}));
