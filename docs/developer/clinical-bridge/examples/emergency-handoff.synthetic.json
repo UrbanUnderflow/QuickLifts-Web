@@ -31,5 +31,6 @@
     "status": "emergency_safety_basis",
     "disclosureVersion": "pulsecheck-clinical-handoff-v1",
     "consentedAt": null
-  }
+  },
+  "universityCode": "SANDBOX"
 }

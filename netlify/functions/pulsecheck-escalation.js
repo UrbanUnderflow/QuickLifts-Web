@@ -29,6 +29,7 @@ const {
   buildPulseCallbackUrl,
   createClinicalBridge,
   resolveClinicalBridgeConfig,
+  resolveClinicalUniversityCode,
 } = require('./lib/clinical-bridge');
 
 // Escalation Tier enum values
@@ -3487,6 +3488,10 @@ async function performClinicalHandoff(
     severity: d.data().severity
   }));
 
+  // Resolve optional partner routing from persisted configuration only. Ignore
+  // any universityCode on the browser request, athlete profile, or incident.
+  const universityCode = await resolveClinicalUniversityCode(runtimeDb, { teamId, organizationId });
+
   // Build handoff payload
   const consentTimestamp = Number(escalationData?.consentTimestamp || 0);
   const stateSnapshot = buildClinicalStateSnapshotEnvelope(escalationData);
@@ -3515,6 +3520,7 @@ async function performClinicalHandoff(
     escalationTimestamp: Date.now(),
     pulseApiCallback: buildPulseCallbackUrl(),
     payloadVersion: 'pulse-manas-v1-draft',
+    ...(universityCode ? { universityCode } : {}),
     organizationId: organizationId || null,
     teamId: teamId || null,
     routingContext: {
@@ -3589,6 +3595,7 @@ async function performClinicalHandoff(
     if (athleticMindEmergency) await runtimeDb.collection(ATHLETE_SAFETY_STATE_COLLECTION).doc(userId).set({ emergencySupportMode: 'auntedna', emergencyHandoffStatus: 'pending' }, { merge: true });
     const athleteUpsert = await bridge.upsertAthlete({
       externalId: userId,
+      ...(universityCode ? { universityCode } : {}),
       ...(shortUser.displayName ? { displayName: shortUser.displayName } : {}),
       ...(shortUser.email ? { email: shortUser.email } : {}),
       ...(organizationId ? { organizationId } : {}),

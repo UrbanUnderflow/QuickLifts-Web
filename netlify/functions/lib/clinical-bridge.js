@@ -4,6 +4,24 @@ function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+// Partner routing is administrator-managed on the persisted organization.
+// Missing or unreadable optional metadata must never block an emergency case.
+async function resolveClinicalUniversityCode(db, { teamId, organizationId } = {}) {
+  const normalizedTeamId = normalizeString(teamId);
+  const normalizedOrganizationId = normalizeString(organizationId);
+  if (!normalizedTeamId || !normalizedOrganizationId) return undefined;
+  try {
+    const team = await db.collection('pulsecheck-teams').doc(normalizedTeamId).get();
+    if (!team.exists || team.data()?.organizationId !== normalizedOrganizationId) return undefined;
+    const organization = await db.collection('pulsecheck-organizations').doc(normalizedOrganizationId).get();
+    if (!organization.exists || organization.data()?.productBrand !== 'athleticmind') return undefined;
+    const code = normalizeString(organization.data()?.universityCode);
+    return /^[A-Z0-9][A-Z0-9_-]{0,63}$/.test(code) ? code : undefined;
+  } catch (_error) {
+    return undefined;
+  }
+}
+
 function resolveIntegerEnv(value, fallback, min, max) {
   const parsed = Number.parseInt(normalizeString(value), 10);
   if (!Number.isFinite(parsed)) return fallback;
@@ -200,6 +218,7 @@ class AuntEdnaClinicalBridge {
       firstName: input.firstName,
       lastName: input.lastName,
       organizationId: input.organizationId,
+      ...(input.universityCode ? { universityCode: input.universityCode } : {}),
       teamId: input.teamId,
       source: 'pulsecheck',
       metadata: input.metadata || undefined,
@@ -260,4 +279,5 @@ module.exports = {
   normalizeCreateEscalationResult,
   resolveCredentialMode,
   resolveClinicalBridgeConfig,
+  resolveClinicalUniversityCode,
 };

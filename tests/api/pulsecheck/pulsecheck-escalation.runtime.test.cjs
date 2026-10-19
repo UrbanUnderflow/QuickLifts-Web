@@ -1758,3 +1758,26 @@ for (const invalidScope of ['ended-team', 'archived-organization', 'wrong-organi
     assert.equal(delivered, false);
   });
 }
+
+for (const configuredCode of ['CAU', undefined, 'invalid code']) {
+  test(`emergency university code comes from persisted scope and missing code never blocks delivery: ${configuredCode}`, async () => withEmergencyDelivery(true, async () => {
+    const record = { ...emergencyRecord(), universityCode: 'BROWSER_OVERRIDE' };
+    const { db, state } = createClinicalRuntimeDb(record);
+    state.organization = { productBrand: 'athleticmind', status: 'active', universityCode: configuredCode };
+    state.team.universityCode = 'TEAM_OVERRIDE';
+    state.userProfile.universityCode = 'PROFILE_OVERRIDE';
+    const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+    let athlete, packet;
+    const result = await runtimeHelpers.performClinicalHandoff('athlete-1', 'conversation-1', 'escalation-1', record, db,
+      { ...emergencyContext, universityCode: 'CONTEXT_OVERRIDE' }, () => liveFixtureBridge({
+        upsertAthlete: async input => { athlete = input; return liveFixtureBridge().upsertAthlete(); },
+        createEscalation: async input => { packet = input; return liveFixtureBridge().createEscalation(); },
+      }));
+    assert.equal(result.success, true);
+    const expected = configuredCode === 'CAU' ? 'CAU' : undefined;
+    assert.equal(athlete.universityCode, expected);
+    assert.equal(packet.universityCode, expected);
+    assert.equal(state.record.clinicalReceiptVerified, true);
+    assert.equal(state.notifications.length, 0);
+  }));
+}

@@ -18,7 +18,27 @@ AuntEdna sends callbacks to the `pulseApiCallback` URL in each case packet. The 
 
 `POST {AuntEdna base URL}/athletes`
 
-Use `externalId` as the stable PulseCheck athlete ID. The request includes available name/email and scoped organization/team IDs. Repeated registration must be idempotent. Return HTTP 2xx with `{ "success": true, "data": { ... }, "requestId": "..." }`; an explicit error or missing success acknowledgment is a failure.
+Use `externalId` as the stable PulseCheck athlete ID. The request includes available name/email, scoped organization/team IDs, and `universityCode` when configured. See the [registration schema](athlete-registration.schema.json) and [synthetic registration example](examples/athlete-registration.synthetic.json). Repeated registration must be idempotent. Return HTTP 2xx with `{ "success": true, "data": { ... }, "requestId": "..." }`; an explicit error or missing success acknowledgment is a failure.
+
+## University routing
+
+Both `POST /athletes` and `POST /escalations` carry the same optional, top-level `universityCode`. For Clark Atlanta, the agreed code is `CAU`; synthetic examples use `SANDBOX`. Code values contain 1–64 uppercase letters, digits, underscores or hyphens, starting with a letter or digit.
+
+PulseCheck resolves the code from the persisted organization's `universityCode` after verifying the team's organization relationship and Athletic Mind product configuration. Athlete-supplied codes, display branding, institution names and questionnaire defaults do not determine this field. Each other institution needs its own agreed configuration.
+
+When routing metadata is missing, invalid or temporarily unreadable, PulseCheck omits the field and continues the emergency pathway. AuntEdna must accept emergency packets and their preceding athlete registration without a code, using the agreed `organizationId`/`teamId` mapping or clinical triage fallback. A missing code must never delay emergency acceptance. Existing product, consent, credential and receipt requirements remain in force.
+
+### Clark Atlanta production mapping
+
+Verified on 19 October 2026. The production organization ID is `0mXTn4DUYYL7t2K9AzZP`, with `productBrand: athleticmind` and `universityCode: CAU`.
+
+| Team | Production teamId | Current status |
+| --- | --- | --- |
+| Volleyball | `GlKi00GszJxnSnY8eh80` | Active |
+| Men's Basketball | `6YE1sh7G6YRWHhedoSpe` | Provisioning |
+| Clark Athletics | `zbgtLXGLpSFbODe9G0MX` | Provisioning |
+
+These identifiers may support AuntEdna's CAU routing fallback. Provisioning teams are not active snapshot programs. Reconfirm status before enabling exchange for another team.
 
 ## Receive an emergency handoff
 
@@ -26,7 +46,7 @@ Use `externalId` as the stable PulseCheck athlete ID. The request includes avail
 
 The header `Idempotency-Key` equals the packet's `escalationRecordId`. Preserve that identity across retries and return the existing case after acknowledgment loss.
 
-The [handoff example](examples/emergency-handoff.synthetic.json) and [payload schema](emergency-handoff.schema.json) describe the emergency packet. It contains scoped IDs, available contact information, tier/category, the current concern excerpt, classification reason, a brief handoff summary, consent basis, and callback URL. The current emergency path excludes full conversation history, unrelated mental notes, wearable snapshots, and optional profile history. Concern excerpts and classification reasons are bounded to 2,000 and 1,000 characters respectively.
+The [handoff example](examples/emergency-handoff.synthetic.json) and [payload schema](emergency-handoff.schema.json) describe the emergency packet. It contains scoped IDs, the optional university code, available contact information, tier/category, the current concern excerpt, classification reason, a brief handoff summary, consent basis, and callback URL. The current emergency path excludes full conversation history, unrelated mental notes, wearable snapshots, and optional profile history. Concern excerpts and classification reasons are bounded to 2,000 and 1,000 characters respectively.
 
 Return HTTP 2xx using the [case receipt](examples/case-receipt.synthetic.json): `success: true`, a nonempty `data.escalationId`, and a status of `received`, `processing`, or `assigned`. Other status values do not confirm this emergency handoff. The receiver must preserve the relationship between this provider case ID and the submitted `escalationRecordId`. A rejected, failed, or unconfirmed response does not establish acceptance.
 
@@ -66,4 +86,4 @@ Callback HTTP statuses:
 
 ## Versioning
 
-The emergency packet currently uses `payloadVersion: pulse-manas-v1-draft`. This wire identifier is retained for compatibility. The separate consent disclosure version is `pulsecheck-clinical-handoff-v1`. Validate the published schema and coordinate any breaking field, authentication, or event-vocabulary change before switching versions. Daily automated snapshots use their own `athleticmind-snapshot-v1` contract.
+The emergency packet currently uses `payloadVersion: pulse-manas-v1-draft`. This wire identifier is retained for compatibility. The separate consent disclosure version is `pulsecheck-clinical-handoff-v1`. Validate the published schema and coordinate any breaking field, authentication, or event-vocabulary change before switching versions. Daily automated snapshots use their own `athleticmind-snapshot-v2` contract.

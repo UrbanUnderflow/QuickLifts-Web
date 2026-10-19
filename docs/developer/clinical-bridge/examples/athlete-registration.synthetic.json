@@ -1,0 +1,9 @@
+{
+  "externalId": "synthetic-athlete",
+  "displayName": "Example Athlete",
+  "email": "athlete@example.invalid",
+  "organizationId": "synthetic-organization",
+  "teamId": "synthetic-team",
+  "universityCode": "SANDBOX",
+  "source": "pulsecheck"
+}

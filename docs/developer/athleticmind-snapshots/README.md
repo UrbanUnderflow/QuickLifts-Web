@@ -32,6 +32,53 @@ Calculate HMAC-SHA256 over the exact UTF-8 string `<timestamp>.POST./.netlify/fu
 
 Scheduled deliveries use `Authorization: Bearer <partner credential>`, `Idempotency-Key: <snapshotId>`, and `X-Snapshot-Contract: athleticmind-snapshot-v2`.
 
+## Check your key before snapshot activation
+
+`POST https://fitwithpulse.ai/.netlify/functions/auntedna-snapshot-auth-check` verifies a managed partner key for one approved team. Send only `{ "teamId": "<approved-team-id>" }`. The body limit is 1,024 bytes. This check uses the same `athleticmind.snapshot.read` permission, current program/team eligibility, key expiry/revocation checks, and shared per-key request limit as snapshot pull. It remains available while snapshot exchange is disabled. Legacy environment-registry credentials are unsupported here.
+
+Sign the exact UTF-8 string `<timestamp>.POST./.netlify/functions/auntedna-snapshot-auth-check.<raw JSON body>`. The auth-check path is part of the signature; a signature for the pull endpoint will fail. Keep the JSON bytes unchanged. The timestamp must be within five minutes of server time. The server selects the environment; the request cannot change it.
+
+Server-side Node.js example (supply the issued key ID, secret, and approved team ID through secure environment variables):
+
+```js
+const { createHmac } = require('node:crypto');
+const path = '/.netlify/functions/auntedna-snapshot-auth-check';
+const body = JSON.stringify({ teamId: process.env.APPROVED_TEAM_ID });
+const timestamp = Math.floor(Date.now() / 1000);
+const digest = createHmac('sha256', process.env.AUNTEDNA_HMAC_SECRET)
+  .update(`${timestamp}.POST.${path}.${body}`)
+  .digest('hex');
+async function checkKey() {
+  const response = await fetch(`https://fitwithpulse.ai${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-AuntEdna-Key-Id': process.env.AUNTEDNA_KEY_ID,
+      'X-AuntEdna-Signature': `t=${timestamp},v1=${digest}`,
+    },
+    body,
+  });
+  console.log(response.status, await response.json());
+}
+checkKey().catch(() => { process.exitCode = 1; });
+```
+
+Example successful authentication while pull is disabled:
+
+```json
+{
+  "authenticated": true,
+  "contractVersion": "athleticmind-snapshot-v2",
+  "snapshotPullStatus": "snapshot_pull_disabled"
+}
+```
+
+`authenticated: true` confirms the credential and this team's current partner scope. The response contains no athlete identifiers or content, and the check reads no athlete records. It creates only the normal authentication audit and rate-limit record. It never enables exchange, assembles a snapshot, or advances delivery state.
+
+`snapshotPullStatus` is one of `snapshot_pull_disabled`, `program_snapshot_pull_disabled`, `receiver_verification_required`, `synthetic_fixture_source_unconfigured` (test environment only), or `athlete_eligibility_required`. The last value means deployment and receiver gates passed at check time; every actual pull still separately validates the requested athlete's membership, current consent, and source permissions. This check does not establish athlete eligibility or confirm receiver delivery.
+
+HTTP `400` means invalid body, `401` invalid authentication, `403` missing/currently ineligible program scope, `405` wrong method, `413` oversized body, `429` shared key quota reached, and `503` configuration or service unavailable. A disabled pull can still produce HTTP `200` here because this endpoint checks authentication without releasing athlete data.
+
 ## Request a snapshot
 
 `POST https://fitwithpulse.ai/.netlify/functions/auntedna-snapshot-pull`
@@ -39,6 +86,18 @@ Scheduled deliveries use `Authorization: Bearer <partner credential>`, `Idempote
 Send a unique `requestId`, `teamId`, `athleteId`, `windowStart`, and `windowEnd`. IDs use 1–128 ASCII letters, numbers, underscores, or hyphens. Window bounds are UTC ISO 8601 timestamps ending in `Z`; the start is inclusive and the end is exclusive. The window must be positive, no longer than seven days, and cannot end in the future. The request-body limit is 8,192 bytes.
 
 See [request example](examples/pull-request.synthetic.json) and [response example](examples/pull-response.synthetic.json). The response contains `snapshot` and `receipt`. A retrieval receipt does not represent scheduled delivery or clinical acceptance.
+
+## Clark Atlanta delivery setup
+
+As of 19 October 2026, CAU Volleyball (`GlKi00GszJxnSnY8eh80`, organization `0mXTn4DUYYL7t2K9AzZP`) is configured for `America/New_York`, with a daily cutoff of `00:00` local time and a 48-hour overlap for late updates. Midnight closes the preceding local calendar day. Daylight-saving time is handled through the IANA timezone; this is not a fixed UTC offset. The scheduler checks every 15 minutes, so the cutoff defines the data window rather than a guaranteed delivery instant. Overlap requires `(sourceId, revision)` deduplication.
+
+Push and pull remain disabled. Activation requires AuntEdna's verified receiver and v2 receipt/withdrawal behavior, the agreed retention/deletion process, and current athlete-owned participation permission for this exchange. Existing program participation alone does not establish the expanded snapshot permission. The separate signed auth-check endpoint can verify the existing production key before those activation steps are complete.
+
+### Dedicated daily-push connection
+
+AuntEdna supplies its receiving HTTPS URL and a dedicated Bearer key through the secure integration channel. Pulse configures the dedicated snapshot destination and credential separately from clinical handoff credentials. A snapshot credential is not an HMAC pull secret, baseline key or documentation password.
+
+All four server-only settings are required when selecting this dedicated connection: `ATHLETICMIND_SNAPSHOT_PUSH_BASE_URL`, `ATHLETICMIND_SNAPSHOT_PUSH_PATH`, `ATHLETICMIND_SNAPSHOT_PUSH_API_KEY`, and `ATHLETICMIND_SNAPSHOT_PUSH_CREDENTIAL_MODE=live`. The base URL and appended path must match the team's verified receiver record exactly. Incomplete dedicated configuration blocks delivery; it never falls back to the clinical handoff key. Existing integrations with no dedicated settings retain their prior clinical-bridge configuration. The global and team activation flags remain separate and stay disabled until verification is complete.
 
 ## Receive a scheduled snapshot
 
