@@ -791,3 +791,18 @@
   schedule = "15 * * * *"
   node_bundler = "nft"
   external_node_modules = ["sharp"]
+
+# Private personalized skill scenes use traced native image dependencies.
+[functions.pulsecheck-clay-scenes]
+  node_bundler = "nft"
+  external_node_modules = ["sharp"]
+
+[functions.pulsecheck-clay-scenes-background]
+  node_bundler = "nft"
+  external_node_modules = ["sharp"]
+
+[functions.pulsecheck-clay-scenes-cleanup]
+  node_bundler = "nft"
+  external_node_modules = ["sharp"]
+  schedule = "35 * * * *"
+
