@@ -501,7 +501,7 @@
 
 [functions]
   directory = "netlify/functions"
-  included_files = ["netlify/functions/**"]
+  included_files = ["netlify/functions/*", "netlify/functions/!(lib)/**", "netlify/functions/lib/*", "netlify/functions/lib/!(clay-skill-style)/**"]
   node_bundler = "esbuild"
 
 [functions.nora-red-team-run-background]
@@ -794,14 +794,17 @@
 
 # Private personalized skill scenes use traced native image dependencies.
 [functions.pulsecheck-clay-scenes]
+  included_files = ["netlify/functions/lib/clay-skill-style/**"]
   node_bundler = "nft"
   external_node_modules = ["sharp"]
 
 [functions.pulsecheck-clay-scenes-background]
+  included_files = ["netlify/functions/lib/clay-skill-style/**"]
   node_bundler = "nft"
   external_node_modules = ["sharp"]
 
 [functions.pulsecheck-clay-scenes-cleanup]
+  included_files = ["netlify/functions/lib/clay-skill-style/**"]
   node_bundler = "nft"
   external_node_modules = ["sharp"]
   schedule = "35 * * * *"
