@@ -1,0 +1,715 @@
+import React, { useEffect, useRef, useState } from 'react';
+import Head from 'next/head';
+import { useRouter } from 'next/router';
+import { format, parse } from 'date-fns';
+import { Calendar, CheckCircle2, Loader2 } from 'lucide-react';
+import GroupMeetAvailabilityPicker from './GroupMeetAvailabilityPicker';
+import {
+  type GroupMeetAvailabilitySlot,
+  type GroupMeetImportedAvailabilitySuggestion,
+  type GroupMeetSharedAvailabilityParticipant,
+} from '../../lib/groupMeet';
+
+type InviteResponse = {
+  invite: {
+    token: string;
+    name: string;
+    email: string | null;
+    imageUrl?: string | null;
+    participantType: 'host' | 'participant';
+    shareUrl: string;
+    responseSubmittedAt: string | null;
+    availabilityEntries: GroupMeetAvailabilitySlot[];
+    peerAvailability: GroupMeetSharedAvailabilityParticipant[];
+    calendarImport?: {
+      provider?: 'google' | string;
+      connected?: boolean;
+      connectedEmail?: string | null;
+      status?: string | null;
+      lastConnectedAt?: string | null;
+      lastImportedAt?: string | null;
+      error?: string | null;
+    } | null;
+    deadlinePassed: boolean;
+    request: {
+      id: string;
+      title: string;
+      targetMonth: string;
+      deadlineAt: string | null;
+      timezone: string;
+      meetingDurationMinutes: number;
+      status: 'collecting' | 'closed';
+    };
+  };
+};
+
+type CalendarAction = 'connect' | 'import' | 'disconnect' | null;
+
+function sortAvailabilitySlots(slots: GroupMeetAvailabilitySlot[]) {
+  return [...slots].sort((left, right) => {
+    if (left.date !== right.date) {
+      return left.date.localeCompare(right.date);
+    }
+
+    if (left.startMinutes !== right.startMinutes) {
+      return left.startMinutes - right.startMinutes;
+    }
+
+    return left.endMinutes - right.endMinutes;
+  });
+}
+
+function mergeAvailabilitySlots(
+  currentSlots: GroupMeetAvailabilitySlot[],
+  nextSlots: GroupMeetAvailabilitySlot[]
+) {
+  const seen = new Set<string>();
+  const merged: GroupMeetAvailabilitySlot[] = [];
+
+  for (const slot of [...currentSlots, ...nextSlots]) {
+    const key = `${slot.date}:${slot.startMinutes}:${slot.endMinutes}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(slot);
+  }
+
+  return sortAvailabilitySlots(merged);
+}
+
+function queryValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function buildCalendarCallbackMessage(query: Record<string, string | string[] | undefined>) {
+  const candidates = Object.entries(query).filter(([key]) =>
+    /calendar|google/i.test(key)
+  );
+
+  for (const [key, value] of candidates) {
+    const raw = queryValue(value);
+    if (!raw) continue;
+
+    const normalized = `${key}:${raw}`.toLowerCase();
+
+    if (normalized.includes('error') || normalized.includes('failed') || normalized.includes('denied')) {
+      return {
+        type: 'error' as const,
+        text: raw === '1' || raw.toLowerCase() === 'error'
+          ? 'Google Calendar import was not completed.'
+          : raw,
+      };
+    }
+
+    if (
+      normalized.includes('connected') ||
+      normalized.includes('imported') ||
+      normalized.includes('success') ||
+      normalized.includes('complete') ||
+      normalized.includes('ok')
+    ) {
+      let text = raw;
+      if (normalized.includes('connected')) {
+        text = 'Google Calendar connected. You can import availability now.';
+      } else if (normalized.includes('imported')) {
+        text = 'Google Calendar availability imported.';
+      } else if (raw === '1' || raw.toLowerCase() === 'success') {
+        text = 'Google Calendar connected.';
+      } else if (/^(ok|done|completed)$/i.test(raw)) {
+        text = 'Google Calendar action completed.';
+      }
+
+      return {
+        type: 'success' as const,
+        text,
+      };
+    }
+  }
+
+  return null;
+}
+
+function stripCalendarQueryParams(query: Record<string, string | string[] | undefined>) {
+  const nextQuery: Record<string, string | string[]> = {};
+
+  for (const [key, value] of Object.entries(query)) {
+    if (/calendar|google/i.test(key)) continue;
+    if (value === undefined) continue;
+    nextQuery[key] = value;
+  }
+
+  return nextQuery;
+}
+
+type Props = {
+  token: string;
+  onFinish?: () => Promise<void>;
+  onClose?: () => void;
+  onBusyChange?: (busy: boolean) => void;
+};
+
+const GroupMeetInviteAvailability: React.FC<Props> = ({ token, onFinish, onClose, onBusyChange }) => {
+  const router = useRouter();
+  const [invite, setInvite] = useState<InviteResponse['invite'] | null>(null);
+  const [availabilityEntries, setAvailabilityEntries] = useState<GroupMeetAvailabilitySlot[]>([]);
+  const [importedSuggestions, setImportedSuggestions] = useState<GroupMeetImportedAvailabilitySuggestion[]>([]);
+  const [calendarImport, setCalendarImport] = useState<InviteResponse['invite']['calendarImport'] | null>(null);
+  const [calendarAction, setCalendarAction] = useState<CalendarAction>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [finishing, setFinishing] = useState(false);
+  const popupRef = useRef<Window | null>(null);
+  const handledCallbackRef = useRef<string | null>(null);
+
+  const loadInvite = async (options?: { silent?: boolean }) => {
+    if (!token) return;
+
+    if (!options?.silent) {
+      setLoading(true);
+    }
+    try {
+      const response = await fetch(`/api/group-meet/${encodeURIComponent(token)}`);
+      const payload = (await response.json().catch(() => ({}))) as Partial<InviteResponse> & { error?: string };
+      if (!response.ok || !payload.invite) {
+        throw new Error(payload.error || 'Invite not found.');
+      }
+      setInvite(payload.invite);
+      setAvailabilityEntries(Array.isArray(payload.invite.availabilityEntries) ? payload.invite.availabilityEntries : []);
+      setImportedSuggestions([]);
+      setCalendarImport(payload.invite.calendarImport || null);
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Failed to load invite.' });
+    } finally {
+      if (!options?.silent) {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadInvite();
+  }, [token]);
+
+  useEffect(() => {
+    if (!router.isReady || onFinish) return;
+
+    const callbackMessage = buildCalendarCallbackMessage(router.query as Record<string, string | string[] | undefined>);
+    if (!callbackMessage) return;
+
+    const signature = `${callbackMessage.type}:${callbackMessage.text}`;
+    if (handledCallbackRef.current === signature) return;
+    handledCallbackRef.current = signature;
+
+    if (window.opener) {
+      window.opener.postMessage({ type: 'group-meet-calendar-result', token, message: callbackMessage }, window.location.origin);
+      window.close();
+    }
+    setMessage(callbackMessage);
+
+    if (callbackMessage.type === 'success') {
+      void loadInvite({ silent: true });
+    }
+
+    void router.replace(
+      {
+        pathname: router.pathname,
+        query: stripCalendarQueryParams(router.query as Record<string, string | string[] | undefined>),
+      },
+      undefined,
+      { shallow: true }
+    );
+  }, [router.isReady, router.pathname, router.query]);
+
+  const busy = saving || finishing || calendarAction !== null;
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
+
+  useEffect(() => {
+    if (!onFinish || calendarAction !== 'connect') return;
+    let completed = false;
+    const complete = async (result?: { type: 'success' | 'error'; text: string }) => {
+      if (completed) return;
+      completed = true;
+      popupRef.current?.close();
+      popupRef.current = null;
+      await loadInvite({ silent: true });
+      if (result) setMessage(result);
+      setCalendarAction(null);
+    };
+    const receive = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== popupRef.current ||
+          event.data?.type !== 'group-meet-calendar-result' || event.data?.token !== token) return;
+      const result = event.data.message;
+      if ((result?.type === 'success' || result?.type === 'error') && typeof result.text === 'string') {
+        void complete(result);
+      }
+    };
+    window.addEventListener('message', receive);
+    const timer = window.setInterval(() => {
+      if (popupRef.current?.closed) void complete();
+    }, 500);
+    return () => {
+      window.removeEventListener('message', receive);
+      window.clearInterval(timer);
+    };
+  }, [calendarAction, onFinish, token]);
+
+  useEffect(() => () => { popupRef.current?.close(); }, []);
+
+  const finish = async () => {
+    if (!onFinish || busy || !invite?.availabilityEntries.length) return;
+    setFinishing(true);
+    setMessage(null);
+    try {
+      await onFinish();
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Could not refresh the request. Try Finish again.' });
+    } finally {
+      setFinishing(false);
+    }
+  };
+
+  const saveAvailability = async (
+    nextAvailabilityEntries: GroupMeetAvailabilitySlot[],
+    options?: {
+      successText?: string;
+      errorText?: string;
+    }
+  ) => {
+    if (!invite) return null;
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/group-meet/${encodeURIComponent(invite.token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ availabilityEntries: nextAvailabilityEntries }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as Partial<InviteResponse> & { error?: string };
+      if (!response.ok || !payload.invite) {
+        throw new Error(payload.error || options?.errorText || 'Failed to save availability.');
+      }
+
+      setInvite(payload.invite);
+      setAvailabilityEntries(Array.isArray(payload.invite.availabilityEntries) ? payload.invite.availabilityEntries : []);
+      setImportedSuggestions([]);
+      setCalendarImport(payload.invite.calendarImport || null);
+      setMessage({ type: 'success', text: options?.successText || 'Availability saved automatically.' });
+      return payload.invite;
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || options?.errorText || 'Failed to save availability.' });
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAvailabilityChange = (nextAvailabilityEntries: GroupMeetAvailabilitySlot[]) => {
+    const previousAvailabilityEntries = availabilityEntries;
+    setAvailabilityEntries(nextAvailabilityEntries);
+
+    void saveAvailability(nextAvailabilityEntries, {
+      successText: nextAvailabilityEntries.length
+        ? 'Availability saved automatically.'
+        : 'Availability cleared.',
+      errorText: 'Failed to automatically save availability.',
+    }).then((savedInvite) => {
+      if (!savedInvite) {
+        setAvailabilityEntries(previousAvailabilityEntries);
+      }
+    });
+  };
+
+  const startGoogleCalendarConnect = async () => {
+    if (!invite) return;
+
+    if (onFinish) {
+      popupRef.current = window.open('about:blank', '_blank', 'popup,width=560,height=720');
+      if (!popupRef.current) {
+        setMessage({ type: 'error', text: 'Allow the Google sign-in pop-up, then try connecting again.' });
+        return;
+      }
+    }
+    setCalendarAction('connect');
+    setMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/group-meet/${encodeURIComponent(invite.token)}/calendar/google/connect/start`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+        debugCode?: string;
+        debugHint?: string;
+        debugId?: string;
+      };
+
+      if (!response.ok || !payload.url) {
+        const error = new Error(payload.error || 'Unable to start Google Calendar connection.') as Error & {
+          status?: number;
+          payload?: typeof payload;
+        };
+        error.status = response.status;
+        error.payload = payload;
+        throw error;
+      }
+
+      if (onFinish) {
+        if (!popupRef.current || popupRef.current.closed) throw new Error('Google Calendar connection was canceled.');
+        popupRef.current.location.href = payload.url;
+      } else {
+        window.location.assign(payload.url);
+      }
+    } catch (error: any) {
+      popupRef.current?.close();
+      popupRef.current = null;
+      console.error('[GroupMeetInvitePage] Google Calendar connect failed', {
+        status: error?.status || null,
+        payload: error?.payload || null,
+      });
+      setMessage({ type: 'error', text: error?.message || 'Unable to start Google Calendar connection.' });
+      setCalendarAction(null);
+    }
+  };
+
+  const importGoogleCalendarAvailability = async () => {
+    if (!invite) return;
+
+    setCalendarAction('import');
+    setMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/group-meet/${encodeURIComponent(invite.token)}/calendar/google/import`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        suggestions?: GroupMeetImportedAvailabilitySuggestion[];
+        calendarImport?: InviteResponse['invite']['calendarImport'];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        if (payload.calendarImport !== undefined) {
+          setCalendarImport(payload.calendarImport || null);
+        }
+        throw new Error(payload.error || 'Failed to import Google Calendar availability.');
+      }
+
+      const nextSuggestions = Array.isArray(payload.suggestions) ? payload.suggestions : [];
+      const importedSlots: GroupMeetAvailabilitySlot[] = nextSuggestions.map((suggestion) => ({
+        date: suggestion.date,
+        startMinutes: suggestion.startMinutes,
+        endMinutes: suggestion.endMinutes,
+      }));
+      const mergedAvailability = mergeAvailabilitySlots(availabilityEntries, importedSlots);
+      const addedSlotCount = mergedAvailability.length - availabilityEntries.length;
+
+      if (addedSlotCount > 0) {
+        setAvailabilityEntries(mergedAvailability);
+        setImportedSuggestions([]);
+        const savedInvite = await saveAvailability(mergedAvailability, {
+          successText: `Imported and saved ${addedSlotCount} Google Calendar ${addedSlotCount === 1 ? 'time slot' : 'time slots'}.`,
+          errorText: 'Google Calendar imported times, but automatic save failed.',
+        });
+        if (!savedInvite) setAvailabilityEntries(availabilityEntries);
+      } else {
+        if (payload.calendarImport !== undefined) {
+          setCalendarImport(payload.calendarImport || null);
+        }
+        setMessage({
+          type: 'success',
+          text: availabilityEntries.length
+            ? 'No new availability windows were added. Your saved availability is unchanged.'
+            : 'No available times were found in Google Calendar for this month. Add a time window manually or adjust your calendar and import again.',
+        });
+      }
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Failed to import Google Calendar availability.' });
+    } finally {
+      setCalendarAction(null);
+    }
+  };
+
+  const disconnectGoogleCalendar = async () => {
+    if (!invite) return;
+
+    setCalendarAction('disconnect');
+    setMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/group-meet/${encodeURIComponent(invite.token)}/calendar/google/disconnect`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+      const payload = (await response.json().catch(() => ({}))) as {
+        calendarImport?: InviteResponse['invite']['calendarImport'];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to disconnect Google Calendar.');
+      }
+
+      setCalendarImport(payload.calendarImport || null);
+      setImportedSuggestions([]);
+      setMessage({
+        type: 'success',
+        text: 'Google Calendar disconnected. Your drafted availability stays in place.',
+      });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Failed to disconnect Google Calendar.' });
+    } finally {
+      setCalendarAction(null);
+    }
+  };
+
+  const googleCalendarConnected = Boolean(
+    calendarImport &&
+      (calendarImport.connected ||
+        calendarImport.status === 'connected' ||
+        calendarImport.status === 'imported')
+  );
+  const googleCalendarStatusLabel = googleCalendarConnected
+    ? calendarImport?.status === 'imported'
+      ? 'Connected and imported'
+      : 'Connected'
+    : 'Not connected';
+  const googleCalendarHint = googleCalendarConnected
+    ? 'Import busy blocks from Google Calendar to add availability. New imported windows save automatically.'
+    : 'Optionally connect Google Calendar to add availability from busy-block data. New imported windows save automatically.';
+  const isClosed = invite?.request.status === 'closed';
+  const deadlinePassedButStillOpen = Boolean(invite?.deadlinePassed && !isClosed);
+  const pickerSubtitle = googleCalendarConnected
+    ? 'Tap the days that work, add your times, or import Google Calendar. Changes save automatically.'
+    : deadlinePassedButStillOpen
+      ? 'The deadline has passed, but you can still add or update your availability here.'
+      : 'Tap the days that work and add one or more time windows. Changes save automatically.';
+
+  return (
+    <div className={`${onFinish ? "" : "min-h-screen"} bg-[#FAFAF7] text-stone-900`}>
+      {!onFinish && <Head>
+        <title>{invite ? `${invite.request.title} | Group Meet` : 'Group Meet'}</title>
+      </Head>}
+
+      <div className="max-w-5xl mx-auto px-5 py-8 sm:px-8 sm:py-12">
+        {loading ? (
+          <div className="rounded-lg border border-stone-200 bg-white px-6 py-16 text-center shadow-sm">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-stone-900" />
+            <div className="text-stone-500">Loading your Group Meet invite...</div>
+          </div>
+        ) : !invite ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-6 py-16 text-center shadow-sm">
+            <div className="text-xl font-semibold mb-2">Invite unavailable</div>
+            <div className="text-red-700">This link may be invalid or expired.</div>
+          </div>
+        ) : (
+          <>
+            <section className="rounded-lg border border-stone-200 bg-white p-6 shadow-sm sm:p-8">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-stone-500">
+                    <Calendar className="w-3.5 h-3.5" />
+                    Group Meet
+                  </div>
+                  {invite.imageUrl && (
+                    <img
+                      src={invite.imageUrl}
+                      alt={invite.name}
+                      className="mt-4 h-14 w-14 rounded-lg object-cover border border-stone-200"
+                    />
+                  )}
+                  <h1 className="mt-4 text-3xl sm:text-4xl font-semibold text-stone-950">{invite.request.title}</h1>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-stone-500 sm:text-base">
+                    Hi {invite.name}. Tap any day that works for you and add one or more time windows. Group Meet saves changes automatically, and you can still come back later to update them.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-3">
+                    <div className="text-stone-500">Target month</div>
+                    <div className="mt-1 font-medium text-stone-950">{format(parse(`${invite.request.targetMonth}-01`, 'yyyy-MM-dd', new Date()), 'MMMM yyyy')}</div>
+                  </div>
+                  <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-3">
+                    <div className="text-stone-500">Meeting length</div>
+                    <div className="mt-1 font-medium text-stone-950">{invite.request.meetingDurationMinutes} minutes</div>
+                  </div>
+                  <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] px-4 py-3">
+                    <div className="text-stone-500">Deadline</div>
+                    <div className="mt-1 font-medium text-stone-950">
+                      {invite.request.deadlineAt
+                        ? new Date(invite.request.deadlineAt).toLocaleString('en-US', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                            timeZone: invite.request.timezone,
+                          })
+                        : '—'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {message && (
+              <div
+                className={`mt-6 rounded-lg border px-4 py-3 text-sm ${
+                  message.type === 'success'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700'
+                    : 'border-red-500/30 bg-red-500/10 text-red-700'
+                }`}
+              >
+                {message.text}
+              </div>
+            )}
+
+            {deadlinePassedButStillOpen && (
+              <div className="mt-6 rounded-lg border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
+                The deadline has passed, but this request is still open. You can continue adding or updating your availability.
+              </div>
+            )}
+
+            <section className="mt-6 rounded-lg border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-3xl">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
+                    <Calendar className="w-3.5 h-3.5" />
+                    Google Calendar
+                  </div>
+                  <h2 className="mt-3 text-xl font-semibold text-stone-950">Optional calendar import</h2>
+                  <p className="mt-2 text-sm leading-6 text-stone-500">{googleCalendarHint}</p>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs text-stone-600">
+                    <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1">
+                      {googleCalendarStatusLabel}
+                    </span>
+                    <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1">
+                      Auto-save is on
+                    </span>
+                    {calendarImport?.connectedEmail && (
+                      <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1">
+                        {calendarImport.connectedEmail}
+                      </span>
+                    )}
+                    {calendarImport?.lastImportedAt && (
+                      <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1">
+                        Last imported {new Date(calendarImport.lastImportedAt).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto lg:flex-col">
+                  {!googleCalendarConnected ? (
+                    <button
+                      type="button"
+                      onClick={startGoogleCalendarConnect}
+                      disabled={busy || isClosed}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-stone-900 px-5 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-60 sm:w-auto"
+                    >
+                      {calendarAction === 'connect' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                      Connect Google Calendar
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={importGoogleCalendarAvailability}
+                        disabled={busy || isClosed}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-stone-900 px-5 py-3 font-semibold text-white hover:bg-stone-700 disabled:opacity-60 sm:w-auto"
+                      >
+                        {calendarAction === 'import' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        Import availability
+                      </button>
+                      <button
+                        type="button"
+                        onClick={disconnectGoogleCalendar}
+                        disabled={busy}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-stone-200 bg-white px-5 py-3 font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-60 sm:w-auto"
+                      >
+                        {calendarAction === 'disconnect' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                        Disconnect
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <div className="mt-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-5">
+                <div>
+                  <h2 className="text-xl font-semibold text-stone-950">Pick your availability</h2>
+                  <p className="text-sm text-stone-500 mt-1">
+                    {saving
+                      ? 'Saving changes...'
+                      : invite.responseSubmittedAt
+                        ? `Last saved ${new Date(invite.responseSubmittedAt).toLocaleString()}`
+                        : 'Nothing saved yet'}
+                  </p>
+                </div>
+
+                <div className="inline-flex items-center justify-center gap-2 rounded-md border border-stone-200 bg-white px-5 py-3 text-sm font-semibold text-stone-700">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  {isClosed ? 'Availability closed' : saving ? 'Saving automatically' : 'Auto-save on'}
+                </div>
+              </div>
+
+              <GroupMeetAvailabilityPicker
+                targetMonth={invite.request.targetMonth}
+                availabilityEntries={availabilityEntries}
+                importedSuggestions={importedSuggestions}
+                peerAvailability={invite.peerAvailability}
+                meetingDurationMinutes={invite.request.meetingDurationMinutes}
+                currentParticipant={{
+                  token: invite.token,
+                  name: invite.name,
+                  imageUrl: invite.imageUrl || null,
+                  participantType: invite.participantType,
+                }}
+                onChange={handleAvailabilityChange}
+                disabled={isClosed || busy}
+                title="Calendar"
+                subtitle={pickerSubtitle}
+              />
+            </div>
+
+            <section className="mt-6 rounded-lg border border-stone-200 bg-white p-6 shadow-sm">
+              <div className="text-sm text-stone-500">
+                Tip: if a day works, tap it and add as many windows as you want. Once a day is added, Group Meet saves it automatically.
+              </div>
+            </section>
+          </>
+        )}
+      </div>
+      {onFinish && (
+        <div className="sticky bottom-0 flex items-center justify-between gap-4 border-t border-stone-200 bg-white px-5 py-4 sm:px-8">
+          <p className={`text-sm ${message?.type === 'error' ? 'text-red-700' : 'text-stone-600'}`} role={message?.type === 'error' ? 'alert' : 'status'}>
+            {message?.type === 'error' ? message.text : busy ? (finishing ? 'Updating request…' : calendarAction === 'connect' ? 'Complete Google sign-in to continue.' : 'Saving calendar changes…') :
+              invite?.availabilityEntries.length ? 'Availability saved. Finish to update the request.' :
+              'Import availability or add a time window, then press Finish.'}
+          </p>
+          <div className="flex shrink-0 gap-2">
+            <button type="button" onClick={onClose} disabled={busy} className="rounded-md border border-stone-200 px-4 py-2 text-sm disabled:opacity-50">Close</button>
+            <button type="button" onClick={finish} disabled={busy || loading || !invite?.availabilityEntries.length}
+              className="rounded-md bg-stone-900 px-5 py-2 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-50">
+              {finishing ? 'Updating…' : 'Finish'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default GroupMeetInviteAvailability;
