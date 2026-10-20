@@ -1,3 +1,4 @@
+import OrganizationLifecycle from '../../components/admin/OrganizationLifecycle';
 import TeamReportDelivery from '../../components/admin/TeamReportDelivery';
 import ui from '../../components/admin/ProvisioningWorkspace.module.css';
 import ProgramProductConfiguration, { ProductConfigurationFields } from '../../components/admin/ProgramProductConfiguration';
@@ -752,6 +753,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const currentUser = useUser();
   const dispatch = useDispatch();
   const [organizations, setOrganizations] = useState<PulseCheckOrganization[]>([]);
+  const [organizationToDelete, setOrganizationToDelete] = useState<PulseCheckOrganization | null>(null);
   const [teams, setTeams] = useState<PulseCheckTeam[]>([]);
   const [pilots, setPilots] = useState<PulseCheckPilot[]>([]);
   const [pilotCohorts, setPilotCohorts] = useState<PulseCheckPilotCohort[]>([]);
@@ -4039,6 +4041,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           </div>
 
                           <div className="pcp-org-actions">
+                            <button type="button" className="pcp-ab" onClick={(event) => { event.stopPropagation(); setOrganizationToDelete(organization); }}>Delete organization</button>
                             <span className={`pcp-status pcp-org-status-tr ${getDashboardStatusClassName(orgStatus)}`}>{orgStatus.label}</span>
                             <button
                               type="button"
@@ -5727,6 +5730,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   })
                 )}
               </div>
+              <OrganizationLifecycle target={organizationToDelete} onClose={() => setOrganizationToDelete(null)} onChanged={async () => { setSelectedOrganizationId(null); await loadData(); }} />
             </main>
           </div>
 

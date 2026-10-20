@@ -90,6 +90,7 @@ function fixture(options = {}) {
     },
   };
   const modules = {
+    './lib/organization-access': { organizationTeamIsActive: async () => { state.scopeChecks = (state.scopeChecks || 0) + 1; return state.organizationActive !== false && !(state.decommissionBeforeSend && state.scopeChecks > 1); } },
     './utils/getServiceAccount': { initAdmin: async () => {}, getFirestore: async () => db },
     './pulsecheck-notification-utils': {
       async loadPulseCheckNudgeSuppressionState(input) {
@@ -280,3 +281,11 @@ test('Android retains data-only messaging and the same reminder identity', async
   assert.equal(f.sends[0].data._pushPlatform, 'android');
   assert.equal(f.sends[0].data.reminderId, 'curriculum-2026-10-18-evening');
 });
+
+for (const options of [{ organizationActive: false }, { decommissionBeforeSend: true }]) {
+  test(`decommissioned organization blocks curriculum delivery ${JSON.stringify(options)}`, async () => {
+    const f = fixture(options);
+    await f.run();
+    assert.equal(f.sends.length, 0);
+  });
+}

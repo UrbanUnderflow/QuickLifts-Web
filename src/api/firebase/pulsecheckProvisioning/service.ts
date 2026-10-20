@@ -1777,7 +1777,7 @@ async function createProvisionedEntity(kind: 'organization' | 'team', payload: R
 export const pulseCheckProvisioningService = {
   async listOrganizations(): Promise<PulseCheckOrganization[]> {
     const snapshot = await getDocs(collection(db, ORGANIZATIONS_COLLECTION));
-    return sortByCreatedAtDesc(snapshot.docs.map((docSnap) => toOrganization(docSnap.id, docSnap.data() as Record<string, any>)));
+    return sortByCreatedAtDesc(snapshot.docs.filter((docSnap) => !['deleted', 'purging', 'purged'].includes(docSnap.data().lifecycleState)).map((docSnap) => toOrganization(docSnap.id, docSnap.data() as Record<string, any>)));
   },
 
   async listTeams(): Promise<PulseCheckTeam[]> {

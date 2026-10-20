@@ -22,6 +22,7 @@ async function provisionEntity(db, { kind, operationId, actor, actorUid, payload
     const existing = await transaction.get(ref);
     if (existing.exists) {
       const row = existing.data();
+      if (row.lifecycleState || row.deletedAt) throw new Error('This program is decommissioned. Restore it from Deleted organizations before making changes.');
       if (row.displayName !== data.displayName || (kind === 'team' && row.organizationId !== data.organizationId) ||
         (kind === 'organization' && row.productBrand !== data.productBrand)) throw new Error('This saved operation already created a different program. Resume that program or start a separate organization.');
       return { id, created: false };
@@ -30,6 +31,7 @@ async function provisionEntity(db, { kind, operationId, actor, actorUid, payload
       if (typeof data.organizationId !== 'string' || !data.organizationId || data.organizationId.includes('/')) throw new Error('Organization required.');
       const organization = await transaction.get(db.collection('pulsecheck-organizations').doc(data.organizationId));
       if (!organization.exists) throw new Error('Organization not found.');
+      if (organization.data().lifecycleState || organization.data().deletedAt) throw new Error('This organization is decommissioned.');
       validateProductBrand(organization.data().productBrand);
     }
     transaction.set(ref, { ...data, provisioningOperationId: operationId, provisionedBy: actor,

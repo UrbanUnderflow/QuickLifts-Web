@@ -1,3 +1,4 @@
+import { organizationTeamIsActive } from '../lib/organization-access';
 import { hasProtectedLinearState, commitLegacyGeneration } from './legacy-generation-guard';
 import { runLinearRuntime, linearRuntimeEnabled } from '../../../src/api/firebase/dailyCurriculum/linearRuntimeAdmin';
 import type * as FirebaseAdmin from 'firebase-admin';
@@ -470,6 +471,7 @@ export const generateDailyAssignmentAdmin = async (
   db: FirebaseAdmin.firestore.Firestore,
   input: GenerateDailyAssignmentAdminInput,
 ): Promise<CurriculumGenerationResult | null> => {
+  if (!await organizationTeamIsActive(db, input.teamId)) return null;
   if (await hasProtectedLinearState(db, input.athleteUserId)) return null;
   if (linearRuntimeEnabled()) {
     const runtime = await runLinearRuntime(db, { athleteId: input.athleteUserId, action: 'today' }, { dryRun: !!input.preview });
@@ -668,6 +670,7 @@ export const generateDailyAssignmentAdmin = async (
 
   const traceId = `${input.athleteUserId}_${sourceDate}_${generatedAt}`;
   const committed = await commitLegacyGeneration(db, input.athleteUserId, async (tx) => {
+    if (!await organizationTeamIsActive(db, input.teamId, undefined, tx)) throw new Error('Organization is inactive.');
     [...protocolSlots, ...simSlots].forEach((slot) => {
       const slotMetadata = buildSlotMetadata({ slateId, slot });
       if (slot.existing) {

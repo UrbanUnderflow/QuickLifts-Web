@@ -269,6 +269,21 @@ service cloud.firestore {
     function pcOrganizationPath(organizationId) {
       return /databases/$(database)/documents/pulsecheck-organizations/$(organizationId);
     }
+    function pcOrganizationNotDecommissioned(organizationId) {
+      return organizationId is string
+        && exists(pcOrganizationPath(organizationId))
+        && get(pcOrganizationPath(organizationId)).data.get('lifecycleState', null) == null
+        && get(pcOrganizationPath(organizationId)).data.get('deletedAt', null) == null;
+    }
+    // Preserve legacy unscoped records while closing known organization scopes.
+    function pcLifecycleScopeOpen(data) {
+      let organizationId = data.get('organizationId', '');
+      let teamId = data.get('teamId', '');
+      return (organizationId == '' || organizationId == null
+          || !exists(pcOrganizationPath(organizationId)) || pcOrganizationNotDecommissioned(organizationId))
+        && (teamId == '' || teamId == null || !exists(pcTeamPath(teamId))
+          || pcOrganizationNotDecommissioned(get(pcTeamPath(teamId)).data.organizationId));
+    }
     function pcPilotPath(pilotId) {
       return /databases/$(database)/documents/pulsecheck-pilots/$(pilotId);
     }
@@ -2818,6 +2833,7 @@ service cloud.firestore {
     // token, while team lists and all mutations require active management access.
     match /pulsecheck-invite-links/{inviteId} {
       allow get: if isSignedIn()
+        && (isAdminUser() || pcLifecycleScopeOpen(resource.data))
         && resource.data.status == 'active'
         && (
           !('revokedAt' in resource.data)
@@ -2937,7 +2953,7 @@ service cloud.firestore {
     // Pilot definitions are visible to authenticated PulseCheck clients, but
     // provisioning changes remain limited to platform or team administrators.
     match /pulsecheck-pilots/{pilotId} {
-      allow read: if isSignedIn();
+      allow read: if isAdminUser() || (isSignedIn() && pcOrganizationNotDecommissioned(resource.data.organizationId));
       allow create: if isAdminUser()
         || (
           pcCanManageTeam(request.resource.data.teamId)
@@ -2953,7 +2969,7 @@ service cloud.firestore {
     }
 
     match /pulsecheck-pilot-cohorts/{cohortId} {
-      allow read: if isSignedIn();
+      allow read: if isAdminUser() || (isSignedIn() && pcOrganizationNotDecommissioned(resource.data.organizationId));
       allow create: if isAdminUser()
         || (
           pcCanManageTeam(request.resource.data.teamId)
@@ -3021,11 +3037,14 @@ service cloud.firestore {
 
     match /pulsecheck-teams/{teamId} {
       allow read: if isAdminUser() || pcHasActiveTeamMembership(teamId);
-      allow create, delete: if isAdminUser();
+      allow create: if isAdminUser() && pcOrganizationNotDecommissioned(request.resource.data.organizationId);
+      allow delete: if isAdminUser() && pcOrganizationNotDecommissioned(resource.data.organizationId);
       // Commercial and billing switches grant paid or sponsored app access.
       // Coaches manage athlete pricing through the authenticated server route;
       // only platform admins may write commercialConfig directly.
-      allow update: if isAdminUser()
+      allow update: if (isAdminUser()
+          && pcOrganizationNotDecommissioned(resource.data.organizationId)
+          && pcOrganizationNotDecommissioned(request.resource.data.organizationId))
         || (
           pcCanManageTeam(teamId)
           && request.resource.data.organizationId == resource.data.organizationId
@@ -3044,6 +3063,9 @@ service cloud.firestore {
     }
 
     match /pulsecheck-organizations/{organizationId} {
+      match /lifecycle-jobs/{jobId} {
+        allow read, write: if false;
+      }
       allow read: if isAdminUser()
         || (
           isSignedIn()
@@ -3057,7 +3079,13 @@ service cloud.firestore {
             || resource.data.deletedAt == null
           )
         );
-      allow create, update, delete: if isAdminUser();
+      // The authenticated lifecycle endpoint owns deletion and restoration.
+      allow create: if isAdminUser()
+        && !request.resource.data.keys().hasAny(['lifecycleState', 'deletedAt', 'purgeAfter', 'previousStatus', 'deletedBy', 'purgedAt']);
+      allow update: if isAdminUser()
+        && resource.data.get('lifecycleState', null) == null
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lifecycleState', 'deletedAt', 'purgeAfter', 'previousStatus', 'deletedBy', 'purgedAt']);
+      allow delete: if false;
     }
 
     match /pulsecheck-organization-memberships/{membershipId} {
@@ -3392,8 +3420,8 @@ service cloud.firestore {
     // Low-sensitivity telemetry: signed-in clients may append and read; only admins
     // may mutate or remove existing entries.
     match /pulsecheck-invite-activities/{activityId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if isAdminUser() || (isSignedIn() && pcLifecycleScopeOpen(resource.data));
+      allow create: if isSignedIn() && pcLifecycleScopeOpen(request.resource.data);
       allow update, delete: if isAdminUser();
     }
 
@@ -3441,12 +3469,16 @@ service cloud.firestore {
 
     match /{collectionName}/{document=**} {
       allow read: if isSignedIn()
-        && !isExplicitlyRuledCollection(collectionName);
+        && !isExplicitlyRuledCollection(collectionName)
+        && (resource == null || pcLifecycleScopeOpen(resource.data));
       allow create, update: if isSignedIn()
         && !isExplicitlyRuledCollection(collectionName)
+        && pcLifecycleScopeOpen(request.resource.data)
+        && (resource == null || pcLifecycleScopeOpen(resource.data))
         && pcLegacyAssignmentWriteAllowed(collectionName);
       allow delete: if isSignedIn()
         && !isExplicitlyRuledCollection(collectionName)
+        && pcLifecycleScopeOpen(resource.data)
         && (!(collectionName in ['sim-assignments', 'mental-exercise-assignments']) || (resource.data.get('source', '') != 'standalone_reservation' && !pcLegacyOwnerEnrolled(resource.data) && !pcLegacyExecuting(resource.data)));
     }
     // Durable closure and delivery state are owned exclusively by trusted services.

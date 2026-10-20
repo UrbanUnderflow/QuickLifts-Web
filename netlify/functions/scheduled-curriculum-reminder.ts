@@ -1,3 +1,4 @@
+import { organizationTeamIsActive } from './lib/organization-access';
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import {
@@ -151,6 +152,7 @@ export const handler: Handler = async () => {
       summary.skippedInactiveMembership += 1;
       continue;
     }
+    if (!await organizationTeamIsActive(db, m.teamId, m.organizationId)) continue;
     if (seenAthletes.has(m.userId)) {
       summary.skippedDuplicateMembership += 1;
       continue;
@@ -246,6 +248,7 @@ export const handler: Handler = async () => {
       }
       continue;
     }
+    if (!await organizationTeamIsActive(db, m.teamId, m.organizationId)) continue;
     const result = await sendNotification(messaging, target.token, title, body, {
       recipientUserId: m.userId, _pushPlatform: target.platform || '',
       type: 'curriculum_reminder', cadence: slot, reminderId,

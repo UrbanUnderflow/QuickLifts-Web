@@ -160,3 +160,14 @@ export const nativeAthleteInviteHandoffErrorResponse = (error: unknown) => {
     message: 'Unable to complete the secure app handoff.',
   };
 };
+
+export const validateNativeHandoffParents = async (firestore: any, transaction: any, binding: { teamId: string; organizationId: string }) => {
+  const [teamSnapshot, organizationSnapshot] = await Promise.all([
+    transaction.get(firestore.collection('pulsecheck-teams').doc(binding.teamId)),
+    transaction.get(firestore.collection('pulsecheck-organizations').doc(binding.organizationId)),
+  ]);
+  const allowed = (snapshot: any) => snapshot.exists && ['active', 'provisioning', 'ready-for-activation', 'draft'].includes(snapshot.data().status) && !snapshot.data().deletedAt && !snapshot.data().archivedAt && !snapshot.data().revokedAt;
+  if (!allowed(teamSnapshot) || !allowed(organizationSnapshot) || teamSnapshot.data().organizationId !== binding.organizationId) {
+    throw new NativeAthleteInviteHandoffError('This organization or team is unavailable.', 403);
+  }
+};

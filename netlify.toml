@@ -813,3 +813,7 @@
 # Team report delivery is configured in Provisioning.
 [functions.scheduled-coach-participation-reports]
   schedule = "*/5 * * * *"
+
+# Complete organization decommissioning after the 90-day restore window.
+[functions.scheduled-organization-deletion]
+  schedule = "*/5 * * * *"

@@ -1,3 +1,4 @@
+import { organizationTeamIsActive } from './lib/organization-access';
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import {
@@ -300,6 +301,7 @@ export const handler: Handler = async () => {
   summary.reminders = reminders.length;
 
   for (const reminder of reminders) {
+    if (!await organizationTeamIsActive(db, reminder.teamId, reminder.organizationId)) continue;
     let athleteCandidates: AthleteCandidate[] = [];
     try {
       athleteCandidates = await resolveAthletesForReminder(db, reminder, teamCache);
@@ -376,6 +378,7 @@ export const handler: Handler = async () => {
         ? buildCoachCheckInReminderMessage({ athleteName, localDate: localDateStr, slot: reminder.slot })
         : customReminderMessage(reminder, localDateStr);
 
+      if (!await organizationTeamIsActive(db, reminder.teamId, reminder.organizationId)) continue;
       const result = await sendLoggedNoraPush({
         messaging,
         db,
