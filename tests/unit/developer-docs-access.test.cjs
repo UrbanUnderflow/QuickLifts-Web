@@ -92,3 +92,24 @@ test('baseline request schema accepts the example and rejects wrong versions, ow
   const changed=JSON.parse(JSON.stringify(example));mutate(changed);assert.equal(validate(changed),false);
  }
 });
+
+test('native browser form unlock redirects safely and preserves JSON clients',async()=>configured(async h=>{
+ const handler=h.load('src/pages/api/developer/docs/[slug]/unlock.ts').createDeveloperDocsUnlockHandler({db:h.db});
+ const request=password=>({method:'POST',query:{slug:'auntedna',next:'https://untrusted.invalid'},headers:{'content-type':'application/x-www-form-urlencoded; charset=UTF-8'},socket:{remoteAddress:'native-test'},body:{password}});
+ for(const [password,error] of [['wrong','incorrect'],['','missing']]){const res=h.response();await handler(request(password),res);assert.equal(res.code,303);assert.equal(res.headers.Location,`/developer/api/auntedna?accessError=${error}`);assert.equal(res.headers['Set-Cookie'],undefined);}
+ const res=h.response();await handler(request('SyntheticDeveloperPassword'),res);assert.equal(res.code,303);assert.equal(res.headers.Location,'/developer/api/auntedna');assert.match(res.headers['Set-Cookie'],/HttpOnly/);
+}));
+test('native browser runtime failures redirect to a recoverable guide error',async()=>configured(async()=>{
+ const h=harness(async()=>{throw Error('synthetic runtime failure');});
+ const handler=h.load('src/pages/api/developer/docs/[slug]/unlock.ts').createDeveloperDocsUnlockHandler({db:h.db}),res=h.response();
+ await handler({method:'POST',query:{slug:'clinical-bridge'},headers:{'content-type':'application/x-www-form-urlencoded'},body:{password:'synthetic'}},res);
+ assert.equal(res.code,303);assert.equal(res.headers.Location,'/developer/api/clinical-bridge?accessError=unavailable');assert.equal(res.headers['Set-Cookie'],undefined);
+}));
+test('artifact navigation stays allowlisted and cannot bypass password protection',async()=>configured(async h=>{
+ const helper=h.load('src/lib/developerDocsServer.ts'),slug='clinical-bridge';
+ const cookie=helper.developerDocsCookie(slug).split(';')[0].split('=')[1];
+ const context={req:{cookies:{[helper.developerDocsCookieName(slug)]:cookie}},res:h.response(),query:{artifact:'athlete-registration.schema.json'}};
+ const selected=await helper.getDeveloperDocumentPageProps(slug,context);assert.equal(selected.props.selectedArtifact,'athlete-registration.schema.json');
+ const invalid=await helper.getDeveloperDocumentPageProps(slug,{...context,query:{artifact:'../../secret',accessError:'untrusted'}});assert.equal(invalid.props.selectedArtifact,'README.md');assert.equal(invalid.props.accessError,'');
+ const locked=await helper.getDeveloperDocumentPageProps(slug,{...context,req:{cookies:{}}});assert.equal(locked.props.locked,true);assert.equal(locked.props.artifacts.length,0);
+}));
