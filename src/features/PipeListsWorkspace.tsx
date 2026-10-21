@@ -8906,6 +8906,7 @@ Rules:
 
   const selectedShareLists = lists.filter((list) => shareSelectedListIds.includes(list.id));
   const inviteHistory = useMemo(() => {
+    const currentListsById = new Map(lists.map((list) => [list.id, list]));
     const shareDocsById = new Map<string, PipeListShare>();
     ownerShareDocs.forEach((share) => shareDocsById.set(share.id, share));
     if (shareDoc && !shareDocsById.has(shareDoc.id)) shareDocsById.set(shareDoc.id, shareDoc);
@@ -8917,6 +8918,9 @@ Rules:
 
     Array.from(shareDocsById.values())
       .forEach((share) => {
+        // Sharing snapshots can outlive a deleted list or retain its old name.
+        const currentList = currentListsById.get(share.list.id);
+        if (!currentList) return;
         const accessByEmail = new Map<string, ShareAccess>();
         share.viewerEmails.forEach((email) => accessByEmail.set(email.trim().toLowerCase(), 'read'));
         share.editorEmails.forEach((email) => accessByEmail.set(email.trim().toLowerCase(), 'edit'));
@@ -8944,8 +8948,8 @@ Rules:
             ...(existing?.listAccess || []).filter((entry) => entry.listId !== share.list.id),
             {
               listId: share.list.id,
-              listName: share.list.name,
-              accent: share.list.accent,
+              listName: currentList.name,
+              accent: currentList.accent,
               access,
               status,
               shareId: share.id,
@@ -8975,7 +8979,7 @@ Rules:
       if (left.status !== right.status) return left.status === 'sent' ? -1 : 1;
       return (left.displayName || left.email).localeCompare(right.displayName || right.email);
     });
-  }, [ownerShareDocs, searchableProfiles, shareDoc]);
+  }, [lists, ownerShareDocs, searchableProfiles, shareDoc]);
   const moveTargetLists = lists.filter(
     (list) => list.id !== activeList.id && (!sharedListIds.has(list.id) || editableListIds.has(list.id)),
   );
