@@ -679,7 +679,7 @@ export async function sendBrevoTransactionalEmail(args: {
   cc?: Array<{ email: string; name?: string }>;
   bcc?: Array<{ email: string; name?: string }>;
   scheduledAt?: string;
-  sender?: { email: string; name?: string };
+  sender?: { email?: string; name?: string };
   preserveSenderEmail?: boolean;
   replyTo?: { email: string; name?: string };
   idempotencyKey?: string;

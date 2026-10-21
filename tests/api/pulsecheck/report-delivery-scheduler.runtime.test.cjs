@@ -108,3 +108,16 @@ test('CC removal while preparing is honored before provider delivery', async () 
   await runner.runReportDeliveries(f.db, monday, { prepare: async () => { await f.db.collection(`${prefix}/configs`).doc('team').update({ recipientCc: {} }); return prepare(); }, send: async args => { assert.deepEqual(args.cc, []); return { success: true, messageId: 'test' }; } });
   assert.equal(record(f, 'daily').status, 'sent');
 });
+
+
+test('daily and weekly sender uses persisted organization product brand, not display branding', async () => {
+  const branded = loadCompiledModule({ compiled, fileName: 'reportDelivery.js', mocks: { './access': access, './data': { loadDashboard: async () => ({ from: '2026-10-19', to: '2026-10-25', athletes: [] }) } } });
+  for (const productBrand of ['athleticmind', 'pulsecheck', undefined]) {
+    const f = fixture({ 'pulsecheck-organizations': [{ id: 'org', data: { status: 'active', displayName: 'AthleticMind', ...(productBrand ? { productBrand } : {}) } }] });
+    const calls = [];
+    const result = await runner.runReportDeliveries(f.db, new Date('2026-10-19T12:00:00Z'), { prepare: branded.prepareParticipationReport, send: async args => { calls.push(args); return { success: true, messageId: 'synthetic' }; } });
+    assert.equal(result.sent, 2);
+    for (const args of calls) assert.deepEqual(args.sender, productBrand === 'athleticmind' ? { name: 'AthleticMind' } : undefined);
+    for (const kind of ['daily', 'weekly']) assert.equal(f.getDocument(`${prefix}/reports/${helpers.deliveryId('team', 'coach', kind, '2026-10-18')}`).senderName, productBrand === 'athleticmind' ? 'AthleticMind' : null);
+  }
+});

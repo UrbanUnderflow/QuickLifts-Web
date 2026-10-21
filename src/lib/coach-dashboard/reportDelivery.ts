@@ -74,7 +74,7 @@ export function renderParticipationReport(input:{teamName:string;brand:string;ki
  const content=`<p style="font-size:12px;letter-spacing:2px">${esc(brand.toUpperCase())} · ${kind==='daily'?'DAILY PARTICIPATION':'WEEKLY COACH REPORT'}</p><h1>${esc(teamName)}</h1><p>${esc(period)}</p>${body}`;
  const foot='<p style="font-size:12px;color:#555">Recorded participation uses UTC dates. Practice counts follow the assignment date. Historical summaries reflect current team access. Names are dashboard display names. A check-in day means at least one recorded check-in. Missing activity alone does not establish how an athlete is feeling. Private responses and conversations stay private.</p>';
  const html=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f4f1eb;color:#222;font:16px/1.6 Arial,sans-serif"><main style="max-width:640px;margin:28px auto;background:white;padding:32px;border-radius:16px">${content}<p><a href="${esc(url)}" style="display:inline-block;background:#222;color:white;padding:12px 20px;text-decoration:none;border-radius:8px">View ${kind==='daily'?'daily':'weekly'} report</a></p>${foot}</main></body></html>`;
- return {subject,html,contentHtml:content+foot,from,to,athleteIds:rows.map(a=>a.id)};
+ return {subject,html,contentHtml:content+foot,from,to,athleteIds:rows.map(a=>a.id),senderName:brand==='AthleticMind'?'AthleticMind':undefined};
 }
 export async function prepareParticipationReport(db:firestore.Firestore,uid:string,teamId:string,kind:ReportKind,to:string,id:string){
  const asOf=Date.parse(to+'T00:00:00Z')+DAY;
