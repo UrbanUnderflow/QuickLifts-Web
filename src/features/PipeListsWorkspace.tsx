@@ -1,3 +1,5 @@
+import { APPLICABLE_COMPANIES, normalizeApplicableCompanies, matchesApplicableCompany } from '../utils/pipelistsCompanies';
+import PipeListsCompanies from '../components/pipelists/PipeListsCompanies';
 import { matchesLeadTagFilters, normalizeLeadTags } from '../utils/pipelistsTags';
 import { preserveStoredUniversityList } from '../utils/pipelistsPersistence';
 import { getLinkedLeads, normalizeLinkedLeadIds, setLeadLink } from '../utils/pipelistsLinkedLeads';
@@ -310,6 +312,7 @@ type PipelineItem = {
   linkedLeadIds?: string[];
   needsResearch?: boolean;
   tags?: string[];
+  applicableCompanies?: string[];
   title: string;
   organization: string;
   description: string;
@@ -463,6 +466,7 @@ type GeneratedLead = ItemDraft & {
   sourceVerificationReason?: string;
 };
 type ManualLeadDraft = {
+  applicableCompanies?: string[];
   tags: string[];
   title: string;
   organization: string;
@@ -1743,6 +1747,7 @@ const createItem = (draft: ItemDraft, id = makeId()): PipelineItem => {
   return {
     ...draft,
     tags: normalizeLeadTags(draft.tags),
+    applicableCompanies: normalizeApplicableCompanies(draft.applicableCompanies),
     description: draft.description.trim(),
     contactEmails: normalizeContactEmails(draft.contactEmails),
     contactPhone: draft.contactPhone.trim(),
@@ -2501,6 +2506,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[], s
     title,
     organization,
     tags: normalizeLeadTags(item.tags),
+    applicableCompanies: normalizeApplicableCompanies(item.applicableCompanies),
     description: item.description || '',
     owner: item.owner || '',
     contactEmails: normalizeContactEmails(item.contactEmails),
@@ -3504,6 +3510,7 @@ const PipelinePage: NextPage = () => {
   const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>('90');
   const [runbookHasUnsavedChanges, setRunbookHasUnsavedChanges] = useState(false);
   const [query, setQuery] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('');
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [stageFilters, setStageFilters] = useState<string[]>([]);
   const [priorityFilters, setPriorityFilters] = useState<PipelinePriority[]>([]);
@@ -3794,6 +3801,7 @@ const PipelinePage: NextPage = () => {
     setStageFilters([]);
     setPriorityFilters([]);
     setTagFilters([]);
+    setCompanyFilter('');
   }, [activeList.id, user?.uid]);
 
   useEffect(() => {
@@ -5035,7 +5043,7 @@ const PipelinePage: NextPage = () => {
             .toLowerCase()
             .includes(search);
 
-        return matchesSelectedCategories && matchesQuery && matchesLeadTagFilters(item.tags, tagFilters);
+        return matchesSelectedCategories && matchesQuery && matchesLeadTagFilters(item.tags, tagFilters) && matchesApplicableCompany(item.applicableCompanies, companyFilter);
       })
       .sort((left, right) => {
         if (sortColumn) {
@@ -5095,6 +5103,7 @@ const PipelinePage: NextPage = () => {
     sortDirection,
     stageFilters,
     tagFilters,
+    companyFilter,
   ]);
 
   const filteredItemIds = useMemo(() => filteredItems.map((item) => item.id), [filteredItems]);
@@ -6954,6 +6963,7 @@ Rules:
     setStageFilters([]);
     setPriorityFilters([]);
     setTagFilters([]);
+    setCompanyFilter('');
     setViewMode('pipeline');
     setLeadGenMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
   };
@@ -7018,6 +7028,7 @@ Rules:
     setStageFilters([]);
     setPriorityFilters([]);
     setTagFilters([]);
+    setCompanyFilter('');
     setViewMode('pipeline');
     setPastedLeadListMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
   };
@@ -7266,7 +7277,7 @@ Rules:
         ? { ...list, items: [...selectNewContacts(items, list.items), ...list.items] } : list));
       setContactImport(null);
       setContactImportMessage({ type: 'success', text: `${items.length} contacts added. ${contactImport.rows.length - rows.length} duplicates skipped.` });
-      setQuery(''); setStageFilters([]); setPriorityFilters([]); setTagFilters([]);
+      setQuery(''); setStageFilters([]); setPriorityFilters([]); setTagFilters([]); setCompanyFilter('');
     } catch (error) {
       setContactImportMessage({ type: 'error', text: readFirestoreError(error, 'Import failed. Your contact file is ready to retry.') });
     } finally {
@@ -7563,6 +7574,7 @@ Rules:
         stage,
         notes: cleanDealNotes(manualLeadDraft.notes),
         tags: normalizeLeadTags(manualLeadDraft.tags),
+        applicableCompanies: normalizeApplicableCompanies(manualLeadDraft.applicableCompanies),
       },
       makeId(),
     );
@@ -7590,6 +7602,7 @@ Rules:
     setStageFilters([]);
     setPriorityFilters([]);
     setTagFilters([]);
+    setCompanyFilter('');
     setSelectedLogItemId(nextItem.id);
     setViewMode('pipeline');
     setToastMessage({
@@ -7647,6 +7660,7 @@ Rules:
     setStageFilters([]);
     setPriorityFilters([]);
     setTagFilters([]);
+    setCompanyFilter('');
       setSelectedDetailItemId(nextItem.id);
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
@@ -7790,6 +7804,7 @@ Rules:
     setStageFilters([]);
     setPriorityFilters([]);
     setTagFilters([]);
+    setCompanyFilter('');
       setSelectedDetailItemId(nextItem.id);
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
@@ -8009,6 +8024,7 @@ Rules:
     setStageFilters([]);
     setPriorityFilters([]);
     setTagFilters([]);
+    setCompanyFilter('');
     setNewListName('');
     setDraft(defaultDraft(nextList.stages[0]?.id));
     setSelectedLogItemId('');
@@ -8149,6 +8165,7 @@ Rules:
       title: isContactListActive && !draft.title.trim() && inferredContactName ? inferredContactName : draft.title,
       contactEmails: normalizedContactEmails,
       tags: normalizeLeadTags(draft.tags),
+      applicableCompanies: normalizeApplicableCompanies(draft.applicableCompanies),
       notes: cleanDealNotes(draft.notes),
       ...(customerSuccessToSave
         ? {
@@ -8462,6 +8479,7 @@ Rules:
     setStageFilters([]);
     setPriorityFilters([]);
     setTagFilters([]);
+    setCompanyFilter('');
     setQuery('');
     setSelectedDetailItemId(itemId);
     setSelectedLogItemId(itemId);
@@ -8611,6 +8629,7 @@ Rules:
     setStageFilters([]);
     setPriorityFilters([]);
     setTagFilters([]);
+    setCompanyFilter('');
     setSelectedLogItemId('');
     setLogDraft(defaultLogDraft(nextLists[0].templateKey));
     setDetailModalMode('details');
@@ -10031,6 +10050,7 @@ Rules:
       onChange={() => setItemSaveError('')}
       className="space-y-4"
     >
+      <PipeListsCompanies value={draft.applicableCompanies} onChange={(applicableCompanies) => setDraft((current) => ({ ...current, applicableCompanies }))} />
       <label className="block" htmlFor="pipe-lead-tags">
         <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Tags</span>
         <input
@@ -10820,6 +10840,7 @@ Rules:
                           setStageFilters([]);
                           setPriorityFilters([]);
                           setTagFilters([]);
+                          setCompanyFilter('');
                           setSelectedLogItemId('');
                           setLogDraft(defaultLogDraft(list.templateKey));
                           setDraft(defaultDraft(list.stages[0]?.id));
@@ -11390,6 +11411,11 @@ Rules:
                       </div>
                     )}
 
+                    <select aria-label="Filter by applicable company" value={companyFilter} onChange={(event) => setCompanyFilter(event.target.value)} className="h-11 max-w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm text-stone-700">
+                      <option value="">All companies</option>
+                      <option value="unassigned">Unassigned</option>
+                      {APPLICABLE_COMPANIES.map((company) => <option key={company} value={company}>{company}</option>)}
+                    </select>
                     <div className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-stone-500">
                       <Filter className="h-4 w-4" />
                       <select
@@ -11424,6 +11450,7 @@ Rules:
                         setStageFilters([]);
                         setPriorityFilters([]);
                         setTagFilters([]);
+                        setCompanyFilter('');
                         setSortColumn(null);
                         setSortDirection('asc');
                       }}
@@ -12200,6 +12227,7 @@ Rules:
                                         )}
                                       </div>
 
+                                      <p className="mt-3 text-xs text-stone-600">Applicable company: {normalizeApplicableCompanies(item.applicableCompanies).join(', ') || 'Unassigned'}</p>
                                       {normalizeLeadTags(item.tags).length > 0 && (
                                         <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Lead tags">
                                           {normalizeLeadTags(item.tags).map((tag) => (
@@ -13454,6 +13482,7 @@ Rules:
 
             {isManualLeadEntry ? (
               <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2"><PipeListsCompanies value={manualLeadDraft.applicableCompanies} onChange={(applicableCompanies) => setManualLeadDraft((current) => ({ ...current, applicableCompanies }))} /></div>
                 <label className="block sm:col-span-2" htmlFor="pipe-manual-tags">
                   <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Tags</span>
                   <input
@@ -15355,6 +15384,7 @@ Rules:
                         { label: 'Owner', value: selectedDetailItem.owner },
                         { label: 'Contact Email', value: selectedDetailItem.contactEmails.join(', ') },
                         { label: 'Organization', value: selectedDetailItem.organization },
+                        { label: 'Applicable company', value: normalizeApplicableCompanies(selectedDetailItem.applicableCompanies).join(', ') || 'Unassigned' },
                         { label: 'Segment', value: selectedDetailItem.segment },
                         { label: 'Decision Maker', value: selectedDetailItem.decisionMaker },
                         ...(isFundSizeList(activeList)

@@ -1,3 +1,5 @@
+import { normalizeApplicableCompanies } from '../../src/utils/pipelistsCompanies';
+import { normalizeLeadTags } from '../../src/utils/pipelistsTags';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -65,6 +67,7 @@ test('actual university normalizer is stable for incomplete legacy items, logs a
   let clock = '2026-01-01T00:00:00Z'; let generated = 0;
   class FakeDate extends Date { constructor(value?: string) { super(value === undefined ? clock : value); } }
   const scope = {
+    normalizeApplicableCompanies, normalizeLeadTags,
     Date: FakeDate, makeId: () => `generated-${++generated}`,
     createItem: (_draft: any, id: string) => ({ id }), defaultDraft: (stage: string) => ({ stage }),
     pipeTimestampToDate: (value: any) => value ? new Date(value) : null,
@@ -75,6 +78,8 @@ test('actual university normalizer is stable for incomplete legacy items, logs a
   };
   const normalize = new Function(...Object.keys(scope), ts.transpile(stages + "\nconst templateCatalog = {'university-pilot': {defaultName:'University', description:'', stages:pilotContractStages}};\n" + normalizers + '\nreturn normalizeList;'))(...Object.values(scope));
   const stored = { id: 'legacy', templateKey: 'university-pilot', stages: [{ id: 'cold-email-sent', label: 'Cold Email Sent', probability: 15 }], items: [{ id: 'old-lead', stage: 'cold-email-sent', weeklyLogs: [{ summary: 'Original synthetic history' }], attachments: [{ url: 'https://example.com/reference' }] }] };
+  assert.deepEqual(normalize(stored, 0).items[0].applicableCompanies, []);
+  assert.deepEqual(normalize({ ...stored, items: [{ ...stored.items[0], applicableCompanies: ['PIL', 'ATHLeda'] }] }, 0).items[0].applicableCompanies, ['PIL', 'ATHLeda']);
   const first = normalize(stored, 0); clock = '2027-02-03T01:02:03Z'; const second = normalize(stored, 0);
   assert.deepEqual(second, first);
   assert.deepEqual(preserveStoredUniversityList(stored, first, second), stored);

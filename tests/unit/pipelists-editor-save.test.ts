@@ -1,3 +1,5 @@
+import { normalizeApplicableCompanies } from '../../src/utils/pipelistsCompanies';
+import { normalizeLeadTags } from '../../src/utils/pipelistsTags';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,16 +9,17 @@ const source = fs.readFileSync(new URL('../../src/features/PipeListsWorkspace.ts
 const handler = source.slice(source.indexOf('  const handleSaveItem ='), source.indexOf('  const clearKanbanDrag ='));
 const original = { id: 'lead', title: 'Original', organization: 'Organization', contactEmails: [], notes: '', weeklyLogs: [{ id: 'history' }], attachments: [{ id: 'attachment' }], createdAt: '2026-01-01', updatedAt: '2026-01-01' };
 
-function save({ missing = false, deleted = false, missingList = false, email = '', title = 'Edited', permission = true } = {}) {
+function save({ missing = false, deleted = false, missingList = false, email = '', title = 'Edited', permission = true, companies = [] as string[] } = {}) {
   const item = { ...original, ...(deleted ? { deletedAt: '2026-09-21' } : {}) };
   let lists = missingList ? [] : [{ id: 'list', templateKey: 'vc', items: missing ? [] : [item] }];
   let error = '';
   let closed = false;
   const scope = {
+    normalizeApplicableCompanies, normalizeLeadTags,
     lists, activeList: { id: 'list', templateKey: 'vc', items: [item] },
     detailSnapshotRef: { current: { list: { id: 'list' }, item } },
     canModify: permission, editingItemId: 'lead', itemResearchResult: null,
-    draft: { ...original, title, organization: title ? 'Organization' : '' }, contactEmailInput: email,
+    draft: { ...original, applicableCompanies: companies, title, organization: title ? 'Organization' : '' }, contactEmailInput: email,
     setItemSaveError: (value: string) => { error = value; },
     isValidContactEmail: (value: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value),
     setContactEmailError: () => {}, contactNameFromEmail: () => '',
@@ -61,3 +64,14 @@ for (const [label, options] of Object.entries({
     if (result.lists.length) assert.equal(result.lists[0].items[0].title, original.title);
   });
 }
+
+
+test('editor saves multiple companies and allows clearing without changing sponsor or history', () => {
+  for (const companies of [['PIL', 'AthleticMind'], []]) {
+    const result = save({ companies });
+    const stored = JSON.parse(JSON.stringify(result.lists[0].items[0]));
+    assert.deepEqual(stored.applicableCompanies, companies);
+    assert.equal(stored.organization, original.organization);
+    assert.deepEqual(stored.weeklyLogs, original.weeklyLogs);
+  }
+});

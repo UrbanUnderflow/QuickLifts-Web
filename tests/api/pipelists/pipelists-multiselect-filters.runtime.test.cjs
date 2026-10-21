@@ -21,7 +21,7 @@ test('filtering is additive within categories and keeps selected Kanban columns 
 });
 
 test('clear and list changes reset both category groups while counts stay list-wide', () => {
-  assert.match(pageSource, /useEffect\(\(\) => \{\s*setStageFilters\(\[\]\);\s*setPriorityFilters\(\[\]\);\s*setTagFilters\(\[\]\);\s*\}, \[activeList\.id, user\?\.uid\]\)/);
+  assert.match(pageSource, /useEffect\(\(\) => \{\s*setStageFilters\(\[\]\);\s*setPriorityFilters\(\[\]\);\s*setTagFilters\(\[\]\);\s*setCompanyFilter\(''\);\s*\}, \[activeList\.id, user\?\.uid\]\)/);
   assert.match(pageSource, /setQuery\(''\);\s*setStageFilters\(\[\]\);\s*setPriorityFilters\(\[\]\);/);
   assert.match(pageSource, /const countsByStage = useMemo\([\s\S]*?activeList\.stages\.reduce<Record<string, number>>[\s\S]*?activeListItems\.filter\(\(item\) => item\.stage === stage\.id\)[\s\S]*?\[activeListItems, activeList\.stages\]/);
   assert.match(pageSource, /const countsByPriority = useMemo\([\s\S]*?activeListItems\.reduce<Record<PipelinePriority, number>>[\s\S]*?\[activeListItems\]/);
