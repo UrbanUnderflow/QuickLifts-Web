@@ -1,0 +1,684 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasEmail() {
+      return isSignedIn() && request.auth.token.email != null;
+    }
+
+    function isAdminUser() {
+      return hasEmail()
+        && exists(/databases/$(database)/documents/admin/$(request.auth.token.email));
+    }
+
+    function isValidNorthStarPayload() {
+      return request.resource.data.title is string
+        && request.resource.data.description is string
+        && request.resource.data.objectives is list;
+    }
+
+    function isAdminManagedPublicReadCollection(collectionName) {
+      return collectionName in [
+        'app-config',
+        'authorProfiles',
+        'daily-reflections',
+        'legal-documents',
+        'macra-version',
+        'macra-versions',
+        'pageMetaData',
+        'pressKitData',
+        'pressReleases',
+        'pulsecheck-version',
+        'pulsecheck-versions',
+        'researchArticles',
+        'shortLinks',
+        'version',
+        'versions'
+      ];
+    }
+
+    function isAdminOnlyCollection(collectionName) {
+      return collectionName in [
+        'agent-commands',
+        'agent-deliverables',
+        'agent-group-chats',
+        'agent-interventions',
+        'agent-onboarding',
+        'agent-outcomes',
+        'agent-presence',
+        'agent-tasks',
+        'corporate-partners',
+        'creator-prospects',
+        'email-sequence-config',
+        'email-templates',
+        'equity-convertible-notes',
+        'equity-documents',
+        'equity-grants',
+        'equity-pool',
+        'equity-stakeholders',
+        'errorLogs',
+        'fitnessSeeker_leads',
+        'founder-budgets',
+        'friends-business-updates',
+        'friends-of-business',
+        'functionMetadata',
+        'investorAccess',
+        'investorAccessLogs',
+        'lead-list-items',
+        'lead-lists',
+        'lead-massage-jobs',
+        'notification-logs',
+        'northstar-proposed-objectives',
+        'outreach_campaigns',
+        'payoutRecords',
+        'progress-timeline',
+        'pulsecheck-conversation-tree',
+        'pulsecheck-nora-translation-log',
+        'pulsecheck-off-limits-config',
+        'pulsecheck-translation-table',
+        'pulsecheck-user-revenue-summaries',
+        'researchArticleAccess',
+        'revenue-calculations',
+        'university-prospects',
+        'venture-prospects'
+      ];
+    }
+
+    function isPurchaseLogCollection(collectionName) {
+      return collectionName in [
+        'Macra-purchase-logs',
+        'PulseRitual-purchase-logs'
+      ];
+    }
+
+    function isLockedPrivateCollection(collectionName) {
+      return collectionName in [
+        'admin',
+        'beta',
+        'payments',
+        'subscriptions'
+      ];
+    }
+
+    function isExplicitlyRuledCollection(collectionName) {
+      // Staff reports are accessible only through role-checked server APIs.
+
+      return collectionName == 'coach-team-insight-reports' || collectionName in ['groupMeetBookingSettings', 'groupMeetBookings', 'groupMeetBookingLimits'] || collectionName == 'pulsecheck-evidence-journals' || collectionName == 'pulsecheck-linear-curriculum' || collectionName == 'pulsecheck-restricted-questionnaire-submissions' || collectionName.matches('nora-red-team-.*') || collectionName in [
+        'beta-applications',
+        'partner-api-access-requests',
+        'partner-api-keys',
+        'partner-api-key-audit',
+        'partner-api-key-rate-limits',
+        'developerDocsUnlockAttempts',
+        'systemOverviewShareLinks',
+        'systemOverviewShareUnlockAttempts',
+        'athleticmind-snapshot-pulls',
+        'athleticmind-snapshots',
+        'athleticmind-snapshot-deliveries',
+        'athleticmind-snapshot-watermarks',
+        'athleticmind-snapshot-scheduler',
+        'coach-nora-vault',
+        'coach-team-schedule',
+        'company-config',
+        'document-notes',
+        'programming-access',
+        'pulsecheck-invite-activities',
+        'pulsecheck-invite-links',
+        'pulsecheck-team-memberships',
+        'round-exports',
+        'signingRequests',
+        'user-reports'
+      ] || isAdminManagedPublicReadCollection(collectionName)
+        || isAdminOnlyCollection(collectionName)
+        || isPurchaseLogCollection(collectionName)
+        || isLockedPrivateCollection(collectionName);
+    }
+
+    // PulseCheck provisioning helpers. Membership docs are keyed `${teamId}_${uid}`,
+    // so the requester's own membership on a team is a deterministic lookup.
+    function pcMembershipPath(teamId) {
+      return /databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + request.auth.uid);
+    }
+    // Managing the team (inviting staff, assigning permissions) is admin-only.
+    // The legacy 'team-admin' role is the org founder/full-access seat and keeps
+    // access; the 'admin' staff capability is the new superuser grant. Manager
+    // ('administrative') and 'coaching' no longer manage the team.
+    function pcCanManageTeam(teamId) {
+      return isSignedIn()
+        && exists(pcMembershipPath(teamId))
+        && (
+          get(pcMembershipPath(teamId)).data.role == 'team-admin'
+          || (
+            get(pcMembershipPath(teamId)).data.staffCapabilities is list
+            && 'admin' in get(pcMembershipPath(teamId)).data.staffCapabilities
+          )
+        );
+    }
+    // A redeeming user may flip an invite link to redeemed for themselves without
+    // being a team manager (mirrors the redeem transaction's invite-link write).
+    function pcIsInviteRedemptionUpdate() {
+      return isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'redeemedByUserId',
+          'redeemedByEmail',
+          'redeemedAt',
+          'redemptionCount',
+          'updatedAt'
+        ]);
+    }
+
+    function hasHumanUiAuditFields() {
+      return request.resource.data.updatedBySource == 'human-ui'
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedByEmail == request.auth.token.email;
+    }
+
+    function isNonEmptyString(value) {
+      return value is string && value.size() > 0;
+    }
+
+    function isValidUsernameValue(value) {
+      return value == null || (value is string && value.matches('^[a-z0-9_.-]{3,20}$'));
+    }
+
+    function isValidProfileImageValue(value) {
+      return value == null
+        || (
+          value is map
+          && value.profileImageURL is string
+          && value.profileImageURL.size() > 0
+          && value.imageOffsetWidth is number
+          && value.imageOffsetHeight is number
+        );
+    }
+
+    function isValidUserLevelValue(value) {
+      return value == null || value in ['novice', 'intermediate', 'expert'];
+    }
+
+    function isValidSubscriptionTypeValue(value) {
+      return value == null || value in [
+        'Unsubscribed',
+        'Team Plan Access',
+        'Beta User',
+        'Monthly Subscriber',
+        'Annual Subscriber',
+        'Sweat Equity Partner',
+        'Executive Partner'
+      ];
+    }
+
+    function isValidSubscriptionPlatformValue(value) {
+      return value == null || value in ['ios', 'web', 'android'];
+    }
+
+    function isValidCheckinsPrivacyValue(value) {
+      return value == null || value in ['privateOnly', 'followersOnly', 'publicAccess'];
+    }
+
+    function isValidLegalAcceptanceValue(value) {
+      return value is map
+        && value.termsVersion is string
+        && value.termsVersion.size() > 0
+        && value.privacyVersion is string
+        && value.privacyVersion.size() > 0
+        && (value.acceptedAt is timestamp || value.acceptedAt is number || value.acceptedAt is string)
+        && value.acceptanceMethod is string
+        && value.acceptanceMethod.size() > 0
+        && value.termsPath is string
+        && value.termsPath.size() > 0
+        && value.privacyPath is string
+        && value.privacyPath.size() > 0;
+    }
+
+    function isValidAdminDocumentCreateOrUpdate(email) {
+      return request.resource.data.email == email
+        && request.resource.data.keys().hasOnly([
+          'email',
+          'createdAt',
+          'createdBy',
+          'updatedAt',
+          'updatedBy'
+        ]);
+    }
+
+    function isPublicBetaApplicationCreate() {
+      return request.resource.data.status == 'pending'
+        && isNonEmptyString(request.resource.data.email)
+        && isNonEmptyString(request.resource.data.name);
+    }
+
+    function isPublicProgrammingAccessCreate() {
+      return request.resource.data.status == 'requested'
+        && isNonEmptyString(request.resource.data.email);
+    }
+
+    function isPublicRoundExportCreate() {
+      return isNonEmptyString(request.resource.data.email)
+        && isNonEmptyString(request.resource.data.fileName)
+        && isNonEmptyString(request.resource.data.downloadURL)
+        && request.resource.data.roundData is map;
+    }
+
+    function isPublicDocumentNoteCreate() {
+      return isNonEmptyString(request.resource.data.documentId)
+        && isNonEmptyString(request.resource.data.authorName)
+        && isNonEmptyString(request.resource.data.content)
+        && request.resource.data.xPercent is number
+        && request.resource.data.yOffset is number;
+    }
+
+    function isPublicSigningViewUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'lastSignerActivityAt',
+          'status',
+          'updatedAt',
+          'viewedAt'
+        ])
+        && resource.data.status != 'signed'
+        && request.resource.data.status == 'viewed';
+    }
+
+    function isPublicSigningSignatureUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'lastSignerActivityAt',
+          'signatureData',
+          'signedAt',
+          'status',
+          'updatedAt'
+        ])
+        && resource.data.status != 'signed'
+        && request.resource.data.status == 'signed'
+        && request.resource.data.signatureData is map
+        && isNonEmptyString(request.resource.data.signatureData.typedName)
+        && isNonEmptyString(request.resource.data.signatureData.signatureFont);
+    }
+
+    function hasValidLegalAcceptanceOnCreate() {
+      return !request.resource.data.keys().hasAny(['legalAcceptance'])
+        || isValidLegalAcceptanceValue(request.resource.data.legalAcceptance);
+    }
+
+    function preservesOrValidlyUpdatesLegalAcceptance() {
+      return request.resource.data.legalAcceptance == resource.data.legalAcceptance
+        || isValidLegalAcceptanceValue(request.resource.data.legalAcceptance);
+    }
+
+    function isCanonicalRootUserCreate(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.id == userId
+        && request.resource.data.email == request.auth.token.email
+        && hasValidLegalAcceptanceOnCreate();
+    }
+
+    function isCanonicalRootUserUpdate(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.lifetimePulsePoints == resource.data.lifetimePulsePoints
+        && request.resource.data.categoryPoints == resource.data.categoryPoints
+        && request.resource.data.creator == resource.data.creator
+        && (request.resource.data.username == resource.data.username || isValidUsernameValue(request.resource.data.username))
+        && (request.resource.data.displayName == resource.data.displayName || isNonEmptyString(request.resource.data.displayName))
+        && (request.resource.data.birthdate == resource.data.birthdate || request.resource.data.birthdate == null || request.resource.data.birthdate is timestamp || request.resource.data.birthdate is number)
+        && (request.resource.data.profileImage == resource.data.profileImage || isValidProfileImageValue(request.resource.data.profileImage))
+        && (
+          request.resource.data.registrationComplete == resource.data.registrationComplete
+          || request.resource.data.registrationComplete == true
+          || request.resource.data.registrationComplete == null
+        )
+        && (request.resource.data.level == resource.data.level || isValidUserLevelValue(request.resource.data.level))
+        && (request.resource.data.subscriptionType == resource.data.subscriptionType || isValidSubscriptionTypeValue(request.resource.data.subscriptionType))
+        && (request.resource.data.subscriptionPlatform == resource.data.subscriptionPlatform || isValidSubscriptionPlatformValue(request.resource.data.subscriptionPlatform))
+        && (request.resource.data.checkinsPrivacy == resource.data.checkinsPrivacy || isValidCheckinsPrivacyValue(request.resource.data.checkinsPrivacy))
+        && preservesOrValidlyUpdatesLegalAcceptance();
+    }
+
+    function isOwnedPurchaseLogCreate() {
+      return isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    function isOwnedPurchaseLogUpdate() {
+      return isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId;
+    }
+
+    // North Star is writable only by authenticated admin humans through the UI.
+    match /company-config/north-star {
+      allow read: if true;
+      allow create, update: if isAdminUser()
+        && isValidNorthStarPayload()
+        && hasHumanUiAuditFields();
+      allow delete: if false;
+    }
+
+    // Company-level config is public to read for apps, but only admins can write.
+    // north-star is handled above because it has stricter audit/payload checks.
+    match /company-config/{docId} {
+      allow read: if true;
+      allow create, update: if docId != 'north-star' && isAdminUser();
+      allow delete: if false;
+    }
+
+    // Admin membership is the source of truth for admin-gated surfaces. Existing
+    // admins can manage it; non-admin clients cannot grant themselves access.
+    match /admin/{email} {
+      allow read: if isAdminUser()
+        || (hasEmail() && request.auth.token.email == email);
+      allow create, update: if isAdminUser() && isValidAdminDocumentCreateOrUpdate(email);
+      allow delete: if isAdminUser();
+    }
+
+    match /admin-settings/{document=**} {
+      // Existing Next API routes use the client SDK server-side and do not carry
+      // caller auth into Firestore. Leaving this permissive until those routes
+      // move to a less brittle server auth model.
+      allow read, write: if true;
+    }
+
+    // Public app/config documents can be fetched by clients but authored only by admins.
+    match /{collectionName}/{document=**} {
+      allow read: if isAdminManagedPublicReadCollection(collectionName);
+      allow create, update, delete: if isAdminManagedPublicReadCollection(collectionName)
+        && isAdminUser();
+    }
+
+    // Internal admin workspaces, CRM data, campaign data, logs, and equity records.
+    match /{collectionName}/{document=**} {
+      allow read, create, update, delete: if isAdminOnlyCollection(collectionName)
+        && collectionName != 'equity-documents'
+        && isAdminUser();
+    }
+
+    // An EIP is a retained corporate record. Revisions get a new document ID;
+    // draft signing metadata may change until approval. Approved and legacy
+    // auto-executed records retain all saved approval and signature evidence.
+    // Admin SDK writes bypass rules and must enforce the same policy server-side.
+    match /equity-documents/{documentId} {
+      function isEip(data) {
+        return data.get('documentType', '') == 'eip';
+      }
+      function unsignedDraft(data) {
+        return data.get('approvalStatus', '') == 'draft'
+          && data.get('autoSigned', false) == false
+          && data.get('autoSignedAt', null) == null;
+      }
+      function approvalEvidenceExists(data) {
+        return data.get('approvalStatus', '') == 'approved'
+          || data.get('autoSigned', false) == true
+          || data.get('autoSignedAt', null) != null;
+      }
+      function signingMetadataOnly() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'signingRequestId', 'signingRequestIds', 'requiresSignature',
+          'needsResendSignature', 'status', 'approvalStatus', 'approvedAt',
+          'approvedBy', 'updatedAt', 'errorMessage'
+        ]);
+      }
+      function completesNewDraft() {
+        return resource.data.get('status', '') == 'generating'
+          && resource.data.get('content', '') == ''
+          && unsignedDraft(resource.data)
+          && unsignedDraft(request.resource.data)
+          && request.resource.data.get('status', '') == 'completed'
+          && request.resource.data.get('content', '') is string
+          && request.resource.data.get('content', '').size() > 0
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'content', 'title', 'legalTemplateVersion', 'requiresSignature',
+            'status', 'updatedAt', 'errorMessage'
+          ]);
+      }
+      allow read: if isAdminUser();
+      allow create: if isAdminUser()
+        && (!isEip(request.resource.data) || unsignedDraft(request.resource.data));
+      allow update: if isAdminUser() && (
+        (!isEip(resource.data) && !isEip(request.resource.data))
+        || (isEip(resource.data) && isEip(request.resource.data)
+          && !approvalEvidenceExists(resource.data)
+          && (signingMetadataOnly() || completesNewDraft()))
+      );
+      allow delete: if isAdminUser() && !isEip(resource.data);
+    }
+
+    // Purchase observability. The apps write their own purchase attempts,
+    // successes, failures, cancellations, and cancel reasons; admins can review
+    // all product logs from the Purchase Logs admin page.
+    match /{collectionName}/{logId} {
+      allow read: if isPurchaseLogCollection(collectionName)
+        && (
+          isAdminUser()
+          || (isSignedIn() && resource.data.userId == request.auth.uid)
+        );
+      allow create: if isPurchaseLogCollection(collectionName)
+        && (isAdminUser() || isOwnedPurchaseLogCreate());
+      allow update: if isPurchaseLogCollection(collectionName)
+        && (isAdminUser() || isOwnedPurchaseLogUpdate());
+      allow delete: if isPurchaseLogCollection(collectionName)
+        && isAdminUser();
+    }
+
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAdminUser()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdminUser();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAdminUser()
+        || (isSignedIn() && resource.data.buyerId == request.auth.uid);
+      allow create, update, delete: if isAdminUser();
+    }
+
+    match /beta/{email} {
+      allow read: if isAdminUser()
+        || (hasEmail() && resource.data.email == request.auth.token.email)
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdminUser();
+    }
+
+    match /beta-applications/{applicationId} {
+      allow read: if isAdminUser();
+      allow create: if isAdminUser() || isPublicBetaApplicationCreate();
+      allow update, delete: if isAdminUser();
+    }
+
+    match /programming-access/{requestId} {
+      allow read: if isAdminUser()
+        || (hasEmail() && resource.data.email == request.auth.token.email);
+      allow create: if isAdminUser() || isPublicProgrammingAccessCreate();
+      allow update, delete: if isAdminUser();
+    }
+
+    match /round-exports/{exportId} {
+      allow read, update, delete: if isAdminUser();
+      allow create: if isPublicRoundExportCreate();
+    }
+
+    match /user-reports/{reportId} {
+      allow read, update, delete: if isAdminUser();
+      allow create: if isSignedIn()
+        && request.resource.data.reportedBy == request.auth.uid;
+    }
+
+    match /document-notes/{noteId} {
+      allow read: if true;
+      allow create: if isPublicDocumentNoteCreate();
+      allow delete: if true;
+      allow update: if false;
+    }
+
+    match /signingRequests/{requestId} {
+      allow get, list: if true;
+      allow create, delete: if isAdminUser();
+      allow update: if isAdminUser()
+        || isPublicSigningViewUpdate()
+        || isPublicSigningSignatureUpdate();
+    }
+
+    // User documents: allow clients to set partnerSource only at creation.
+    // After creation, partnerSource is treated as immutable and can only be
+    // changed by trusted backends using the Admin SDK (which bypasses rules).
+    match /users/{userId} {
+      allow create: if isCanonicalRootUserCreate(userId);
+
+      allow update: if isCanonicalRootUserUpdate(userId);
+
+      allow read: if true;
+    }
+
+    // Train Nora knowledge vault. Each entry is owned by the coach whose uid
+    // equals coachId. The owning coach manages their entries; any signed-in
+    // user (e.g. a linked athlete's Nora) may read so it can answer questions
+    // from the coach's shared context.
+    match /coach-nora-vault/{entryId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.coachId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.coachId == request.auth.uid;
+    }
+
+    // Team schedule (Coach Dashboard v2 → Schedule tab). Same ownership model as
+    // the Nora vault: any signed-in athlete/coach can read, only the owning coach
+    // can write. Athlete-facing Nora reads these to answer "when's our next meet?".
+    match /coach-team-schedule/{eventId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.coachId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && resource.data.coachId == request.auth.uid;
+    }
+
+    // PulseCheck staff invites. Reads stay open to signed-in clients (a not-yet-
+    // member must read an invite to redeem it; the dashboard lists a team's links),
+    // but only an admin or a manager of the link's team may issue or change one. A
+    // redeeming user may mark their own redemption. The redeem API route uses the
+    // Admin SDK and bypasses these rules.
+    match /pulsecheck-invite-links/{inviteId} {
+      allow read: if isSignedIn();
+      allow create: if isAdminUser() || pcCanManageTeam(request.resource.data.teamId);
+      allow update: if isAdminUser()
+        || pcCanManageTeam(resource.data.teamId)
+        || pcIsInviteRedemptionUpdate();
+      allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
+    }
+
+    // PulseCheck team memberships (staff + athletes). Reads stay open to signed-in
+    // clients (iOS and the dashboard read memberships broadly). A user may write
+    // their own membership (onboarding / redemption), a team manager may adjust
+    // access for members of their team, and admins can do anything.
+    match /pulsecheck-team-memberships/{membershipId} {
+      match /consent-events/{eventId} {
+        allow read: if isSignedIn() && get(/databases/$(database)/documents/pulsecheck-team-memberships/$(membershipId)).data.userId == request.auth.uid;
+        allow create: if isSignedIn()
+          && get(/databases/$(database)/documents/pulsecheck-team-memberships/$(membershipId)).data.userId == request.auth.uid
+          && request.resource.data.actorUserId == request.auth.uid
+          && request.resource.data.recordedAt == request.time
+          && request.resource.data.keys().hasOnly(['actorUserId', 'decisions', 'recordedAt']);
+        allow update, delete: if false;
+      }
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        isAdminUser()
+        || request.resource.data.userId == request.auth.uid
+        || pcCanManageTeam(request.resource.data.teamId)
+      );
+      allow update: if isSignedIn() && (
+        isAdminUser()
+        || resource.data.userId == request.auth.uid
+        || pcCanManageTeam(resource.data.teamId)
+      );
+      allow delete: if isAdminUser() || pcCanManageTeam(resource.data.teamId);
+    }
+
+    // PulseCheck invite activity log (page views, redemption events, email sends).
+    // Low-sensitivity telemetry: signed-in clients may append and read; only admins
+    // may mutate or remove existing entries.
+    match /pulsecheck-invite-activities/{activityId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdminUser();
+    }
+
+    // Curriculum plans, journals, and state are served only by authenticated APIs.
+    match /pulsecheck-linear-curriculum/{document=**} { allow read, write: if false; }
+
+    // Compatibility fallback: unknown collections are no longer public. They
+    // remain available to signed-in clients unless a stricter rule exists above.
+    function pcHasLinearState(owner) {
+      return owner is string && owner.size() > 0
+        && exists(/databases/$(database)/documents/pulsecheck-linear-curriculum/states/items/$(owner));
+    }
+    function pcLegacyOwnerEnrolled(data) {
+      return pcHasLinearState(data.get('athleteUserId', ''))
+        || pcHasLinearState(data.get('athleteId', ''))
+        || pcHasLinearState(data.get('userId', ''));
+    }
+    function pcLegacyExecuting(data) {
+      return data.get('status', '') in ['started', 'in_progress', 'inProgress', 'paused']
+        || (!(data.get('status', '') in ['completed', 'done', 'expired', 'superseded', 'overridden', 'deferred', 'skipped', 'cancelled', 'canceled'])
+          && data.get('startedAt', 0) is number && data.get('startedAt', 0) > 0);
+    }
+    function pcLegacyAssignmentWriteAllowed(collectionName) {
+      return !(collectionName in ['pulsecheck-daily-assignments', 'sim-assignments', 'mental-exercise-assignments'])
+        || ((collectionName != 'pulsecheck-daily-assignments' || (!pcLegacyOwnerEnrolled(request.resource.data) && (resource == null || !pcLegacyOwnerEnrolled(resource.data))))
+          && request.resource.data.get('source', '') != 'standalone_reservation'
+          && (resource == null || resource.data.get('source', '') != 'standalone_reservation')
+          && (resource == null || (!pcLegacyOwnerEnrolled(resource.data) && !pcLegacyExecuting(resource.data))
+            || (request.resource.data.get('athleteUserId', '') == resource.data.get('athleteUserId', '')
+              && request.resource.data.get('athleteId', '') == resource.data.get('athleteId', '')
+              && request.resource.data.get('userId', '') == resource.data.get('userId', '')))
+          && (!pcLegacyExecuting(request.resource.data)
+          || (!pcHasLinearState(request.auth.uid)
+            && !pcLegacyOwnerEnrolled(request.resource.data)
+            && (resource == null || !pcLegacyOwnerEnrolled(resource.data)))));
+    }
+
+    // Partner credentials, snapshots, and protected documentation are server-only.
+    match /partner-api-access-requests/{document=**} { allow read, write: if false; }
+    match /partner-api-keys/{document=**} { allow read, write: if false; }
+    match /partner-api-key-audit/{document=**} { allow read, write: if false; }
+    match /partner-api-key-rate-limits/{document=**} { allow read, write: if false; }
+    match /developerDocsUnlockAttempts/{document=**} { allow read, write: if false; }
+    match /systemOverviewShareLinks/{document=**} { allow read, write: if false; }
+    match /systemOverviewShareUnlockAttempts/{document=**} { allow read, write: if false; }
+    match /athleticmind-snapshot-pulls/{document=**} { allow read, write: if false; }
+    match /athleticmind-snapshots/{document=**} { allow read, write: if false; }
+    match /athleticmind-snapshot-deliveries/{document=**} { allow read, write: if false; }
+    match /athleticmind-snapshot-watermarks/{document=**} { allow read, write: if false; }
+    match /athleticmind-snapshot-scheduler/{document=**} { allow read, write: if false; }
+
+    // Individual booking records and management tokens are API-only.
+    match /groupMeetBookingSettings/{document=**} { allow read, write: if false; }
+    match /groupMeetBookings/{document=**} { allow read, write: if false; }
+    match /groupMeetBookingLimits/{document=**} { allow read, write: if false; }
+    match /coach-team-insight-reports/{document=**} { allow read, write: if false; }
+
+    match /{collectionName}/{document=**} {
+      allow read: if isSignedIn()
+        && !isExplicitlyRuledCollection(collectionName);
+      allow create, update: if isSignedIn()
+        && !isExplicitlyRuledCollection(collectionName)
+        && pcLegacyAssignmentWriteAllowed(collectionName);
+      allow delete: if isSignedIn()
+        && !isExplicitlyRuledCollection(collectionName)
+        && (!(collectionName in ['pulsecheck-daily-assignments', 'sim-assignments', 'mental-exercise-assignments']) || (resource.data.get('source', '') != 'standalone_reservation' && !pcLegacyOwnerEnrolled(resource.data) && !pcLegacyExecuting(resource.data)));
+    }
+    match /pulsecheck-restricted-questionnaire-submissions/{document=**} { allow read, write: if false; }
+
+    // Private evidence is accessed only through the owner-authorized API.
+    match /pulsecheck-evidence-journals/{document=**} {
+      allow read, write: if false;
+    }
+
+  }
+}

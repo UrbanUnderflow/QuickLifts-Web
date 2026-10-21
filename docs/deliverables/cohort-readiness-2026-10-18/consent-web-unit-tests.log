@@ -1,0 +1,18 @@
+✔ requiresReConsentForVersion detects older accepted versions (0.48225ms)
+✔ PulseCheck consent v6 re-prompts athletes who completed v5 documents (0.227417ms)
+✔ PulseCheck consent v6 accepts athletes who completed current versions (0.092792ms)
+✔ declining optional health and research preserves participation access without marking either accepted (1.256458ms)
+✔ a new authorization version requires a fresh decision even after decline (0.060042ms)
+✔ legacy accepted IDs cannot fabricate health authorization (0.036041ms)
+✔ research willingness alone is never dataset eligibility (0.055042ms)
+✔ default categories are independent and staff has its own terms (0.333291ms)
+✔ Athletic Mind disclosure follows the current membership and explicit organization configuration (0.067958ms)
+✔ PulseCheck stock terms exclude AuntEdna and require a fresh exact receipt without changing custom terms (0.179416ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 89.121375

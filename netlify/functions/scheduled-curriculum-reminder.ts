@@ -1,3 +1,4 @@
+import { organizationTeamIsActive } from './lib/organization-access';
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import {
@@ -70,7 +71,9 @@ const isWithinWindow = (
 ): boolean => {
   const current = currentHour * 60 + currentMinute;
   const target = targetHour * 60;
-  return Math.abs(current - target) <= windowMinutes;
+  // One forward-only scheduler window: an 8 PM reminder never fires at 7:30.
+  return Number.isFinite(targetHour) && targetHour >= 0 && targetHour < 24
+    && current >= target && current < target + windowMinutes;
 };
 
 const localNowFor = (nowUtc: Date, timeZone: string): Date => {
@@ -89,7 +92,10 @@ const sendNotification = async (
       token: fcmToken,
       ...(data._pushPlatform === "android" ? {} : { notification: { title, body } }),
       data: { ...data, title, body },
-      apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+      apns: {
+        headers: { 'apns-collapse-id': data.reminderId },
+        payload: { aps: { sound: 'default', badge: 1 } },
+      },
     };
     const messageId = await messaging.send(message);
     return { success: true, messageId };
@@ -97,6 +103,13 @@ const sendNotification = async (
     return { success: false, error: err?.message || String(err) };
   }
 };
+
+function isActiveMembership(data: Record<string, unknown>): boolean {
+  const status = typeof data.status === 'string' ? data.status.trim().toLowerCase() : '';
+  return (!status || status === 'active')
+    && data.revokedAt == null && data.archivedAt == null && data.deletedAt == null
+    && data.revoked !== true;
+}
 
 export const handler: Handler = async () => {
   await initAdmin();
@@ -125,15 +138,30 @@ export const handler: Handler = async () => {
     sentEvening: 0,
     skippedNoOpenAssignment: 0,
     skippedSuppressed: 0,
+    skippedInactiveMembership: 0,
+    skippedDuplicateMembership: 0,
+    skippedAlreadyClaimed: 0,
     failed: 0,
   };
 
+  const seenAthletes = new Set<string>();
   for (const mem of memSnap.docs) {
     const m = mem.data();
     if (!m.userId) continue;
+    if (!isActiveMembership(m)) {
+      summary.skippedInactiveMembership += 1;
+      continue;
+    }
+    if (!await organizationTeamIsActive(db, m.teamId, m.organizationId)) continue;
+    if (seenAthletes.has(m.userId)) {
+      summary.skippedDuplicateMembership += 1;
+      continue;
+    }
+    seenAthletes.add(m.userId);
     summary.candidates += 1;
     const tz = (m.timezone as string | undefined) || 'America/New_York';
-    const localNow = localNowFor(nowUtc, tz);
+    let localNow: Date;
+    try { localNow = localNowFor(nowUtc, tz); } catch { summary.failed += 1; continue; }
     const localHour = localNow.getHours();
     const localMinute = localNow.getMinutes();
     const todayKey = formatYmd(localNow);
@@ -147,9 +175,12 @@ export const handler: Handler = async () => {
     // Suppression check.
     let suppression: { suppressed: boolean } = { suppressed: false };
     try {
-      suppression = (await loadPulseCheckNudgeSuppressionState({ db, athleteId: m.userId })) || { suppressed: false };
+      const suppressionOptions = { db, athleteId: m.userId, allowMembershipFallback: false };
+      suppression = (await loadPulseCheckNudgeSuppressionState(suppressionOptions)) || { suppressed: false };
     } catch {
-      /* tolerate */
+      // Do not deliver when we cannot establish the athlete's suppression state.
+      summary.failed += 1;
+      continue;
     }
     if (suppression.suppressed) {
       summary.skippedSuppressed += 1;
@@ -167,7 +198,7 @@ export const handler: Handler = async () => {
         .limit(5)
         .get();
       openAssignments = snap.docs
-        .map((d) => d.data())
+        .map((d): Record<string, unknown> => ({ ...d.data(), id: d.id }))
         .filter((a) => a.status !== 'completed' && a.status !== 'archived');
     } catch {
       /* tolerate index miss */
@@ -184,53 +215,62 @@ export const handler: Handler = async () => {
     const target = await loadPulseCheckPushTarget(db, m.userId);
     if (!target?.token) continue;
 
-    if (isMiddayWindow) {
-      const simAssignment = openAssignments.find((a) => a.actionType === 'simulation');
-      if (simAssignment) {
-        const { title, body } = middaySimMessage(simAssignment.simName as string | undefined);
-        const result = await sendNotification(
-          messaging,
-          target.token,
-          title,
-          body,
-          {
-            recipientUserId: m.userId, _pushPlatform: target.platform || '',
-            type: 'curriculum_reminder',
-            cadence: 'midday',
-            assignmentId: String(simAssignment.id || ''),
-          },
-        );
-        if (result.success) summary.sentMidday += 1;
-        else summary.failed += 1;
+    const slot = isMiddayWindow ? 'midday' : 'evening';
+    const simAssignment = openAssignments.find((a) => a.actionType === 'simulation');
+    const assignment = slot === 'midday'
+      ? simAssignment
+      : openAssignments.find((a) => a.actionType === 'protocol') || simAssignment;
+    if (!assignment) continue;
+    const { title, body } = slot === 'midday'
+      ? middaySimMessage(assignment.simName as string | undefined)
+      : assignment.actionType === 'protocol'
+        ? eveningProtocolMessage(assignment.protocolLabel as string | undefined)
+        : eveningSimMessage(assignment.simName as string | undefined);
+
+    // This subtree is already server-only under the deployed Firestore rules.
+    // Atomic create reserves one attempt per athlete/local day/cadence across
+    // memberships, concurrent runs and retries. Never release a claim after an
+    // ambiguous FCM failure or a crash: a missed nudge is preferable to a burst.
+    const reminderId = `curriculum-${todayKey}-${slot}`;
+    const delivery = db.collection('pulsecheck-private-users').doc(m.userId)
+      .collection('curriculum-reminder-deliveries').doc(`${todayKey}_${slot}`);
+    try {
+      await delivery.create({
+        status: 'claimed', localDate: todayKey, cadence: slot,
+        assignmentId: String(assignment.id || ''), claimedAt: nowUtc,
+      });
+    } catch (error: any) {
+      if (error?.code === 6 || error?.code === 'already-exists') {
+        summary.skippedAlreadyClaimed += 1;
+      } else {
+        summary.failed += 1;
+        console.error('Curriculum reminder claim failed', error?.code || 'unknown');
       }
-    } else if (isEveningWindow) {
-      // Prefer to nudge the protocol if uncompleted, else the sim.
-      const protocolAssignment = openAssignments.find((a) => a.actionType === 'protocol');
-      const simAssignment = openAssignments.find((a) => a.actionType === 'simulation');
-      const target1 = protocolAssignment || simAssignment;
-      if (target1) {
-        const isProtocol = target1.actionType === 'protocol';
-        const { title, body } = isProtocol
-          ? eveningProtocolMessage(target1.protocolLabel as string | undefined)
-          : eveningSimMessage(target1.simName as string | undefined);
-        const result = await sendNotification(
-          messaging,
-          target.token,
-          title,
-          body,
-          {
-            recipientUserId: m.userId, _pushPlatform: target.platform || '',
-            type: 'curriculum_reminder',
-            cadence: 'evening',
-            assignmentId: String(target1.id || ''),
-          },
-        );
-        if (result.success) summary.sentEvening += 1;
-        else summary.failed += 1;
-      }
+      continue;
+    }
+    if (!await organizationTeamIsActive(db, m.teamId, m.organizationId)) continue;
+    const result = await sendNotification(messaging, target.token, title, body, {
+      recipientUserId: m.userId, _pushPlatform: target.platform || '',
+      type: 'curriculum_reminder', cadence: slot, reminderId,
+      assignmentId: String(assignment.id || ''),
+    });
+    if (result.success) {
+      if (slot === 'midday') summary.sentMidday += 1;
+      else summary.sentEvening += 1;
+    } else summary.failed += 1;
+    try {
+      await delivery.set({
+        status: result.success ? 'sent' : 'send_failed',
+        messageId: result.messageId || null,
+        finishedAt: new Date(),
+      }, { merge: true });
+    } catch {
+      // The durable claim still prevents replay if outcome recording fails.
+      console.error('Curriculum reminder outcome could not be recorded');
     }
   }
 
+  console.info('Curriculum reminder summary', JSON.stringify(summary));
   return {
     statusCode: 200,
     body: JSON.stringify({ ok: true, summary }),

@@ -7,6 +7,27 @@ This document describes a workflow; it grants no tool access or permission to se
 ## Product identity
 Use Athletic Mind as the school-facing product name. Describe mental performance and mental care as equal parts of one product. Omit the underlying company names from school-facing materials. Preserve clinical responsibilities, consent boundaries and evidence requirements when describing either part.
 
+## Current buyer resources and commercial baseline
+
+Resource register updated October 18, 2026. Use these named references for new university opportunities. The founder owns commercial approval and the version shared with each buyer; record the resource URL or filename and date in the opportunity notes.
+
+| Sales moment | Current resource | Sharing |
+| --- | --- | --- |
+| Initial outreach and discovery | [University buyer guide](https://theathleticmind.ai/universities) | public |
+| Discovery, budget conversations and custom scope of work | [University pricing](https://theathleticmind.ai/university-pricing) | public |
+| Sponsor and internal university sharing | [University overview PDF](https://theathleticmind.ai/universities/downloads/athleticmind-university-overview.pdf) | public |
+| Pilot planning, success measures and purchasing decision date | [Pilot blueprint PDF](https://theathleticmind.ai/universities/downloads/athleticmind-pilot-blueprint.pdf) | public |
+| Detailed product and commercial diligence | Institutional FAQ: `TheAthleticMind-Institutional-QA-2026-10-18.pdf`. Founder-provided copy. | Founder provides the appropriate reviewed copy; the full document contains investor material and historical account information. |
+| Institutional privacy, security and data-flow diligence | Data governance package: `The_Athletic_Mind_Data_Governance_Summary_2026.pdf`. Founder-provided copy. | Founder provides the latest reviewed package and institution-specific supporting agreements; confirm currency before sharing. |
+
+Standard new pilot: **$7,500 for 12 weeks, up to 50 athletes**. Smaller cohorts or different requirements belong in a written custom scope of work. Preserve existing signed agreements, including UMES's existing pilot; the standard offer does not amend those terms.
+
+Standard annual pricing: **$25,000 program fee + $250 per contracted athlete, with a $50,000 annual minimum**. At 500 athletes, the standard annual price is $150,000. Multi-year discounts are quoted in the written proposal. Confirm the applicable internal approval before quoting a discount, changing the minimum or combining credits and discounts. The public pricing page is the current baseline for new proposals; an executed institution-specific agreement governs that account.
+
+Use the blueprint to record the cohort, success measures, review dates and purchasing decision date. The final review records paid continuation, expansion, a bounded extension or closeout. Illustrative proof remains labeled illustrative; absent measures stay “not yet collected.”
+
+Keep investor material, private commercial policy and institution-specific agreements in controlled sharing channels. The governance summary is a reference for diligence, not proof of current deployment or the university's signed terms. The founder confirms current supporting evidence before sharing it.
+
 ## Approved email channel
 Use the founder-approved business Gmail inbox for all email in this university pilot sales workflow, including introductions and follow-ups. This channel decision is approved; sending scope and agent access still require verification.
 Do not use the Brevo integration attached to PipeLists, its Send Email controls, or its email-sequence send/resume actions for this workflow. Do not fall back to Brevo if Gmail is unavailable. Keep the item blocked and notify the owner.
@@ -14,6 +35,16 @@ Use PipeLists for account research, stages, owners, activity logs and next actio
 Before every Gmail send, verify the approved sender account, recipient, latest thread, stop requests, scheduled follow-ups and prior sends. Pause generic follow-ups on a reply; stop outreach on an opt-out or delivery failure. Verify cancellation of any queued sends. If reply access or suppression cannot be verified, keep work in draft mode.
 Record verified Gmail sends in PipeLists activity logs with recipient, time, subject, available message/thread reference, outcome and next action/date. Read replies in Gmail and log their substance in PipeLists. Do not assume automatic Gmail sync or treat Brevo delivery/open/click fields as Gmail evidence. A confirmed send does not prove delivery or inbox placement.
 If a send outcome is uncertain, reconcile Gmail Sent and the thread before retrying. Track substantive replies and meetings as primary sales signals.
+
+## Inbound university inquiries
+
+Tremaine Grant owns inbound university inquiries. Review the receiving inbox each business day and record a next action and date for each genuine inquiry.
+
+- The website pilot form submits through `/api/demo-request`. Its internal transactional Brevo notification is addressed to `hello@fitwithpulse.ai`, which is visible in the connected Gmail inbox. Custom-pricing links and the form's email fallback open a draft to `tre@fitwithpulse.ai`.
+- Website notifications do not automatically create University Pilots records. Before manual intake, check for an existing organization and contact, then create or update the appropriate opportunity through the authorized PipeLists workflow.
+- Record the source page, available email message/thread reference, stated need, owner, next action and due date. Keep pilot value separate from potential annual value. Assign a stage only after a person validates the inquiry and its evidence.
+- Exclude clearly labeled tests from forecasts and outreach. An endpoint success response alone does not establish inbox delivery or a saved CRM record; verify those separately.
+- The Gmail-only rule governs buyer outreach. An internal website notification is a transactional intake message; it does not authorize Brevo sales campaigns or change the approved outbound channel.
 
 ## Activation gate
 1. Read the authorized live PipeLists University pipeline and saved runbook. Record its version/date. Reconcile differences with this snapshot; escalate material conflicts rather than silently overriding either source.

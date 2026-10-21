@@ -1,0 +1,112 @@
+{
+  "verifiedAt": "2026-10-18T13:28:38.461Z",
+  "project": "quicklifts-dd3f1",
+  "organizations": [
+    {
+      "id": "0mXTn4DUYYL7t2K9AzZP",
+      "displayName": "Clark Atlanta University",
+      "productBrand": "athleticmind",
+      "onlyProductBrandChanged": true
+    },
+    {
+      "id": "O3xDl0Ng9Bbd9ot1rzfc",
+      "displayName": "The Athletic Mind Council",
+      "productBrand": "pulsecheck",
+      "onlyProductBrandChanged": true
+    },
+    {
+      "id": "WIqVs4SsqNSoJunckDIE",
+      "displayName": "Building Bodies",
+      "productBrand": "pulsecheck",
+      "onlyProductBrandChanged": true
+    },
+    {
+      "id": "lBAyqI56zB1YuCWjUEJM",
+      "displayName": "Hampton University Athletics",
+      "productBrand": "pulsecheck",
+      "onlyProductBrandChanged": true
+    },
+    {
+      "id": "legacy-coach-org-Bq6zlqIlSdPUGki6gsv6X9TdVtG3",
+      "displayName": "Tremaine Coaching",
+      "productBrand": "pulsecheck",
+      "onlyProductBrandChanged": true
+    },
+    {
+      "id": "mEUQFqPB6ubRGz4luxpY",
+      "displayName": "HyperCharge Wellness",
+      "productBrand": "pulsecheck",
+      "onlyProductBrandChanged": true
+    },
+    {
+      "id": "mVHV5BZ0MOmOO39p0aFD",
+      "displayName": "4D Cycling",
+      "productBrand": "pulsecheck",
+      "onlyProductBrandChanged": true
+    }
+  ],
+  "teamResolution": [
+    {
+      "teamId": "6YE1sh7G6YRWHhedoSpe",
+      "organizationId": "0mXTn4DUYYL7t2K9AzZP",
+      "productBrand": "athleticmind",
+      "escalationModel": "aunt-edna"
+    },
+    {
+      "teamId": "GlKi00GszJxnSnY8eh80",
+      "organizationId": "0mXTn4DUYYL7t2K9AzZP",
+      "productBrand": "athleticmind",
+      "escalationModel": "aunt-edna"
+    },
+    {
+      "teamId": "XKZKHIiIXE8Au3zHuwvU",
+      "organizationId": "O3xDl0Ng9Bbd9ot1rzfc",
+      "productBrand": "pulsecheck",
+      "escalationModel": "988"
+    },
+    {
+      "teamId": "ampwEu8TXMXxmuWwFkYN",
+      "organizationId": "mVHV5BZ0MOmOO39p0aFD",
+      "productBrand": "pulsecheck",
+      "escalationModel": "988"
+    },
+    {
+      "teamId": "hRhImTeau8qlmvYE0DlF",
+      "organizationId": "WIqVs4SsqNSoJunckDIE",
+      "productBrand": "pulsecheck",
+      "escalationModel": "988"
+    },
+    {
+      "teamId": "hnPbfVg2ygyIpxTmgyPV",
+      "organizationId": "mEUQFqPB6ubRGz4luxpY",
+      "productBrand": "pulsecheck",
+      "escalationModel": "988"
+    },
+    {
+      "teamId": "legacy-coach-team-Bq6zlqIlSdPUGki6gsv6X9TdVtG3",
+      "organizationId": "legacy-coach-org-Bq6zlqIlSdPUGki6gsv6X9TdVtG3",
+      "productBrand": "pulsecheck",
+      "escalationModel": "988"
+    },
+    {
+      "teamId": "qu1a6IKpCOgj2KPQ5jRg",
+      "organizationId": "lBAyqI56zB1YuCWjUEJM",
+      "productBrand": "pulsecheck",
+      "escalationModel": "988"
+    },
+    {
+      "teamId": "yFZLBov3S6TFRYwlbsbs",
+      "organizationId": "O3xDl0Ng9Bbd9ot1rzfc",
+      "productBrand": "pulsecheck",
+      "escalationModel": "988"
+    },
+    {
+      "teamId": "zbgtLXGLpSFbODe9G0MX",
+      "organizationId": "0mXTn4DUYYL7t2K9AzZP",
+      "productBrand": "athleticmind",
+      "escalationModel": "aunt-edna"
+    }
+  ],
+  "verification": "Every organization read back and deep-compared to before-state with only productBrand replaced. Existing clinician incident route preserved by resolver.",
+  "limits": "No live handoff or native refresh performed."
+}

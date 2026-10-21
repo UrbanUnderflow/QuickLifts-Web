@@ -1,0 +1,79 @@
+{
+  "verifiedAt": "2026-10-18T13:40:26.268Z",
+  "project": "quicklifts-dd3f1",
+  "teams": [
+    {
+      "id": "XKZKHIiIXE8Au3zHuwvU",
+      "displayName": "Track And Field",
+      "productBrand": "pulsecheck",
+      "documentVersions": [
+        {
+          "id": "pulsecheck-program-participation",
+          "version": "v1-pulsecheck",
+          "category": "participation"
+        },
+        {
+          "id": "pulsecheck-health-authorization",
+          "version": "v1-pulsecheck",
+          "category": "health_authorization"
+        }
+      ],
+      "onlyRequiredConsentsChanged": true
+    },
+    {
+      "id": "ampwEu8TXMXxmuWwFkYN",
+      "displayName": "4D Cycling Off-Road Race Team",
+      "productBrand": "pulsecheck",
+      "documentVersions": [
+        {
+          "id": "pulsecheck-program-participation",
+          "version": "v1-pulsecheck",
+          "category": "participation"
+        },
+        {
+          "id": "pulsecheck-health-authorization",
+          "version": "v1-pulsecheck",
+          "category": "health_authorization"
+        }
+      ],
+      "onlyRequiredConsentsChanged": true
+    },
+    {
+      "id": "hnPbfVg2ygyIpxTmgyPV",
+      "displayName": "HyperCharge",
+      "productBrand": "pulsecheck",
+      "documentVersions": [
+        {
+          "id": "pulsecheck-program-participation",
+          "version": "v1-pulsecheck",
+          "category": "participation"
+        },
+        {
+          "id": "pulsecheck-health-authorization",
+          "version": "v1-pulsecheck",
+          "category": "health_authorization"
+        }
+      ],
+      "onlyRequiredConsentsChanged": true
+    },
+    {
+      "id": "yFZLBov3S6TFRYwlbsbs",
+      "displayName": "Men's Basketball",
+      "productBrand": "pulsecheck",
+      "documentVersions": [
+        {
+          "id": "pulsecheck-program-participation",
+          "version": "v1-pulsecheck",
+          "category": "participation"
+        },
+        {
+          "id": "pulsecheck-health-authorization",
+          "version": "v1-pulsecheck",
+          "category": "health_authorization"
+        }
+      ],
+      "onlyRequiredConsentsChanged": true
+    }
+  ],
+  "historicalConsentEvidenceChanged": false
+}

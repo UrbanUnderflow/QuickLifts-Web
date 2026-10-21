@@ -382,6 +382,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/pulsecheck/activation/*"
+  to = "/.netlify/functions/firebase-next-api?originalPath=/api/pulsecheck/activation/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/reset-badges"
   to = "/.netlify/functions/firebase-next-api?originalPath=/api/reset-badges"
   status = 200
@@ -780,3 +786,22 @@
 # Remove abandoned Clay Self reference photos after one hour.
 [functions.pulsecheck-clay-self-cleanup]
   schedule = "15 * * * *"
+
+# Preserve native sharp dependencies for private personalized scene generation.
+[functions.pulsecheck-clay-scenes]
+  node_bundler = "nft"
+
+[functions.pulsecheck-clay-scenes-background]
+  node_bundler = "nft"
+
+[functions.pulsecheck-clay-scenes-cleanup]
+  node_bundler = "nft"
+  schedule = "35 * * * *"
+
+# Team-configured coach reports, managed in Provisioning. Local-time gating and dedupe run server-side.
+[functions.scheduled-coach-participation-reports]
+  schedule = "*/5 * * * *"
+
+# Permanently decommission organizations after the server-enforced 90-day restore window.
+[functions.scheduled-organization-deletion]
+  schedule = "*/5 * * * *"

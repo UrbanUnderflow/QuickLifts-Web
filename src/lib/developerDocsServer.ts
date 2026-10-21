@@ -7,7 +7,7 @@ import { verifyPasscodeHash } from './systemOverviewShareAccess';
 export const DEVELOPER_DOCS = {
   'auntedna': { title: 'AuntEdna athlete baseline', description: 'The 48-item Starting Point, question ownership, versioning, baseline payloads and receipts.', files: ['README.md', 'questionnaire.json', 'routing.json', 'baseline.schema.json', 'examples/baseline.synthetic.json', 'examples/receipt.synthetic.json'] },
   'athleticmind-snapshots': { title: 'Athletic Mind snapshots', description: 'Authenticated snapshot exchange, payload schemas and synthetic examples.', files: ['README.md', 'snapshot.schema.json', 'examples/snapshot.synthetic.json', 'examples/pull-request.synthetic.json', 'examples/pull-response.synthetic.json', 'examples/push-ack.synthetic.json'] },
-  'clinical-bridge': { title: 'Clinical bridge', description: 'Emergency handoff, receipt and callback integration.', files: ['README.md', 'emergency-handoff.schema.json', 'webhook.schema.json', 'examples/emergency-handoff.synthetic.json', 'examples/case-receipt.synthetic.json', 'examples/webhook.synthetic.json'] },
+  'clinical-bridge': { title: 'Clinical bridge', description: 'Emergency handoff, receipt and callback integration.', files: ['README.md', 'athlete-registration.schema.json', 'examples/athlete-registration.synthetic.json', 'emergency-handoff.schema.json', 'webhook.schema.json', 'examples/emergency-handoff.synthetic.json', 'examples/case-receipt.synthetic.json', 'examples/webhook.synthetic.json'] },
 } as const;
 export type DeveloperDocSlug = keyof typeof DEVELOPER_DOCS;
 export type DeveloperDocArtifact = { name: string; content: string; contentType: string };
@@ -49,7 +49,7 @@ export async function loadDeveloperDocArtifact(slug: DeveloperDocSlug, name: str
   if (!developerArtifactAllowed(slug, name)) throw new Error('Unknown developer artifact.');
   return { name, content: await readFile(path.join(process.cwd(), 'docs/developer', slug, name), 'utf8'), contentType: name.endsWith('.json') ? 'application/json; charset=utf-8' : 'text/plain; charset=utf-8' };
 }
-export async function getDeveloperDocumentPageProps(slug: DeveloperDocSlug, { req, res }: Pick<GetServerSidePropsContext, 'req' | 'res'>) {
+export async function getDeveloperDocumentPageProps(slug: DeveloperDocSlug, { req, res, query }: Pick<GetServerSidePropsContext, 'req' | 'res'> & { query?: GetServerSidePropsContext['query'] }) {
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
   res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   if (!isDeveloperDocSlug(slug)) return { notFound: true as const };
@@ -60,7 +60,9 @@ export async function getDeveloperDocumentPageProps(slug: DeveloperDocSlug, { re
   const available = !!developerDocsConfig();
   const locked = !developerDocsAuthorized(slug, req.cookies[developerDocsCookieName(slug)]);
   const artifacts = locked ? [] : await Promise.all(DEVELOPER_DOCS[slug].files.map(file => loadDeveloperDocArtifact(slug, file)));
-  return { props: { slug, title: DEVELOPER_DOCS[slug].title, description: DEVELOPER_DOCS[slug].description, locked, available, artifacts } };
+  const selectedArtifact = typeof query?.artifact === 'string' && developerArtifactAllowed(slug, query.artifact) ? query.artifact : 'README.md';
+  const accessError = typeof query?.accessError === 'string' && ['incorrect', 'missing', 'rate_limited', 'unavailable'].includes(query.accessError) ? query.accessError : '';
+  return { props: { slug, title: DEVELOPER_DOCS[slug].title, description: DEVELOPER_DOCS[slug].description, locked, available, artifacts, selectedArtifact, accessError } };
 }
 export async function consumeDeveloperDocsAttempt(db: any, slug: DeveloperDocSlug, address: string, now = Date.now()) {
   const windowMs = 15 * 60 * 1000; const window = Math.floor(now / windowMs);

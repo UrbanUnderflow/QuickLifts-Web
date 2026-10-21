@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.fitwithpulse.pulsecheck.PulseCheckTeamInviteConsentPolicyTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-18T13:20:29.530Z" hostname="Tremaines-MacBook-Pro.local" time="0.006">
+  <properties/>
+  <testcase name="optionalDeclinesPreserveAccessAndVersionsRequireNewChoices" classname="com.fitwithpulse.pulsecheck.PulseCheckTeamInviteConsentPolicyTest" time="0.004"/>
+  <testcase name="researchInvitesRequireResearchDecisionAndConsentDocuments" classname="com.fitwithpulse.pulsecheck.PulseCheckTeamInviteConsentPolicyTest" time="0.0"/>
+  <testcase name="athleteMembershipStaysPendingUntilEntryAndConsentsAreComplete" classname="com.fitwithpulse.pulsecheck.PulseCheckTeamInviteConsentPolicyTest" time="0.0"/>
+  <testcase name="staleDefaultConsentDocumentsDoNotOverrideCurrentModeDefaults" classname="com.fitwithpulse.pulsecheck.PulseCheckTeamInviteConsentPolicyTest" time="0.001"/>
+  <testcase name="consentPresentationUsesOnlyMatchingMembershipOrganizationConfiguration" classname="com.fitwithpulse.pulsecheck.PulseCheckTeamInviteConsentPolicyTest" time="0.001"/>
+  <testcase name="pulseCheckDefaultsAreScopedAndRequireFreshDecisionReceipts" classname="com.fitwithpulse.pulsecheck.PulseCheckTeamInviteConsentPolicyTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

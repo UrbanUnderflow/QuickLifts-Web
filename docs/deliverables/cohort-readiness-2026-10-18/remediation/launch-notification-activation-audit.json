@@ -1,0 +1,7 @@
+{
+  "checkedAt": "2026-10-18T14:31:54.021Z",
+  "remainingNewSchedulerJobs": [],
+  "observedRequestLogs": [],
+  "moreLogPages": false,
+  "limitation": "Request-log visibility can lag; no synthetic participant or provider messages were sent. New notification functions were briefly created then removed to preserve the preexisting activation set."
+}

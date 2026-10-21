@@ -1,0 +1,1434 @@
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+  - Experiments (use with caution):
+    · webpackBuildWorker
+
+   Skipping linting
+   Checking validity of types ...
+   Creating an optimized production build ...
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: browsers data (caniuse-lite) is 9 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: browsers data (caniuse-lite) is 9 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully
+   Collecting page data ...
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:35.946Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:35.947Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:35.947Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:35.947Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:35.947Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:35.949Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:35.949Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:35.950Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:35.950Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:35.950Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:35.950Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:35.952Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:35.960Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:35.962Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:35.962Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:35.962Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:35.962Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:35.964Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:35.967Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:35.968Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:35.969Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:35.969Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:35.969Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:35.971Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.032Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.033Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.033Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.033Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.033Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.034Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.168Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.174Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.175Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.175Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.175Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.177Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.175Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.177Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.177Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.178Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.178Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.179Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.181Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.183Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.183Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.183Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.183Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.173Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.185Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.185Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.185Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.185Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.185Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.187Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.188Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.191Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.191Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.192Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.192Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.186Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.183Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.194Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.195Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.196Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.196Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.253Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.255Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.255Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.255Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.255Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.256Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.265Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.267Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.267Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.267Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.268Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.270Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.270Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.272Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.272Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.272Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.272Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.273Z'
+}
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:34:36.280Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:34:36.288Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✓ Usable',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✓ Usable'
+  },
+  timestamp: '2026-10-20T00:34:36.288Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: 'AIzaSy...',
+  authDomain: 'quicklifts-dd3f1.firebaseapp.com',
+  projectId: 'quicklifts-dd3f1',
+  storageBucket: 'quicklifts-dd3f1.appspot.com',
+  messagingSenderId: 'configured',
+  appId: 'configured',
+  timestamp: '2026-10-20T00:34:36.288Z'
+}
+[Firebase] Using configuration: {
+  mode: 'production',
+  isLocalhost: false,
+  projectId: 'quicklifts-dd3f1',
+  hasApiKey: true,
+  hasAppId: true,
+  timestamp: '2026-10-20T00:34:36.288Z'
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: true,
+  hasAuth: true,
+  hasDb: true,
+  hasStorage: true,
+  timestamp: '2026-10-20T00:34:36.290Z'
+}
+   Generating static pages (0/306) ...
+   Generating static pages (76/306) 
+   Generating static pages (152/306) 
+   Generating static pages (229/306) 
+Failed to parse date from filename: [slug].tsx. Assigning default date.
+ ✓ Generating static pages (306/306)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (pages)                                                           Size     First Load JS
+┌ ● / (ISR: 3600 Seconds)                                               293 B           678 kB
+├   /_app                                                               0 B            88.9 kB
+├ ƒ /[username]/[page]                                                  11.3 kB         508 kB
+├ ƒ /[username]/earnings                                                14 kB           631 kB
+├ ƒ /[username]/questionnaire/[questionnaireId]                         1.38 kB         497 kB
+├ ƒ /100trainers                                                        10.8 kB         490 kB
+├ ƒ /1on1-invite/[id]                                                   1.8 kB         90.7 kB
+├ ○ /404                                                                3.28 kB        94.8 kB
+├ ● /about (ISR: 3600 Seconds)                                          592 B           678 kB
+├ ○ /admin                                                              12.7 kB         533 kB
+├ ○ /admin/adaptationFramingLayer                                       5.37 kB         526 kB
+├ ○ /admin/addpoints                                                    5.45 kB         526 kB
+├ ○ /admin/addUserToChallenge                                           4.45 kB         525 kB
+├ ○ /admin/addVersion                                                   6.95 kB         527 kB
+├ ○ /admin/adminLevers                                                  16.5 kB         537 kB
+├ ○ /admin/adminPayouts                                                 4.16 kB         525 kB
+├ ○ /admin/agentChat                                                    10.4 kB         535 kB
+├ ○ /admin/ai-voice                                                     45 kB           607 kB
+├ ○ /admin/assign-prize-money                                           10.5 kB         531 kB
+├ ○ /admin/authorProfiles                                               3.93 kB         524 kB
+├ ○ /admin/betausers                                                    5.84 kB         526 kB
+├ ○ /admin/challengestatus                                              13.9 kB         534 kB
+├ ○ /admin/chatManagement                                               7.8 kB          528 kB
+├ ○ /admin/clinicalTestUnit                                             282 B           529 kB
+├ ○ /admin/coachInvites                                                 3.49 kB         524 kB
+├ ○ /admin/coachRevenue                                                 2.11 kB         478 kB
+├ ○ /admin/corporatePartners                                            18 kB           538 kB
+├ ○ /admin/creatorModeration                                            2.92 kB         523 kB
+├ ○ /admin/creatorProspects                                             11.6 kB         532 kB
+├ ƒ /admin/curriculumLayer                                              265 B          89.2 kB
+├ ○ /admin/dailyPrompts                                                 4.08 kB         524 kB
+├ ○ /admin/dailyReflection                                              6.85 kB         527 kB
+├ ○ /admin/debugUserChallenge                                           4.19 kB         525 kB
+├ ○ /admin/deliverables/[agent]                                         13 kB           118 kB
+├ ○ /admin/documentSigning                                              5.51 kB         526 kB
+├ ○ /admin/emailLogs                                                    279 B           525 kB
+├ ○ /admin/emailSequences                                               43.4 kB         568 kB
+├ ○ /admin/equity                                                       130 kB          810 kB
+├ ○ /admin/ErrorLogs                                                    7.07 kB         527 kB
+├ ○ /admin/escalationConditions                                         13.1 kB         571 kB
+├ ○ /admin/experiments                                                  14.1 kB         534 kB
+├ ○ /admin/fitclubMedia                                                 3.34 kB         524 kB
+├ ○ /admin/fitnessSeekerLeads                                           9.51 kB         530 kB
+├ ○ /admin/founderBudget                                                13.2 kB         534 kB
+├ ○ /admin/friendsOfBusiness                                            10.6 kB         531 kB
+├ ○ /admin/fwpMedia                                                     3.09 kB         523 kB
+├ ○ /admin/generateMealMacros                                           6.89 kB         527 kB
+├ ○ /admin/groupMeet                                                    291 B           577 kB
+├ ○ /admin/heartbeatProtocol                                            366 B          89.3 kB
+├ ○ /admin/inactivityCheck                                              10.9 kB         531 kB
+├ ○ /admin/investorAccess                                               6.83 kB         527 kB
+├ ƒ /admin/juniorCurriculum                                             259 B          89.2 kB
+├ ○ /admin/leadMassaging                                                13.6 kB         534 kB
+├ ○ /admin/legalDocuments                                               31.6 kB         552 kB
+├ ○ /admin/links                                                        1.98 kB        90.9 kB
+├ ○ /admin/macraCancelReasons                                           6.71 kB         527 kB
+├ ○ /admin/macraMedia                                                   2.72 kB         523 kB
+├ ○ /admin/macraPurchaseLogs                                            286 B           527 kB
+├ ƒ /admin/manageMeta                                                   8.94 kB         529 kB
+├ ○ /admin/mealLogs                                                     6.72 kB         527 kB
+├ ○ /admin/metrics                                                      10.2 kB         548 kB
+├ ƒ /admin/missionControl                                               264 B          89.2 kB
+├ ○ /admin/MoveManagement                                               13.5 kB         537 kB
+├ ○ /admin/noraGuard                                                    4.44 kB         525 kB
+├ ƒ /admin/noraRedTeam                                                  35.7 kB         568 kB
+├   └ css/1ef9a9f9f7f31301.css                                          4.67 kB
+├ ○ /admin/NotificationLogs                                             5.67 kB         481 kB
+├ ○ /admin/notificationSequences                                        19.3 kB         540 kB
+├ ○ /admin/nutritionInsightLayer                                        4.43 kB         525 kB
+├ ○ /admin/objective-timeline                                           2.24 kB         527 kB
+├ ○ /admin/og-preview                                                   5.38 kB         526 kB
+├ ○ /admin/outreach-campaigns                                           14 kB           534 kB
+├ ○ /admin/partner-api-keys                                             6.88 kB         527 kB
+├   └ css/c09d5a4abde1e40f.css                                          1.84 kB
+├ ○ /admin/presentations                                                4.5 kB          525 kB
+├ ○ /admin/pressReleases                                                4.88 kB         539 kB
+├ ○ /admin/prize-test-setup                                             2.47 kB        92.8 kB
+├ ○ /admin/programmingAccess                                            4.53 kB         525 kB
+├ ○ /admin/projectManagement                                            14.4 kB         535 kB
+├ ○ /admin/pulsecheckDesignSystem                                       2.15 kB         523 kB
+├ ○ /admin/pulsecheckDeviceDashboard                                    11.5 kB         532 kB
+├ ○ /admin/pulsecheckLegacyRosterMigration                              6.25 kB         527 kB
+├ ○ /admin/pulsecheckMedia                                              4.81 kB         525 kB
+├ ○ /admin/pulsecheckOnboardingOverview                                 28.4 kB         588 kB
+├ ○ /admin/pulsecheckPayouts                                            4.85 kB         525 kB
+├ ○ /admin/pulsecheckPilotDashboard                                     22.4 kB         638 kB
+├ ○ /admin/pulsecheckPilotDashboard/[pilotId]                           74.4 kB         696 kB
+├ ○ /admin/pulsecheckPilotDashboard/[pilotId]/athletes/[athleteId]      18.8 kB         575 kB
+├ ○ /admin/pulsecheckPilotDashboard/organizations/[organizationId]      403 B           608 kB
+├ ○ /admin/pulsecheckPilotDashboard/teams/[teamId]                      398 B           608 kB
+├ ○ /admin/pulsecheckProvisioning                                       53.6 kB         614 kB
+├   └ css/182d43d1129359a0.css                                          3.93 kB
+├ ○ /admin/pulsecheckSportConfiguration                                 18.1 kB         578 kB
+├ ○ /admin/pulseCheckTechDemoAnalytics                                  5.57 kB         526 kB
+├ ○ /admin/pulsecheckVisionProReporting                                 7 kB            527 kB
+├ ○ /admin/pulseCommand                                                 2.03 kB        90.9 kB
+├ ○ /admin/purchaseLogs                                                 335 B           527 kB
+├ ○ /admin/referralAward                                                6.17 kB         527 kB
+├ ○ /admin/researchArticles                                             12.6 kB         533 kB
+├ ○ /admin/reviewTracker                                                7.01 kB         535 kB
+├ ○ /admin/roundExports                                                 3.67 kB         524 kB
+├ ○ /admin/sage-deliverables                                            9.59 kB         114 kB
+├ ○ /admin/screenDemo                                                   4.53 kB         525 kB
+├ ○ /admin/SendNotification                                             1.63 kB         480 kB
+├ ○ /admin/shortLinks                                                   5.22 kB         526 kB
+├ ○ /admin/sportsIntelligenceReports                                    36.8 kB         619 kB
+├ ○ /admin/StacksManagement                                             7.08 kB         527 kB
+├ ○ /admin/subscriptions                                                7.21 kB         528 kB
+├ ○ /admin/systemOverview                                               752 kB         1.58 MB
+├   └ css/93f9ac100b4aef3e.css                                          2.37 kB
+├ ○ /admin/testCheckinNotification                                      9.19 kB         530 kB
+├ ○ /admin/universityProspects                                          9.4 kB          530 kB
+├ ○ /admin/userOnboarding                                               8.99 kB         486 kB
+├ ○ /admin/users                                                        28.4 kB         549 kB
+├ ○ /admin/vcDatabase                                                   22.5 kB         543 kB
+├ ƒ /admin/virtualOffice                                                264 B          89.2 kB
+├ ○ /admin/workoutCategoryConfig                                        4.75 kB         525 kB
+├ ○ /admin/workoutSummaries                                             5.99 kB         526 kB
+├ ○ /advisory-board                                                     13.4 kB         140 kB
+├ ƒ /api/activity-records                                               0 B            88.9 kB
+├ ƒ /api/activity-records/coach-summary                                 0 B            88.9 kB
+├ ƒ /api/activity-records/settings                                      0 B            88.9 kB
+├ ƒ /api/admin/_auth                                                    0 B            88.9 kB
+├ ƒ /api/admin/audit-legal-document                                     0 B            88.9 kB
+├ ƒ /api/admin/audit-variant-spec                                       0 B            88.9 kB
+├ ƒ /api/admin/create-programming-access                                0 B            88.9 kB
+├ ƒ /api/admin/curriculum/_auth                                         0 B            88.9 kB
+├ ƒ /api/admin/curriculum/enrollment                                    0 B            88.9 kB
+├ ƒ /api/admin/curriculum/insights                                      0 B            88.9 kB
+├ ƒ /api/admin/curriculum/publication                                   0 B            88.9 kB
+├ ƒ /api/admin/curriculum/status                                        0 B            88.9 kB
+├ ƒ /api/admin/extract-creator-prospects                                0 B            88.9 kB
+├ ƒ /api/admin/extract-university-prospects                             0 B            88.9 kB
+├ ƒ /api/admin/founder-budget/parse-expenses                            0 B            88.9 kB
+├ ƒ /api/admin/generate-legal-document                                  0 B            88.9 kB
+├ ƒ /api/admin/generate-variant-spec                                    0 B            88.9 kB
+├ ƒ /api/admin/generate-voice-asset                                     0 B            88.9 kB
+├ ƒ /api/admin/group-meet                                               0 B            88.9 kB
+├ ƒ /api/admin/group-meet/[requestId]                                   0 B            88.9 kB
+├ ƒ /api/admin/group-meet/[requestId]/confirmation-email                0 B            88.9 kB
+├ ƒ /api/admin/group-meet/[requestId]/finalize                          0 B            88.9 kB
+├ ƒ /api/admin/group-meet/[requestId]/invites/[token]                   0 B            88.9 kB
+├ ƒ /api/admin/group-meet/[requestId]/invites/[token]/flex              0 B            88.9 kB
+├ ƒ /api/admin/group-meet/[requestId]/invites/[token]/resend            0 B            88.9 kB
+├ ƒ /api/admin/group-meet/[requestId]/preview-email                     0 B            88.9 kB
+├ ƒ /api/admin/group-meet/[requestId]/recommend                         0 B            88.9 kB
+├ ƒ /api/admin/group-meet/[requestId]/schedule                          0 B            88.9 kB
+├ ƒ /api/admin/group-meet/[requestId]/send                              0 B            88.9 kB
+├ ƒ /api/admin/group-meet/booking                                       0 B            88.9 kB
+├ ƒ /api/admin/group-meet/contacts                                      0 B            88.9 kB
+├ ƒ /api/admin/group-meet/test-email                                    0 B            88.9 kB
+├ ƒ /api/admin/nora-guard/revoke                                        0 B            88.9 kB
+├ ƒ /api/admin/partner-api-keys                                         0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/access                          0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/chat-simulation                 0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/devices                         0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/estimate-meal                   0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/history                         0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/library                         0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/local-meal                      0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/local-session                   0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/local-storage-check             0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/privacy                         0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/run                             0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/nora-red-team/suite                           0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/organization-configuration                    0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/organization-lifecycle                        0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/pilot-hypothesis-assist/generate              0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/pilot-research-readout/generate               0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/pilot-research-readout/review                 0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/protect-legacy-roster                         0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/provision-entity                              0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/provision-organization-and-team               0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/remove-athlete-from-team                      0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/report-delivery                               0 B            88.9 kB
+├ ƒ /api/admin/pulsecheck/smoke-levers                                  0 B            88.9 kB
+├ ƒ /api/admin/refine-sfx-prompt                                        0 B            88.9 kB
+├ ƒ /api/admin/research-articles/access                                 0 B            88.9 kB
+├ ƒ /api/admin/revise-legal-document                                    0 B            88.9 kB
+├ ƒ /api/admin/scout-university-prospects                               0 B            88.9 kB
+├ ƒ /api/admin/send-signing-request                                     0 B            88.9 kB
+├ ƒ /api/admin/send-university-prospect-email                           0 B            88.9 kB
+├ ƒ /api/admin/system-overview/share-links                              0 B            88.9 kB
+├ ƒ /api/admin/system-overview/share-links/_auth                        0 B            88.9 kB
+├ ƒ /api/admin/system-overview/share-links/[token]                      0 B            88.9 kB
+├ ƒ /api/admin/system-overview/snapshot-artifacts                       0 B            88.9 kB
+├ ƒ /api/admin/test-nora-translation                                    0 B            88.9 kB
+├ ƒ /api/agent/control                                                  0 B            88.9 kB
+├ ƒ /api/agent/followup                                                 0 B            88.9 kB
+├ ƒ /api/agent/generateMinutes                                          0 B            88.9 kB
+├ ƒ /api/agent/intelFeed                                                0 B            88.9 kB
+├ ƒ /api/agent/kickoff-mission                                          0 B            88.9 kB
+├ ƒ /api/agent/macra-operating-read                                     0 B            88.9 kB
+├ ƒ /api/agent/manifesto                                                0 B            88.9 kB
+├ ƒ /api/agent/onboard                                                  0 B            88.9 kB
+├ ƒ /api/agent/trigger-standup                                          0 B            88.9 kB
+├ ƒ /api/athletic-mind-hub/admin-users                                  0 B            88.9 kB
+├ ƒ /api/athletic-mind-hub/extract-email-contacts                       0 B            88.9 kB
+├ ƒ /api/audio/run-alerts                                               0 B            88.9 kB
+├ ƒ /api/audit-vc-data                                                  0 B            88.9 kB
+├ ƒ /api/auth/logout                                                    0 B            88.9 kB
+├ ƒ /api/backfill-badges                                                0 B            88.9 kB
+├ ƒ /api/brevo/demo-request                                             0 B            88.9 kB
+├ ƒ /api/brevo/pulse-check-pilot-request                                0 B            88.9 kB
+├ ƒ /api/brevo/pulse-check-waitlist                                     0 B            88.9 kB
+├ ƒ /api/brevo/subscribe                                                0 B            88.9 kB
+├ ƒ /api/cancel-scheduled-email                                         0 B            88.9 kB
+├ ƒ /api/chatbot                                                        0 B            88.9 kB
+├ ƒ /api/check-email-status                                             0 B            88.9 kB
+├ ƒ /api/coach/participation-report                                     0 B            88.9 kB
+├ ƒ /api/coach/schedule-scrape                                          0 B            88.9 kB
+├ ƒ /api/coach/support-requests                                         0 B            88.9 kB
+├ ƒ /api/coach/team-dashboard                                           0 B            88.9 kB
+├ ƒ /api/coach/team-insights                                            0 B            88.9 kB
+├ ƒ /api/coach/trainer-sharing                                          0 B            88.9 kB
+├ ƒ /api/create-payment-intent                                          0 B            88.9 kB
+├ ƒ /api/curriculum/journal                                             0 B            88.9 kB
+├ ƒ /api/curriculum/legacy-start                                        0 B            88.9 kB
+├ ƒ /api/curriculum/plan                                                0 B            88.9 kB
+├ ƒ /api/curriculum/runtime                                             0 B            88.9 kB
+├ ƒ /api/curriculum/session                                             0 B            88.9 kB
+├ ƒ /api/developer/access-requests                                      0 B            88.9 kB
+├ ƒ /api/developer/docs/[slug]/unlock                                   0 B            88.9 kB
+├ ƒ /api/developer/partner/auntedna/[action]                            0 B            88.9 kB
+├ ƒ /api/evidence-journal                                               0 B            88.9 kB
+├ ƒ /api/evidence-journal/event                                         0 B            88.9 kB
+├ ƒ /api/evidence-journal/sharing                                       0 B            88.9 kB
+├ ƒ /api/extract-partner-data                                           0 B            88.9 kB
+├ ƒ /api/extract-vc-data                                                0 B            88.9 kB
+├ ƒ /api/generate-vc-email                                              0 B            88.9 kB
+├ ƒ /api/generateRound                                                  0 B            88.9 kB
+├ ƒ /api/generateRoundV2                                                0 B            88.9 kB
+├ ƒ /api/gpt/revise-dm                                                  0 B            88.9 kB
+├ ƒ /api/group-meet/[token]                                             0 B            88.9 kB
+├ ƒ /api/group-meet/[token]/calendar/google/connect/start               0 B            88.9 kB
+├ ƒ /api/group-meet/[token]/calendar/google/disconnect                  0 B            88.9 kB
+├ ƒ /api/group-meet/[token]/calendar/google/import                      0 B            88.9 kB
+├ ƒ /api/group-meet/book/[slug]                                         0 B            88.9 kB
+├ ƒ /api/group-meet/booking/[token]                                     0 B            88.9 kB
+├ ƒ /api/group-meet/calendar/google/callback                            0 B            88.9 kB
+├ ƒ /api/group-meet/flex/[token]                                        0 B            88.9 kB
+├ ƒ /api/group-meet/host-selection/[token]                              0 B            88.9 kB
+├ ƒ /api/instantly/push-fitness-leads                                   0 B            88.9 kB
+├ ƒ /api/invest/analytics                                               0 B            88.9 kB
+├ ƒ /api/invest/record-view                                             0 B            88.9 kB
+├ ƒ /api/investor/verify-access                                         0 B            88.9 kB
+├ ƒ /api/load-admin-settings                                            0 B            88.9 kB
+├ ƒ /api/mentaltraining/evaluate-protocol-practice                      0 B            88.9 kB
+├ ƒ /api/mentaltraining/generate-sfx                                    0 B            88.9 kB
+├ ƒ /api/migrate/fitness-seeker-leads                                   0 B            88.9 kB
+├ ƒ /api/nora-notetaker/queue-bot                                       0 B            88.9 kB
+├ ƒ /api/nora-notetaker/sync-bot                                        0 B            88.9 kB
+├ ƒ /api/og-fetch                                                       0 B            88.9 kB
+├ ƒ /api/outreach/activate-campaign                                     0 B            88.9 kB
+├ ƒ /api/outreach/add-leads                                             0 B            88.9 kB
+├ ƒ /api/outreach/check-spam-triggers                                   0 B            88.9 kB
+├ ƒ /api/outreach/create                                                0 B            88.9 kB
+├ ƒ /api/outreach/create-campaign                                       0 B            88.9 kB
+├ ƒ /api/outreach/deploy-campaign                                       0 B            88.9 kB
+├ ƒ /api/outreach/parse-campaign-strategy                               0 B            88.9 kB
+├ ƒ /api/outreach/sync-campaign-settings                                0 B            88.9 kB
+├ ƒ /api/partners/onboard                                               0 B            88.9 kB
+├ ƒ /api/pipelists/check-email-events                                   0 B            88.9 kB
+├ ƒ /api/pipelists/email-sequence                                       0 B            88.9 kB
+├ ƒ /api/pipelists/extract-lead                                         0 B            88.9 kB
+├ ƒ /api/pipelists/generate-leads                                       0 B            88.9 kB
+├ ƒ /api/pipelists/runbook                                              0 B            88.9 kB
+├ ƒ /api/pipelists/send-contact-email                                   0 B            88.9 kB
+├ ƒ /api/pipelists/send-invite                                          0 B            88.9 kB
+├ ƒ /api/pipelists/stage-migration                                      0 B            88.9 kB
+├ ƒ /api/pipelists/verify-linkedin-url                                  0 B            88.9 kB
+├ ƒ /api/pipelists/verify-source                                        0 B            88.9 kB
+├ ƒ /api/pitch/analytics                                                0 B            88.9 kB
+├ ƒ /api/pitch/record-view                                              0 B            88.9 kB
+├ ƒ /api/profiles/directory                                             0 B            88.9 kB
+├ ƒ /api/profiles/offerings                                             0 B            88.9 kB
+├ ƒ /api/profiles/public                                                0 B            88.9 kB
+├ ƒ /api/profiles/workout-counts                                        0 B            88.9 kB
+├ ƒ /api/pulse-check-tech-demo/analytics                                0 B            88.9 kB
+├ ƒ /api/pulse-check-tech-demo/record-view                              0 B            88.9 kB
+├ ƒ /api/pulsecheck/admin-activation/redeem                             0 B            88.9 kB
+├ ƒ /api/pulsecheck/assessment-checkout                                 0 B            88.9 kB
+├ ƒ /api/pulsecheck/functions/[name]                                    0 B            88.9 kB
+├ ƒ /api/pulsecheck/intake/[token]                                      0 B            88.9 kB
+├ ƒ /api/pulsecheck/preview/athlete-invite-email                        0 B            88.9 kB
+├ ƒ /api/pulsecheck/preview/team-invite-email                           0 B            88.9 kB
+├ ƒ /api/pulsecheck/questionnaire/cau                                   0 B            88.9 kB
+├ ƒ /api/pulsecheck/questionnaire/cau-team-test                         0 B            88.9 kB
+├ ƒ /api/pulsecheck/referral-attribution                                0 B            88.9 kB
+├ ƒ /api/pulsecheck/team-code/redeem                                    0 B            88.9 kB
+├ ƒ /api/pulsecheck/team-invite/activity                                0 B            88.9 kB
+├ ƒ /api/pulsecheck/team-invite/native-handoff/consume                  0 B            88.9 kB
+├ ƒ /api/pulsecheck/team-invite/native-handoff/create                   0 B            88.9 kB
+├ ƒ /api/pulsecheck/team-invite/redeem                                  0 B            88.9 kB
+├ ƒ /api/pulsecheck/testimonials                                        0 B            88.9 kB
+├ ƒ /api/read-file                                                      0 B            88.9 kB
+├ ƒ /api/research-vc-firm                                               0 B            88.9 kB
+├ ƒ /api/research-vc-o3                                                 0 B            88.9 kB
+├ ƒ /api/research/[slug]/unlock                                         0 B            88.9 kB
+├ ƒ /api/reset-badges                                                   0 B            88.9 kB
+├ ƒ /api/review/capture-reply                                           0 B            88.9 kB
+├ ƒ /api/review/send-draft-reminder                                     0 B            88.9 kB
+├ ƒ /api/review/send-weekly-checkin                                     0 B            88.9 kB
+├ ƒ /api/save-admin-settings                                            0 B            88.9 kB
+├ ƒ /api/seed-reunion-payments                                          0 B            88.9 kB
+├ ƒ /api/seed-the-system                                                0 B            88.9 kB
+├ ƒ /api/send-vc-email                                                  0 B            88.9 kB
+├ ƒ /api/shared/system-overview/[token]/unlock                          0 B            88.9 kB
+├ ƒ /api/surveys/notify-completed                                       0 B            88.9 kB
+├ ƒ /api/track                                                          0 B            88.9 kB
+├ ƒ /api/tts                                                            0 B            88.9 kB
+├ ƒ /api/validate-apple-merchant                                        0 B            88.9 kB
+├ ƒ /api/vision-pro/reset-sounds                                        0 B            88.9 kB
+├ ƒ /api/wunna-run/analytics                                            0 B            88.9 kB
+├ ƒ /api/wunna-run/record-view                                          0 B            88.9 kB
+├ ○ /athletic-mind-hub                                                  13.2 kB         497 kB
+├ ○ /athletic-mind-hub/contacts                                         7.47 kB         492 kB
+├ ○ /athletic-mind-hub/permissions                                      6.12 kB         490 kB
+├ ○ /athletic-trainer-training                                          5.79 kB         140 kB
+├ ○ /auntedna                                                           18.1 kB         149 kB
+├ ○ /box-breathing-simulator                                            11.1 kB         137 kB
+├ ○ /build-your-round                                                   13.1 kB         489 kB
+├ ● /Checklist                                                          3.42 kB         113 kB
+├ ○ /checkout-redirect                                                  1.24 kB        90.1 kB
+├ ○ /chromatic-glass                                                    42.1 kB         172 kB
+├ ○ /club-analytics                                                     111 kB          635 kB
+├ ○ /club-studio                                                        16.6 kB         657 kB
+├ ƒ /club/[id]                                                          28.1 kB         689 kB
+├ ƒ /club/[id]/check-in                                                 13.1 kB         553 kB
+├ ƒ /club/[id]/install                                                  11.6 kB         234 kB
+├ ƒ /coach                                                              248 B          89.2 kB
+├ ƒ /coach-invite/[referralCode]                                        265 B          89.2 kB
+├ ƒ /coach-onboard                                                      256 B          89.2 kB
+├ ○ /coach-report-demo                                                  3.57 kB         538 kB
+├ ƒ /coach-report-demo/[sportId]                                        2.45 kB         540 kB
+├ ○ /coach-reports/[teamId]/[reportId]                                  8.79 kB         550 kB
+├ ○ /coach-training                                                     6.14 kB         141 kB
+├ ƒ /coach/athletes                                                     5.97 kB         566 kB
+├ ○ /coach/dashboard                                                    285 B           717 kB
+├ ○ /coach/dashboard/demo                                               740 B           718 kB
+├ ƒ /coach/inbox                                                        5.06 kB         565 kB
+├ ○ /coach/login                                                        8.17 kB         489 kB
+├ ƒ /coach/mental-training                                              367 B           788 kB
+├ ƒ /coach/mentalGames                                                  294 B           788 kB
+├ ○ /coach/notifications                                                6.81 kB         567 kB
+├ ○ /coach/onboarding-success                                           6.23 kB         103 kB
+├ ○ /coach/participation-report                                         4.22 kB         484 kB
+├ ƒ /coach/profile                                                      9.56 kB         570 kB
+├ ƒ /coach/referrals                                                    4.31 kB         565 kB
+├ ƒ /coach/revenue                                                      11.4 kB         572 kB
+├ ƒ /coach/sign-up                                                      254 B          89.2 kB
+├ ○ /coach/sports-intelligence-reports                                  8.26 kB         569 kB
+├ ƒ /coach/staff                                                        7.03 kB         567 kB
+├ ○ /coaching/[id]                                                      2.38 kB        91.3 kB
+├ ƒ /coherence-score-whitepaper                                         263 B          89.2 kB
+├ ○ /CollectionView                                                     1.89 kB         478 kB
+├ ○ /CompletedOnboarding                                                754 B          89.7 kB
+├ ○ /connect                                                            1.69 kB        90.6 kB
+├ ƒ /connect/[referralCode]                                             260 B          89.2 kB
+├ ƒ /corporate-packages                                                 9.26 kB         101 kB
+├ ○ /create                                                             597 B           582 kB
+├ ○ /create-round                                                       15.1 kB         492 kB
+├ ○ /createStack                                                        7.6 kB          485 kB
+├ ƒ /Creator                                                            254 B          89.2 kB
+├ ○ /creator-onboarding                                                 4.39 kB         523 kB
+├ ƒ /CreatorClub                                                        13.1 kB         102 kB
+├ ƒ /creators                                                           10.7 kB         148 kB
+├ ○ /curriculum-outline                                                 55.3 kB         815 kB
+├ ○ /debug-admin                                                        3.25 kB         483 kB
+├ ○ /delete-account                                                     1.37 kB        90.3 kB
+├ ○ /deleteAccount                                                      1.4 kB         90.3 kB
+├ ○ /developer                                                          3.27 kB        94.8 kB
+├ ○ /developer/api                                                      3.26 kB        94.8 kB
+├ ƒ /developer/api/[slug]/artifacts/[...filename]                       282 B          89.2 kB
+├ ƒ /developer/api/athleticmind-snapshots                               286 B           109 kB
+├ ƒ /developer/api/auntedna                                             276 B           109 kB
+├ ƒ /developer/api/clinical-bridge                                      282 B           109 kB
+├ ƒ /developer/api/partner/auntedna                                     5.81 kB        97.3 kB
+├   └ css/8dbc4be1daf7b1c6.css                                          3.26 kB
+├ ○ /developer/api/request-access                                       3.22 kB        94.7 kB
+├ ○ /directory                                                          5 kB            525 kB
+├ ○ /download                                                           5.16 kB         105 kB
+├ ○ /elite-athlete-support-readiness-assessments                        31.8 kB         548 kB
+├ ○ /equity-doc/[id]                                                    5.07 kB         609 kB
+├ ƒ /exercise/[exerciseName]                                            3.78 kB        92.7 kB
+├ ○ /fat-burn                                                           6.54 kB         490 kB
+├ ○ /fitbit                                                             404 B           485 kB
+├ ○ /fitclub                                                            280 B           104 kB
+├ ○ /FullscreenExerciseView                                             1.24 kB        90.1 kB
+├ ƒ /FWB                                                                17.4 kB         106 kB
+├ ○ /FWP                                                                277 B           104 kB
+├ ○ /GetInTouch                                                         8.58 kB         100 kB
+├ ƒ /go/[slug]                                                          1.32 kB        90.2 kB
+├ ● /good-soil                                                          4.24 kB        93.2 kB
+├ ○ /group-meet                                                         3.25 kB        94.7 kB
+├ ○ /group-meet/[token]                                                 1.05 kB         112 kB
+├ ○ /group-meet/book/[slug]                                             4.3 kB         93.2 kB
+├ ○ /group-meet/booking/[token]                                         3.92 kB        92.8 kB
+├ ○ /group-meet/flex/[token]                                            3.24 kB        94.7 kB
+├ ○ /group-meet/host-selection/[token]                                  3.44 kB        92.3 kB
+├ ○ /group-meet/privacy                                                 2.89 kB        94.4 kB
+├ ○ /group-meet/terms                                                   1.92 kB        93.4 kB
+├ ○ /GroupMeet                                                          341 B           577 kB
+├ ○ /HaveYouPaid                                                        4.69 kB         480 kB
+├ ○ /HealthDataStories                                                  7.02 kB         137 kB
+├ ƒ /home                                                               2.63 kB         478 kB
+├ ƒ /Invest                                                             18.6 kB         671 kB
+├ ○ /investor                                                           53 kB           529 kB
+├ ○ /join-challenge                                                     3.92 kB         515 kB
+├ ○ /legal-doc/[id]                                                     16.6 kB         494 kB
+├ ○ /links                                                              1.96 kB        90.9 kB
+├ ƒ /logout                                                             3.57 kB        92.5 kB
+├ ● /Macra                                                              1.5 kB          106 kB
+├ ○ /macra-offer                                                        2.16 kB        91.1 kB
+├ ƒ /macra/buddy/[token]                                                1.48 kB        90.4 kB
+├ ○ /manage-clubs                                                       3.52 kB         527 kB
+├ ○ /manage-landing-pages                                               7.26 kB         525 kB
+├ ○ /mental-training                                                    9.37 kB         752 kB
+├ ○ /messages                                                           4.85 kB         542 kB
+├ ○ /messages/dm/[chatId]                                               7.34 kB         544 kB
+├ ○ /mobility                                                           8.13 kB         242 kB
+├ ○ /morning-mobility-challenge                                         8.13 kB         242 kB
+├ ○ /morningMobilityRedirect                                            1 kB           89.9 kB
+├ ƒ /MoveAndFuelATL                                                     19.2 kB         111 kB
+├ ƒ /MoveAndFuelATL copy                                                19.1 kB         111 kB
+├ ƒ /moves                                                              7.28 kB         137 kB
+├ ● /NCAA-Compliance                                                    22.2 kB         111 kB
+├ ○ /Nora                                                               23 kB           112 kB
+├ ○ /nora-engagement-model                                              18.3 kB         107 kB
+├ ○ /NoraNotetaker                                                      10.4 kB         271 kB
+├ ○ /notification-test                                                  1.47 kB        90.4 kB
+├ ○ /onboarding/set-password                                            7 kB           95.9 kB
+├ ○ /one-on-one                                                         6.43 kB        95.3 kB
+├ ○ /one-pager                                                          8.63 kB         135 kB
+├ ○ /open                                                               1.55 kB        90.5 kB
+├ ○ /parent-training                                                    7.99 kB         143 kB
+├ ○ /partner/apply                                                      5.84 kB         102 kB
+├ ○ /partner/onboarding-success                                         5.62 kB         110 kB
+├ ƒ /payment/[id]                                                       15.7 kB         495 kB
+├ ● /performers-info                                                    330 B           123 kB
+├ ● /PIL                                                                1.94 kB         102 kB
+├ ● /PIL/apps                                                           5.89 kB         135 kB
+├ ● /PIL/products                                                       1.97 kB         102 kB
+├ ● /PIL/Ritual                                                         268 B          97.4 kB
+├ ● /PIL/TheAthleticMindCouncil                                         218 B           143 kB
+├ ○ /PILOne                                                             13.2 kB         139 kB
+├ ○ /PipeLists                                                          647 B          89.6 kB
+├ ○ /PipeListsQueue                                                     4.36 kB        93.3 kB
+├ ƒ /pitch                                                              19.3 kB         671 kB
+├ ● /planned-org                                                        9.11 kB         101 kB
+├ ƒ /press                                                              21.3 kB         499 kB
+├ ● /press/[slug] (ISR: 3600 Seconds)                                   4.99 kB         102 kB
+├   └ /press/2023-05-01-pulse-launches-with-focus-on-creator-community
+├ ○ /press/app-screenshots                                              5.05 kB         483 kB
+├ ○ /press/brand-guidelines                                             16.4 kB         495 kB
+├ ○ /press/logos                                                        4.88 kB         483 kB
+├ ● /press/press-releases (ISR: 3600 Seconds)                           7.32 kB        98.8 kB
+├ ○ /press/upload                                                       12.5 kB         491 kB
+├ ○ /press/videos                                                       4.54 kB          96 kB
+├ ○ /pricing                                                            5.44 kB         557 kB
+├ ƒ /privacy                                                            262 B          98.8 kB
+├ ƒ /privacyPolicy                                                      202 B          98.7 kB
+├ ● /pro-info                                                           321 B           123 kB
+├ ○ /product-demos                                                      4.42 kB        93.3 kB
+├ ƒ /profile/[username]                                                 15.2 kB         586 kB
+├ ○ /profile/coaches                                                    1.16 kB         496 kB
+├ ○ /profile/paymentHistory                                             1.74 kB         479 kB
+├ ○ /programming                                                        21.8 kB         504 kB
+├ ○ /programming-invite                                                 3.65 kB         486 kB
+├ ○ /pulse-auntedna-pitch                                               31.6 kB         162 kB
+├ ○ /pulse-auntedna-stakeholder-deck                                    26.8 kB         157 kB
+├ ƒ /pulse-check-tech-demo                                              12.6 kB         223 kB
+├ ○ /pulse-overview                                                     748 B          89.7 kB
+├ ○ /pulse-overview/2min                                                772 B          89.7 kB
+├ ○ /pulse-pil-pepperdine-pitch                                         37 kB           167 kB
+├ ● /PulseCheck                                                         52 kB           847 kB
+├ ƒ /PulseCheck/admin-activation/[token]                                8.49 kB         491 kB
+├ ○ /PulseCheck/assessments                                             7.83 kB         490 kB
+├ ○ /PulseCheck/athlete-guide                                           7.26 kB        98.7 kB
+├ ƒ /PulseCheck/athlete-offer/[token]                                   331 B           492 kB
+├ ○ /PulseCheck/athlete-onboarding                                      11.4 kB         706 kB
+├ ƒ /PulseCheck/athlete-subscription-complete                           4.73 kB         483 kB
+├ ƒ /PulseCheck/clinician-onboarding/[token]                            1.97 kB        90.9 kB
+├ ○ /PulseCheck/coach                                                   11.1 kB         112 kB
+├ ○ /PulseCheck/coach-guide/calvin                                      8.21 kB        99.7 kB
+├ ○ /PulseCheck/fitbit                                                  390 B           485 kB
+├ ○ /PulseCheck/intake/[token]                                          7.87 kB        96.8 kB
+├ ƒ /PulseCheck/invite-unavailable                                      2.03 kB        93.5 kB
+├ ○ /PulseCheck/linear                                                  3.44 kB         482 kB
+├ ƒ /PulseCheck/linear-preview                                          2.81 kB         478 kB
+├ ○ /PulseCheck/login                                                   13.2 kB         531 kB
+├ ○ /PulseCheck/member-setup                                            6.65 kB         484 kB
+├ ○ /PulseCheck/mental-skills-starting-point-demo                       3.43 kB         724 kB
+├ ○ /PulseCheck/messages                                                6.93 kB         547 kB
+├ ○ /PulseCheck/messages/[id]                                           7.8 kB          548 kB
+├ ○ /PulseCheck/open                                                    3.09 kB        94.6 kB
+├ ○ /PulseCheck/oura                                                    7.74 kB         523 kB
+├ ○ /PulseCheck/partner                                                 5.14 kB         122 kB
+├ ƒ /PulseCheck/pilot-invite-next-steps                                 2.95 kB        94.4 kB
+├ ○ /PulseCheck/post-activation                                         9.72 kB         493 kB
+├ ○ /PulseCheck/privacy                                                 4.25 kB        95.7 kB
+├ ● /PulseCheck/pro                                                     31.9 kB         166 kB
+├ ƒ /PulseCheck/questionnaire/cau                                       29.3 kB         542 kB
+├ ○ /PulseCheck/service-purchase/success                                2.51 kB         478 kB
+├ ○ /PulseCheck/staff-onboarding-demo                                   7.41 kB         528 kB
+├ ƒ /PulseCheck/subscription-flow-lab                                   11 kB          99.9 kB
+├ ○ /PulseCheck/team-billing                                            6.53 kB         482 kB
+├   └ css/0bc024dac35af0a9.css                                          2.07 kB
+├ ƒ /PulseCheck/team-invite/[token]                                     266 B           492 kB
+├ ○ /PulseCheck/team-sharing                                            3.3 kB          482 kB
+├   └ css/567dfabd886806a6.css                                          862 B
+├ ○ /PulseCheck/team-workspace                                          18.8 kB         742 kB
+├ ○ /PulseCheck/terms                                                   4.48 kB          96 kB
+├ ○ /PulseCheck/wearables                                               10.9 kB         102 kB
+├   └ css/62cdafcb15063a7c.css                                          3.83 kB
+├ ● /PulseCheck/youth                                                   35 kB           169 kB
+├ ● /PulseCheck/youth-info                                              211 B           123 kB
+├ ○ /pulsecheckathletedemo                                              16.3 kB         146 kB
+├ ○ /PulseCheckChat                                                     3.13 kB         480 kB
+├ ○ /pulsecheckdemo                                                     39.2 kB         169 kB
+├ ○ /pulseintelligencelabs                                              14.1 kB         140 kB
+├ ○ /remote-login                                                       2.63 kB         478 kB
+├ ○ /research                                                           51.6 kB         567 kB
+├ ƒ /research/[slug]                                                    22.9 kB         152 kB
+├ ● /review                                                             11.5 kB         539 kB
+├ ○ /review/[slug]                                                      9.73 kB         545 kB
+├ ○ /review/dec24                                                       6.35 kB         268 kB
+├ ○ /review/draft/[id]                                                  12.5 kB         616 kB
+├ ○ /review/nov24                                                       4.12 kB         266 kB
+├ ○ /review/q1-25                                                       6.22 kB         268 kB
+├ ○ /review/q2-25                                                       6.71 kB         264 kB
+├ ○ /review/q2-26                                                       8.78 kB        97.7 kB
+├ ○ /review/q3-25                                                       5.02 kB         262 kB
+├ ○ /review/q4-25                                                       5.52 kB         142 kB
+├ ○ /review/year2025                                                    9.07 kB         271 kB
+├ ○ /review/yearInReview                                                3.72 kB         144 kB
+├ ● /Ritual                                                             196 B          97.3 kB
+├ ƒ /round-invitation/[id]                                              7.95 kB         598 kB
+├ ○ /round-library/[id]                                                 3.07 kB         479 kB
+├ ○ /round/[id]                                                         17.3 kB         497 kB
+├ ○ /round/[id]/wrapup                                                  8.91 kB         486 kB
+├ ƒ /rounds                                                             7.33 kB         139 kB
+├ ○ /run                                                                5.11 kB         482 kB
+├ ○ /run/active                                                         4.56 kB         488 kB
+├ ○ /run/summary                                                        4.43 kB         486 kB
+├ ○ /secure                                                             5.78 kB         107 kB
+├ ○ /settings                                                           5.48 kB         483 kB
+├ ƒ /shared/oura-recovery/[token]                                       5.13 kB          94 kB
+├ ƒ /shared/system-overview/[token]                                     11 kB           526 kB
+├ ƒ /shared/system-overview/[token]/artifacts/[...filename]             290 B          89.2 kB
+├ ○ /sign-up                                                            6.49 kB         486 kB
+├ ○ /sign/[id]                                                          15 kB           667 kB
+├ ○ /SimpBudget                                                         14.5 kB         490 kB
+├ ƒ /stacks                                                             2.99 kB        91.9 kB
+├ ○ /staff/clinical-escalations                                         7.53 kB         485 kB
+├ ○ /starter-pack                                                       5.88 kB        94.8 kB
+├ ○ /stretch                                                            5.29 kB         482 kB
+├ ○ /subscribe                                                          5.43 kB         557 kB
+├ ○ /subscription                                                       4.51 kB         519 kB
+├ ○ /subscription-error                                                 2.36 kB        91.3 kB
+├ ○ /subscription-success                                               5.24 kB         106 kB
+├ ○ /Support                                                            1.01 kB        89.9 kB
+├ ○ /terms                                                              6.22 kB        97.7 kB
+├ ○ /test                                                               2 kB            522 kB
+├ ○ /test-messaging                                                     4.38 kB         497 kB
+├ ○ /test/edna-integration                                              334 B           529 kB
+├ ● /testimonials                                                       10.7 kB        99.6 kB
+├ ● /TheAthleticMindCouncil                                             277 B           143 kB
+├ ○ /train-your-client                                                  6.98 kB        95.9 kB
+├ ○ /trainer/connect-account                                            2.58 kB         480 kB
+├ ○ /trainer/dashboard                                                  5.7 kB          603 kB
+├ ○ /trainer/test-payment                                               1.57 kB        91.9 kB
+├ ○ /trim-video                                                         5.26 kB         103 kB
+├ ○ /update-challenge-status                                            1.44 kB        90.3 kB
+├ ○ /user-dashboard                                                     945 B          89.9 kB
+├ ○ /whoop-pulsecheck-demo                                              19.4 kB         146 kB
+├ ƒ /winner/connect-account                                             3.43 kB         481 kB
+├ ○ /winner/dashboard                                                   4.1 kB          216 kB
+├ ○ /workout/[username]/[id]                                            5.34 kB         520 kB
+├ ○ /workout/[username]/[id]/[summaryId]                                3.98 kB         480 kB
+├ ƒ /WunnaRun                                                           26.1 kB         678 kB
+├ ○ /wunnarundemo                                                       18.1 kB         144 kB
+├ ● /youth                                                              264 B           123 kB
+└ ● /youth-info                                                         270 B           123 kB
++ First Load JS shared by all                                           153 kB
+  ├ chunks/framework-2d6d237b995ba581.js                                44.9 kB
+  ├ chunks/main-678578aeb0041e7b.js                                     39.6 kB
+  ├ css/dc9402f6ee23ee58.css                                            64.3 kB
+  └ other shared chunks (total)                                         4.46 kB
+
+ƒ Middleware                                                            26.4 kB
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses getStaticProps)
+   (ISR)      incremental static regeneration (uses revalidate in getStaticProps)
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -33,6 +33,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import AdminRouteGuard from "../../components/auth/AdminRouteGuard";
+import GroupMeetHostAvailabilityModal from "../../components/group-meet/GroupMeetHostAvailabilityModal";
 import GroupMeetBookingSettings from "../../components/group-meet/GroupMeetBookingSettings";
 import GroupMeetAvailabilityPicker from "../../components/group-meet/GroupMeetAvailabilityPicker";
 import { auth, storage } from "../../api/firebase/config";
@@ -519,6 +520,8 @@ const GroupMeetAdminPage: React.FC = () => {
   const [calendarDayModalDate, setCalendarDayModalDate] = useState<
     string | null
   >(null);
+  const [hostAvailability, setHostAvailability] = useState<{ requestId: string; token: string } | null>(null);
+  const [savingTitle, setSavingTitle] = useState(false);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [recommendLoading, setRecommendLoading] = useState(false);
@@ -1813,6 +1816,46 @@ const GroupMeetAdminPage: React.FC = () => {
     }
   };
 
+  const finishHostAvailability = async () => {
+    if (!hostAvailability) return;
+    const headers = await getAdminHeaders();
+    const response = await fetch(`/api/admin/group-meet/${encodeURIComponent(hostAvailability.requestId)}`, { headers });
+    const payload = await response.json();
+    if (!response.ok || !payload.request) throw new Error(payload.error || "Could not refresh the request. Try Finish again.");
+    const updated = payload.request as GroupMeetRequestDetail;
+    if (!updated.invites.some((invite) => invite.token === hostAvailability.token && invite.availabilityEntries.length > 0)) {
+      throw new Error("Save at least one availability window before finishing.");
+    }
+    setRequests((current) => current.map((request) => request.id === updated.id ? updated : request));
+    if (selectedRequestId === updated.id) setSelectedRequest(updated);
+    setHostAvailability(null);
+    setMessage({ type: "success", text: "Host availability saved. Request updated." });
+    setRequestModalMessage({ type: "success", text: "Host availability saved. Request updated." });
+  };
+
+  const saveDraftTitle = async () => {
+    if (!selectedRequest || selectedRequest.status !== "draft" || !editTitle.trim()) return;
+    setSavingTitle(true);
+    setRequestModalMessage(null);
+    try {
+      const headers = await getAdminHeaders();
+      const response = await fetch(`/api/admin/group-meet/${encodeURIComponent(selectedRequest.id)}`, {
+        method: "PATCH", headers, body: JSON.stringify({ title: editTitle.trim() }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.request) throw new Error(payload.error || "Could not save the title.");
+      const updated = payload.request as GroupMeetRequestDetail;
+      setSelectedRequest(updated);
+      setEditTitle(updated.title);
+      setRequests((current) => current.map((request) => request.id === updated.id ? updated : request));
+      setRequestModalMessage({ type: "success", text: "Title saved." });
+    } catch (error: any) {
+      setRequestModalMessage({ type: "error", text: error?.message || "Could not save the title." });
+    } finally {
+      setSavingTitle(false);
+    }
+  };
+
   const saveRequestEdits = async () => {
     if (!selectedRequestId) return;
     if (!editDeadlineAt) {
@@ -2850,10 +2893,9 @@ const GroupMeetAdminPage: React.FC = () => {
                               </button>
                             )}
                             {hostInvite?.shareUrl && (
-                              <a
-                                href={hostInvite.shareUrl}
-                                target="_blank"
-                                rel="noreferrer"
+                              <button
+                                type="button"
+                                onClick={() => setHostAvailability({ requestId: request.id, token: hostInvite.token })}
                                 className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold ${
                                   hostHasAvailability
                                     ? "border border-stone-200 hover:bg-white"
@@ -2864,7 +2906,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                 {hostHasAvailability
                                   ? "Open host availability"
                                   : "Sync host calendar"}
-                              </a>
+                              </button>
                             )}
                             {hostInvite?.shareUrl && (
                               <button
@@ -2916,17 +2958,35 @@ const GroupMeetAdminPage: React.FC = () => {
             </section>
           </div>
 
+          {hostAvailability && (
+            <GroupMeetHostAvailabilityModal key={hostAvailability.token} token={hostAvailability.token}
+              onFinish={finishHostAvailability} onClose={() => setHostAvailability(null)} />
+          )}
           {requestModalOpen && (
             <div className="fixed inset-0 z-50 bg-stone-950/35 p-4 sm:p-6">
               <div className="mx-auto flex h-full max-w-[1500px] flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl">
                 <div className="flex items-start justify-between gap-4 border-b border-stone-200 px-6 py-5">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="text-xs uppercase tracking-[0.2em] text-stone-400">
                       Request detail
                     </div>
-                    <h2 className="mt-2 text-3xl font-semibold text-stone-950">
-                      {selectedRequest?.title || "Loading request…"}
-                    </h2>
+                    {selectedRequest?.status === "draft" ? (
+                      <form className="mt-2 flex flex-col items-stretch gap-3 lg:flex-row lg:items-end" onSubmit={(event) => { event.preventDefault(); void saveDraftTitle(); }}>
+                        <label className="min-w-0 flex-1 text-sm text-stone-600">
+                          Request title
+                          <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} disabled={savingTitle || savingEdits}
+                            className="mt-1 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 py-2 text-xl font-semibold text-stone-950" />
+                        </label>
+                        <button type="submit" disabled={savingTitle || savingEdits || !editTitle.trim() || editTitle.trim() === selectedRequest.title}
+                          className="rounded-md bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+                          {savingTitle ? "Saving…" : "Save title"}
+                        </button>
+                      </form>
+                    ) : (
+                      <h2 className="mt-2 text-3xl font-semibold text-stone-950">
+                        {selectedRequest?.title || "Loading request…"}
+                      </h2>
+                    )}
                     {selectedRequest && (
                       <div className="mt-2 flex flex-wrap gap-2 text-xs text-stone-500">
                         <span className="rounded-full border border-stone-200 bg-[#FAFAF7] px-3 py-1.5">
@@ -3069,10 +3129,9 @@ const GroupMeetAdminPage: React.FC = () => {
                               </button>
                             )}
                             {selectedRequestHostInvite?.shareUrl && (
-                              <a
-                                href={selectedRequestHostInvite.shareUrl}
-                                target="_blank"
-                                rel="noreferrer"
+                              <button
+                                type="button"
+                                onClick={() => setHostAvailability({ requestId: selectedRequest.id, token: selectedRequestHostInvite.token })}
                                 className={`inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold ${
                                   selectedRequestHostHasAvailability
                                     ? "border border-stone-200 hover:bg-white"
@@ -3083,7 +3142,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                 {selectedRequestHostHasAvailability
                                   ? "Open host availability"
                                   : "Sync host calendar"}
-                              </a>
+                              </button>
                             )}
                             <button
                               type="button"
@@ -3113,20 +3172,18 @@ const GroupMeetAdminPage: React.FC = () => {
                                     Host availability is needed before invites can send.
                                   </div>
                                   <p className="mt-1 max-w-4xl text-amber-700">
-                                    Click Sync host calendar to open the host
-                                    availability page, connect Google Calendar,
-                                    import times, then save at least one window.
+                                    Click Sync host calendar, connect Google Calendar,
+                                    import or add your available times, then press Finish.
                                   </p>
                                 </div>
-                                <a
-                                  href={selectedRequestHostInvite.shareUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                <button
+                                  type="button"
+                                  onClick={() => setHostAvailability({ requestId: selectedRequest.id, token: selectedRequestHostInvite.token })}
                                   className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-700"
                                 >
                                   <Calendar className="w-4 h-4" />
                                   Sync host calendar
-                                </a>
+                                </button>
                               </div>
                             </div>
                           )}

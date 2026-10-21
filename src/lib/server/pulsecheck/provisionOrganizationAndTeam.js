@@ -277,6 +277,7 @@ function assertNoLegacyWrite(payload, scopeLabel) {
 
 function assertExistingDocCompatible(existing, expected, scopeLabel) {
   if (!existing || typeof existing !== 'object') return;
+  if (existing.lifecycleState || existing.deletedAt) throw new Error(`${scopeLabel} is decommissioned. Restore the organization before making changes.`);
 
   if (normalizeString(existing.legacySource) || normalizeString(existing.legacyCoachId)) {
     throw new Error(`${scopeLabel} already exists with legacy linkage and cannot be claimed by the non-legacy provisioner.`);
@@ -637,6 +638,7 @@ async function seedInitialPulseCheckAdminHandoff({ adminApp, input }) {
     if (!organizationSnap.exists) {
       throw new Error(`Organization not found: ${organizationId}`);
     }
+    if (organizationSnap.data()?.lifecycleState || organizationSnap.data()?.deletedAt) throw new Error('Organization is decommissioned.');
     if (!teamSnap.exists) {
       throw new Error(`Team not found: ${teamId}`);
     }
@@ -780,6 +782,7 @@ async function issuePulseCheckAdminActivationInvite({ adminApp, input }) {
     }
 
     const organizationData = organizationSnap.data() || {};
+    if (organizationData.lifecycleState || organizationData.deletedAt) throw new Error('Organization is decommissioned.');
     const teamData = teamSnap.data() || {};
     if (normalizeString(teamData.organizationId) !== organizationId) {
       throw new Error('Team is linked to a different organizationId.');

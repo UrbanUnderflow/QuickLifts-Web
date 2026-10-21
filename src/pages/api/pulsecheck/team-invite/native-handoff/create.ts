@@ -8,6 +8,7 @@ import {
   NATIVE_ATHLETE_INVITE_HANDOFF_TTL_SECONDS,
   normalizeNativeHandoffString,
   validateNativeAthleteInviteBinding,
+  validateNativeHandoffParents,
 } from '../../../../../lib/server/pulsecheck/native-athlete-invite-handoff';
 
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
@@ -63,6 +64,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         Math.floor(nowMs / 1000)
       );
+
+      await validateNativeHandoffParents(firestore, transaction, binding);
 
       transaction.set(handoffRef, {
         version: 1,

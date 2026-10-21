@@ -68,9 +68,31 @@ function getDailySnapshotWindow(input, now = Date.now()) {
   const start = localCutoff(previousDate({ year, month, day }), config.cutoff, formatter);
   return { windowStart: iso(start), windowEnd: iso(end), timeZone: config.timeZone, cutoff: config.cutoff, lookbackHours: config.lookbackHours };
 }
-function verifiedDestination(teamConfig, bridgeConfig, env) {
+function resolveSnapshotPushConfig(bridgeConfig, env) {
+  const keys = ['BASE_URL', 'PATH', 'API_KEY', 'CREDENTIAL_MODE'].map(key => `ATHLETICMIND_SNAPSHOT_PUSH_${key}`);
+  // Partial dedicated configuration must not send the clinical credential to a
+  // different receiver. Keep legacy behavior only when no override is present.
+  if (!keys.some(key => Object.prototype.hasOwnProperty.call(env, key))) {
+    return { ...bridgeConfig, snapshotPath: env.CLINICAL_BRIDGE_SNAPSHOT_PATH };
+  }
+  const value = key => typeof env[key] === 'string' ? env[key].trim() : '';
+  const apiKey = value('ATHLETICMIND_SNAPSHOT_PUSH_API_KEY');
+  const requestedMode = value('ATHLETICMIND_SNAPSHOT_PUSH_CREDENTIAL_MODE');
+  return {
+    ...bridgeConfig,
+    baseUrl: value('ATHLETICMIND_SNAPSHOT_PUSH_BASE_URL').replace(/\/+$/, ''),
+    snapshotPath: value('ATHLETICMIND_SNAPSHOT_PUSH_PATH'),
+    apiKey,
+    hasApiKey: Boolean(apiKey),
+    // Dedicated receiver keys may be opaque. Live mode must be explicit, and a
+    // known test credential remains non-live even if incorrectly configured.
+    credentialMode: !apiKey ? 'missing' : /^ae_pk_test_/i.test(apiKey) ? 'test' : requestedMode,
+  };
+}
+function verifiedDestination(teamConfig, clinicalConfig, env) {
+  const bridgeConfig = resolveSnapshotPushConfig(clinicalConfig, env);
   const receiver = teamConfig.receiver || {};
-  const path = env.CLINICAL_BRIDGE_SNAPSHOT_PATH;
+  const path = bridgeConfig.snapshotPath;
   if (env.ATHLETICMIND_SNAPSHOT_PUSH_ENABLED !== 'true' || teamConfig.enabled !== true) return null;
   if (bridgeConfig.provider !== 'auntedna' || bridgeConfig.credentialMode !== 'live' || !bridgeConfig.apiKey) return null;
   if (receiver.status !== 'verified' || receiver.contractVersion !== SCHEMA_VERSION || !receiver.verifiedAt || !receiver.verifiedBy) return null;
@@ -209,7 +231,7 @@ async function deliverAthleticMindSnapshot(db, input, dependencies = {}) {
     if (mode === 'live' && !await require('./athleticmind-snapshot').revalidateSnapshotJournalSources(db, envelope, { now: clock() })) throw Object.assign(new Error('Journal sources changed.'), { snapshotFailure: 'journal_sources_changed' });
     const response = mode === 'synthetic'
       ? await dependencies.syntheticTransport(envelope, { idempotencyKey: envelope.snapshotId })
-      : await (dependencies.bridgeFactory || createClinicalBridge)(bridgeConfig).request('POST', destination.path, envelope, {
+      : await (dependencies.bridgeFactory || createClinicalBridge)(resolveSnapshotPushConfig(bridgeConfig, env)).request('POST', destination.path, envelope, {
         headers: { 'Idempotency-Key': envelope.snapshotId, 'X-Snapshot-Contract': destination.contractVersion },
       });
     const delivered = verifiedReceipt(response, envelope.snapshotId, mode);
@@ -242,4 +264,4 @@ async function deliverAthleticMindSnapshot(db, input, dependencies = {}) {
     return { status: blockedReason ? 'blocked' : 'failed', reason: blockedReason || 'delivery_attempt_failed', jobId };
   }
 }
-module.exports = { consentAndScopeMatch, isSnapshotReplayPermitted, DELIVERY_COLLECTION, WATERMARK_COLLECTION, MAX_ENVELOPE_BYTES, getDailySnapshotWindow, verifiedDestination, verifiedReceipt, deliverAthleticMindSnapshot };
+module.exports = { consentAndScopeMatch, isSnapshotReplayPermitted, DELIVERY_COLLECTION, WATERMARK_COLLECTION, MAX_ENVELOPE_BYTES, getDailySnapshotWindow, resolveSnapshotPushConfig, verifiedDestination, verifiedReceipt, deliverAthleticMindSnapshot };

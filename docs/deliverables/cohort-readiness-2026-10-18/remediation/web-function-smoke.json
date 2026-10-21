@@ -1,0 +1,10 @@
+{
+  "verifiedAt": "2026-10-18T13:57:05.686594+00:00",
+  "url": "https://fitwithpulse.ai/.netlify/functions/pulsecheck-escalation",
+  "method": "GET",
+  "status": 405,
+  "body": {
+    "error": "Method not allowed"
+  },
+  "scope": "Function startup and method rejection only; no clinical request or delivery"
+}

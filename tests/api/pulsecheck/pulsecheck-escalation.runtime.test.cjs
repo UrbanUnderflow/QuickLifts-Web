@@ -1758,3 +1758,51 @@ for (const invalidScope of ['ended-team', 'archived-organization', 'wrong-organi
     assert.equal(delivered, false);
   });
 }
+
+for (const configuredCode of ['CAU', undefined, 'invalid code']) {
+  test(`emergency university code comes from persisted scope and missing code never blocks delivery: ${configuredCode}`, async () => withEmergencyDelivery(true, async () => {
+    const record = { ...emergencyRecord(), universityCode: 'BROWSER_OVERRIDE' };
+    const { db, state } = createClinicalRuntimeDb(record);
+    state.organization = { productBrand: 'athleticmind', status: 'active', universityCode: configuredCode };
+    state.team.universityCode = 'TEAM_OVERRIDE';
+    state.userProfile.universityCode = 'PROFILE_OVERRIDE';
+    const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+    let athlete, packet;
+    const result = await runtimeHelpers.performClinicalHandoff('athlete-1', 'conversation-1', 'escalation-1', record, db,
+      { ...emergencyContext, universityCode: 'CONTEXT_OVERRIDE' }, () => liveFixtureBridge({
+        upsertAthlete: async input => { athlete = input; return liveFixtureBridge().upsertAthlete(); },
+        createEscalation: async input => { packet = input; return liveFixtureBridge().createEscalation(); },
+      }));
+    assert.equal(result.success, true);
+    const expected = configuredCode === 'CAU' ? 'CAU' : undefined;
+    assert.equal(athlete.universityCode, expected);
+    assert.equal(packet.universityCode, expected);
+    assert.equal(state.record.clinicalReceiptVerified, true);
+    assert.equal(state.notifications.length, 0);
+  }));
+}
+
+test('decommissioned organization cannot notify its coach from a historical incident', async () => {
+  const record = { ...emergencyRecord(), tier: 2, consentStatus: 'accepted' };
+  const { db, state } = createClinicalRuntimeDb(record);
+  state.organization = { productBrand: 'athleticmind', status: 'deleted', deletedAt: 1 };
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  const response = await runtimeHelpers.notifyCoach({ escalationId: 'escalation-1', userId: 'athlete-1', coachId: 'coach-1' }, db);
+  assert.equal(JSON.parse(response.body).reason, 'organization_unavailable');
+  assert.equal(state.notifications.length, 0);
+  assert.equal(state.record.coachNotified, undefined);
+});
+
+test('decommissioned organization leaves personal emergency resources available without provider delivery', async () => withEmergencyDelivery(true, async () => {
+  const record = emergencyRecord();
+  const { db, state } = createClinicalRuntimeDb(record);
+  state.organization = { productBrand: 'athleticmind', status: 'deleted', deletedAt: 1 };
+  const { runtimeHelpers } = loadEscalationModule({ runtimeDb: db });
+  let contacted = false;
+  const result = await runtimeHelpers.performClinicalHandoff('athlete-1', 'conversation-1', 'escalation-1', record, db, emergencyContext, () => { contacted = true; throw new Error('Must not contact provider'); });
+  assert.equal(result.resourcesOnly, true);
+  assert.equal(result.providerConfirmed, false);
+  assert.equal(state.safetyState.emergencySupportMode, 'resources_only');
+  assert.equal(contacted, false);
+  assert.equal(state.notifications.length, 0);
+}));

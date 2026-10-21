@@ -164,7 +164,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // Shared System Overview artifacts have their own token/passcode/revocation
     // checks on the page and must stay viewable without account auth.
     '/shared/system-overview',
-    '/coach-report-demo', '/research', '/onboarding', '/legal-doc', '/pulsecheck', '/group-meet', '/sign', '/pil'
+    '/coach-report-demo', '/research', '/onboarding', '/legal-doc', '/pulsecheck', '/athleticmind/team-invite/', '/group-meet', '/sign', '/pil'
   ].map(pattern => pattern.toLowerCase());
 
   const isSharedSystemOverviewPath = (path: string) => {

@@ -1,0 +1,4 @@
+#!/bin/sh
+if [ "$1" != tsc ]; then exit 1; fi
+shift
+exec /Users/tremainegrant/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/typescript/bin/tsc "$@"

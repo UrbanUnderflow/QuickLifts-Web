@@ -7,6 +7,7 @@ import {
   NATIVE_ATHLETE_INVITE_HANDOFFS_COLLECTION,
   normalizeNativeHandoffString,
   validateNativeAthleteInviteBinding,
+  validateNativeHandoffParents,
 } from '../../../../../lib/server/pulsecheck/native-athlete-invite-handoff';
 
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
@@ -93,6 +94,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           403
         );
       }
+
+      await validateNativeHandoffParents(firestore, transaction, binding);
 
       transaction.update(handoffRef, {
         status: 'consumed',

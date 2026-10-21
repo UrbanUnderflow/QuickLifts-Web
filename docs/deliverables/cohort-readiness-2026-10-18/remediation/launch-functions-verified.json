@@ -1,0 +1,136 @@
+{
+  "checkedAt": "2026-10-18T14:39:22.434Z",
+  "sourceCommit": "59a047253fc0271e272f47202749228d0c68306c",
+  "functions": [
+    {
+      "name": "sendCoachAthleteMessageNotification",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:27:12.583Z",
+      "runtime": "nodejs22",
+      "versionId": "4",
+      "desired": true
+    },
+    {
+      "name": "sendDirectMessageNotification",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:16.742916714Z",
+      "runtime": "nodejs22",
+      "revision": "senddirectmessagenotification-00034-cud",
+      "desired": true
+    },
+    {
+      "name": "sendRoundTableNotification",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:17.525134020Z",
+      "runtime": "nodejs22",
+      "revision": "sendroundtablenotification-00008-zez",
+      "desired": true
+    },
+    {
+      "name": "onChallengeStatusChange",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:15.880315233Z",
+      "runtime": "nodejs22",
+      "revision": "onchallengestatuschange-00035-qun",
+      "desired": true
+    },
+    {
+      "name": "onMainChallengeStatusChange",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:18.782633996Z",
+      "runtime": "nodejs22",
+      "revision": "onmainchallengestatuschange-00024-rid",
+      "desired": true
+    },
+    {
+      "name": "sendCheckinCalloutNotification",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:16.570103295Z",
+      "runtime": "nodejs22",
+      "revision": "sendcheckincalloutnotification-00019-pim",
+      "desired": true
+    },
+    {
+      "name": "sendCoachAthleteMessageNotification",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:27:12.583Z",
+      "runtime": "nodejs22",
+      "revision": "4",
+      "desired": true
+    },
+    {
+      "name": "onCoachNotificationCreated",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:28:17.055597364Z",
+      "runtime": "nodejs22",
+      "revision": "oncoachnotificationcreated-00003-zeg",
+      "desired": true
+    },
+    {
+      "name": "sendNewUserJoinedChallengeNotification",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:16.267715385Z",
+      "runtime": "nodejs22",
+      "revision": "sendnewuserjoinedchallengenotification-00035-hil",
+      "desired": true
+    },
+    {
+      "name": "sendChainReactionNotification",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:15.724052537Z",
+      "runtime": "nodejs22",
+      "revision": "sendchainreactionnotification-00008-yin",
+      "desired": true
+    },
+    {
+      "name": "handleReferralBonus",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:17.343137582Z",
+      "runtime": "nodejs22",
+      "revision": "handlereferralbonus-00011-sul",
+      "desired": true
+    },
+    {
+      "name": "sendSingleNotification",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:16.879509285Z",
+      "runtime": "nodejs22",
+      "revision": "sendsinglenotification-00031-dec",
+      "desired": true
+    },
+    {
+      "name": "onPulseCheckTeamShowingUpSprintUpdated",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:28:15.884428397Z",
+      "runtime": "nodejs22",
+      "revision": "onpulsecheckteamshowingupsprintupdated-00004-qot",
+      "desired": true
+    },
+    {
+      "name": "sendRoundTableNotificationAlt",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:17.749323215Z",
+      "runtime": "nodejs22",
+      "revision": "sendroundtablenotificationalt-00005-pan",
+      "desired": true
+    },
+    {
+      "name": "sendWorkoutStartNotification",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:18.192241387Z",
+      "runtime": "nodejs22",
+      "revision": "sendworkoutstartnotification-00031-lag",
+      "desired": true
+    },
+    {
+      "name": "sendClubChatNotification",
+      "state": "ACTIVE",
+      "updateTime": "2026-10-18T14:33:16.616802422Z",
+      "runtime": "nodejs22",
+      "revision": "sendclubchatnotification-00003-din",
+      "desired": true
+    }
+  ],
+  "unexpectedNewExports": [],
+  "missingExpected": []
+}

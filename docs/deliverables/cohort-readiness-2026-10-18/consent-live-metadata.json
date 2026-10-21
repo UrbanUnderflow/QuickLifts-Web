@@ -1,0 +1,271 @@
+{
+  "observedAt": "2026-10-18T13:32:07.513Z",
+  "project": "quicklifts-dd3f1",
+  "scope": "Read-only projected program/consent metadata, no user identifiers/signatures/intake/health answers output",
+  "orgProductCounts": {
+    "athleticmind": 1,
+    "pulsecheck": 6
+  },
+  "teamInventory": [
+    {
+      "teamLabel": "team-1",
+      "productBrand": "athleticmind",
+      "status": "provisioning",
+      "configuredConsents": [],
+      "selectedConfiguredConsents": []
+    },
+    {
+      "teamLabel": "team-2",
+      "productBrand": "athleticmind",
+      "status": "active",
+      "configuredConsents": [],
+      "selectedConfiguredConsents": []
+    },
+    {
+      "teamLabel": "team-3",
+      "productBrand": "pulsecheck",
+      "status": "active",
+      "configuredConsents": [
+        {
+          "id": "pulsecheck-operational-participation-notice-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "c142e8d00def",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        },
+        {
+          "id": "pulsecheck-operational-privacy-and-sharing-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "acb7ac1a4a3d",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        }
+      ],
+      "selectedConfiguredConsents": [
+        {
+          "id": "pulsecheck-operational-participation-notice-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "c142e8d00def",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        },
+        {
+          "id": "pulsecheck-operational-privacy-and-sharing-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "acb7ac1a4a3d",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        }
+      ]
+    },
+    {
+      "teamLabel": "team-4",
+      "productBrand": "pulsecheck",
+      "status": "ready-for-activation",
+      "configuredConsents": [
+        {
+          "id": "pulsecheck-operational-participation-notice-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "c142e8d00def",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        },
+        {
+          "id": "pulsecheck-operational-privacy-and-sharing-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "acb7ac1a4a3d",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        }
+      ],
+      "selectedConfiguredConsents": [
+        {
+          "id": "pulsecheck-operational-participation-notice-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "c142e8d00def",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        },
+        {
+          "id": "pulsecheck-operational-privacy-and-sharing-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "acb7ac1a4a3d",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        }
+      ]
+    },
+    {
+      "teamLabel": "team-5",
+      "productBrand": "pulsecheck",
+      "status": "active",
+      "configuredConsents": [],
+      "selectedConfiguredConsents": []
+    },
+    {
+      "teamLabel": "team-6",
+      "productBrand": "pulsecheck",
+      "status": "active",
+      "configuredConsents": [
+        {
+          "id": "pulsecheck-operational-participation-notice-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "c142e8d00def",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        },
+        {
+          "id": "pulsecheck-operational-privacy-and-sharing-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "acb7ac1a4a3d",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        }
+      ],
+      "selectedConfiguredConsents": [
+        {
+          "id": "pulsecheck-operational-participation-notice-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "c142e8d00def",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        },
+        {
+          "id": "pulsecheck-operational-privacy-and-sharing-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "acb7ac1a4a3d",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        }
+      ]
+    },
+    {
+      "teamLabel": "team-7",
+      "productBrand": "pulsecheck",
+      "status": "active",
+      "configuredConsents": [],
+      "selectedConfiguredConsents": []
+    },
+    {
+      "teamLabel": "team-8",
+      "productBrand": "pulsecheck",
+      "status": "ready-for-activation",
+      "configuredConsents": [],
+      "selectedConfiguredConsents": []
+    },
+    {
+      "teamLabel": "team-9",
+      "productBrand": "pulsecheck",
+      "status": "ready-for-activation",
+      "configuredConsents": [
+        {
+          "id": "pulsecheck-operational-participation-notice-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "c142e8d00def",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        },
+        {
+          "id": "pulsecheck-operational-privacy-and-sharing-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "acb7ac1a4a3d",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        }
+      ],
+      "selectedConfiguredConsents": [
+        {
+          "id": "pulsecheck-operational-participation-notice-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "c142e8d00def",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        },
+        {
+          "id": "pulsecheck-operational-privacy-and-sharing-v1",
+          "version": "v3",
+          "category": "participation",
+          "bodyHash": "acb7ac1a4a3d",
+          "mentionsAuntEdna": true,
+          "studySpecific": false
+        }
+      ]
+    },
+    {
+      "teamLabel": "team-10",
+      "productBrand": "athleticmind",
+      "status": "provisioning",
+      "configuredConsents": [],
+      "selectedConfiguredConsents": []
+    }
+  ],
+  "pilotModes": {
+    "operational": 2,
+    "pilot": 5,
+    "research": 2
+  },
+  "membershipAggregates": {
+    "athleticmind": {
+      "includedAthleteMemberships": 46,
+      "explicitActive": 12,
+      "explicitActiveWithIncompleteDecisions": 12,
+      "activeTeamAndMembershipWithIncompleteDecisions": 12,
+      "legacyMissingStatus": 34,
+      "alreadyOnboardingComplete": 20,
+      "documentDecisionIncomplete": 45,
+      "productSwitchChangedDocuments": 0,
+      "completeMembershipsWithIncompleteDecisions": 19,
+      "incompleteByDocument": {
+        "pulsecheck-program-participation@v1": 45,
+        "pulsecheck-health-authorization@v1": 45,
+        "pulsecheck-research-interest@v1": 33
+      },
+      "documentSets": {
+        "[{\"id\":\"pulsecheck-program-participation\",\"version\":\"v1\",\"category\":\"participation\",\"bodyHash\":\"9717045130ee\",\"mentionsAuntEdna\":true,\"studySpecific\":false},{\"id\":\"pulsecheck-health-authorization\",\"version\":\"v1\",\"category\":\"health_authorization\",\"bodyHash\":\"a2e1361dd4f8\",\"mentionsAuntEdna\":true,\"studySpecific\":false}]": 12,
+        "[{\"id\":\"pulsecheck-program-participation\",\"version\":\"v1\",\"category\":\"participation\",\"bodyHash\":\"9717045130ee\",\"mentionsAuntEdna\":true,\"studySpecific\":false},{\"id\":\"pulsecheck-health-authorization\",\"version\":\"v1\",\"category\":\"health_authorization\",\"bodyHash\":\"a2e1361dd4f8\",\"mentionsAuntEdna\":true,\"studySpecific\":false},{\"id\":\"pulsecheck-research-interest\",\"version\":\"v1\",\"category\":\"research\",\"bodyHash\":\"7c38fa67cf8e\",\"mentionsAuntEdna\":false,\"studySpecific\":false}]": 34
+      }
+    },
+    "pulsecheck": {
+      "includedAthleteMemberships": 14,
+      "explicitActive": 6,
+      "explicitActiveWithIncompleteDecisions": 4,
+      "activeTeamAndMembershipWithIncompleteDecisions": 4,
+      "legacyMissingStatus": 8,
+      "alreadyOnboardingComplete": 11,
+      "documentDecisionIncomplete": 10,
+      "productSwitchChangedDocuments": 9,
+      "completeMembershipsWithIncompleteDecisions": 7,
+      "incompleteByDocument": {
+        "pulsecheck-operational-participation-notice-v1@v3": 1,
+        "pulsecheck-operational-privacy-and-sharing-v1@v3": 1,
+        "pulsecheck-program-participation@v1-pulsecheck": 9,
+        "pulsecheck-health-authorization@v1-pulsecheck": 9
+      },
+      "documentSets": {
+        "[{\"id\":\"pulsecheck-operational-participation-notice-v1\",\"version\":\"v3\",\"category\":\"participation\",\"bodyHash\":\"c142e8d00def\",\"mentionsAuntEdna\":true,\"studySpecific\":false},{\"id\":\"pulsecheck-operational-privacy-and-sharing-v1\",\"version\":\"v3\",\"category\":\"participation\",\"bodyHash\":\"acb7ac1a4a3d\",\"mentionsAuntEdna\":true,\"studySpecific\":false}]": 5,
+        "[{\"id\":\"pulsecheck-program-participation\",\"version\":\"v1-pulsecheck\",\"category\":\"participation\",\"bodyHash\":\"b0c2494bf57f\",\"mentionsAuntEdna\":false,\"studySpecific\":false},{\"id\":\"pulsecheck-health-authorization\",\"version\":\"v1-pulsecheck\",\"category\":\"health_authorization\",\"bodyHash\":\"897db1237f75\",\"mentionsAuntEdna\":false,\"studySpecific\":false}]": 9
+      }
+    }
+  },
+  "limitations": [
+    "Counts are memberships, not unique athletes",
+    "Missing membership status retained as legacy candidate, not confirmed active",
+    "Expected-document analysis executes current TypeScript policy over projected metadata; not observed UI",
+    "No consent-event subcollections or signer names were read"
+  ]
+}

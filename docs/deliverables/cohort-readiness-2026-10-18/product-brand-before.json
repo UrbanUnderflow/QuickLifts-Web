@@ -1,0 +1,64 @@
+{
+  "capturedAt": "2026-10-18T13:28:35.701Z",
+  "project": "quicklifts-dd3f1",
+  "scope": "Only productBrand on existing organization records",
+  "restoreInstruction": "For each record, restore previous value if productBrandPresent; otherwise delete productBrand field. Do not overwrite whole documents. Compare current value to intendedProductBrand and obtain restoration authorization first.",
+  "organizations": [
+    {
+      "id": "0mXTn4DUYYL7t2K9AzZP",
+      "displayName": "Clark Atlanta University",
+      "productBrandPresent": false,
+      "previousProductBrand": null,
+      "intendedProductBrand": "athleticmind",
+      "updateTime": "2026-08-24T13:34:00.216Z"
+    },
+    {
+      "id": "O3xDl0Ng9Bbd9ot1rzfc",
+      "displayName": "The Athletic Mind Council",
+      "productBrandPresent": false,
+      "previousProductBrand": null,
+      "intendedProductBrand": "pulsecheck",
+      "updateTime": "2026-06-12T14:41:07.407Z"
+    },
+    {
+      "id": "WIqVs4SsqNSoJunckDIE",
+      "displayName": "Building Bodies",
+      "productBrandPresent": false,
+      "previousProductBrand": null,
+      "intendedProductBrand": "pulsecheck",
+      "updateTime": "2026-03-14T14:15:46.611Z"
+    },
+    {
+      "id": "lBAyqI56zB1YuCWjUEJM",
+      "displayName": "Hampton University Athletics",
+      "productBrandPresent": false,
+      "previousProductBrand": null,
+      "intendedProductBrand": "pulsecheck",
+      "updateTime": "2026-03-20T20:08:48.689Z"
+    },
+    {
+      "id": "legacy-coach-org-Bq6zlqIlSdPUGki6gsv6X9TdVtG3",
+      "displayName": "Tremaine Coaching",
+      "productBrandPresent": false,
+      "previousProductBrand": null,
+      "intendedProductBrand": "pulsecheck",
+      "updateTime": "2026-07-31T00:32:19.587Z"
+    },
+    {
+      "id": "mEUQFqPB6ubRGz4luxpY",
+      "displayName": "HyperCharge Wellness",
+      "productBrandPresent": false,
+      "previousProductBrand": null,
+      "intendedProductBrand": "pulsecheck",
+      "updateTime": "2026-06-29T14:29:51.823Z"
+    },
+    {
+      "id": "mVHV5BZ0MOmOO39p0aFD",
+      "displayName": "4D Cycling",
+      "productBrandPresent": false,
+      "previousProductBrand": null,
+      "intendedProductBrand": "pulsecheck",
+      "updateTime": "2026-06-30T13:04:14.066Z"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+i  emulators: Starting emulators: firestore
+i  emulators: Detected demo project ID "demo-pulse-consent", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+⚠  hub: emulator hub unable to start on port 4400, starting on 4401 instead.
+⚠  logging: Logging Emulator unable to start on port 4500, starting on 4501 instead.
+⚠  firestore: Cloud Firestore rules file /tmp/consent-verification-emulator/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/firestore.rules specified in firebase.json does not exist.
+⚠  firestore: The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration.
+i  firestore: Firestore Emulator logging to firestore-debug.log
+✔  firestore: Firestore Emulator UI websocket is running on 9151.
+i  Running script: node --test /tmp/consent-verification-emulator/deployed-test.cjs
+[2026-10-18T13:32:25.312Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x35e83187 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L391, false for 'update' @ L397, false for 'update' @ L587, false for 'update' @ L669
+[2026-10-18T13:32:25.320Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x35e83189 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L391, false for 'delete' @ L397, false for 'delete' @ L587, false for 'delete' @ L672
+[2026-10-18T13:32:25.346Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x35e8318b error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L391, false for 'create' @ L397, evaluation error at L582:26 for 'create' @ L582, false for 'create' @ L669, false for 'update' @ L391, false for 'update' @ L397, false for 'update' @ L587, false for 'update' @ L669, false for 'create' @ L391, false for 'create' @ L397, false for 'create' @ L582, false for 'create' @ L669
+✔ consent evidence belongs to the signer and cannot be changed or supplied by a coach (837.771375ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 926.40625
+✔  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  firestore: Stopping Firestore Emulator
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator

@@ -627,3 +627,18 @@ test('protected record and staff privacy fallbacks remain relevant and pass resp
   assert.doesNotMatch(response,/mental cue|what would be most useful/i);
  }
 });
+
+test('polite thanks does not discard a substantive check-in or question', () => {
+  for (const message of [
+    "I'm feeling pretty good Nora thanks for asking",
+    'Thanks Nora, my focus was better today.',
+    'Thank you. How should I feel?',
+    'Nora',
+  ]) {
+    assert.equal(policy.isConversationClosure(message), false, message);
+    assert.equal(classifyNoraConversationLane(message), NoraConversationLane.Performance, message);
+  }
+  for (const message of ['Thanks so much Nora', 'Thank you, that really helps.', 'Got it, thanks.']) {
+    assert.equal(policy.isConversationClosure(message), true, message);
+  }
+});

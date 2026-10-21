@@ -1,0 +1,44 @@
+[
+  {
+    "product": "athleticmind",
+    "document": "pulsecheck-program-participation",
+    "version": "v1",
+    "iosExactMatch": true,
+    "androidExactMatch": true
+  },
+  {
+    "product": "athleticmind",
+    "document": "pulsecheck-health-authorization",
+    "version": "v1",
+    "iosExactMatch": true,
+    "androidExactMatch": true
+  },
+  {
+    "product": "athleticmind",
+    "document": "pulsecheck-research-interest",
+    "version": "v1",
+    "iosExactMatch": true,
+    "androidExactMatch": true
+  },
+  {
+    "product": "pulsecheck",
+    "document": "pulsecheck-program-participation",
+    "version": "v1-pulsecheck",
+    "iosExactMatch": true,
+    "androidExactMatch": true
+  },
+  {
+    "product": "pulsecheck",
+    "document": "pulsecheck-health-authorization",
+    "version": "v1-pulsecheck",
+    "iosExactMatch": true,
+    "androidExactMatch": true
+  },
+  {
+    "product": "pulsecheck",
+    "document": "pulsecheck-research-interest",
+    "version": "v1",
+    "iosExactMatch": true,
+    "androidExactMatch": true
+  }
+]

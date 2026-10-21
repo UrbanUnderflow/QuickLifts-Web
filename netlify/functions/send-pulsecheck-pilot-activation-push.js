@@ -1,3 +1,4 @@
+const { resolveNativeAppDistribution } = require('./lib/native-app-distribution');
 const { admin, headers, initializeFirebaseAdmin } = require('./config/firebase');
 const {
   loadPulseCheckPushTarget,
@@ -6,7 +7,6 @@ const {
 
 const OUTREACH_COLLECTION = 'pulsecheck-pilot-athlete-communications';
 const OUTREACH_CHANNEL = 'push';
-const DEFAULT_OPEN_APP_URL = 'pulsecheck://open';
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -21,10 +21,10 @@ function buildPushTitle({ teamName, organizationName, pilotName }) {
   return /\bpilot\b/i.test(baseLabel) ? baseLabel : `${baseLabel} Pilot`;
 }
 
-function buildPushBody(enrollmentStatus) {
+function buildPushBody(enrollmentStatus, appName) {
   return normalizeString(enrollmentStatus) === 'active'
-    ? 'Your PulseCheck app is ready! Open the app and you should be good to go.'
-    : 'Your PulseCheck app is ready! Open the app, complete consent, and you should be good to go.';
+    ? `Your ${appName} app is ready! Open the app and you should be good to go.`
+    : `Your ${appName} app is ready! Open the app, complete consent, and you should be good to go.`;
 }
 
 function buildPushStatusRecord(docId, data) {
@@ -68,7 +68,8 @@ exports.handler = async (event) => {
     const athleteName = normalizeString(body.athleteName);
     const athleteEmail = normalizeString(body.athleteEmail);
     const enrollmentStatus = normalizeString(body.enrollmentStatus);
-    const openAppUrl = normalizeString(body.openAppUrl) || DEFAULT_OPEN_APP_URL;
+    const distribution = await resolveNativeAppDistribution(db, { pilotId, organizationId: body.organizationId });
+    const openAppUrl = distribution.openAppUrl;
     const previewOnly = body.previewOnly === true;
 
     if (!athleteId) {
@@ -87,8 +88,8 @@ exports.handler = async (event) => {
       channel: OUTREACH_CHANNEL,
       title: buildPushTitle({ teamName, organizationName, pilotName }),
       subtitle: 'Open the app to continue',
-      body: buildPushBody(enrollmentStatus),
-      ctaLabel: 'Open PulseCheck App',
+      body: buildPushBody(enrollmentStatus, distribution.name),
+      ctaLabel: `Open ${distribution.name} App`,
       ctaUrl: openAppUrl,
     };
 
@@ -114,7 +115,7 @@ exports.handler = async (event) => {
     }
 
     const userData = userDoc.data() || {};
-    const pushTarget = await loadPulseCheckPushTarget(db, athleteId);
+    const pushTarget = await loadPulseCheckPushTarget(db, athleteId, distribution.brand);
     if (!pushTarget.eligible || !pushTarget.token) {
       return {
         statusCode: 400,

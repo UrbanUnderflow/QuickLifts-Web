@@ -181,14 +181,14 @@ function sanitizeReturnTo(value) {
 
   try {
     const parsed = new URL(trimmed);
-    if (parsed.protocol === 'pulsecheck:' || parsed.protocol === 'pulse:' || parsed.protocol === 'quicklifts:') {
+    if (parsed.protocol === 'athleticmind:' || parsed.protocol === 'pulsecheck:' || parsed.protocol === 'pulse:' || parsed.protocol === 'quicklifts:') {
       return parsed.toString();
     }
   } catch (error) {
-    return DEFAULT_RETURN;
+    return DEFAULT_RETURN_TO;
   }
 
-  return DEFAULT_RETURN;
+  return DEFAULT_RETURN_TO;
 }
 
 function getBaseSiteUrl() {

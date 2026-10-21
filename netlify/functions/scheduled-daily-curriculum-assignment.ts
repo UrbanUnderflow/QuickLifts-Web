@@ -1,3 +1,4 @@
+import { organizationTeamIsActive } from './lib/organization-access';
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import { generateDailyAssignmentAdmin } from './utils/dailyCurriculumAdmin';
@@ -90,6 +91,7 @@ export const handler: Handler = async () => {
     const m = mem.data() as Record<string, unknown>;
     if (!isActiveAthleteMembership(m)) continue;
     if (!m.userId) continue;
+    if (!await organizationTeamIsActive(db, m.teamId, m.organizationId)) continue;
     summary.candidates += 1;
     const tz = (m.timezone as string | undefined) || 'America/New_York';
     const localNow = localNowFor(nowUtc, tz);
@@ -115,6 +117,7 @@ export const handler: Handler = async () => {
     }
 
     try {
+      if (!await organizationTeamIsActive(db, m.teamId, m.organizationId)) continue;
       const result = await generateDailyAssignmentAdmin(db, {
         athleteUserId: m.userId as string,
         teamId: (m.teamId as string | undefined) || '',

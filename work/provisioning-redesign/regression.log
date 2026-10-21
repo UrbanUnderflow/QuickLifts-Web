@@ -1,0 +1,27 @@
+✔ server provisioning preserves athlete subscription and additional-services config (0.7575ms)
+✔ server provisioning applies safe subscription defaults to malformed config (0.092042ms)
+✔ new programs require explicit product selection with independent app defaults (0.800833ms)
+✔ program and installed app branding are independent settings (0.108292ms)
+✔ provisioning rejects unsupported product and app identities (0.066625ms)
+✔ paired provisioning stores visual experience independently and validates explicit choices (0.120833ms)
+✔ lost provisioning response retries return the same entity; separate operations remain separate (1.295708ms)
+✔ notification outage remains pending; retry uses verified recipient; sent replay never sends again (1.375542ms)
+✔ removed recipient and inactive enrollment cancel delivery (0.149583ms)
+✔ existing lease prevents concurrent delivery and expired lease is recoverable (0.176458ms)
+✔ public sender rejects unauthenticated and forged membership requests without delivering (1.846292ms)
+✔ ambiguous provider delivery is held for reconciliation and cannot be replayed (0.207833ms)
+✔ worker that loses its lease before dispatch cannot deliver (0.120208ms)
+✔ interrupted dispatch becomes needs-review after lease expiry without resending (0.073917ms)
+✔ presentation fallback is PulseCheck; app identities default independently (0.336583ms)
+✔ write validators reject invalid identities and preserve default overrides (0.311084ms)
+✔ persisted team organization controls routing (0.118916ms)
+✔ server routing rejects missing and invalid persisted product (0.105167ms)
+✔ iOS app experience validates writes and defaults invalid presentation reads (0.1255ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 620.405084

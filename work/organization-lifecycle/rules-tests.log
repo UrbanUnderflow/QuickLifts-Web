@@ -1,0 +1,37 @@
+i  emulators: Starting emulators: firestore
+i  emulators: Detected demo project ID "demo-organization-lifecycle", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+⚠  hub: emulator hub unable to start on port 4400, starting on 4401 instead.
+⚠  logging: Logging Emulator unable to start on port 4500, starting on 4501 instead.
+i  firestore: Firestore Emulator logging to firestore-debug.log
+✔  firestore: Firestore Emulator UI websocket is running on 9151.
+i  Running script: node --test tests/api/pulsecheck/organization-lifecycle-rules.emulator.test.cjs
+✔ decommission blocks organization, team, pilot and cohort reads; restore reopens only that organization (2964.696334ms)
+[2026-10-20T00:32:44.453Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x158258a4 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L452, false for 'delete' @ L458, false for 'delete' @ L526, false for 'delete' @ L805, false for 'delete' @ L1217, false for 'delete' @ L1286
+[2026-10-20T00:32:44.465Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x158258a5 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L452, false for 'update' @ L458, false for 'update' @ L524, false for 'update' @ L800, false for 'update' @ L1213, evaluation error at L1283:24 for 'update' @ L1283, false for 'update' @ L452, false for 'update' @ L458, false for 'update' @ L524, false for 'update' @ L800, false for 'update' @ L1213, false for 'update' @ L1283
+[2026-10-20T00:32:44.478Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x158258a6 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L452, false for 'create' @ L458, false for 'create' @ L522, false for 'create' @ L800, false for 'create' @ L1213, false for 'create' @ L1281, false for 'update' @ L452, false for 'update' @ L458, false for 'update' @ L524, false for 'update' @ L800, false for 'update' @ L1213, evaluation error at L1283:24 for 'update' @ L1283, false for 'create' @ L452, false for 'create' @ L458, false for 'create' @ L522, false for 'create' @ L800, false for 'create' @ L1213, false for 'create' @ L1281
+[2026-10-20T00:32:44.487Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x158258a7 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'create' @ L452, false for 'create' @ L458, false for 'create' @ L800, false for 'create' @ L1277, false for 'update' @ L452, false for 'update' @ L458, false for 'update' @ L800, false for 'update' @ L1277
+[2026-10-20T00:32:44.511Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x158258a9 error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L452, false for 'update' @ L458, false for 'update' @ L524, false for 'update' @ L800, false for 'update' @ L1213, evaluation error at L1283:24 for 'update' @ L1283, false for 'update' @ L452, false for 'update' @ L458, false for 'update' @ L524, false for 'update' @ L800, false for 'update' @ L1213, false for 'update' @ L1283
+[2026-10-20T00:32:44.526Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x158258aa error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'update' @ L452, false for 'update' @ L458, false for 'update' @ L524, false for 'update' @ L800, false for 'update' @ L1213, evaluation error at L1295:24 for 'update' @ L1295, false for 'update' @ L452, false for 'update' @ L458, false for 'update' @ L524, false for 'update' @ L800, false for 'update' @ L1213, false for 'update' @ L1295
+[2026-10-20T00:32:44.536Z]  @firebase/firestore: Firestore (11.10.0): GrpcConnection RPC 'Write' stream 0x158258ab error. Code: 7 Message: 7 PERMISSION_DENIED: 
+false for 'delete' @ L452, false for 'delete' @ L458, false for 'delete' @ L526, false for 'delete' @ L805, false for 'delete' @ L1217, evaluation error at L1291:24 for 'delete' @ L1291, false for 'delete' @ L452, false for 'delete' @ L458, false for 'delete' @ L526, false for 'delete' @ L805, false for 'delete' @ L1217, false for 'delete' @ L1291
+✔ platform admin cannot bypass lifecycle endpoint or manipulate purge jobs (176.554125ms)
+✔ live scoped patch preserves preactivation consent reads (70.049667ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3322.643084
+✔  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  firestore: Stopping Firestore Emulator
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator

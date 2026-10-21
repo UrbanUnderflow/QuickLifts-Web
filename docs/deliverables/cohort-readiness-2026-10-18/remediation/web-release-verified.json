@@ -1,0 +1,13 @@
+{
+  "id": "05a6cac5-9994-4883-9e90-5adb69528bda",
+  "url": "https://fitwithpulse.ai",
+  "published": {
+    "id": "6ad4cdb9447fa430a064fcb1",
+    "state": "ready",
+    "commit_ref": "99207139513b429a02136a92f6dbf4d0bfc66db6",
+    "published_at": "2026-10-18T13:56:31.947Z",
+    "created_at": "2026-10-18T13:46:33.212Z",
+    "error_message": null,
+    "deploy_ssl_url": "https://main--quickliftsapp.netlify.app"
+  }
+}

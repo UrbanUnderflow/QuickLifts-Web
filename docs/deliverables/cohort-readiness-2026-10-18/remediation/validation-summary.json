@@ -1,0 +1,69 @@
+[
+  {
+    "path": "/tmp/consent-final-rules-tests.log",
+    "sha256": "abfb98bbf81d3a9a5b5a555761aee53ea1144d54ac5586e6b4eca3972cd1e363",
+    "resultLines": [
+      "\u2139 tests 13",
+      "\u2139 pass 13",
+      "\u2139 fail 0"
+    ]
+  },
+  {
+    "path": "/tmp/consent-policy-tests.log",
+    "sha256": "ed60178b8b238ccc305d18ec2102280ac5a4635742e3913b6189570dfbe306fd",
+    "resultLines": [
+      "\u2714 research refusal from an old version does not bypass current document review (0.0555ms)",
+      "\u2714 stale open-form changes fail before saving while historical evidence and optional refusal remain valid (0.285958ms)",
+      "\u2139 tests 16",
+      "\u2139 pass 16",
+      "\u2139 fail 0"
+    ]
+  },
+  {
+    "path": "/tmp/consent-escalation-tests.log",
+    "sha256": "bf278d3dc0b75b76704c908ded381659c2f980c7d00d4ee46fb694b0b7dc0a55",
+    "resultLines": [
+      "    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {",
+      "\u2139 tests 63",
+      "\u2139 pass 63",
+      "\u2139 fail 0"
+    ]
+  },
+  {
+    "path": "/tmp/ios-consent-refresh-tests.log",
+    "sha256": "8ca598b4b0bd495de25cbc3023eda710ac5c7efdb610b557036046d2c82bd88f",
+    "resultLines": [
+      "PASS: 15 isolated Swift consent assertions against extracted current model. Includes legacy custom-document fallback acceptance.",
+      "PASS: 6 refresh/regression assertions: unchanged context, product switch, new study, same-version changed terms, stale receipt, optional revocation."
+    ]
+  },
+  {
+    "path": "/tmp/ios-consent-build-final.log",
+    "sha256": "00a542e51dd9bf43b5cf74f180328ac34e501a8437f40dc6f7f2f9f3ec2abfa0",
+    "resultLines": [
+      "** BUILD SUCCEEDED **"
+    ]
+  },
+  {
+    "path": "/tmp/android-consent-refresh-validation.log",
+    "sha256": "d20cd54b1ab6b2cabf5028141a2717cdf0bbf208feaae37d6d6180d992a546f5",
+    "resultLines": [
+      "BUILD SUCCESSFUL in 32s"
+    ]
+  },
+  {
+    "path": "/tmp/consent-web-release-build.log",
+    "sha256": "be344da9451a61d759eaba818c6b1ebf1f124741b0af9e4af47e2cf92e6220a3",
+    "exitCode": 0,
+    "sourceCommit": "99207139513b429a02136a92f6dbf4d0bfc66db6",
+    "result": "Isolated Next.js production build passed including TypeScript validation and 305 generated static pages"
+  },
+  {
+    "path": "/tmp/consent-clinical-helper-tests.log",
+    "sha256": "535f622a9d44f23de33006fcde4a364d61caf7986de0c795ab5817aa22a340e5",
+    "exitCode": 0,
+    "tests": 3,
+    "pass": 3,
+    "fail": 0
+  }
+]

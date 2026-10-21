@@ -27,6 +27,7 @@ const SUPPORTED_FUNCTIONS = new Set([
   'coach-nora-chat',
   'pulsecheck-avatar-session',
   'pulsecheck-clay-self',
+  'pulsecheck-clay-scenes',
   'pulsecheck-escalation',
   'journal-guide',
   'journal-safety-screen',

@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-10-18T13:31:48.088Z",
+  "release": "projects/quicklifts-dd3f1/releases/cloud.firestore",
+  "ruleset": "projects/quicklifts-dd3f1/rulesets/2f6d998c-38a6-409b-bf2c-a45b8760e804",
+  "releaseUpdated": "2026-10-11T21:44:27.230868Z",
+  "fileName": "firestore.rules",
+  "deployedSha256": "a69007c18337231317288834df9938ca86182af33064c5906121991d46fb14b8",
+  "localSha256": "c92f205fd71867a90a224fdcb6f9172dbcd4bdb937c70dae2bb9fe4f3eb734f6",
+  "matchesCurrentLocal": false
+}

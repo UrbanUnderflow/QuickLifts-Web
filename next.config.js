@@ -32,6 +32,11 @@ const nextConfig = {
   async rewrites() {
     return {
       beforeFiles: [
+        // Opt-in local administration uses production's existing credentials and
+        // authorization checks; no server secrets need to be copied locally.
+        ...(process.env.NODE_ENV === 'development' && process.env.LOCAL_PARTNER_API_USE_PRODUCTION === 'true'
+          ? [{ source: '/api/admin/partner-api-keys', destination: 'https://fitwithpulse.ai/api/admin/partner-api-keys' }]
+          : []),
         { source: '/operations', destination: '/operations/index.html' },
         { source: '/university-sales-strategy', destination: '/university-sales-strategy/index.html' },
         { source: '/pilot-expansion', destination: '/pilot-expansion/index.html' },

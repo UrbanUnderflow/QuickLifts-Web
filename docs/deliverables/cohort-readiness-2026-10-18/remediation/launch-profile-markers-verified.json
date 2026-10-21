@@ -1,0 +1,10 @@
+{
+  "verifiedAt": "2026-10-18T14:22:23.996Z",
+  "membershipCount": 69,
+  "protectedPrincipalCount": 59,
+  "created": 59,
+  "existing": 0,
+  "readbackExact": true,
+  "principalSetSha256": "1ed7b184b013a517774269d2112aaa45ddf494fcd6d6d4eecfbccb1e5a8aa850",
+  "scope": "Only server-owned privacy markers created from membership userId metadata; no profile, consent, branding, role or membership edits"
+}

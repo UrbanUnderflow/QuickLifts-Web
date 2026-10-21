@@ -1,0 +1,9 @@
+Working directory: /Users/tremainegrant/Documents/GitHub/QuickLifts-Web
+Node: /Users/tremainegrant/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node
+node --import tsx --test tests/unit/pulsecheck-consent-choices.test.ts tests/unit/pulsecheck-consent-access-state.test.ts
+node --test netlify/functions/__tests__/clinical-authorization.test.js tests/api/pulsecheck/record-clinical-product-routing.runtime.test.cjs
+node --import tsx /tmp/consent-verification-emulator/access-gate-repro.cjs
+PATH=/Users/tremainegrant/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH node_modules/.bin/firebase emulators:exec --only firestore --project demo-pulse-consent --config /tmp/consent-verification-emulator/firebase.json 'node --test /tmp/consent-verification-emulator/test.cjs'
+PATH=/Users/tremainegrant/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH node_modules/.bin/firebase emulators:exec --only firestore --project demo-pulse-consent --config /tmp/consent-verification-emulator/firebase.json 'node --test /tmp/consent-verification-emulator/deployed-test.cjs'
+PATH=/Users/tremainegrant/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH node_modules/.bin/firebase emulators:exec --only firestore --project demo-consent-summary --config /tmp/consent-verification-emulator/firebase.json 'node --test /tmp/consent-verification-emulator/summary-privacy-test.cjs'
+The CLI warns its configured rules path is missing because it resolves absolute paths relative to temporary config. Tests explicitly load exact rules text using initializeTestEnvironment firestore.rules before every assertion. Thus the startup fallback is replaced before testing; local-denied and deployed-allowed differential confirms enforcement.

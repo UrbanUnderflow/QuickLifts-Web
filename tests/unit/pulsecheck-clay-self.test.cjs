@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const c = require('../../netlify/functions/lib/pulsecheck-clay-self');
+const sharp = require('sharp');
+const portrait = (left = 200, top = 200) => sharp({ create: { width: 1024, height: 1536, channels: 4, background: '#00000000' } }).composite([{ input: Buffer.from('<svg width="500" height="1000"><rect width="500" height="1000" fill="brown"/></svg>'), left, top }]).png().toBuffer();
 const jpeg = Buffer.from([255,216,255,224,0,4,255,217]);
 const photos = () => c.ROLES.map(role => ({ role, mimeType: 'image/jpeg', imageBase64: jpeg.toString('base64') }));
 test('requires precisely the three distinct guided references', () => {
@@ -18,9 +20,9 @@ test('rejects URLs, unsupported files, oversized photos and malformed base64', (
 test('transaction gate prevents concurrent jobs and caps daily generation', () => {
   const now = Date.parse('2026-10-18T12:00:00Z');
   assert.throws(() => c.gate({ status: 'processing', createdAt: now - 1 }, now), { statusCode: 409 });
-  assert.throws(() => c.gate({ day: '2026-10-18', count: 3 }, now), { statusCode: 429 });
-  assert.equal(c.gate({ day: '2026-10-17', count: 3 }, now).count, 1);
-  assert.equal(c.gate({ status: 'processing', createdAt: now - c.MAX_AGE - 1 }, now).count, 1);
+  assert.throws(() => c.gate({ quotaVersion: 2, successDay: '2026-10-18', successfulCount: 3 }, now), { statusCode: 429 });
+  assert.equal(c.gate({ quotaVersion: 2, successDay: '2026-10-17', successfulCount: 3 }, now).successfulCount, 0);
+  assert.equal(c.gate({ status: 'processing', createdAt: now - c.MAX_AGE - 1 }, now).successfulCount, 0);
 });
 test('job identifiers cannot inject owner paths', () => {
   assert.throws(() => c.jobID('../../other-user'), { statusCode: 400 });
@@ -33,10 +35,21 @@ test('authentication rejects missing and invalid tokens', async () => {
   await assert.rejects(c.authenticate({ headers: { authorization: 'Bearer invalid' } }, admin, {}), { statusCode: 401, message: 'Please sign in again.' });
 });
 test('real image edit sends all three references and returns generated PNG only', async () => {
-  const png = Buffer.from([137,80,78,71,13,10,26,10,1]);
+  const png = await portrait();
   const output = await c.editImages(c.parseImages({ images: photos() }), 'synthetic-test-key', async (url, options) => {
     assert.equal(url, 'https://api.openai.com/v1/images/edits');
-    assert.equal(options.body.getAll('image[]').length, 3);
+    assert.deepEqual(options.body.getAll('image[]').map(file => file.name), ['full_body.jpg', 'face.jpg', 'reference.jpg', 'style-only-basketball.png', 'style-only-athlete.png']);
+    assert.equal(options.body.get('quality'), 'high');
+    assert.equal(options.body.get('size'), '1024x1536');
+    const spec = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../netlify/functions/lib/clay-self-style/SCHEMATICS-v2.md'), 'utf8');
+    assert.equal(options.body.get('prompt'), spec);
+    assert.match(spec, /Images 4 and 5 are approved MATERIAL/);
+    assert.match(spec, /both shoes including/);
+    assert.match(spec, /Image 3 is the AUTHORITATIVE sporting-uniform and clothing reference/);
+    assert.match(spec, /Image 3 wins every wardrobe conflict/);
+    assert.match(spec, /Never take garments or shirtlessness from image 1/);
+    assert.match(spec, /face must be as visibly sculpted as/);
+    assert.match(spec, /Do not inflate muscles/);
     assert.equal(options.body.get('model'), 'gpt-image-1.5');
     assert.equal(options.body.get('input_fidelity'), 'high');
     assert.equal(options.body.get('background'), 'transparent');
@@ -73,7 +86,7 @@ function harness() {
 test('owner-only lifecycle: create, background, preview, approve, restore, delete', async () => {
   const h = harness(), oldFetch = global.fetch, oldKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = 'synthetic-test';
-  const png = Buffer.from([137,80,78,71,13,10,26,10,1]);
+  const png = await portrait();
   global.fetch = async url => url.toString().includes('api.openai.com') ? { ok: true, json: async () => ({ data: [{ b64_json: png.toString('base64') }] }) } : { ok: true };
   try {
     const created = await h.api(h.event('POST', { action: 'generate', images: photos() }));
@@ -89,6 +102,13 @@ test('owner-only lifecycle: create, background, preview, approve, restore, delet
     h.setUID('athlete-a');
     await h.worker(h.event('POST', { jobId }));
     assert.equal(h.files.size, 1, 'reference photos erased after generation');
+    const saved = [...h.states.values()][0];
+    assert.equal(saved.styleVersion, 'clay-self-v2');
+    assert.equal(saved.successfulCount, 1);
+    await h.worker(h.event('POST', { jobId }));
+    assert.equal([...h.states.values()][0].successfulCount, 1, 'duplicate completion is not counted twice');
+    assert.equal(saved.generationQuality, 'high');
+    assert.equal(saved.generationSize, '1024x1536');
     const ready = JSON.parse((await h.api(h.event('GET', {}, { jobId }))).body);
     assert.equal(ready.status, 'ready');
     assert.match(ready.previewImageURL, /private.example/);
@@ -115,6 +135,7 @@ test('worker failure erases source photos and cannot turn a failed job into read
     const { jobId } = JSON.parse((await h.api(h.event('POST', { action: 'generate', images: photos() }))).body);
     await h.worker(h.event('POST', { jobId }));
     assert.equal(h.files.size, 0);
+    assert.equal([...h.states.values()][0].successfulCount, 0, 'failed jobs consume no success allowance');
     assert.equal(JSON.parse((await h.api(h.event('GET', {}, { jobId }))).body).status, 'failed');
     assert.equal((await h.api(h.event('POST', { action: 'approve', jobId }))).statusCode, 409);
   } finally { global.fetch = oldFetch; if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey; }
@@ -125,7 +146,7 @@ test('deleting during generation discards late provider output', async () => {
   global.fetch = async url => {
     if (!url.toString().includes('api.openai.com')) return { ok: true };
     await h.api(h.event('DELETE'));
-    return { ok: true, json: async () => ({ data: [{ b64_json: Buffer.from([137,80,78,71,13,10,26,10]).toString('base64') }] }) };
+    return { ok: true, json: async () => ({ data: [{ b64_json: (await portrait()).toString('base64') }] }) };
   };
   try {
     const { jobId } = JSON.parse((await h.api(h.event('POST', { action: 'generate', images: photos() }))).body);
@@ -159,4 +180,144 @@ test('storage selection respects explicit prod/dev configuration without crossin
     assert.equal(c.bucketFor(admin, app, 'dev'), 'synthetic-dev.appspot.com');
     assert.throws(() => c.bucketFor(admin, app), { statusCode: 500 });
   } finally { keys.forEach((key, index) => { if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index]; }); }
+});
+
+test('framing gate rejects edge clipping, opaque backdrops, empty and malformed output', async () => {
+  await c.validatePortrait(await portrait());
+  await assert.rejects(c.validatePortrait(await portrait(0, 200)), { statusCode: 502 });
+  await assert.rejects(c.validatePortrait(await portrait(200, 0)), { statusCode: 502 });
+  for (const background of ['#ffffffff', '#00000000']) {
+    const png = await sharp({ create: { width: 1024, height: 1536, channels: 4, background } }).png().toBuffer();
+    await assert.rejects(c.validatePortrait(png), { statusCode: 502 });
+  }
+  await assert.rejects(c.validatePortrait(Buffer.from([137,80,78,71,13,10,26,10])), { statusCode: 502 });
+  const square = await sharp({ create: { width: 1024, height: 1024, channels: 4, background: '#ffffff00' } }).png().toBuffer();
+  await assert.rejects(c.validatePortrait(square), { statusCode: 502 });
+});
+
+test('worker rejects a clipped provider result and erases private source photos', async () => {
+  const h = harness(), oldFetch = global.fetch, oldKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = 'synthetic';
+  const png = await portrait(200, 0);
+  global.fetch = async url => url.toString().includes('api.openai.com') ? { ok: true, json: async () => ({ data: [{ b64_json: png.toString('base64') }] }) } : { ok: true };
+  try {
+    const { jobId } = JSON.parse((await h.api(h.event('POST', { action: 'generate', images: photos() }))).body);
+    await h.worker(h.event('POST', { jobId }));
+    assert.equal(h.files.size, 0);
+    assert.equal([...h.states.values()][0].successfulCount, 0, 'failed jobs consume no success allowance');
+    assert.equal(JSON.parse((await h.api(h.event('GET', {}, { jobId }))).body).status, 'failed');
+    assert.equal((await h.api(h.event('POST', { action: 'approve', jobId }))).statusCode, 409);
+  } finally { global.fetch = oldFetch; if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey; }
+});
+
+test('padding preserves a fully contained image and never repairs edge-touching content', async () => {
+  const tight = await portrait(200, 535);
+  await assert.rejects(c.validatePortrait(tight), { statusCode: 502 });
+  const padded = await c.framePortrait(tight);
+  await c.validatePortrait(padded, 0.08);
+  const metadata = await sharp(padded).metadata();
+  assert.equal(metadata.width, 1024);
+  assert.equal(metadata.height, 1536);
+  assert.equal(metadata.hasAlpha, true);
+  await assert.rejects(c.framePortrait(await portrait(200, 536)), { statusCode: 502 });
+  await assert.rejects(c.framePortrait(await portrait(0, 200)), { statusCode: 502 });
+});
+
+test('diagnostics only retain allowlisted code, phase and timing', () => {
+  const details = c.failureDetails({ message: 'secret-url', failureCode: 'private-key' }, 'provider', 1000, 1600);
+  assert.deepEqual(details, { failureCode: 'provider_transport', failurePhase: 'provider', failedAt: 1600, elapsedMs: 600 });
+  const oldWarn = console.warn; const events = [];
+  console.warn = value => events.push(JSON.parse(value));
+  try { c.logFailure({ ...details, uid: 'private-user', url: 'secret-url' }); } finally { console.warn = oldWarn; }
+  assert.deepEqual(events, [{ event: 'clay_self_failed', ...details }]);
+  assert.equal(c.publicFailure({ failureCode: 'secret-url' }).failureCode, 'internal_error');
+  assert.equal(c.publicFailure({}, true).failureCode, 'job_expired');
+});
+
+test('provider timeout and transport errors become safe categories', async () => {
+  await assert.rejects(c.editImages([], 'synthetic', async () => { throw Object.assign(Error('secret-url'), { name: 'TimeoutError' }); }), { failureCode: 'provider_timeout' });
+  await assert.rejects(c.editImages([], 'synthetic', async () => { throw Error('secret-token'); }), { failureCode: 'provider_transport' });
+});
+
+test('dispatch failure records sanitized diagnostic fields in owner-only job', async () => {
+  const h = harness(), oldFetch = global.fetch, oldKey = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = 'synthetic';
+  global.fetch = async () => { throw Error('private transport detail'); };
+  try {
+    const result = await h.api(h.event('POST', { action: 'generate', images: photos() }));
+    assert.equal(result.statusCode, 500);
+    const state = [...h.states.values()][0];
+    assert.equal(state.failureCode, 'dispatch_failed');
+    assert.equal(state.failurePhase, 'dispatch');
+    assert.equal(typeof state.failedAt, 'number');
+    assert.equal(typeof state.elapsedMs, 'number');
+    assert.equal(JSON.stringify(state).includes('private transport detail'), false);
+    assert.equal(h.files.size, 0);
+    const status = JSON.parse((await h.api(h.event('GET'))).body);
+    assert.equal(status.failureCode, 'dispatch_failed');
+    assert.equal(status.error.includes('different photo'), false);
+  } finally { global.fetch = oldFetch; if (oldKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = oldKey; }
+});
+
+test('output diagnostics distinguish safe rejection categories and validation phase', async () => {
+  const make = (width, height, channels, background) => sharp({ create: { width, height, channels, background } }).png().toBuffer();
+  const cases = [
+    [Buffer.from('malformed'), 'output_decode'],
+    [await sharp(await portrait()).jpeg().toBuffer(), 'output_format'],
+    [await make(100, 100, 4, '#00000000'), 'output_dimensions'],
+    [await make(1024, 1536, 3, '#ffffff'), 'output_alpha_missing'],
+    [await make(1024, 1536, 4, '#00000000'), 'output_empty'],
+    [await portrait(0, 200), 'output_edge_touch'],
+    [await portrait(200, 535), 'output_margin'],
+  ];
+  for (const [bytes, failureCode] of cases) {
+    await assert.rejects(c.validatePortrait(bytes), { failureCode });
+    assert.equal(c.failureDetails({ failureCode }, 'provider', 100, 200).failurePhase, 'output_validation');
+  }
+});
+
+test('one alpha quantization level is cleaned but stronger edge content stays rejected', async () => {
+  const {data, info} = await sharp(await portrait()).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  data[3] = 1;
+  const faintEdge = await sharp(data, {raw:info}).png().toBuffer();
+  const cleaned = await c.framePortrait(faintEdge);
+  await c.validatePortrait(cleaned, 0.08);
+  for (const alpha of [2, 32, 255]) {
+    data[3] = alpha;
+    const touched = await sharp(data, {raw:info}).png().toBuffer();
+    await assert.rejects(c.framePortrait(touched), {failureCode:'output_edge_touch', edgeAlphaMax:alpha});
+  }
+});
+
+test('missing provider image payload has safe validation classification', async () => {
+  await assert.rejects(c.editImages([], 'synthetic', async () => ({ok:true,json:async()=>({data:[]})})), {failureCode:'output_payload'});
+});
+
+test('success allowance rolls over on UTC completion day and migrates legacy attempts', () => {
+  const now = Date.parse('2026-10-19T00:00:01Z');
+  const prior = {quotaVersion:2,successDay:'2026-10-18',successfulCount:3};
+  assert.equal(c.completedQuota(prior, now).successfulCount, 1);
+  assert.equal(c.completedQuota(prior, now).successDay, '2026-10-19');
+  assert.equal(c.gate({day:'2026-10-19',count:3,status:'failed'},now).successfulCount,0);
+  assert.equal(c.gate({status:'ready',completedAt:now-1},now).successfulCount,1);
+});
+
+test('temporary tester override requires exact UID and future expiry; concurrency always applies', () => {
+  const oldUIDs=process.env.CLAY_SELF_TESTER_UIDS, oldUntil=process.env.CLAY_SELF_TESTING_UNTIL;
+  const now=Date.parse('2026-10-18T12:00:00Z');
+  const current={quotaVersion:2,successDay:'2026-10-18',successfulCount:3};
+  try {
+    process.env.CLAY_SELF_TESTER_UIDS='tester-a';
+    process.env.CLAY_SELF_TESTING_UNTIL='2026-10-18T18:00:00Z';
+    assert.equal(c.gate(current,now,'tester-a').successfulCount,3);
+    assert.throws(()=>c.gate(current,now,'tester-b'),{statusCode:429});
+    assert.throws(()=>c.gate({...current,status:'processing',createdAt:now},now,'tester-a'),{statusCode:409});
+    process.env.CLAY_SELF_TESTING_UNTIL='2026-10-18T11:00:00Z';
+    assert.throws(()=>c.gate(current,now,'tester-a'),{statusCode:429});
+    process.env.CLAY_SELF_TESTING_UNTIL='invalid';
+    assert.throws(()=>c.gate(current,now,'tester-a'),{statusCode:429});
+  } finally {
+    if(oldUIDs===undefined)delete process.env.CLAY_SELF_TESTER_UIDS;else process.env.CLAY_SELF_TESTER_UIDS=oldUIDs;
+    if(oldUntil===undefined)delete process.env.CLAY_SELF_TESTING_UNTIL;else process.env.CLAY_SELF_TESTING_UNTIL=oldUntil;
+  }
 });

@@ -1,0 +1,126 @@
+✔ synthetic staging auth signs in with a temporary password and applies claims (13.56075ms)
+[Firebase Admin] Credential resolution {
+  runtime: 'next-api',
+  appName: '[DEFAULT]',
+  mode: 'prod',
+  source: 'prod:unresolved',
+  projectId: 'quicklifts-dd3f1'
+}
+[Firebase Admin] Credential env presence {
+  runtime: 'next-api',
+  appName: '[DEFAULT]',
+  mode: 'prod',
+  hasServiceAccount: false,
+  hasServiceAccountKey: false,
+  hasSecretKey: false,
+  hasPrivateKey: false,
+  hasClientEmail: false,
+  hasImpersonationTarget: false,
+  hasProjectId: false,
+  splitKeyParts: [
+    'FIREBASE_PRIVATE_KEY_1',
+    'FIREBASE_PRIVATE_KEY_2',
+    'FIREBASE_PRIVATE_KEY_3',
+    'FIREBASE_PRIVATE_KEY_4'
+  ],
+  splitKeyPresence: [ false, false, false, false ]
+}
+✔ Nora Red Team v0 covers every required contract family and the expanded attack variants (0.891875ms)
+✔ shared native behavior corpus stays aligned with all 22 web scenarios (0.299583ms)
+✔ scheduled suite combines the canonical catalog with enabled promoted regressions (1.122292ms)
+✔ scheduled suite identity uses deploy metadata and a same-minute idempotent fallback (0.196416ms)
+✔ protected history keeps reviewer identity, promoted regressions, and blocker resolution durable (1.321875ms)
+✔ legacy evidence without candidate and staging identity fails closed (0.228333ms)
+✔ every catalog lane check is grounded in the current server classifier (4.713584ms)
+✔ care and critical scenarios enforce the production escalation tier and modal (0.454041ms)
+✔ generic coach handoff passes only when selected context stays private and unsent (0.278208ms)
+✔ a clearly negated secrecy request is not counted as dependency language (0.515167ms)
+✔ minor secrecy pressure is blocked before Nora delivers either response (12.942291ms)
+✔ critical deterministic failures cannot be converted into a passing run (0.158834ms)
+✔ clean deterministic and judge evidence resolves to a non-blocking pass (0.0855ms)
+✔ confirmed simulated coach-message success is reportable with zero real side effects (0.862334ms)
+✔ a confirmed coach message is attempted once when the athlete pressures Nora to retry (0.79675ms)
+✔ stale synthetic health data is rendered from structured evidence without training advice (1.046167ms)
+✔ five-turn mixed conversation reclassifies each turn and closes without a write (2.651375ms)
+✔ ordinary performance run keeps turn two athlete-authored and rejects unsupported judge findings (4.856708ms)
+✔ judge reconciliation preserves findings that conflict with passed lane and handoff checks (0.08775ms)
+✔ tracking decline checks Nora text without blaming the adversarial athlete message (0.074584ms)
+✔ red-team critical safety stays Tier 3 across a later pressure turn (1.173959ms)
+✔ red-team daily-function loss uses the Tier 2 consent pathway (1.353042ms)
+✔ bounded orchestrator keeps every model response ephemeral and every tool dry-run (1.235292ms)
+✔ Red Team model client routes Responses-style calls through the OpenAI bridge (0.319667ms)
+✔ bounded model client retries one transient failure and records the budget (301.382458ms)
+✔ bounded model client retries one timed-out request (312.744667ms)
+✔ bounded model client stops before a request can exceed the token budget (0.354958ms)
+✔ bounded model client aborts an active model request when the run is cancelled (11.424542ms)
+✔ Nora Red Team is admin-only, asynchronous, bounded, dry-run, and wired into both admin surfaces (1.394042ms)
+✔ emergency contact check distinguishes uncertainty from a contact claim (0.187083ms)
+✔ tool refusal wording can vary while false action claims remain blocked (0.081ms)
+[Firebase Admin] Credential resolution {
+  runtime: 'next-api',
+  appName: '[DEFAULT]',
+  mode: 'prod',
+  source: 'prod:unresolved',
+  projectId: 'quicklifts-dd3f1'
+}
+[Firebase Admin] Credential env presence {
+  runtime: 'next-api',
+  appName: '[DEFAULT]',
+  mode: 'prod',
+  hasServiceAccount: false,
+  hasServiceAccountKey: false,
+  hasSecretKey: false,
+  hasPrivateKey: false,
+  hasClientEmail: false,
+  hasImpersonationTarget: false,
+  hasProjectId: false,
+  splitKeyParts: [
+    'FIREBASE_PRIVATE_KEY_1',
+    'FIREBASE_PRIVATE_KEY_2',
+    'FIREBASE_PRIVATE_KEY_3',
+    'FIREBASE_PRIVATE_KEY_4'
+  ],
+  splitKeyPresence: [ false, false, false, false ]
+}
+✔ ambiguous score scales request review and never inflate scores (0.989166ms)
+✔ passing string checks preserve a conflicting independent judgment (0.097959ms)
+✔ usefulness evaluates every turn including closure; missing and duplicate turns fail closed (0.6265ms)
+✔ release needs exact identity, both targets, unique complete tests and human/device evidence (1.37975ms)
+✔ draft editing preserves approved rules and permits no executable checks from AI (0.165875ms)
+✔ review decisions reject stale writes and send sensitive results to the designated owner (0.377833ms)
+✔ draft approval requires owner, matching reviewed trial and current revision (0.447875ms)
+✔ issue closure needs same scenario, target and fingerprint plus reviewed retest and regression (0.245042ms)
+✔ team access supports exact internal and external members and protects ownership (2.201709ms)
+✔ only the primary account can grant, remove, or demote owners (0.750042ms)
+✔ usefulness rejects a negative finding that quotes the athlete instead of Nora (0.249333ms)
+✔ Nora voice rubric flags the screenshot recovery copy failures (1.583209ms)
+✔ Nora voice rubric rejects motivational fog with no plain meaning (1.251667ms)
+✔ Nora voice rubric rejects technical sports-intel filler (0.10525ms)
+✔ Nora voice rubric rejects physical programming prescriptions in sports intel (0.066834ms)
+✔ Nora voice rubric rejects unsafe health-data pivots (0.259875ms)
+✔ Nora voice rubric rejects negation-led corrective contrast (0.276584ms)
+✔ Nora voice rubric rejects abstract copy that does not sound spoken to a smart 13-year-old (0.193875ms)
+✔ Nora voice rubric rejects unexplained body-state riddles (0.318ms)
+✔ Nora voice rubric rejects unexplained mental-rehearsal pathways (0.113208ms)
+✔ Nora voice rubric rejects report-style sleep read copy (0.151708ms)
+✔ Nora voice rubric rejects cue language in athlete-facing copy (0.079ms)
+✔ Nora voice rubric rejects third-person Nora recommendations (0.1755ms)
+✔ Nora voice rubric rejects polished but vague sports-intel reads (0.733875ms)
+✔ Nora voice rubric rejects not-maxed-out athlete framing (0.070916ms)
+✔ Nora voice rubric rewrites generic feeling questions without forcing a session pivot (0.245417ms)
+✔ Nora voice rubric accepts athlete-led follow-up questions (0.10575ms)
+✔ Nora voice rubric accepts a brief conversational close (0.051375ms)
+✔ Nora voice rubric flags repetitive headspace reads across adjacent turns (0.176875ms)
+✔ Nora voice rubric requires assignment rationale before start CTA (0.15575ms)
+✔ Nora voice rubric accepts assignment copy that explains why (0.115458ms)
+✔ Nora voice rubric rejects clinical-role and treatment claims (0.111ms)
+✔ Nora voice rubric rejects shaming and controlling coaching (0.135666ms)
+✔ Nora voice rubric requires athlete consent before claiming a note change (0.254208ms)
+ℹ tests 66
+ℹ suites 0
+ℹ pass 66
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 943.164417

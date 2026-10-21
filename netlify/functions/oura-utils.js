@@ -187,7 +187,7 @@ function sanitizeReturnTo(value) {
 
   try {
     const parsed = new URL(trimmed);
-    if (parsed.protocol === 'pulsecheck:' || parsed.protocol === 'pulse:') {
+    if (parsed.protocol === 'athleticmind:' || parsed.protocol === 'pulsecheck:' || parsed.protocol === 'pulse:') {
       return parsed.toString();
     }
   } catch (error) {

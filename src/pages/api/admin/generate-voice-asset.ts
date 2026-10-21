@@ -23,6 +23,14 @@
 //     settings?: ElevenLabsVoiceSettings,
 //     punctuationPauses?: boolean,
 //   }
+//
+// Access:
+//   - Local dev tool only. It writes into the repo's public/ folder, which is
+//     read-only on Netlify, so production deploys reject every request with
+//     403 before any provider call is made (no ElevenLabs credits spent).
+//   - Requires an admin Firebase ID token (`Authorization: Bearer <token>`),
+//     verified by requireAdminRequest against the `admin` allowlist. On
+//     localhost the helper also accepts `x-admin-email` with any bearer value.
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs/promises';
@@ -34,6 +42,7 @@ import {
   normalizeElevenLabsSettings,
   shouldUseElevenLabsVoiceDefaults,
 } from '../../../lib/aiVoice';
+import { requireAdminRequest } from './_auth';
 
 type RequestBody = {
   text?: string;
@@ -108,6 +117,15 @@ async function fetchAdminVoiceConfig(): Promise<AiVoiceConfig | null> {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ error: 'This endpoint is only available in local development.' });
+  }
+
+  const adminRequest = await requireAdminRequest(req);
+  if (!adminRequest) {
+    return res.status(401).json({ error: 'Admin authentication required.' });
+  }
 
   const body = (req.body || {}) as RequestBody;
   const { text, filename, dir = 'nora' } = body;

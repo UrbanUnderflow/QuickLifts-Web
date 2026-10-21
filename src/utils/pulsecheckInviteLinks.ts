@@ -1,3 +1,5 @@
+import { getNativeAppDistribution } from './pulsecheckAppDistribution';
+
 // OneLink `af_r` web-fallback origin (+ default preview image host). Kept on
 // fitwithpulse.ai because that domain is already on AppsFlyer's af_r redirect
 // allowlist — recipients only ever see the pulsecheckapp.onelink.me link, so the
@@ -87,6 +89,7 @@ export const buildPulseCheckTeamInviteOneLink = ({
   organizationName,
   cohortName,
   imageUrl,
+  productBrand,
 }: {
   token: string;
   fallbackPath: string;
@@ -96,11 +99,19 @@ export const buildPulseCheckTeamInviteOneLink = ({
   organizationName?: string | null;
   cohortName?: string | null;
   imageUrl?: string | null;
+  productBrand?: unknown;
 }): string => {
-  const baseUrl = `https://${APPS_FLYER_SUBDOMAIN}/${APPS_FLYER_TEMPLATE_ID}`;
+  const app = getNativeAppDistribution(productBrand);
+  // Unconfigured AthleticMind distribution stays on the invite web page. Never
+  // send a university recipient through the PulseCheck store template.
+  const brandedFallbackPath = app.brand === 'athleticmind'
+    ? fallbackPath.replace('/PulseCheck/team-invite/', '/AthleticMind/team-invite/')
+    : fallbackPath;
+  if (!app.oneLinkUrl) return toAbsoluteUrl(brandedFallbackPath);
+  const baseUrl = app.oneLinkUrl;
   const title = pilotName?.trim()
     ? `You're Invited to Join ${pilotName.trim()}`
-    : `You're Invited to Join ${teamName?.trim() || 'PulseCheck'}`;
+    : `You're Invited to Join ${teamName?.trim() || app.name}`;
 
   const descriptionParts = [
     role ? `${role} access` : '',
@@ -110,16 +121,18 @@ export const buildPulseCheckTeamInviteOneLink = ({
   ].filter(Boolean);
 
   const description = descriptionParts.length > 0
-    ? `${descriptionParts.join(' ')} on PulseCheck.`
-    : 'Join PulseCheck through this invite.';
+    ? `${descriptionParts.join(' ')} on ${app.name}.`
+    : `Join ${app.name} through this invite.`;
 
-  const fallbackUrl = toAbsoluteUrl(fallbackPath);
+  const fallbackUrl = toAbsoluteUrl(brandedFallbackPath);
   const ogImageUrl = resolvePulseCheckInvitePreviewImage(imageUrl);
   const pairs = [
     ['pid', encodeURIComponent('pulsecheck_team_invite')],
     ['c', encodeURIComponent(pilotName?.trim() ? 'pulsecheck_pilot_invite' : 'pulsecheck_team_invite')],
     ['deep_link_value', encodeURIComponent(APPS_FLYER_DEEP_LINK_VALUE)],
     ['inviteToken', encodeURIComponent(token)],
+    // UDL only returns deep_link_value/sub1-10 after a new installation.
+    ['deep_link_sub2', encodeURIComponent(token)],
     ['af_r', fallbackUrl],
     ['af_og_title', encodeURIComponent(title)],
     ['af_og_description', encodeURIComponent(description)],

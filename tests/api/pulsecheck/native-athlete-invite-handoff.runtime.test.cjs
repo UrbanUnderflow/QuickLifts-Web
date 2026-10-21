@@ -63,6 +63,8 @@ const loadHandoffRuntime = ({ invite = baseInvite(), decoded = {} } = {}) => {
   clearCompiledRuntime();
   const firebase = createFirestoreAdminMock({
     collections: {
+      'pulsecheck-teams': [{ id: 'team-1', data: { status: 'active', organizationId: 'org-1' } }],
+      'pulsecheck-organizations': [{ id: 'org-1', data: { status: 'active' } }],
       'pulsecheck-invite-links': [
         { id: 'invite-1', data: invite },
       ],
@@ -266,4 +268,15 @@ test('native handoff rejects the wrong athlete account and rechecks revocation a
     runtime.authCalls.filter((call) => call.method === 'createCustomToken').length,
     0
   );
+});
+
+test('decommissioned parent rejects handoff creation and consumption', async () => {
+  const runtime = loadHandoffRuntime();
+  const created = await createHandoff(runtime);
+  await runtime.firebase.db.collection('pulsecheck-organizations').doc('org-1').update({ status: 'deleted', deletedAt: 1 });
+  assert.equal((await createHandoff(runtime)).statusCode, 403);
+  const response = createNextApiResponseRecorder();
+  await runtime.consume(request({ firebaseMode: 'dev', body: { inviteToken: 'invite-1', handoffCode: created.body.handoffCode, forceDevFirebase: true } }), response);
+  assert.equal(response.statusCode, 403);
+  assert.equal(runtime.authCalls.filter(call => call.method === 'createCustomToken').length, 0);
 });

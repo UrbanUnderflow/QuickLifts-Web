@@ -218,3 +218,45 @@ test('existing escalation POST carries stable idempotency and injected transport
   assert.equal(first.deliveryMode, 'mock');
   assert.equal(second.deliveryMode, 'mock');
 });
+
+test('university routing uses only the matching persisted Athletic Mind organization', async () => {
+  const { resolveClinicalUniversityCode } = require('../lib/clinical-bridge');
+  const makeDb = (team, organization) => ({ collection: name => ({ doc: () => ({ get: async () => ({ exists: Boolean(name === 'pulsecheck-teams' ? team : organization), data: () => name === 'pulsecheck-teams' ? team : organization }) }) }) });
+  const scope = { teamId: 'synthetic-team', organizationId: 'synthetic-org', universityCode: 'UNTRUSTED' };
+  const team = { organizationId: 'synthetic-org', universityCode: 'UNTRUSTED' };
+  const organization = { productBrand: 'athleticmind', universityCode: 'CAU' };
+  assert.equal(await resolveClinicalUniversityCode(makeDb(team, organization), scope), 'CAU');
+  assert.equal(await resolveClinicalUniversityCode(makeDb(team, { ...organization, universityCode: 'OTHER_SCHOOL' }), scope), 'OTHER_SCHOOL');
+  for (const [teamFixture, orgFixture] of [
+    [null, organization], [team, null], [{ organizationId: 'other-org' }, organization],
+    [team, { universityCode: 'CAU', productBrand: 'pulsecheck', appBranding: { pulsecheck: 'athleticmind' } }],
+    [team, { productBrand: 'athleticmind', name: 'Clark Atlanta' }],
+    [team, { ...organization, universityCode: 'invalid value' }],
+    [team, { ...organization, universityCode: 'A'.repeat(65) }],
+  ]) assert.equal(await resolveClinicalUniversityCode(makeDb(teamFixture, orgFixture), scope), undefined);
+  assert.equal(await resolveClinicalUniversityCode({ collection() { throw new Error('temporary lookup failure'); } }, scope), undefined);
+});
+
+test('athlete registration and emergency transport preserve the same optional university code', async () => {
+  const packets = [];
+  const bridge = new AuntEdnaClinicalBridge({ provider: 'auntedna', baseUrl: 'https://synthetic.invalid', apiKey: 'synthetic-only', credentialMode: 'test', timeoutMs: 1000 }, async (url, options) => {
+    packets.push({ url, body: JSON.parse(options.body) });
+    return new Response(JSON.stringify({ success: true, data: { escalationId: 'synthetic-case', status: 'received' } }), { status: 200 });
+  });
+  const Ajv = require('ajv');
+  const validateRegistration = new Ajv({ allErrors: true }).compile(require('../../../docs/developer/clinical-bridge/athlete-registration.schema.json'));
+  const validateEmergency = new Ajv({ allErrors: true }).compile(require('../../../docs/developer/clinical-bridge/emergency-handoff.schema.json'));
+  for (const universityCode of ['SANDBOX', undefined]) {
+    await bridge.upsertAthlete({ externalId: 'synthetic-athlete', universityCode });
+    const example = { ...require('../../../docs/developer/clinical-bridge/examples/emergency-handoff.synthetic.json') };
+    if (universityCode) example.universityCode = universityCode;
+    else delete example.universityCode;
+    await bridge.createEscalation(example);
+    const [athlete, emergency] = packets.slice(-2).map(packet => packet.body);
+    assert.equal(athlete.universityCode, universityCode);
+    assert.equal(emergency.universityCode, universityCode);
+    assert.equal(validateRegistration(athlete), true, JSON.stringify(validateRegistration.errors));
+    assert.equal(validateEmergency(emergency), true, JSON.stringify(validateEmergency.errors));
+  }
+  assert.equal(validateRegistration(require('../../../docs/developer/clinical-bridge/examples/athlete-registration.synthetic.json')), true);
+});

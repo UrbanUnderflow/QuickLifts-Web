@@ -1,3 +1,4 @@
+import { resolveNativeAppDistribution } from './lib/native-app-distribution';
 import type { Handler } from '@netlify/functions';
 import {
   escapeHtml,
@@ -133,7 +134,7 @@ function buildEmailSafeOpenAppUrl(args: { openAppUrl: string; iosAppUrl: string 
 function replacePulseCheckSchemeLinks(html: string, iosAppUrl: string): string {
   if (!html) return html;
 
-  return html.replace(/pulsecheck:\/\/[^\s"'<>]+/gi, (matchedUrl) =>
+  return html.replace(/(?:pulsecheck|athleticmind):\/\/[^\s"'<>]+/gi, (matchedUrl) =>
     buildEmailSafeOpenAppUrl({
       openAppUrl: matchedUrl,
       iosAppUrl,
@@ -157,7 +158,9 @@ function renderFallbackHtml(args: {
   pilotName: string;
   openAppUrl: string;
   iosAppUrl: string;
+  appName: string;
 }): string {
+  const appName = escapeHtml(args.appName);
   const firstName = escapeHtml(args.firstName);
   const organizationName = escapeHtml(args.organizationName);
   const teamName = escapeHtml(args.teamName);
@@ -179,29 +182,29 @@ function renderFallbackHtml(args: {
             <tr>
               <td style="padding:28px;font-family:Arial,sans-serif;color:#f4f4f5;">
                 <div style="display:inline-block;border:1px solid rgba(34,211,238,0.22);background:rgba(34,211,238,0.12);color:#c6f7ff;border-radius:999px;padding:6px 10px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;">
-                  PulseCheck Access Ready
+                  ${appName} Access Ready
                 </div>
-                <h1 style="margin:18px 0 10px 0;font-size:28px;line-height:1.2;color:#ffffff;">Your PulseCheck app is ready, ${firstName}.</h1>
+                <h1 style="margin:18px 0 10px 0;font-size:28px;line-height:1.2;color:#ffffff;">Your ${appName} app is ready, ${firstName}.</h1>
                 <p style="margin:0 0 14px 0;font-size:15px;line-height:1.75;color:#d4d4d8;">
                   Your access to <strong>${pilotName}</strong> for <strong>${teamName}</strong> inside <strong>${organizationName}</strong> is now active.
                 </p>
                 <p style="margin:0 0 14px 0;font-size:15px;line-height:1.75;color:#d4d4d8;">
-                  Open PulseCheck with the same email you used during activation. If you are prompted for consent, complete it and you should be good to go.
+                  Open ${appName} with the same email you used during activation. If you are prompted for consent, complete it and you should be good to go.
                 </p>
                 <p style="margin:24px 0 12px 0;">
                   <a href="${openAppUrl}" style="display:inline-block;background:#d7ff00;color:#0b0f16;text-decoration:none;padding:14px 18px;border-radius:12px;font-weight:800;">
-                    Open PulseCheck App
+                    Open ${appName} App
                   </a>
                 </p>
                 <p style="margin:0 0 16px 0;font-size:13px;line-height:1.7;color:#a1a1aa;">
-                  If the button does not open the app directly, open PulseCheck manually on your phone and sign in with the same email.
+                  If the button does not open the app directly, open ${appName} manually on your phone and sign in with the same email.
                 </p>
                 <div style="border-top:1px solid #263042;margin-top:20px;padding-top:16px;">
                   <p style="margin:0 0 10px 0;font-size:13px;line-height:1.7;color:#a1a1aa;">
                     Need the app on your phone first?
                   </p>
                   <a href="${iosAppUrl}" style="color:#9be7ff;text-decoration:underline;font-size:13px;">
-                    Download PulseCheck on iPhone
+                    Download ${appName} on iPhone
                   </a>
                 </div>
               </td>
@@ -261,14 +264,19 @@ export const handler: Handler = async (event) => {
     const organizationName = normalizeString(body.organizationName) || 'your organization';
     const teamName = normalizeString(body.teamName) || 'your team';
     const pilotName = normalizeString(body.pilotName) || 'your PulseCheck pilot';
-    const nativeOpenAppUrl = normalizeString(body.openAppUrl) || DEFAULT_OPEN_APP_URL;
-    const iosAppUrl = normalizeString(body.iosAppUrl) || DEFAULT_IOS_APP_STORE_URL;
+    const distribution = await resolveNativeAppDistribution(db, { pilotId: resolvedPilotId, organizationId: body.organizationId });
+    if (!distribution.iosUrl) {
+      return { statusCode: 409, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ success: false, error: 'AthleticMind iPhone distribution is not configured. Activation outreach is paused until its download is available.' }) };
+    }
+    const nativeOpenAppUrl = distribution.openAppUrl;
+    const iosAppUrl = distribution.iosUrl;
     const openAppUrl = buildEmailSafeOpenAppUrl({
       openAppUrl: nativeOpenAppUrl,
       iosAppUrl,
     });
-    const fallbackSubject = `${teamName} access is ready in PulseCheck`;
+    const fallbackSubject = `${teamName} access is ready in ${distribution.name}`;
     const fallbackHtml = renderFallbackHtml({
+      appName: distribution.name,
       firstName: recipient.firstName,
       organizationName,
       teamName,
@@ -278,12 +286,14 @@ export const handler: Handler = async (event) => {
     });
 
     const template = await resolveSequenceTemplate({
-      templateDocId: 'pulsecheck-pilot-activation-v1',
+      templateDocId: `${distribution.brand}-pilot-activation-v1`,
       fallbackSubject,
       fallbackHtml,
-      subjectOverride,
-      htmlOverride,
+      subjectOverride: distribution.brand === 'athleticmind' ? undefined : subjectOverride,
+      htmlOverride: distribution.brand === 'athleticmind' ? undefined : htmlOverride,
       vars: {
+        appName: distribution.name,
+        app_name: distribution.name,
         firstName: recipient.firstName,
         first_name: recipient.firstName,
         organizationName,
@@ -307,7 +317,7 @@ export const handler: Handler = async (event) => {
       subject: template.subject,
       body: stripHtmlToPreviewText(emailHtml),
       html: emailHtml,
-      ctaLabel: 'Open PulseCheck App',
+      ctaLabel: `Open ${distribution.name} App`,
       ctaUrl: openAppUrl,
     };
 

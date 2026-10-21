@@ -815,6 +815,7 @@ export interface PulseCheckAthleteClinicianOverride {
 }
 
 export interface PulseCheckInviteLink {
+  activationCode?: string;
   id: string;
   inviteType: PulseCheckInviteLinkType;
   status: PulseCheckInviteLinkStatus;

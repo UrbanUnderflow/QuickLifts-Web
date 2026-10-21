@@ -9,8 +9,11 @@
       {
         "appID": "ZG887P86D5.Tremaine.Macra",
         "paths": ["/macra/buddy/*"]
+      },
+      {
+        "appID": "ZG887P86D5.com.fitwithpulse.athleticmind",
+        "paths": ["/AthleticMind/team-invite/*"]
       }
     ]
   }
 }
-

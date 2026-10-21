@@ -1,0 +1,17 @@
+✔ active organization app override is returned without product or clinical fields (0.818166ms)
+✔ product profile alone never changes app identity (0.117375ms)
+✔ no membership and revoked membership retain app defaults; explicit foreign team is forbidden (0.53875ms)
+✔ inactive or mismatched team and inactive org cannot supply overrides (0.149709ms)
+✔ multiple organizations default unless selected team establishes authorized context (0.14025ms)
+✔ endpoint requires auth, validates context and returns private no-store response (0.245792ms)
+✔ program default is AthleticMind; app identities default independently (0.292125ms)
+✔ write validators reject invalid identities and preserve default overrides (0.28725ms)
+✔ persisted team organization controls routing (0.110083ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 38.566458

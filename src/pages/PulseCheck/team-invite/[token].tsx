@@ -37,12 +37,11 @@ import {
   isPulseCheckCoachPricedAthleteOfferActive,
 } from '../../../utils/pulsecheckCommercialization';
 
-const PULSECHECK_IOS_APP_STORE_URL = 'https://apps.apple.com/app/pulsecheck-mindset-coaching/id6747253393';
-// Placeholder until PulseCheck-Android is published — the listing goes live at this URL automatically.
-const PULSECHECK_ANDROID_PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.fitwithpulse.pulsecheck';
+import { getNativeAppDistribution, normalizeNativeProductBrand, type NativeProductBrand } from '../../../utils/pulsecheckAppDistribution';
 
 type TeamInvitePageProps = {
   invite: {
+    productBrand: NativeProductBrand;
     token: string;
     activationUrl: string;
     organizationId: string;
@@ -302,6 +301,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     setShowWebOnboarding(router.query.web === '1');
   }, [router.isReady, router.query.web]);
 
+  const appDistribution = getNativeAppDistribution(invite.productBrand);
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
@@ -340,9 +340,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     shouldPreferAppDownload && !requiresAthleteCheckout && !showWebOnboarding && !redeemedState;
   const inviteScopeLabel = invite.pilotName || invite.teamName;
   const inviteHeadline = requiresAthleteCheckout
-    ? `Join ${invite.teamName} on PulseCheck.`
+    ? `Join ${invite.teamName} on ${appDistribution.name}.`
     : shouldPreferAppDownload
-      ? `Download the PulseCheck app to join ${inviteScopeLabel}.`
+      ? `Download the ${appDistribution.name} app to join ${inviteScopeLabel}.`
       : `Join ${invite.teamName}`;
 
   useEffect(() => {
@@ -1666,7 +1666,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">App-First Onboarding</p>
                   <h2 className="mt-2 text-3xl font-semibold text-white">Download the app to join this pilot</h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    Download PulseCheck on your phone, then sign in with{' '}
+                    Download {appDistribution.name} on your phone, then sign in with{' '}
                     <span className="font-medium text-white">{invite.targetEmail || 'your invited email'}</span> to continue into{' '}
                     <span className="font-medium text-white">{inviteScopeLabel}</span>.
                   </p>
@@ -1676,30 +1676,32 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <div className="space-y-3">
                     <div className="text-sm font-semibold text-white">Recommended path</div>
                     <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-200">
-                      Install the PulseCheck app, create your account with the invited email, then come back to this browser page and tap Join Now to finish entering the pilot in-app.
+                      Install the {appDistribution.name} app, create your account with the invited email, then come back to this browser page and tap Join Now to finish entering the pilot in-app.
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <a
-                        href={PULSECHECK_IOS_APP_STORE_URL}
+                        href={appDistribution.iosUrl || undefined}
+                        aria-disabled={!appDistribution.iosUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
                       >
                         <Download className="h-4 w-4" />
-                        iPhone App Store
+                        {appDistribution.iosUrl ? 'iPhone App Store' : 'iPhone download coming soon'}
                       </a>
                       <a
-                        href={PULSECHECK_ANDROID_PLAY_STORE_URL}
+                        href={appDistribution.androidUrl || undefined}
+                        aria-disabled={!appDistribution.androidUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
                       >
                         <Smartphone className="h-4 w-4" />
-                        Android Play Store
+                        {appDistribution.androidUrl ? 'Android Play Store' : 'Android download coming soon'}
                       </a>
                     </div>
                     <a
-                      href={invite.activationUrl}
+                      href={invite.productBrand === 'athleticmind' ? `athleticmind://open?inviteToken=${encodeURIComponent(invite.token)}` : invite.activationUrl}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#7C3AED]/35 bg-[#7C3AED]/[0.12] px-4 py-3 text-sm font-semibold text-[#a78bfa] transition hover:bg-[#7C3AED]/[0.18]"
                     >
                       Join Now
@@ -2083,6 +2085,7 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
     }
     if (invite.inviteType !== 'team-access') return unavailable('default');
 
+    let productBrand: NativeProductBrand = 'pulsecheck';
     let organizationName = 'PulseCheck Organization';
     let teamName = 'Team';
     let organizationImageUrl = '';
@@ -2098,6 +2101,8 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
         firestore.collection('pulsecheck-teams').doc(String(invite.teamId || '')).get(),
       ]);
 
+      if (!organizationSnap.exists) return unavailable('not-found');
+      productBrand = normalizeNativeProductBrand(organizationSnap.data()?.productBrand);
       organizationName = organizationSnap.data()?.displayName || organizationName;
       teamName = teamSnap.data()?.displayName || teamName;
       liveTeamCommercialConfig =
@@ -2112,6 +2117,8 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
         getFirestoreDocFallback('pulsecheck-teams', String(invite.teamId || ''), forceDevFirebase),
       ]);
 
+      if (!organizationDoc) return unavailable('not-found');
+      productBrand = normalizeNativeProductBrand(organizationDoc?.productBrand);
       organizationName = String(organizationDoc?.displayName || organizationName);
       teamName = String(teamDoc?.displayName || teamName);
       liveTeamCommercialConfig =
@@ -2135,6 +2142,7 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
     return {
       props: {
         invite: {
+          productBrand,
           token,
           activationUrl: String(invite.activationUrl || pageUrl),
           organizationId: String(invite.organizationId || ''),

@@ -1,0 +1,65 @@
+{
+  "tests": [
+    {
+      "suite": "membership-local",
+      "passed": 21,
+      "log": "/tmp/cohort-final-membership-local.log",
+      "sha256": "2dfb390f06fd53b68c2bf0549080ca4027ffe88e6e1c640b26efec1c7da34722"
+    },
+    {
+      "suite": "membership-candidate",
+      "passed": 21,
+      "log": "/tmp/cohort-final-membership-candidate.log",
+      "sha256": "54a0a77f3990eb21d0dd9c518c6c69247a6a0eba4cb9b0478712b34e24195e87"
+    },
+    {
+      "suite": "escalation",
+      "passed": 2,
+      "log": "/tmp/cohort-final-escalation.log",
+      "sha256": "99309aa23ec49c9c60f8db9a8d7817c393ffb3e095bb20c164262d8b44250f29"
+    },
+    {
+      "suite": "health",
+      "passed": 2,
+      "log": "/tmp/cohort-final-health.log",
+      "sha256": "1569d02350316ce743302698e99c0e199d3489a281f401065f945cd52fee4007"
+    },
+    {
+      "suite": "nora",
+      "passed": 2,
+      "log": "/tmp/cohort-final-nora.log",
+      "sha256": "4cee4e6adffcd1dca771bd9dcc2a7f8c0c6e62be06c494036e9e448ab778e2e6"
+    },
+    {
+      "suite": "assignments",
+      "passed": 2,
+      "log": "/tmp/cohort-final-assignments.log",
+      "sha256": "a0350d0f12c05bc981ef8aa617ead6032c82119db21de28b700f0958df5e2ba3"
+    },
+    {
+      "suite": "provider-rules",
+      "passed": 21,
+      "log": "/tmp/cohort-final-provider-rules.log",
+      "sha256": "ca03ddd719142318ea16b8145da6354b1f4de9c9536fb5b253c230a87f9b9251"
+    },
+    {
+      "suite": "Nora closure and storage",
+      "passed": 84,
+      "log": "/tmp/cohort-chat-closure-final.log",
+      "sha256": "46d4e318f90e8a414e3aecc2d685eb81b433cc5236d10cda47ab88522ccdcfd6"
+    },
+    {
+      "suite": "Nora storage rules",
+      "passed": 2,
+      "log": "/tmp/cohort-final-nora-storage-rules.log",
+      "sha256": "0b7ebc9291f33297016e918742cf84708789f3e2a2b52c8735328f4166f95964"
+    }
+  ],
+  "scope": "Synthetic emulator fixtures; local and exact deployed candidate rules. Counts are per invocation, not unique scenarios.",
+  "finalUiBuild": {
+    "baseCommit": "59a047253",
+    "includedChange": "src/pages/coach/mentalGames.tsx owner-only action, matching84832b2f6",
+    "passed": true,
+    "logSha256": "e7c926e62fdc114af4b2fa92a2bb93ac28b957effa7140c9db2fa0fb30a7e441"
+  }
+}

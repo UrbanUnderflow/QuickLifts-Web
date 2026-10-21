@@ -135,7 +135,7 @@ function sanitizeReturnTo(value) {
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed;
   try {
     const parsed = new URL(trimmed);
-    if (parsed.protocol === 'pulsecheck:' || parsed.protocol === 'pulse:' || parsed.protocol === 'quicklifts:') {
+    if (parsed.protocol === 'athleticmind:' || parsed.protocol === 'pulsecheck:' || parsed.protocol === 'pulse:' || parsed.protocol === 'quicklifts:') {
       return parsed.toString();
     }
   } catch {

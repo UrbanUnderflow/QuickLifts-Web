@@ -19,12 +19,12 @@ exports.handler = async (event) => {
           ...(active ? { jobId: current.jobId } : {}),
           ...(current.approvedPath ? { imageURL: await c.signedURL(bucket, current.approvedPath) } : {}),
           ...(active && current.status === 'ready' && current.approvedPath !== c.paths(uid, current.jobId).output ? { previewImageURL: await c.signedURL(bucket, c.paths(uid, current.jobId).output) } : {}),
-          ...(expired || current.status === 'failed' ? { error: 'We could not make your Clay Self. Please try again.' } : {}),
+          ...(expired || current.status === 'failed' ? c.publicFailure(current, expired) : {}),
         });
       }
       if (c.jobID(id) !== current.jobId) throw c.fail(404, 'Clay Self request not found.');
-      if (['queued', 'processing'].includes(current.status) && Date.now() - current.createdAt >= c.MAX_AGE) return reply(200, { jobId: id, status: 'failed', error: 'This request timed out. Please try again.' });
-      return reply(200, { jobId: id, status: current.status === 'queued' ? 'processing' : current.status, ...(current.status === 'approved' ? { imageURL: await c.signedURL(bucket, current.approvedPath) } : {}), ...(current.status === 'ready' ? { previewImageURL: await c.signedURL(bucket, c.paths(uid, id).output) } : {}), ...(current.status === 'failed' ? { error: 'We could not make your Clay Self. Please try again.' } : {}) });
+      if (['queued', 'processing'].includes(current.status) && Date.now() - current.createdAt >= c.MAX_AGE) return reply(200, { jobId: id, status: 'failed', ...c.publicFailure(current, true) });
+      return reply(200, { jobId: id, status: current.status === 'queued' ? 'processing' : current.status, ...(current.status === 'approved' ? { imageURL: await c.signedURL(bucket, current.approvedPath) } : {}), ...(current.status === 'ready' ? { previewImageURL: await c.signedURL(bucket, c.paths(uid, id).output) } : {}), ...(current.status === 'failed' ? c.publicFailure(current) : {}) });
     }
     if (event.httpMethod === 'DELETE') {
       let previous;
@@ -53,20 +53,24 @@ exports.handler = async (event) => {
     let previous;
     await db.runTransaction(async (tx) => {
       previous = (await tx.get(ref)).data() || {};
-      const limits = c.gate(previous, now);
+      const limits = c.gate(previous, now, uid);
       tx.set(ref, { ...limits, jobId: id, status: 'queued', createdAt: now, approvedPath: previous.approvedPath || null });
     });
     const locations = c.paths(uid, id);
+    let phase = 'input_upload';
     try {
       // Never persist an input URL or public download token for reference photos.
       const uploads = await Promise.allSettled(images.map((image, index) => bucket.file(locations.sources[index]).save(image.bytes, { resumable: false, metadata: { contentType: 'image/jpeg', cacheControl: 'private, no-store' } })));
       if (uploads.some(result => result.status === 'rejected')) throw c.fail(503, 'Photo upload failed. Please try again.');
+      phase = 'dispatch';
       const origin = new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai');
       if (origin.protocol !== 'https:') throw c.fail(503, 'Clay Self creation is temporarily unavailable.');
       const dispatch = await fetch(new URL('/.netlify/functions/pulsecheck-clay-self-background', origin), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: event.headers.authorization || event.headers.Authorization, 'x-pulsecheck-firebase-mode': isDevMode({ headers: event.headers || {} }) ? 'dev' : 'prod' }, body: JSON.stringify({ jobId: id }), signal: AbortSignal.timeout(10000) });
       if (!dispatch.ok) throw c.fail(503, 'Clay Self creation is temporarily unavailable.');
     } catch (error) {
-      await db.runTransaction(async (tx) => { const current = (await tx.get(ref)).data(); if (current?.jobId === id) tx.update(ref, { status: 'failed' }); });
+      const details = c.failureDetails(error, phase, now);
+      c.logFailure(details);
+      await db.runTransaction(async (tx) => { const current = (await tx.get(ref)).data(); if (current?.jobId === id) tx.update(ref, { status: 'failed', ...details }); });
       await c.remove(bucket, locations.sources);
       throw error;
     }

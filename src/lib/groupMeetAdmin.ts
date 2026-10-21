@@ -597,14 +597,16 @@ export async function sendGroupMeetFinalReminderEmailBatch(args: {
   };
 }
 
-async function sendGroupMeetHostProgressEmail(args: {
+async function sendGroupMeetAvailabilityProgressEmail(args: {
   requestId: string;
   requestTitle: string;
   targetMonth: string;
   timezone: string;
-  hostName: string;
-  hostEmail: string;
+  recipientName: string;
+  recipientEmail: string;
   responderName: string;
+  responderToken: string;
+  isHost: boolean;
   responseAction: "added" | "updated";
   respondedAt: string | null;
   responseCount: number;
@@ -618,7 +620,7 @@ async function sendGroupMeetHostProgressEmail(args: {
   const subject = `${args.requestTitle}: ${args.responderName} ${args.responseAction} availability`;
   const htmlContent = `
     <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
-      <p>Hi ${escapeHtml(args.hostName || "there")},</p>
+      <p>Hi ${escapeHtml(args.recipientName || "there")},</p>
       <p><strong>${escapeHtml(args.responderName)}</strong> just ${escapeHtml(args.responseAction)} availability for <strong>${escapeHtml(args.requestTitle)}</strong>.</p>
       <p>
         Responses so far: <strong>${args.responseCount} of ${args.participantCount}</strong><br/>
@@ -626,22 +628,23 @@ async function sendGroupMeetHostProgressEmail(args: {
       </p>
       <p style="margin:0 0 10px;"><strong>Still waiting on:</strong></p>
       <p style="margin:0;color:#52525b;">${escapeHtml(pendingLabel)}</p>
-      <p style="margin-top:16px;color:#52525b;">Once everyone has replied, Group Meet will send you a follow-up email with recommended meeting windows you can choose from directly.</p>
+      <p style="margin-top:16px;color:#52525b;">${args.isHost ? "Once everyone has replied, Group Meet will send you a follow-up email with recommended meeting windows you can choose from directly." : "Once everyone has replied, the host will review the recommended meeting windows."}</p>
     </div>
   `;
 
   return sendBrevoTransactionalEmail({
-    toEmail: args.hostEmail,
-    toName: args.hostName || args.hostEmail,
+    toEmail: args.recipientEmail,
+    toName: args.recipientName || args.recipientEmail,
     subject,
     htmlContent,
     sender: { email: senderEmail, name: senderName },
     replyTo: { email: senderEmail, name: senderName },
-    tags: ["group-meet", "group-meet-host-progress"],
+    tags: ["group-meet", "group-meet-availability-progress"],
     idempotencyKey: buildEmailDedupeKey([
-      "group-meet-host-progress-v1",
+      "group-meet-availability-progress-v2",
       args.requestId,
-      args.responderName,
+      args.responderToken,
+      args.recipientEmail.trim().toLowerCase(),
       args.responseAction,
       args.respondedAt || `${args.responseCount}/${args.participantCount}`,
     ]),
@@ -1474,7 +1477,7 @@ export async function maybeNotifyGroupMeetHostAfterAvailabilitySave(args: {
       (invite) => invite.participantType === "host" && invite.email,
     ) || null;
 
-  if (!responder || !hostInvite || responder.participantType === "host") {
+  if (!responder) {
     return { notified: false, mode: null };
   }
 
@@ -1492,14 +1495,47 @@ export async function maybeNotifyGroupMeetHostAfterAvailabilitySave(args: {
   const pendingParticipantNames = args.invites
     .filter(
       (invite) =>
-        invite.token !== hostInvite.token && invite.token !== responder.token,
+        invite.token !== responder.token,
     )
     .filter(
       (invite) => !invite.respondedAt && !invite.availabilityEntries.length,
     )
     .map((invite) => invite.name || "Unknown");
 
-  if (responseCount >= participantCount) {
+  // Send individually so recipient addresses stay private. Deduplicate shared emails.
+  const recipients = [...new Map(
+    args.invites
+      .filter((invite) => invite.email?.trim())
+      .map((invite) => [invite.email!.trim().toLowerCase(), invite] as const),
+  ).values()];
+  const allResponded = responseCount >= participantCount;
+  const progressResults = await Promise.all(recipients
+    .filter((invite) => !allResponded || invite.email?.trim().toLowerCase() !== hostInvite?.email?.trim().toLowerCase())
+    .map(async (invite) => {
+      try {
+        return await sendGroupMeetAvailabilityProgressEmail({
+          requestId: args.requestId,
+          requestTitle: args.requestData.title || "Group Meet",
+          targetMonth: args.requestData.targetMonth || "",
+          timezone: args.requestData.timezone || "America/New_York",
+          recipientName: invite.name || "there",
+          recipientEmail: invite.email!.trim(),
+          isHost: invite.participantType === "host",
+          responderName: responder.name || "A guest",
+          responderToken: responder.token,
+          responseAction: args.responseAction,
+          respondedAt: responder.respondedAt,
+          responseCount,
+          participantCount,
+          pendingParticipantNames,
+        });
+      } catch (error) {
+        console.error("[group-meet] Availability notification failed:", error);
+        return { success: false, skipped: false };
+      }
+    }));
+
+  if (allResponded && hostInvite) {
     const { recommendation } = await computeGroupMeetAiRecommendation({
       requestTitle: args.requestData.title || "Group Meet",
       targetMonth: args.requestData.targetMonth || "",
@@ -1548,22 +1584,16 @@ export async function maybeNotifyGroupMeetHostAfterAvailabilitySave(args: {
     };
   }
 
-  const sendResult = await sendGroupMeetHostProgressEmail({
-    requestId: args.requestId,
-    requestTitle: args.requestData.title || "Group Meet",
-    targetMonth: args.requestData.targetMonth || "",
-    timezone: args.requestData.timezone || "America/New_York",
-    hostName: hostInvite.name || "Host",
-    hostEmail: hostInvite.email || "",
-    responderName: responder.name || "A guest",
-    responseAction: args.responseAction,
-    respondedAt: responder.respondedAt,
-    responseCount,
-    participantCount,
-    pendingParticipantNames,
-  });
+  const sendResult = {
+    success: progressResults.some((result) => result.success),
+    skipped: progressResults.length > 0 && progressResults.every((result) => result.skipped),
+  };
 
-  if (sendResult.success && !sendResult.skipped) {
+  const hostProgressResult = hostInvite
+    ? progressResults[recipients.findIndex((invite) =>
+        invite.email?.trim().toLowerCase() === hostInvite.email?.trim().toLowerCase())]
+    : null;
+  if (hostProgressResult?.success && !hostProgressResult.skipped) {
     await args.requestRef.set(
       {
         hostLastAvailabilityEmailSentAt:

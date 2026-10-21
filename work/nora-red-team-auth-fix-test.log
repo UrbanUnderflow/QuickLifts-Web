@@ -1,0 +1,11 @@
+✔ dev Firebase resolves to a short-lived impersonated identity without a second private key (1.902625ms)
+✔ dev Firebase defaults to the dedicated Nora impersonation identity (0.313542ms)
+✔ Firebase Admin exchanges the production identity for a short-lived dev credential (1.4265ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 50.577333

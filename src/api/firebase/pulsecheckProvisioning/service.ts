@@ -1054,6 +1054,7 @@ const toPilotEnrollment = (id: string, data: Record<string, any>): PulseCheckPil
 });
 
 const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLink => ({
+  activationCode: data.activationCode || undefined,
   id,
   inviteType: (data.inviteType as PulseCheckInviteLinkType) || 'admin-activation',
   status: resolveInviteLinkStatus(data.status, data.redemptionMode),
@@ -1775,9 +1776,27 @@ async function createProvisionedEntity(kind: 'organization' | 'team', payload: R
 }
 
 export const pulseCheckProvisioningService = {
+  async prepareAthleteActivation(token: string): Promise<{ code: string; url: string }> {
+    const ref = doc(db, INVITE_LINKS_COLLECTION, token);
+    const current = await getDoc(ref);
+    const candidateCode = current.data()?.activationCode || token.replace(/-/g, '').slice(0, 16).toUpperCase();
+    const collisions = await getDocs(query(collection(db, INVITE_LINKS_COLLECTION), where('activationCode', '==', candidateCode)));
+    if (collisions.docs.some(candidate => candidate.id !== token)) throw new Error('This activation code is already assigned. Create a new invitation before sharing it.');
+    return runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(ref);
+      const data = snapshot.data();
+      if (!data || data.inviteType !== 'team-access' || data.teamMembershipRole !== 'athlete' || data.redemptionMode !== 'general' || data.targetEmail || !['active', 'redeemed'].includes(data.status)) throw new Error('Choose an active, reusable athlete invitation for this team or cohort.');
+      const code = data.activationCode || token.replace(/-/g, '').slice(0, 16).toUpperCase();
+      const url = new URL(data.activationUrl);
+      if (url.hostname.endsWith('.onelink.me')) url.searchParams.set('deep_link_sub2', token);
+      transaction.update(ref, { activationCode: code, activationUrl: url.toString(), updatedAt: serverTimestamp() });
+      return { code, url: url.toString() };
+    });
+  },
+
   async listOrganizations(): Promise<PulseCheckOrganization[]> {
     const snapshot = await getDocs(collection(db, ORGANIZATIONS_COLLECTION));
-    return sortByCreatedAtDesc(snapshot.docs.map((docSnap) => toOrganization(docSnap.id, docSnap.data() as Record<string, any>)));
+    return sortByCreatedAtDesc(snapshot.docs.filter((docSnap) => !['deleted', 'purging', 'purged'].includes(docSnap.data().lifecycleState)).map((docSnap) => toOrganization(docSnap.id, docSnap.data() as Record<string, any>)));
   },
 
   async listTeams(): Promise<PulseCheckTeam[]> {
@@ -3832,10 +3851,12 @@ export const pulseCheckProvisioningService = {
           organizationName: resolvedOrganizationName,
           cohortName: normalizeString(input.cohortName),
           imageUrl: previewImageUrl,
+          productBrand: organizationData.productBrand,
         });
 
     const payload = {
       inviteType: 'team-access',
+      ...(normalizedRole === 'athlete' && redemptionMode === 'general' && !normalizedTargetEmail ? { activationCode: token.replace(/-/g, '').slice(0, 16).toUpperCase() } : {}),
       status: 'active',
       redemptionMode,
       redemptionCount: 0,

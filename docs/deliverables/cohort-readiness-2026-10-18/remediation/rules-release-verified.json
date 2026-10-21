@@ -1,0 +1,13 @@
+{
+  "verifiedAt": "2026-10-18T13:39:31.655Z",
+  "beforeRuleset": "projects/quicklifts-dd3f1/rulesets/2f6d998c-38a6-409b-bf2c-a45b8760e804",
+  "afterRelease": {
+    "name": "projects/quicklifts-dd3f1/releases/cloud.firestore",
+    "rulesetName": "projects/quicklifts-dd3f1/rulesets/15994cc9-1f6a-4eab-af31-bee3309d8a8d",
+    "createTime": "2023-06-30T10:39:14.376659Z",
+    "updateTime": "2026-10-18T13:39:31.036391Z"
+  },
+  "sourceSha256": "66f1d89a10d0031d2062123cf74c7ba473ae73c661a09412beb53897c122f109",
+  "scope": "Only membership access/grant restrictions and supporting membership helpers; unrelated deployed rules preserved",
+  "readbackExact": true
+}

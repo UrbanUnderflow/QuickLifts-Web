@@ -1,0 +1,21 @@
+{
+  "deploymentId": "6ad612e05ad8df81552cc286",
+  "commit": "05e571890b0bf8b230f46ff3c8e204dc32c9f366",
+  "state": "ready",
+  "publishedAt": "2026-10-19T13:03:21.433Z",
+  "route": "https://fitwithpulse.ai/admin/groupMeet",
+  "httpStatus": 200,
+  "assetChecks": {
+    "Save title": true,
+    "group-meet-calendar-result": true,
+    "Host availability saved. Request updated.": true,
+    "Finish": true
+  },
+  "signedInUiChecks": {
+    "requestListSyncButton": true,
+    "hostAvailabilityModal": true,
+    "connectedGoogleAccountShown": true,
+    "finishRequiresSavedAvailability": true,
+    "draftTitleEditor": true
+  }
+}

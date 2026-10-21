@@ -1652,3 +1652,179 @@ test('legacy raw journal sharing cannot bypass the saved entry permission flow',
   assert.equal(JSON.parse(response.body).errorCode, 'JOURNAL_ENTRY_PERMISSION_REQUIRED');
   assert.equal(runtime.firestoreReads(), 0);
 });
+
+function loadVoiceTurnRuntime() {
+  const fixture = createEscalationFlowDb({ conversations: [{ id: 'voice-turn', userId: 'athlete-1', messages: [] }] });
+  delete require.cache[chatPath];
+  require.cache[configPath] = { id: configPath, filename: configPath, loaded: true, exports: {
+    initializeFirebaseAdmin: () => {},
+    getFirebaseAdminApp: () => ({ auth: () => ({ verifyIdToken: async () => ({ uid: 'athlete-1' }) }), firestore: () => fixture.db }),
+    admin: { firestore: () => fixture.db }, headers: {},
+  } };
+  require.cache[submitPath] = { id: submitPath, filename: submitPath, loaded: true, exports: { runtimeHelpers: {} } };
+  return { ...fixture, handler: require(chatPath).handler };
+}
+
+const voiceTurnRequest = { httpMethod: 'POST', headers: { authorization: 'Bearer fake-token' }, body: JSON.stringify({
+  message: "I'm feeling pretty good Nora thanks for asking", conversationId: 'voice-turn',
+  recentMessages: [{ isFromUser: false, content: 'How are you feeling right now?' }],
+}) };
+const modelReply = content => ({ ok: true, status: 200, statusText: 'OK', headers: new Map(), json: async () => ({ choices: [{ message: { content } }] }) });
+
+async function withVoiceTurnTransport(transport, run) {
+  const previousFetch = global.fetch;
+  const previousKey = process.env.OPEN_AI_SECRET_KEY;
+  global.fetch = transport;
+  process.env.OPEN_AI_SECRET_KEY = 'test-openai-key';
+  try { await run(loadVoiceTurnRuntime()); }
+  finally {
+    global.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.OPEN_AI_SECRET_KEY;
+    else process.env.OPEN_AI_SECRET_KEY = previousKey;
+  }
+}
+
+test('voice turn overlaps storage and safety checks and waits for both before drafting', async () => {
+  let releaseStorage;
+  let releaseSafety;
+  let drafts = 0;
+  const requestSignals = [];
+  await withVoiceTurnTransport(async (_url, options) => {
+    requestSignals.push(options.signal);
+    const prompt = JSON.parse(options.body).messages[0].content;
+    if (prompt.startsWith('Classify storage')) {
+      await new Promise(resolve => { releaseStorage = resolve; });
+      return modelReply('{"decision":"ordinary"}');
+    }
+    if (prompt.startsWith('You are a clinical safety classifier')) {
+      assert.ok(options.signal, 'Safety requests must have a deadline.');
+      await new Promise(resolve => { releaseSafety = resolve; });
+      return modelReply('{"tier":0,"category":"general","confidence":0.99,"shouldEscalate":false}');
+    }
+    drafts += 1;
+    assert.ok(options.signal, 'Reply requests must have a deadline.');
+    return modelReply("You're feeling pretty good. What's been going well today?");
+  }, async ({ handler, writes }) => {
+    const pending = handler(voiceTurnRequest);
+    await waitFor(() => releaseStorage && releaseSafety);
+    assert.equal(drafts, 0);
+    assert.equal(writes.conversations.length, 0);
+    releaseSafety();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(drafts, 0, 'Storage authorization remains required.');
+    releaseStorage();
+    const response = await pending;
+    const body = JSON.parse(response.body);
+    assert.equal(response.statusCode, 200);
+    assert.equal(drafts, 1);
+    assert.equal(requestSignals.length, 3);
+    assert.ok(requestSignals.every(signal => signal === requestSignals[0]), 'Storage, safety, and reply share one deadline, rather than resetting it per stage.');
+    assert.match(body.assistantMessage, /feeling pretty good/);
+    assert.notEqual(body.assistantMessage, "You're welcome.");
+    assert.equal(writes.conversations.length, 1);
+  });
+});
+
+test('failed safety check returns an unprocessed 503 before drafting or writing a turn', async () => {
+  let drafts = 0;
+  await withVoiceTurnTransport(async (_url, options) => {
+    const prompt = JSON.parse(options.body).messages[0].content;
+    if (prompt.startsWith('Classify storage')) return modelReply('{"decision":"ordinary"}');
+    if (prompt.startsWith('You are a clinical safety classifier')) throw new DOMException('Request timed out', 'TimeoutError');
+    drafts += 1;
+    return modelReply('This reply must never be generated.');
+  }, async ({ handler, writes }) => {
+    const response = await handler(voiceTurnRequest);
+    const body = JSON.parse(response.body);
+    assert.equal(response.statusCode, 503);
+    assert.equal(body.errorCode, 'ESCALATION_CLASSIFICATION_UNAVAILABLE');
+    assert.equal(body.messageProcessed, false);
+    assert.equal(drafts, 0);
+    assert.equal(writes.conversations.length, 0);
+    assert.equal(writes.records.length, 0);
+  });
+});
+
+test('reply timeout returns a retryable timeout without persisting a failed conversation turn', async () => {
+  await withVoiceTurnTransport(async (_url, options) => {
+    const prompt = JSON.parse(options.body).messages[0].content;
+    if (prompt.startsWith('Classify storage')) return modelReply('{"decision":"ordinary"}');
+    if (prompt.startsWith('You are a clinical safety classifier')) return modelReply('{"tier":0,"category":"general","confidence":0.99,"shouldEscalate":false}');
+    throw new DOMException('Request timed out', 'TimeoutError');
+  }, async ({ handler, writes }) => {
+    const response = await handler(voiceTurnRequest);
+    const body = JSON.parse(response.body);
+    assert.equal(response.statusCode, 504);
+    assert.equal(body.errorCode, 'NORA_RESPONSE_TIMEOUT');
+    assert.equal('messageProcessed' in body, false);
+    assert.equal(writes.conversations.length, 0);
+  });
+});
+
+test('simultaneous classifier failures are handled without an unhandled rejection', async () => {
+  const unhandled = [];
+  const recordUnhandled = reason => unhandled.push(reason);
+  process.on('unhandledRejection', recordUnhandled);
+  try {
+    await withVoiceTurnTransport(async () => {
+      await new Promise(resolve => setImmediate(resolve));
+      throw new Error('Classifier unavailable');
+    }, async ({ handler, writes }) => {
+      const response = await handler(voiceTurnRequest);
+      assert.equal(response.statusCode, 503);
+      assert.equal(JSON.parse(response.body).errorCode, 'ESCALATION_CLASSIFICATION_UNAVAILABLE');
+      assert.equal(writes.conversations.length, 0);
+      await new Promise(resolve => setImmediate(resolve));
+      assert.deepEqual(unhandled, []);
+    });
+  } finally {
+    process.off('unhandledRejection', recordUnhandled);
+  }
+});
+
+test('one spent provider budget stops the turn before another model request or write', async () => {
+  const originalTimeout = AbortSignal.timeout;
+  const budget = new AbortController();
+  let calls = 0;
+  AbortSignal.timeout = milliseconds => milliseconds === 14000 ? budget.signal : originalTimeout(milliseconds);
+  try {
+    await withVoiceTurnTransport(async (_url, options) => {
+      calls += 1;
+      const prompt = JSON.parse(options.body).messages[0].content;
+      if (prompt.startsWith('Classify storage')) return modelReply('{"decision":"ordinary"}');
+      budget.abort(new DOMException('Request timed out', 'TimeoutError'));
+      return modelReply('{"tier":0,"category":"general","confidence":0.99,"shouldEscalate":false}');
+    }, async ({ handler, writes }) => {
+      const response = await handler(voiceTurnRequest);
+      assert.equal(response.statusCode, 504);
+      assert.equal(JSON.parse(response.body).errorCode, 'NORA_RESPONSE_TIMEOUT');
+      assert.equal(calls, 2);
+      assert.equal(writes.conversations.length, 0);
+    });
+  } finally {
+    AbortSignal.timeout = originalTimeout;
+  }
+});
+
+test('failure after a persisted turn does not claim the message was unprocessed', async () => {
+  await withVoiceTurnTransport(async (_url, options) => {
+    const prompt = JSON.parse(options.body).messages[0].content;
+    if (prompt.startsWith('Classify storage')) return modelReply('{"decision":"ordinary"}');
+    if (prompt.startsWith('You are a clinical safety classifier')) return modelReply('{"tier":0,"category":"general","confidence":0.99,"shouldEscalate":false}');
+    return modelReply("You're feeling pretty good. What's been going well today?");
+  }, async ({ handler, writes }) => {
+    const stringify = JSON.stringify;
+    JSON.stringify = (value, ...args) => {
+      if (value?.runtimeEvidence && value?.assistantMessage) throw new Error('Response serialization failed');
+      return stringify(value, ...args);
+    };
+    try {
+      const response = await handler(voiceTurnRequest);
+      assert.equal(response.statusCode, 500);
+      assert.equal(writes.conversations.length, 1);
+      assert.equal('messageProcessed' in JSON.parse(response.body), false);
+    } finally {
+      JSON.stringify = stringify;
+    }
+  });
+});

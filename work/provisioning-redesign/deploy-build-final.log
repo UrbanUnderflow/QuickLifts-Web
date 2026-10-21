@@ -1,0 +1,1354 @@
+? Select a deploy
+
+* indicates a deploy created by you (Use arrow keys)
+❯ (6ad5310) Production* 
+  (6ad5300) Branch Deploy* [27D[27C[2K[1A[2K[1A[2K[1A[2K[1A[2K[G? Select a deploy
+
+* indicates a deploy created by you (6ad5310) Production*[57D[57C
+Build ready to start
+build-image version: ea8920232ffbe23506ef69aa99aa2258559fbd91 (noble-new-builds)
+buildbot version: 8abadc3e0f80eb7059c62a698f245b2cc861e1a8
+Building with cache
+Starting to prepare the repo for build
+Preparing Git Reference refs/heads/main
+Custom publish path detected. Proceeding with the specified path: '.next'
+Custom build command detected. Proceeding with the specified command: 'next build'
+Installing dependencies
+[2mmise[0m [2mby @jdx[0m – installing 1 tool
+[2mmise[0m [38;5;11m⇢[0m [34mpython[0m@3.14.3  621ms · already installed
+[2mmise[0m [36m████████████████[0m[31m[0m[2m[0m 1/1 · installed 0 tools · 1 already installed in 622ms
+mise [36m~/.config/mise/config.toml[0m tools: [34mpython[0m@3.14.3
+[2mmise[0m [2mby @jdx[0m – installing 1 tool
+[2mmise[0m [38;5;11m⇢[0m [34mruby[0m@3.4.8  28ms · already installed
+[2mmise[0m [36m████████████████[0m[31m[0m[2m[0m 1/1 · installed 0 tools · 1 already installed in 29ms
+mise [36m~/.config/mise/config.toml[0m tools: [34mruby[0m@3.4.8
+[2mmise[0m [2mby @jdx[0m – installing 1 tool
+[2mmise[0m [38;5;11m⇢[0m [34mgo[0m@1.26.2  35ms · already installed
+[2mmise[0m [36m████████████████[0m[31m[0m[2m[0m 1/1 · installed 0 tools · 1 already installed in 36ms
+mise [36m~/.config/mise/config.toml[0m tools: [34mgo[0m@1.26.2
+v20.20.2 is already installed.
+Now using node v20.20.2 (npm v10.8.2)
+Enabling Node.js Corepack
+No pnpm workspaces detected
+Installing npm packages using pnpm version 10.30.3
+Lockfile is up to date, resolution step is skipped
+Already up to date
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: @firebase/util@1.12.1, @firebase/util@1.15.1,       │
+│   @parcel/watcher@2.5.6, core-js@3.49.0, esbuild@0.25.5, esbuild@0.27.3,     │
+│   esbuild@0.28.0, esbuild@0.28.1, gifsicle@7.0.1, netlify-cli@24.11.3,       │
+│   protobufjs@7.6.4, sharp@0.33.5, sharp@0.34.5, unix-dgram@2.0.7.            │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+Done in 2.5s using pnpm v10.30.3
+npm packages installed using pnpm
+Successfully installed dependencies
+Detected 1 framework(s)
+"next" at version "14.2.35"
+Starting build script
+Section completed: initializing
+[96m[1m​[22m[39m
+[96m[1mNetlify Build                                                 [22m[39m
+[96m[1m────────────────────────────────────────────────────────────────[22m[39m
+[36m[1m​[22m[39m
+[36m[1m❯ Version[22m[39m
+  @netlify/build 37.4.3
+[36m[1m​[22m[39m
+[36m[1m❯ Flags[22m[39m
+  accountId: 64be81598f51ed03d7b214e4
+  baseRelDir: true
+  buildId: 6ad531061917ccba5818e59b
+  deployId: 6ad531061917ccba5818e59d
+[36m[1m​[22m[39m
+[36m[1m❯ Current directory[22m[39m
+  /opt/build/repo
+[36m[1m​[22m[39m
+[36m[1m❯ Config file[22m[39m
+  /opt/build/repo/netlify.toml
+[36m[1m​[22m[39m
+[36m[1m❯ Context[22m[39m
+  production
+[33m[1m​[22m[39m
+[33m[1m❯ Warning: @netlify/plugin-nextjs will be executed with Node.js version 22.23.3[22m[39m
+[93m  The plugin cannot be executed with your defined Node.js version 20.20.2[39m
+[93m​[39m
+[93m  Read more about our minimum required version in our ]8;;https://answers.netlify.com/t/build-plugins-end-of-support-for-node-js-18-node-js-20/162662forums announcement]8;;[39m
+[36m[1m​[22m[39m
+[36m[1m❯ Using Next.js Runtime - v5.15.12[22m[39m
+[33m[1m​[22m[39m
+[33m[1m❯ Outdated plugins[22m[39m
+[93m   - [93m[1m@netlify/plugin-nextjs[22m[93m@5.15.12: latest version is 5.16.2[39m
+[93m     To upgrade this plugin, please update its version in "package.json"[39m
+Next.js cache restored
+[96m[1m​[22m[39m
+[96m[1mbuild.command from netlify.toml                               [22m[39m
+[96m[1m────────────────────────────────────────────────────────────────[22m[39m
+​
+[36m$ next build[39m
+  [1m[38;2;173;127;168m▲ Next.js 14.2.35[39m[22m
+  - Experiments (use with caution):
+    · webpackBuildWorker
+ [37m[1m [22m[39m Skipping linting
+ [37m[1m [22m[39m Checking validity of types ...
+ [37m[1m [22m[39m Creating an optimized production build ...
+ [32m[1m✓[22m[39m Compiled successfully
+ [37m[1m [22m[39m Collecting page data ...
+[Firebase] Initial mode (server): {
+  isDev: [33mfalse[39m,
+  source: [32m'server production default'[39m,
+  timestamp: [32m'2026-10-18T20:54:08.115Z'[39m
+}
+[Firebase] Starting initialization: {
+  environment: [32m'production'[39m,
+  isLocalhost: [33mfalse[39m,
+  timestamp: [32m'2026-10-18T20:54:08.118Z'[39m
+}
+[Firebase Config] Environment Check: {
+  isDev: [33mfalse[39m,
+  isLocalhost: [33mfalse[39m,
+  nodeEnv: [32m'production'[39m,
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: [32m'✓ Usable'[39m,
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: [32m'✓ Usable'[39m,
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: [32m'✓ Usable'[39m
+  },
+  timestamp: [32m'2026-10-18T20:54:08.118Z'[39m
+}
+[Firebase Config] Final Configuration: {
+  mode: [32m'production'[39m,
+  apiKey: [32m'AIzaSy...'[39m,
+  authDomain: [32m'****'[39m,
+  projectId: [32m'quicklifts-dd3f1'[39m,
+  storageBucket: [32m'****'[39m,
+  messagingSenderId: [32m'configured'[39m,
+  appId: [32m'configured'[39m,
+  timestamp: [32m'2026-10-18T20:54:08.118Z'[39m
+}
+[Firebase] Using configuration: {
+  mode: [32m'production'[39m,
+  isLocalhost: [33mfalse[39m,
+  projectId: [32m'quicklifts-dd3f1'[39m,
+  hasApiKey: [33mtrue[39m,
+  hasAppId: [33mtrue[39m,
+  timestamp: [32m'2026-10-18T20:54:08.118Z'[39m
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: [33mtrue[39m,
+  hasAuth: [33mtrue[39m,
+  hasDb: [33mtrue[39m,
+  hasStorage: [33mtrue[39m,
+  timestamp: [32m'2026-10-18T20:54:08.121Z'[39m
+}
+[Firebase] Initial mode (server): {
+  isDev: [33mfalse[39m,
+  source: [32m'server production default'[39m,
+  timestamp: [32m'2026-10-18T20:54:08.285Z'[39m
+}
+[Firebase] Starting initialization: {
+  environment: [32m'production'[39m,
+  isLocalhost: [33mfalse[39m,
+  timestamp: [32m'2026-10-18T20:54:08.287Z'[39m
+}
+[Firebase Config] Environment Check: {
+  isDev: [33mfalse[39m,
+  isLocalhost: [33mfalse[39m,
+  nodeEnv: [32m'production'[39m,
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: [32m'✓ Usable'[39m,
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: [32m'✓ Usable'[39m,
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: [32m'✓ Usable'[39m
+  },
+  timestamp: [32m'2026-10-18T20:54:08.287Z'[39m
+}
+[Firebase Config] Final Configuration: {
+  mode: [32m'production'[39m,
+  apiKey: [32m'AIzaSy...'[39m,
+  authDomain: [32m'****'[39m,
+  projectId: [32m'quicklifts-dd3f1'[39m,
+  storageBucket: [32m'****'[39m,
+  messagingSenderId: [32m'configured'[39m,
+  appId: [32m'configured'[39m,
+  timestamp: [32m'2026-10-18T20:54:08.288Z'[39m
+}
+[Firebase] Using configuration: {
+  mode: [32m'production'[39m,
+  isLocalhost: [33mfalse[39m,
+  projectId: [32m'quicklifts-dd3f1'[39m,
+  hasApiKey: [33mtrue[39m,
+  hasAppId: [33mtrue[39m,
+  timestamp: [32m'2026-10-18T20:54:08.288Z'[39m
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: [33mtrue[39m,
+  hasAuth: [33mtrue[39m,
+  hasDb: [33mtrue[39m,
+  hasStorage: [33mtrue[39m,
+  timestamp: [32m'2026-10-18T20:54:08.291Z'[39m
+}
+[Firebase] Initial mode (server): {
+  isDev: [33mfalse[39m,
+  source: [32m'server production default'[39m,
+  timestamp: [32m'2026-10-18T20:54:08.479Z'[39m
+}
+[Firebase] Starting initialization: {
+  environment: [32m'production'[39m,
+  isLocalhost: [33mfalse[39m,
+  timestamp: [32m'2026-10-18T20:54:08.482Z'[39m
+}
+[Firebase Config] Environment Check: {
+  isDev: [33mfalse[39m,
+  isLocalhost: [33mfalse[39m,
+  nodeEnv: [32m'production'[39m,
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: [32m'✓ Usable'[39m,
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: [32m'✓ Usable'[39m,
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: [32m'✓ Usable'[39m
+  },
+  timestamp: [32m'2026-10-18T20:54:08.482Z'[39m
+}
+[Firebase Config] Final Configuration: {
+  mode: [32m'production'[39m,
+  apiKey: [32m'AIzaSy...'[39m,
+  authDomain: [32m'****'[39m,
+  projectId: [32m'quicklifts-dd3f1'[39m,
+  storageBucket: [32m'****'[39m,
+  messagingSenderId: [32m'configured'[39m,
+  appId: [32m'configured'[39m,
+  timestamp: [32m'2026-10-18T20:54:08.482Z'[39m
+}
+[Firebase] Using configuration: {
+  mode: [32m'production'[39m,
+  isLocalhost: [33mfalse[39m,
+  projectId: [32m'quicklifts-dd3f1'[39m,
+  hasApiKey: [33mtrue[39m,
+  hasAppId: [33mtrue[39m,
+  timestamp: [32m'2026-10-18T20:54:08.483Z'[39m
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: [33mtrue[39m,
+  hasAuth: [33mtrue[39m,
+  hasDb: [33mtrue[39m,
+  hasStorage: [33mtrue[39m,
+  timestamp: [32m'2026-10-18T20:54:08.485Z'[39m
+}
+[Firebase] Initial mode (server): {
+  isDev: [33mfalse[39m,
+  source: [32m'server production default'[39m,
+  timestamp: [32m'2026-10-18T20:54:08.694Z'[39m
+}
+[Firebase] Starting initialization: {
+  environment: [32m'production'[39m,
+  isLocalhost: [33mfalse[39m,
+  timestamp: [32m'2026-10-18T20:54:08.696Z'[39m
+}
+[Firebase Config] Environment Check: {
+  isDev: [33mfalse[39m,
+  isLocalhost: [33mfalse[39m,
+  nodeEnv: [32m'production'[39m,
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: [32m'✓ Usable'[39m,
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: [32m'✓ Usable'[39m,
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: [32m'✓ Usable'[39m
+  },
+  timestamp: [32m'2026-10-18T20:54:08.697Z'[39m
+}
+[Firebase Config] Final Configuration: {
+  mode: [32m'production'[39m,
+  apiKey: [32m'AIzaSy...'[39m,
+  authDomain: [32m'****'[39m,
+  projectId: [32m'quicklifts-dd3f1'[39m,
+  storageBucket: [32m'****'[39m,
+  messagingSenderId: [32m'configured'[39m,
+  appId: [32m'configured'[39m,
+  timestamp: [32m'2026-10-18T20:54:08.697Z'[39m
+}
+[Firebase] Using configuration: {
+  mode: [32m'production'[39m,
+  isLocalhost: [33mfalse[39m,
+  projectId: [32m'quicklifts-dd3f1'[39m,
+  hasApiKey: [33mtrue[39m,
+  hasAppId: [33mtrue[39m,
+  timestamp: [32m'2026-10-18T20:54:08.697Z'[39m
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: [33mtrue[39m,
+  hasAuth: [33mtrue[39m,
+  hasDb: [33mtrue[39m,
+  hasStorage: [33mtrue[39m,
+  timestamp: [32m'2026-10-18T20:54:08.700Z'[39m
+}
+[Firebase] Initial mode (server): {
+  isDev: [33mfalse[39m,
+  source: [32m'server production default'[39m,
+  timestamp: [32m'2026-10-18T20:54:08.768Z'[39m
+}
+[Firebase] Starting initialization: {
+  environment: [32m'production'[39m,
+  isLocalhost: [33mfalse[39m,
+  timestamp: [32m'2026-10-18T20:54:08.770Z'[39m
+}
+[Firebase Config] Environment Check: {
+  isDev: [33mfalse[39m,
+  isLocalhost: [33mfalse[39m,
+  nodeEnv: [32m'production'[39m,
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: [32m'✓ Usable'[39m,
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: [32m'✓ Usable'[39m,
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: [32m'✓ Usable'[39m
+  },
+  timestamp: [32m'2026-10-18T20:54:08.771Z'[39m
+}
+[Firebase Config] Final Configuration: {
+  mode: [32m'production'[39m,
+  apiKey: [32m'AIzaSy...'[39m,
+  authDomain: [32m'****'[39m,
+  projectId: [32m'quicklifts-dd3f1'[39m,
+  storageBucket: [32m'****'[39m,
+  messagingSenderId: [32m'configured'[39m,
+  appId: [32m'configured'[39m,
+  timestamp: [32m'2026-10-18T20:54:08.771Z'[39m
+}
+[Firebase] Using configuration: {
+  mode: [32m'production'[39m,
+  isLocalhost: [33mfalse[39m,
+  projectId: [32m'quicklifts-dd3f1'[39m,
+  hasApiKey: [33mtrue[39m,
+  hasAppId: [33mtrue[39m,
+  timestamp: [32m'2026-10-18T20:54:08.771Z'[39m
+}
+[Firebase] Skipping persistence setup (non-browser environment)
+[Firebase] Initialization complete: {
+  hasApp: [33mtrue[39m,
+  hasAuth: [33mtrue[39m,
+  hasDb: [33mtrue[39m,
+  hasStorage: [33mtrue[39m,
+  timestamp: [32m'2026-10-18T20:54:08.774Z'[39m
+}
+ [37m[1m [22m[39m Generating static pages (0/305) ...
+ [37m[1m [22m[39m Generating static pages (76/305)
+ [37m[1m [22m[39m Generating static pages (152/305)
+ [37m[1m [22m[39m Generating static pages (228/305)
+Failed to parse date from filename: [slug].tsx. Assigning default date.
+ [32m[1m✓[22m[39m Generating static pages (305/305)
+ [37m[1m [22m[39m Finalizing page optimization ...
+ [37m[1m [22m[39m Collecting build traces ...
+[4mRoute (pages)[24m                                                           [4mSize[24m     [4mFirst Load JS[24m
+┌ ● / (ISR: 3600 Seconds) ([32m494 ms[39m)                                      294 B           [37m[1m679 kB[22m[39m
+├   /_app                                                               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /[username]/[page]                                                  11.3 kB         [37m[1m509 kB[22m[39m
+├ ƒ /[username]/earnings                                                14 kB           [37m[1m641 kB[22m[39m
+├ ƒ /[username]/questionnaire/[questionnaireId]                         1.38 kB         [37m[1m497 kB[22m[39m
+├ ƒ /100trainers                                                        10.9 kB         [37m[1m491 kB[22m[39m
+├ ƒ /1on1-invite/[id]                                                   1.81 kB        [37m[1m90.9 kB[22m[39m
+├ ○ /404                                                                3.29 kB        [37m[1m94.9 kB[22m[39m
+├ ● /about (ISR: 3600 Seconds)                                          591 B           [37m[1m679 kB[22m[39m
+├ ○ /admin                                                              12.7 kB         [37m[1m534 kB[22m[39m
+├ ○ /admin/adaptationFramingLayer                                       5.37 kB         [37m[1m527 kB[22m[39m
+├ ○ /admin/addpoints                                                    5.44 kB         [37m[1m527 kB[22m[39m
+├ ○ /admin/addUserToChallenge                                           4.59 kB         [37m[1m526 kB[22m[39m
+├ ○ /admin/addVersion                                                   6.95 kB         [37m[1m528 kB[22m[39m
+├ ○ /admin/adminLevers                                                  16.5 kB         [37m[1m538 kB[22m[39m
+├ ○ /admin/adminPayouts                                                 4.16 kB         [37m[1m525 kB[22m[39m
+├ ○ /admin/agentChat                                                    10.9 kB         [37m[1m536 kB[22m[39m
+├ ○ /admin/ai-voice                                                     45 kB           [37m[1m608 kB[22m[39m
+├ ○ /admin/assign-prize-money                                           10.5 kB         [37m[1m532 kB[22m[39m
+├ ○ /admin/authorProfiles                                               3.93 kB         [37m[1m525 kB[22m[39m
+├ ○ /admin/betausers                                                    5.85 kB         [37m[1m527 kB[22m[39m
+├ ○ /admin/challengestatus                                              13.9 kB         [37m[1m535 kB[22m[39m
+├ ○ /admin/chatManagement                                               7.79 kB         [37m[1m529 kB[22m[39m
+├ ○ /admin/clinicalTestUnit                                             283 B           [37m[1m530 kB[22m[39m
+├ ○ /admin/coachInvites                                                 3.49 kB         [37m[1m525 kB[22m[39m
+├ ○ /admin/coachRevenue                                                 2.11 kB         [37m[1m478 kB[22m[39m
+├ ○ /admin/corporatePartners                                            17.9 kB         [37m[1m539 kB[22m[39m
+├ ○ /admin/creatorModeration                                            2.93 kB         [37m[1m524 kB[22m[39m
+├ ○ /admin/creatorProspects                                             11.6 kB         [37m[1m533 kB[22m[39m
+├ ƒ /admin/curriculumLayer                                              266 B          [37m[1m89.3 kB[22m[39m
+├ ○ /admin/dailyPrompts                                                 4.08 kB         [37m[1m525 kB[22m[39m
+├ ○ /admin/dailyReflection                                              6.86 kB         [37m[1m528 kB[22m[39m
+├ ○ /admin/debugUserChallenge                                           4.2 kB          [37m[1m525 kB[22m[39m
+├ ○ /admin/deliverables/[agent]                                         13 kB           [37m[1m118 kB[22m[39m
+├ ○ /admin/documentSigning                                              5.51 kB         [37m[1m527 kB[22m[39m
+├ ○ /admin/emailLogs                                                    279 B           [37m[1m526 kB[22m[39m
+├ ○ /admin/emailSequences                                               43.4 kB         [37m[1m569 kB[22m[39m
+├ ○ /admin/equity                                                       130 kB          [37m[1m811 kB[22m[39m
+├ ○ /admin/ErrorLogs                                                    7.07 kB         [37m[1m528 kB[22m[39m
+├ ○ /admin/escalationConditions                                         13.1 kB         [37m[1m572 kB[22m[39m
+├ ○ /admin/experiments                                                  14.1 kB         [37m[1m535 kB[22m[39m
+├ ○ /admin/fitclubMedia                                                 3.34 kB         [37m[1m525 kB[22m[39m
+├ ○ /admin/fitnessSeekerLeads                                           9.52 kB         [37m[1m531 kB[22m[39m
+├ ○ /admin/founderBudget                                                13.2 kB         [37m[1m534 kB[22m[39m
+├ ○ /admin/friendsOfBusiness                                            10.6 kB         [37m[1m532 kB[22m[39m
+├ ○ /admin/fwpMedia                                                     3.1 kB          [37m[1m524 kB[22m[39m
+├ ○ /admin/generateMealMacros                                           6.89 kB         [37m[1m528 kB[22m[39m
+├ ○ /admin/groupMeet                                                    283 B           [37m[1m555 kB[22m[39m
+├ ○ /admin/heartbeatProtocol                                            369 B          [37m[1m89.4 kB[22m[39m
+├ ○ /admin/inactivityCheck                                              10.9 kB         [37m[1m532 kB[22m[39m
+├ ○ /admin/investorAccess                                               6.83 kB         [37m[1m528 kB[22m[39m
+├ ƒ /admin/juniorCurriculum                                             261 B          [37m[1m89.3 kB[22m[39m
+├ ○ /admin/leadMassaging                                                13.6 kB         [37m[1m535 kB[22m[39m
+├ ○ /admin/legalDocuments                                               31.6 kB         [37m[1m553 kB[22m[39m
+├ ○ /admin/links                                                        1.98 kB          [37m[1m91 kB[22m[39m
+├ ○ /admin/macraCancelReasons                                           6.72 kB         [37m[1m528 kB[22m[39m
+├ ○ /admin/macraMedia                                                   2.72 kB         [37m[1m524 kB[22m[39m
+├ ○ /admin/macraPurchaseLogs                                            286 B           [37m[1m528 kB[22m[39m
+├ ƒ /admin/manageMeta                                                   8.94 kB         [37m[1m530 kB[22m[39m
+├ ○ /admin/mealLogs                                                     6.72 kB         [37m[1m528 kB[22m[39m
+├ ○ /admin/metrics                                                      10.2 kB         [37m[1m552 kB[22m[39m
+├ ƒ /admin/missionControl                                               262 B          [37m[1m89.3 kB[22m[39m
+├ ○ /admin/MoveManagement                                               13.5 kB         [37m[1m538 kB[22m[39m
+├ ○ /admin/noraGuard                                                    4.44 kB         [37m[1m526 kB[22m[39m
+├ ƒ /admin/noraRedTeam                                                  35.7 kB         [37m[1m569 kB[22m[39m
+├   └ css/1ef9a9f9f7f31301.css                                          4.67 kB
+├ ○ /admin/NotificationLogs                                             5.67 kB         [37m[1m482 kB[22m[39m
+├ ○ /admin/notificationSequences                                        19.2 kB         [37m[1m540 kB[22m[39m
+├ ○ /admin/nutritionInsightLayer                                        4.43 kB         [37m[1m526 kB[22m[39m
+├ ○ /admin/objective-timeline                                           3.08 kB         [37m[1m528 kB[22m[39m
+├ ○ /admin/og-preview                                                   5.38 kB         [37m[1m527 kB[22m[39m
+├ ○ /admin/outreach-campaigns                                           14 kB           [37m[1m535 kB[22m[39m
+├ ○ /admin/partner-api-keys                                             6.88 kB         [37m[1m528 kB[22m[39m
+├   └ css/c09d5a4abde1e40f.css                                          1.84 kB
+├ ○ /admin/presentations                                                4.5 kB          [37m[1m526 kB[22m[39m
+├ ○ /admin/pressReleases                                                4.89 kB         [37m[1m544 kB[22m[39m
+├ ○ /admin/prize-test-setup                                             2.48 kB          [37m[1m93 kB[22m[39m
+├ ○ /admin/programmingAccess                                            4.53 kB         [37m[1m526 kB[22m[39m
+├ ○ /admin/projectManagement                                            14.4 kB         [37m[1m536 kB[22m[39m
+├ ○ /admin/pulsecheckDesignSystem                                       2.15 kB         [37m[1m523 kB[22m[39m
+├ ○ /admin/pulsecheckDeviceDashboard                                    11.5 kB         [37m[1m533 kB[22m[39m
+├ ○ /admin/pulsecheckLegacyRosterMigration                              6.25 kB         [37m[1m527 kB[22m[39m
+├ ○ /admin/pulsecheckMedia                                              4.81 kB         [37m[1m526 kB[22m[39m
+├ ○ /admin/pulsecheckOnboardingOverview                                 28.4 kB         [37m[1m589 kB[22m[39m
+├ ○ /admin/pulsecheckPayouts                                            4.86 kB         [37m[1m526 kB[22m[39m
+├ ○ /admin/pulsecheckPilotDashboard                                     21.7 kB         [37m[1m642 kB[22m[39m
+├ ○ /admin/pulsecheckPilotDashboard/[pilotId]                           73.2 kB         [37m[1m698 kB[22m[39m
+├ ○ /admin/pulsecheckPilotDashboard/[pilotId]/athletes/[athleteId]      18.8 kB         [37m[1m576 kB[22m[39m
+├ ○ /admin/pulsecheckPilotDashboard/organizations/[organizationId]      403 B           [37m[1m612 kB[22m[39m
+├ ○ /admin/pulsecheckPilotDashboard/teams/[teamId]                      398 B           [37m[1m612 kB[22m[39m
+├ ○ /admin/pulsecheckProvisioning                                       50.9 kB         [37m[1m612 kB[22m[39m
+├   └ css/182d43d1129359a0.css                                          3.93 kB
+├ ○ /admin/pulsecheckSportConfiguration                                 18.1 kB         [37m[1m579 kB[22m[39m
+├ ○ /admin/pulseCheckTechDemoAnalytics                                  5.57 kB         [37m[1m527 kB[22m[39m
+├ ○ /admin/pulsecheckVisionProReporting                                 7.01 kB         [37m[1m528 kB[22m[39m
+├ ○ /admin/pulseCommand                                                 2.03 kB        [37m[1m91.1 kB[22m[39m
+├ ○ /admin/purchaseLogs                                                 334 B           [37m[1m528 kB[22m[39m
+├ ○ /admin/referralAward                                                6.17 kB         [37m[1m527 kB[22m[39m
+├ ○ /admin/researchArticles                                             12.6 kB         [37m[1m534 kB[22m[39m
+├ ○ /admin/reviewTracker                                                7.01 kB         [37m[1m536 kB[22m[39m
+├ ○ /admin/roundExports                                                 3.67 kB         [37m[1m525 kB[22m[39m
+├ ○ /admin/sage-deliverables                                            9.59 kB         [37m[1m115 kB[22m[39m
+├ ○ /admin/screenDemo                                                   4.53 kB         [37m[1m526 kB[22m[39m
+├ ○ /admin/SendNotification                                             1.63 kB         [37m[1m481 kB[22m[39m
+├ ○ /admin/shortLinks                                                   5.22 kB         [37m[1m526 kB[22m[39m
+├ ○ /admin/sportsIntelligenceReports                                    36.8 kB         [37m[1m620 kB[22m[39m
+├ ○ /admin/StacksManagement                                             7.09 kB         [37m[1m528 kB[22m[39m
+├ ○ /admin/subscriptions                                                7.21 kB         [37m[1m528 kB[22m[39m
+├ ○ /admin/systemOverview                                               752 kB         [37m[1m1.59 MB[22m[39m
+├   └ css/93f9ac100b4aef3e.css                                          2.37 kB
+├ ○ /admin/testCheckinNotification                                      9.19 kB         [37m[1m530 kB[22m[39m
+├ ○ /admin/universityProspects                                          9.39 kB         [37m[1m531 kB[22m[39m
+├ ○ /admin/userOnboarding                                               9.1 kB          [37m[1m487 kB[22m[39m
+├ ○ /admin/users                                                        28.4 kB         [37m[1m550 kB[22m[39m
+├ ○ /admin/vcDatabase                                                   22.5 kB         [37m[1m544 kB[22m[39m
+├ ƒ /admin/virtualOffice                                                264 B          [37m[1m89.3 kB[22m[39m
+├ ○ /admin/workoutCategoryConfig                                        4.75 kB         [37m[1m526 kB[22m[39m
+├ ○ /admin/workoutSummaries                                             5.98 kB         [37m[1m527 kB[22m[39m
+├ ○ /advisory-board                                                     13.6 kB         [37m[1m140 kB[22m[39m
+├ ƒ /api/activity-records                                               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/activity-records/coach-summary                                 0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/activity-records/settings                                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/_auth                                                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/audit-legal-document                                     0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/audit-variant-spec                                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/create-programming-access                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/curriculum/_auth                                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/curriculum/enrollment                                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/curriculum/insights                                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/curriculum/publication                                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/curriculum/status                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/extract-creator-prospects                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/extract-university-prospects                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/founder-budget/parse-expenses                            0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/generate-legal-document                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/generate-variant-spec                                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/generate-voice-asset                                     0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet                                               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/[requestId]                                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/[requestId]/confirmation-email                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/[requestId]/finalize                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/[requestId]/invites/[token]                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/[requestId]/invites/[token]/flex              0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/[requestId]/invites/[token]/resend            0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/[requestId]/preview-email                     0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/[requestId]/recommend                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/[requestId]/schedule                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/[requestId]/send                              0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/booking                                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/contacts                                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/group-meet/test-email                                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/nora-guard/revoke                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/partner-api-keys                                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/access                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/chat-simulation                 0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/devices                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/estimate-meal                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/history                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/library                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/local-meal                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/local-session                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/local-storage-check             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/privacy                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/run                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/nora-red-team/suite                           0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/organization-configuration                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/pilot-hypothesis-assist/generate              0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/pilot-research-readout/generate               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/pilot-research-readout/review                 0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/protect-legacy-roster                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/provision-entity                              0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/provision-organization-and-team               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/remove-athlete-from-team                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/pulsecheck/smoke-levers                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/refine-sfx-prompt                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/research-articles/access                                 0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/revise-legal-document                                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/scout-university-prospects                               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/send-signing-request                                     0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/send-university-prospect-email                           0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/system-overview/share-links                              0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/system-overview/share-links/_auth                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/system-overview/share-links/[token]                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/system-overview/snapshot-artifacts                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/admin/test-nora-translation                                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/agent/control                                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/agent/followup                                                 0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/agent/generateMinutes                                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/agent/intelFeed                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/agent/kickoff-mission                                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/agent/macra-operating-read                                     0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/agent/manifesto                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/agent/onboard                                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/agent/trigger-standup                                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/athletic-mind-hub/admin-users                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/athletic-mind-hub/extract-email-contacts                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/audio/run-alerts                                               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/audit-vc-data                                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/auth/logout                                                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/backfill-badges                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/brevo/demo-request                                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/brevo/pulse-check-pilot-request                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/brevo/pulse-check-waitlist                                     0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/brevo/subscribe                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/cancel-scheduled-email                                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/chatbot                                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/check-email-status                                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/coach/schedule-scrape                                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/coach/support-requests                                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/coach/team-dashboard                                           0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/coach/team-insights                                            0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/coach/trainer-sharing                                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/create-payment-intent                                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/curriculum/journal                                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/curriculum/legacy-start                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/curriculum/plan                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/curriculum/runtime                                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/curriculum/session                                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/developer/access-requests                                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/developer/docs/[slug]/unlock                                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/developer/partner/auntedna/[action]                            0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/evidence-journal                                               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/evidence-journal/event                                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/evidence-journal/sharing                                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/extract-partner-data                                           0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/extract-vc-data                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/generate-vc-email                                              0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/generateRound                                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/generateRoundV2                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/gpt/revise-dm                                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/group-meet/[token]                                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/group-meet/[token]/calendar/google/connect/start               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/group-meet/[token]/calendar/google/disconnect                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/group-meet/[token]/calendar/google/import                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/group-meet/book/[slug]                                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/group-meet/booking/[token]                                     0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/group-meet/calendar/google/callback                            0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/group-meet/flex/[token]                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/group-meet/host-selection/[token]                              0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/instantly/push-fitness-leads                                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/invest/analytics                                               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/invest/record-view                                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/investor/verify-access                                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/load-admin-settings                                            0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/mentaltraining/evaluate-protocol-practice                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/mentaltraining/generate-sfx                                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/migrate/fitness-seeker-leads                                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/nora-notetaker/queue-bot                                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/nora-notetaker/sync-bot                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/og-fetch                                                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/outreach/activate-campaign                                     0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/outreach/add-leads                                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/outreach/check-spam-triggers                                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/outreach/create                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/outreach/create-campaign                                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/outreach/deploy-campaign                                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/outreach/parse-campaign-strategy                               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/outreach/sync-campaign-settings                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/partners/onboard                                               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pipelists/check-email-events                                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pipelists/email-sequence                                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pipelists/extract-lead                                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pipelists/generate-leads                                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pipelists/runbook                                              0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pipelists/send-contact-email                                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pipelists/send-invite                                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pipelists/stage-migration                                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pipelists/verify-linkedin-url                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pipelists/verify-source                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pitch/analytics                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pitch/record-view                                              0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/profiles/directory                                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/profiles/offerings                                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/profiles/public                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/profiles/workout-counts                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulse-check-tech-demo/analytics                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulse-check-tech-demo/record-view                              0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/admin-activation/redeem                             0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/assessment-checkout                                 0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/functions/[name]                                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/intake/[token]                                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/preview/athlete-invite-email                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/preview/team-invite-email                           0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/questionnaire/cau                                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/questionnaire/cau-team-test                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/referral-attribution                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/team-code/redeem                                    0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/team-invite/activity                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/team-invite/native-handoff/consume                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/team-invite/native-handoff/create                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/team-invite/redeem                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/pulsecheck/testimonials                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/read-file                                                      0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/research-vc-firm                                               0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/research-vc-o3                                                 0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/research/[slug]/unlock                                         0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/reset-badges                                                   0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/review/capture-reply                                           0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/review/send-draft-reminder                                     0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/review/send-weekly-checkin                                     0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/save-admin-settings                                            0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/seed-reunion-payments                                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/seed-the-system                                                0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/send-vc-email                                                  0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/shared/system-overview/[token]/unlock                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/surveys/notify-completed                                       0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/track                                                          0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/tts                                                            0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/validate-apple-merchant                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/vision-pro/reset-sounds                                        0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/wunna-run/analytics                                            0 B            [37m[1m89.1 kB[22m[39m
+├ ƒ /api/wunna-run/record-view                                          0 B            [37m[1m89.1 kB[22m[39m
+├ ○ /athletic-mind-hub                                                  13.2 kB         [37m[1m498 kB[22m[39m
+├ ○ /athletic-mind-hub/contacts                                         7.46 kB         [37m[1m492 kB[22m[39m
+├ ○ /athletic-mind-hub/permissions                                      6.11 kB         [37m[1m491 kB[22m[39m
+├ ○ /athletic-trainer-training                                          5.79 kB         [37m[1m141 kB[22m[39m
+├ ○ /auntedna                                                           18.2 kB         [37m[1m149 kB[22m[39m
+├ ○ /box-breathing-simulator                                            11.2 kB         [37m[1m138 kB[22m[39m
+├ ○ /build-your-round                                                   13.2 kB         [37m[1m489 kB[22m[39m
+├ ● /Checklist                                                          3.42 kB         [37m[1m113 kB[22m[39m
+├ ○ /checkout-redirect                                                  1.24 kB        [37m[1m90.3 kB[22m[39m
+├ ○ /chromatic-glass                                                    42.2 kB         [37m[1m172 kB[22m[39m
+├ ○ /club-analytics                                                     110 kB          [37m[1m636 kB[22m[39m
+├ ○ /club-studio                                                        17.7 kB         [37m[1m666 kB[22m[39m
+├ ƒ /club/[id]                                                          26.9 kB         [37m[1m698 kB[22m[39m
+├ ƒ /club/[id]/check-in                                                 14.3 kB         [37m[1m554 kB[22m[39m
+├ ƒ /club/[id]/install                                                  11.9 kB         [37m[1m243 kB[22m[39m
+├ ƒ /coach                                                              248 B          [37m[1m89.3 kB[22m[39m
+├ ƒ /coach-invite/[referralCode]                                        265 B          [37m[1m89.3 kB[22m[39m
+├ ƒ /coach-onboard                                                      256 B          [37m[1m89.3 kB[22m[39m
+├ ○ /coach-report-demo                                                  3.69 kB         [37m[1m539 kB[22m[39m
+├ ƒ /coach-report-demo/[sportId]                                        2.58 kB         [37m[1m540 kB[22m[39m
+├ ○ /coach-reports/[teamId]/[reportId]                                  8.9 kB          [37m[1m551 kB[22m[39m
+├ ○ /coach-training                                                     6.14 kB         [37m[1m141 kB[22m[39m
+├ ƒ /coach/athletes                                                     6.08 kB         [37m[1m567 kB[22m[39m
+├ ○ /coach/dashboard                                                    286 B           [37m[1m718 kB[22m[39m
+├ ○ /coach/dashboard/demo                                               740 B           [37m[1m718 kB[22m[39m
+├ ƒ /coach/inbox                                                        5.18 kB         [37m[1m566 kB[22m[39m
+├ ○ /coach/login                                                        8.29 kB         [37m[1m490 kB[22m[39m
+├ ƒ /coach/mental-training                                              366 B           [37m[1m797 kB[22m[39m
+├ ƒ /coach/mentalGames                                                  295 B           [37m[1m797 kB[22m[39m
+├ ○ /coach/notifications                                                6.92 kB         [37m[1m568 kB[22m[39m
+├ ○ /coach/onboarding-success                                           6.22 kB         [37m[1m103 kB[22m[39m
+├ ƒ /coach/profile                                                      9.66 kB         [37m[1m571 kB[22m[39m
+├ ƒ /coach/referrals                                                    4.43 kB         [37m[1m566 kB[22m[39m
+├ ƒ /coach/revenue                                                      11.5 kB         [37m[1m573 kB[22m[39m
+├ ƒ /coach/sign-up                                                      254 B          [37m[1m89.3 kB[22m[39m
+├ ○ /coach/sports-intelligence-reports                                  8.38 kB         [37m[1m570 kB[22m[39m
+├ ƒ /coach/staff                                                        7.13 kB         [37m[1m568 kB[22m[39m
+├ ○ /coaching/[id]                                                      2.38 kB        [37m[1m91.4 kB[22m[39m
+├ ƒ /coherence-score-whitepaper                                         263 B          [37m[1m89.3 kB[22m[39m
+├ ○ /CollectionView                                                     1.89 kB         [37m[1m478 kB[22m[39m
+├ ○ /CompletedOnboarding                                                756 B          [37m[1m89.8 kB[22m[39m
+├ ○ /connect                                                            1.69 kB        [37m[1m90.8 kB[22m[39m
+├ ƒ /connect/[referralCode]                                             261 B          [37m[1m89.3 kB[22m[39m
+├ ƒ /corporate-packages                                                 9.4 kB          [37m[1m101 kB[22m[39m
+├ ○ /create                                                             597 B           [37m[1m582 kB[22m[39m
+├ ○ /create-round                                                       15.2 kB         [37m[1m493 kB[22m[39m
+├ ○ /createStack                                                        7.72 kB         [37m[1m485 kB[22m[39m
+├ ƒ /Creator                                                            254 B          [37m[1m89.3 kB[22m[39m
+├ ○ /creator-onboarding                                                 4.38 kB         [37m[1m524 kB[22m[39m
+├ ƒ /CreatorClub                                                        13 kB           [37m[1m102 kB[22m[39m
+├ ƒ /creators                                                           10.7 kB         [37m[1m148 kB[22m[39m
+├ ○ /curriculum-outline                                                 55.3 kB         [37m[1m825 kB[22m[39m
+├ ○ /debug-admin                                                        3.25 kB         [37m[1m484 kB[22m[39m
+├ ○ /delete-account                                                     1.37 kB        [37m[1m90.4 kB[22m[39m
+├ ○ /deleteAccount                                                      1.4 kB         [37m[1m90.5 kB[22m[39m
+├ ○ /developer                                                          280 B          [37m[1m95.2 kB[22m[39m
+├ ○ /developer/api                                                      278 B          [37m[1m95.2 kB[22m[39m
+├ ƒ /developer/api/[slug]/artifacts/[...filename]                       282 B          [37m[1m89.3 kB[22m[39m
+├ ƒ /developer/api/athleticmind-snapshots                               286 B           [37m[1m109 kB[22m[39m
+├ ƒ /developer/api/auntedna                                             275 B           [37m[1m109 kB[22m[39m
+├ ƒ /developer/api/clinical-bridge                                      282 B           [37m[1m109 kB[22m[39m
+├ ƒ /developer/api/partner/auntedna                                     5.95 kB        [37m[1m97.6 kB[22m[39m
+├   └ css/8dbc4be1daf7b1c6.css                                          3.26 kB
+├ ○ /developer/api/request-access                                       3.35 kB          [37m[1m95 kB[22m[39m
+├ ○ /directory                                                          5 kB            [37m[1m526 kB[22m[39m
+├ ○ /download                                                           5.27 kB         [37m[1m106 kB[22m[39m
+├ ○ /elite-athlete-support-readiness-assessments                        31.9 kB         [37m[1m549 kB[22m[39m
+├ ○ /equity-doc/[id]                                                    5.18 kB         [37m[1m610 kB[22m[39m
+├ ƒ /exercise/[exerciseName]                                            3.91 kB          [37m[1m93 kB[22m[39m
+├ ○ /fat-burn                                                           6.54 kB         [37m[1m490 kB[22m[39m
+├ ○ /fitbit                                                             403 B           [37m[1m485 kB[22m[39m
+├ ○ /fitclub                                                            282 B           [37m[1m104 kB[22m[39m
+├ ○ /FullscreenExerciseView                                             1.26 kB        [37m[1m90.3 kB[22m[39m
+├ ƒ /FWB                                                                17.3 kB         [37m[1m106 kB[22m[39m
+├ ○ /FWP                                                                280 B           [37m[1m104 kB[22m[39m
+├ ○ /GetInTouch                                                         8.58 kB         [37m[1m100 kB[22m[39m
+├ ƒ /go/[slug]                                                          1.32 kB        [37m[1m90.4 kB[22m[39m
+├ ● /good-soil                                                          4.24 kB        [37m[1m93.3 kB[22m[39m
+├ ○ /group-meet                                                         3.25 kB        [37m[1m94.9 kB[22m[39m
+├ ○ /group-meet/[token]                                                 4.73 kB         [37m[1m113 kB[22m[39m
+├ ○ /group-meet/book/[slug]                                             4.3 kB         [37m[1m93.4 kB[22m[39m
+├ ○ /group-meet/booking/[token]                                         3.92 kB          [37m[1m93 kB[22m[39m
+├ ○ /group-meet/flex/[token]                                            3.38 kB          [37m[1m95 kB[22m[39m
+├ ○ /group-meet/host-selection/[token]                                  3.57 kB        [37m[1m92.6 kB[22m[39m
+├ ○ /group-meet/privacy                                                 2.89 kB        [37m[1m94.5 kB[22m[39m
+├ ○ /group-meet/terms                                                   1.93 kB        [37m[1m93.6 kB[22m[39m
+├ ○ /GroupMeet                                                          330 B           [37m[1m555 kB[22m[39m
+├ ○ /HaveYouPaid                                                        4.69 kB         [37m[1m481 kB[22m[39m
+├ ○ /HealthDataStories                                                  7.05 kB         [37m[1m137 kB[22m[39m
+├ ƒ /home                                                               2.63 kB         [37m[1m479 kB[22m[39m
+├ ƒ /Invest                                                             18.9 kB         [37m[1m672 kB[22m[39m
+├ ○ /investor                                                           53.1 kB         [37m[1m529 kB[22m[39m
+├ ○ /join-challenge                                                     3.93 kB         [37m[1m516 kB[22m[39m
+├ ○ /legal-doc/[id]                                                     16.7 kB         [37m[1m494 kB[22m[39m
+├ ○ /links                                                              1.96 kB          [37m[1m91 kB[22m[39m
+├ ƒ /logout                                                             3.57 kB        [37m[1m92.6 kB[22m[39m
+├ ● /Macra                                                              1.5 kB          [37m[1m107 kB[22m[39m
+├ ○ /macra-offer                                                        2.3 kB         [37m[1m91.4 kB[22m[39m
+├ ƒ /macra/buddy/[token]                                                1.48 kB        [37m[1m90.5 kB[22m[39m
+├ ○ /manage-clubs                                                       4.49 kB         [37m[1m528 kB[22m[39m
+├ ○ /manage-landing-pages                                               8.23 kB         [37m[1m525 kB[22m[39m
+├ ○ /mental-training                                                    9.48 kB         [37m[1m761 kB[22m[39m
+├ ○ /messages                                                           4.97 kB         [37m[1m542 kB[22m[39m
+├ ○ /messages/dm/[chatId]                                               7.46 kB         [37m[1m545 kB[22m[39m
+├ ○ /mobility                                                           8.13 kB         [37m[1m251 kB[22m[39m
+├ ○ /morning-mobility-challenge                                         8.14 kB         [37m[1m251 kB[22m[39m
+├ ○ /morningMobilityRedirect                                            1 kB           [37m[1m90.1 kB[22m[39m
+├ ƒ /MoveAndFuelATL                                                     19.4 kB         [37m[1m111 kB[22m[39m
+├ ƒ /MoveAndFuelATL copy                                                19.2 kB         [37m[1m111 kB[22m[39m
+├ ƒ /moves                                                              7.28 kB         [37m[1m137 kB[22m[39m
+├ ● /NCAA-Compliance                                                    22.3 kB         [37m[1m111 kB[22m[39m
+├ ○ /Nora                                                               23 kB           [37m[1m112 kB[22m[39m
+├ ○ /nora-engagement-model                                              18.4 kB         [37m[1m107 kB[22m[39m
+├ ○ /NoraNotetaker                                                      10.5 kB         [37m[1m271 kB[22m[39m
+├ ○ /notification-test                                                  1.47 kB        [37m[1m90.5 kB[22m[39m
+├ ○ /onboarding/set-password                                            7.12 kB        [37m[1m96.2 kB[22m[39m
+├ ○ /one-on-one                                                         6.57 kB        [37m[1m95.6 kB[22m[39m
+├ ○ /one-pager                                                          8.65 kB         [37m[1m135 kB[22m[39m
+├ ○ /open                                                               1.55 kB        [37m[1m90.6 kB[22m[39m
+├ ○ /parent-training                                                    7.99 kB         [37m[1m143 kB[22m[39m
+├ ○ /partner/apply                                                      5.84 kB         [37m[1m102 kB[22m[39m
+├ ○ /partner/onboarding-success                                         5.61 kB         [37m[1m110 kB[22m[39m
+├ ƒ /payment/[id]                                                       15.9 kB         [37m[1m496 kB[22m[39m
+├ ● /performers-info                                                    329 B           [37m[1m124 kB[22m[39m
+├ ● /PIL                                                                2.08 kB         [37m[1m103 kB[22m[39m
+├ ● /PIL/apps                                                           6.02 kB         [37m[1m135 kB[22m[39m
+├ ● /PIL/products                                                       2.1 kB          [37m[1m103 kB[22m[39m
+├ ● /PIL/Ritual                                                         267 B          [37m[1m97.6 kB[22m[39m
+├ ● /PIL/TheAthleticMindCouncil                                         219 B           [37m[1m143 kB[22m[39m
+├ ○ /PILOne                                                             13.4 kB         [37m[1m140 kB[22m[39m
+├ ○ /PipeLists                                                          645 B          [37m[1m89.7 kB[22m[39m
+├ ○ /PipeListsQueue                                                     4.37 kB        [37m[1m93.4 kB[22m[39m
+├ ƒ /pitch                                                              19.5 kB         [37m[1m673 kB[22m[39m
+├ ● /planned-org                                                        9.24 kB         [37m[1m101 kB[22m[39m
+├ ƒ /press                                                              21.4 kB         [37m[1m500 kB[22m[39m
+├ ● /press/[slug] (ISR: 3600 Seconds)                                   5.11 kB         [37m[1m103 kB[22m[39m
+├   └ /press/2023-05-01-pulse-launches-with-focus-on-creator-community
+├ ○ /press/app-screenshots                                              5.17 kB         [37m[1m484 kB[22m[39m
+├ ○ /press/brand-guidelines                                             16.5 kB         [37m[1m495 kB[22m[39m
+├ ○ /press/logos                                                        5.01 kB         [37m[1m484 kB[22m[39m
+├ ● /press/press-releases (ISR: 3600 Seconds)                           7.46 kB        [37m[1m99.1 kB[22m[39m
+├ ○ /press/upload                                                       12.6 kB         [37m[1m491 kB[22m[39m
+├ ○ /press/videos                                                       4.67 kB        [37m[1m96.3 kB[22m[39m
+├ ○ /pricing                                                            5.44 kB         [37m[1m558 kB[22m[39m
+├ ƒ /privacy                                                            262 B          [37m[1m98.9 kB[22m[39m
+├ ƒ /privacyPolicy                                                      202 B          [37m[1m98.9 kB[22m[39m
+├ ● /pro-info                                                           323 B           [37m[1m124 kB[22m[39m
+├ ○ /product-demos                                                      4.56 kB        [37m[1m93.6 kB[22m[39m
+├ ƒ /profile/[username]                                                 15.3 kB         [37m[1m587 kB[22m[39m
+├ ○ /profile/coaches                                                    1.16 kB         [37m[1m497 kB[22m[39m
+├ ○ /profile/paymentHistory                                             1.74 kB         [37m[1m479 kB[22m[39m
+├ ○ /programming                                                        21.9 kB         [37m[1m505 kB[22m[39m
+├ ○ /programming-invite                                                 3.65 kB         [37m[1m487 kB[22m[39m
+├ ○ /pulse-auntedna-pitch                                               31.6 kB         [37m[1m162 kB[22m[39m
+├ ○ /pulse-auntedna-stakeholder-deck                                    26.8 kB         [37m[1m157 kB[22m[39m
+├ ƒ /pulse-check-tech-demo                                              12.4 kB         [37m[1m231 kB[22m[39m
+├ ○ /pulse-overview                                                     747 B          [37m[1m89.8 kB[22m[39m
+├ ○ /pulse-overview/2min                                                772 B          [37m[1m89.8 kB[22m[39m
+├ ○ /pulse-pil-pepperdine-pitch                                         37 kB           [37m[1m167 kB[22m[39m
+├ ● /PulseCheck                                                         52 kB           [37m[1m857 kB[22m[39m
+├ ƒ /PulseCheck/admin-activation/[token]                                8.6 kB          [37m[1m491 kB[22m[39m
+├ ○ /PulseCheck/assessments                                             7.93 kB         [37m[1m490 kB[22m[39m
+├ ○ /PulseCheck/athlete-guide                                           7.39 kB          [37m[1m99 kB[22m[39m
+├ ƒ /PulseCheck/athlete-offer/[token]                                   329 B           [37m[1m492 kB[22m[39m
+├ ○ /PulseCheck/athlete-onboarding                                      14.6 kB         [37m[1m707 kB[22m[39m
+├ ƒ /PulseCheck/athlete-subscription-complete                           4.84 kB         [37m[1m484 kB[22m[39m
+├ ƒ /PulseCheck/clinician-onboarding/[token]                            2.11 kB        [37m[1m91.2 kB[22m[39m
+├ ○ /PulseCheck/coach                                                   11.1 kB         [37m[1m113 kB[22m[39m
+├ ○ /PulseCheck/coach-guide/calvin                                      8.33 kB         [37m[1m100 kB[22m[39m
+├ ○ /PulseCheck/fitbit                                                  390 B           [37m[1m485 kB[22m[39m
+├ ○ /PulseCheck/intake/[token]                                          7.99 kB        [37m[1m97.1 kB[22m[39m
+├ ƒ /PulseCheck/invite-unavailable                                      2.17 kB        [37m[1m93.8 kB[22m[39m
+├ ○ /PulseCheck/linear                                                  3.44 kB         [37m[1m482 kB[22m[39m
+├ ƒ /PulseCheck/linear-preview                                          2.81 kB         [37m[1m479 kB[22m[39m
+├ ○ /PulseCheck/login                                                   13.6 kB         [37m[1m532 kB[22m[39m
+├ ○ /PulseCheck/member-setup                                            6.76 kB         [37m[1m484 kB[22m[39m
+├ ○ /PulseCheck/mental-skills-starting-point-demo                       3.56 kB         [37m[1m733 kB[22m[39m
+├ ○ /PulseCheck/messages                                                7.04 kB         [37m[1m547 kB[22m[39m
+├ ○ /PulseCheck/messages/[id]                                           7.9 kB          [37m[1m548 kB[22m[39m
+├ ○ /PulseCheck/open                                                    3.21 kB        [37m[1m94.9 kB[22m[39m
+├ ○ /PulseCheck/oura                                                    7.85 kB         [37m[1m524 kB[22m[39m
+├ ○ /PulseCheck/partner                                                 5.15 kB         [37m[1m122 kB[22m[39m
+├ ƒ /PulseCheck/pilot-invite-next-steps                                 3.08 kB        [37m[1m94.7 kB[22m[39m
+├ ○ /PulseCheck/post-activation                                         12.6 kB         [37m[1m493 kB[22m[39m
+├ ○ /PulseCheck/privacy                                                 4.25 kB        [37m[1m95.9 kB[22m[39m
+├ ● /PulseCheck/pro                                                     31.9 kB         [37m[1m166 kB[22m[39m
+├ ƒ /PulseCheck/questionnaire/cau                                       29.4 kB         [37m[1m543 kB[22m[39m
+├ ○ /PulseCheck/service-purchase/success                                2.63 kB         [37m[1m479 kB[22m[39m
+├ ○ /PulseCheck/staff-onboarding-demo                                   7.42 kB         [37m[1m529 kB[22m[39m
+├ ƒ /PulseCheck/subscription-flow-lab                                   11.1 kB         [37m[1m100 kB[22m[39m
+├ ○ /PulseCheck/team-billing                                            6.65 kB         [37m[1m483 kB[22m[39m
+├   └ css/0bc024dac35af0a9.css                                          2.07 kB
+├ ƒ /PulseCheck/team-invite/[token]                                     266 B           [37m[1m492 kB[22m[39m
+├ ○ /PulseCheck/team-sharing                                            3.3 kB          [37m[1m482 kB[22m[39m
+├   └ css/567dfabd886806a6.css                                          862 B
+├ ○ /PulseCheck/team-workspace                                          18.9 kB         [37m[1m751 kB[22m[39m
+├ ○ /PulseCheck/terms                                                   4.49 kB        [37m[1m96.1 kB[22m[39m
+├ ○ /PulseCheck/wearables                                               11 kB           [37m[1m103 kB[22m[39m
+├   └ css/62cdafcb15063a7c.css                                          3.83 kB
+├ ● /PulseCheck/youth                                                   35 kB           [37m[1m169 kB[22m[39m
+├ ● /PulseCheck/youth-info                                              211 B           [37m[1m124 kB[22m[39m
+├ ○ /pulsecheckathletedemo                                              16.3 kB         [37m[1m146 kB[22m[39m
+├ ○ /PulseCheckChat                                                     3.13 kB         [37m[1m481 kB[22m[39m
+├ ○ /pulsecheckdemo                                                     39.1 kB         [37m[1m169 kB[22m[39m
+├ ○ /pulseintelligencelabs                                              14.2 kB         [37m[1m141 kB[22m[39m
+├ ○ /remote-login                                                       2.62 kB         [37m[1m479 kB[22m[39m
+├ ○ /research                                                           51.6 kB         [37m[1m568 kB[22m[39m
+├ ƒ /research/[slug]                                                    23 kB           [37m[1m152 kB[22m[39m
+├ ● /review ([32m470 ms[39m)                                                    11.6 kB         [37m[1m540 kB[22m[39m
+├ ○ /review/[slug]                                                      9.73 kB         [37m[1m546 kB[22m[39m
+├ ○ /review/dec24                                                       6.33 kB         [37m[1m277 kB[22m[39m
+├ ○ /review/draft/[id]                                                  12.6 kB         [37m[1m625 kB[22m[39m
+├ ○ /review/nov24                                                       4.1 kB          [37m[1m274 kB[22m[39m
+├ ○ /review/q1-25                                                       6.18 kB         [37m[1m277 kB[22m[39m
+├ ○ /review/q2-25                                                       6.69 kB         [37m[1m273 kB[22m[39m
+├ ○ /review/q2-26                                                       8.78 kB        [37m[1m97.8 kB[22m[39m
+├ ○ /review/q3-25                                                       4.99 kB         [37m[1m271 kB[22m[39m
+├ ○ /review/q4-25                                                       5.52 kB         [37m[1m142 kB[22m[39m
+├ ○ /review/year2025                                                    9.06 kB         [37m[1m279 kB[22m[39m
+├ ○ /review/yearInReview                                                3.73 kB         [37m[1m145 kB[22m[39m
+├ ● /Ritual                                                             195 B          [37m[1m97.6 kB[22m[39m
+├ ƒ /round-invitation/[id]                                              8.06 kB         [37m[1m607 kB[22m[39m
+├ ○ /round-library/[id]                                                 3.07 kB         [37m[1m479 kB[22m[39m
+├ ○ /round/[id]                                                         17.4 kB         [37m[1m498 kB[22m[39m
+├ ○ /round/[id]/wrapup                                                  9.12 kB         [37m[1m487 kB[22m[39m
+├ ƒ /rounds                                                             7.33 kB         [37m[1m140 kB[22m[39m
+├ ○ /run                                                                5.24 kB         [37m[1m483 kB[22m[39m
+├ ○ /run/active                                                         4.56 kB         [37m[1m488 kB[22m[39m
+├ ○ /run/summary                                                        4.55 kB         [37m[1m486 kB[22m[39m
+├ ○ /secure                                                             5.77 kB         [37m[1m108 kB[22m[39m
+├ ○ /settings                                                           5.6 kB          [37m[1m483 kB[22m[39m
+├ ƒ /shared/oura-recovery/[token]                                       5.1 kB         [37m[1m94.2 kB[22m[39m
+├ ƒ /shared/system-overview/[token]                                     11.2 kB         [37m[1m526 kB[22m[39m
+├ ƒ /shared/system-overview/[token]/artifacts/[...filename]             290 B          [37m[1m89.4 kB[22m[39m
+├ ○ /sign-up                                                            6.6 kB          [37m[1m487 kB[22m[39m
+├ ○ /sign/[id]                                                          15.1 kB         [37m[1m668 kB[22m[39m
+├ ○ /SimpBudget                                                         14.6 kB         [37m[1m491 kB[22m[39m
+├ ƒ /stacks                                                             2.99 kB        [37m[1m92.1 kB[22m[39m
+├ ○ /staff/clinical-escalations                                         7.62 kB         [37m[1m485 kB[22m[39m
+├ ○ /starter-pack                                                       6.02 kB        [37m[1m95.1 kB[22m[39m
+├ ○ /stretch                                                            5.42 kB         [37m[1m483 kB[22m[39m
+├ ○ /subscribe                                                          5.44 kB         [37m[1m558 kB[22m[39m
+├ ○ /subscription                                                       4.51 kB         [37m[1m519 kB[22m[39m
+├ ○ /subscription-error                                                 2.5 kB         [37m[1m91.6 kB[22m[39m
+├ ○ /subscription-success                                               5.35 kB         [37m[1m107 kB[22m[39m
+├ ○ /Support                                                            1.01 kB        [37m[1m90.1 kB[22m[39m
+├ ○ /terms                                                              6.22 kB        [37m[1m97.9 kB[22m[39m
+├ ○ /test                                                               2 kB            [37m[1m523 kB[22m[39m
+├ ○ /test-messaging                                                     4.37 kB         [37m[1m498 kB[22m[39m
+├ ○ /test/edna-integration                                              333 B           [37m[1m530 kB[22m[39m
+├ ● /testimonials                                                       10.9 kB        [37m[1m99.9 kB[22m[39m
+├ ● /TheAthleticMindCouncil                                             277 B           [37m[1m143 kB[22m[39m
+├ ○ /train-your-client                                                  7.13 kB        [37m[1m96.2 kB[22m[39m
+├ ○ /trainer/connect-account                                            2.58 kB         [37m[1m480 kB[22m[39m
+├ ○ /trainer/dashboard                                                  5.7 kB          [37m[1m612 kB[22m[39m
+├ ○ /trainer/test-payment                                               1.57 kB        [37m[1m92.1 kB[22m[39m
+├ ○ /trim-video                                                         5.27 kB         [37m[1m103 kB[22m[39m
+├ ○ /update-challenge-status                                            1.44 kB        [37m[1m90.5 kB[22m[39m
+├ ○ /user-dashboard                                                     949 B            [37m[1m90 kB[22m[39m
+├ ○ /whoop-pulsecheck-demo                                              19.6 kB         [37m[1m146 kB[22m[39m
+├ ƒ /winner/connect-account                                             3.43 kB         [37m[1m481 kB[22m[39m
+├ ○ /winner/dashboard                                                   4.1 kB          [37m[1m224 kB[22m[39m
+├ ○ /workout/[username]/[id]                                            5.47 kB         [37m[1m521 kB[22m[39m
+├ ○ /workout/[username]/[id]/[summaryId]                                4.1 kB          [37m[1m480 kB[22m[39m
+├ ƒ /WunnaRun                                                           26.4 kB         [37m[1m680 kB[22m[39m
+├ ○ /wunnarundemo                                                       18.3 kB         [37m[1m145 kB[22m[39m
+├ ● /youth                                                              266 B           [37m[1m124 kB[22m[39m
+└ ● /youth-info                                                         270 B           [37m[1m124 kB[22m[39m
++ First Load JS shared by all                                           [37m[1m153 kB[22m[39m
+  ├ chunks/framework-45c13772036bd6ff.js                                44.9 kB
+  ├ chunks/main-5aa35b848a6bc654.js                                     39.6 kB
+  ├ css/1385836466cd254f.css                                            64.3 kB
+  └ other shared chunks (total)                                         4.61 kB
+ƒ Middleware                                                            [37m[1m26.3 kB[22m[39m
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses [36mgetStaticProps[39m)
+   (ISR)      incremental static regeneration (uses revalidate in [36mgetStaticProps[39m)
+ƒ  (Dynamic)  server-rendered on demand
+​
+[90m(build.command completed in 4m 28.9s)[39m
+Next.js cache saved
+[96m[1m​[22m[39m
+[96m[1mFunctions bundling                                            [22m[39m
+[96m[1m────────────────────────────────────────────────────────────────[22m[39m
+​
+Packaging Functions from [36m.netlify/functions-internal[39m directory:
+ - ___netlify-server-handler/___netlify-server-handler.mjs
+​
+Packaging Functions from [36mnetlify/functions[39m directory:
+ - abandon-vision-pro-trial-session.js
+ - add-admin.js
+ - add-email-to-beta-list.js
+ - add-email-to-mailing-list.js
+ - add-gif-to-exercise.mjs
+ - admin-notification-test.js
+ - analyze-sentiment.js
+ - analyze-workout-machine-screen.js
+ - analyzeCalorieAlgorithm.js
+ - anthropic-bridge.ts
+ - apply-pilot-escalation-reclassification.js
+ - apply-pilot-outcome-reclassification.js
+ - apply-pilot-watch-list.js
+ - assign-challenge-prize.js
+ - audio-run-alerts.js
+ - audit-equity-document.ts
+ - auntedna-snapshot-pull.js
+ - auto-repair-deposits.js
+ - auto-retry-pending-payouts.js
+ - award-pulse-points.ts
+ - award-round-badges.ts
+ - backfill-macra-registration-complete.ts
+ - backfill-pilot-athlete-outcomes.js
+ - backfill-revenuecat-ids.js
+ - backfill-subscription-user-fields.js
+ - book-pulsecheck-coach-service.js
+ - brevo-email-webhook.ts
+ - broadcast-club-announcement.ts
+ - calculate-coach-revenue.js
+ - calculate-winners.js
+ - cancel-massage-lead-job.ts
+ - cancel-user-stripe-subscription.js
+ - check-admin.js
+ - check-env.js
+ - check-equity-email-status.ts
+ - check-inactive-workouts.js
+ - claim-vision-pro-trial-session.js
+ - classify-escalation.js
+ - cleanup-duplicate-prize-records.js
+ - cleanup-vision-pro-trial-sessions.js
+ - clear-pilot-watch-list.js
+ - clinical-bridge-smoke-test.js
+ - clinical-callback.js
+ - clinical-responder.js
+ - clone-prize-assignment.js
+ - coach-nora-chat.js
+ - coach-schedule-import-background.ts
+ - coach-schedule-import-status.ts
+ - coach-schedule-import.ts
+ - complete-onboarding-password.ts
+ - complete-payment.js
+ - complete-pulsecheck-baseline.js
+ - complete-stripe-onboarding.js
+ - complete-vision-pro-trial-session.js
+ - complete-winner-stripe-onboarding.js
+ - confirm-prize-distribution.js
+ - confirm-pulsecheck-coach-service-payment.js
+ - confirm-test-payment.js
+ - consume-remote-login-token.js
+ - create-1on1-checkout.js
+ - create-1on1-subscription-checkout.js
+ - create-account-update-link.js
+ - create-athlete-checkout-session.js
+ - create-checkout-session.js
+ - create-coach-checkout-session.js
+ - create-connected-account-simple.js
+ - create-connected-account.js
+ - create-deposit-payment-intent.js
+ - create-macra-web-offer-checkout.js
+ - create-manual-escrow.js
+ - create-onboarding-link.ts
+ - create-partner-profile.js
+ - create-payment-intent-test.js
+ - create-payment-intent.js
+ - create-pulsecheck-athlete-app-subscription-intent.js
+ - create-pulsecheck-coach-service-checkout-session.js
+ - create-pulsecheck-coach-service-payment-intent.js
+ - create-pulsecheck-coach-service-subscription-checkout.js
+ - create-pulsecheck-oura-share.js
+ - create-round-checkout.js
+ - create-test-payment.js
+ - create-vision-pro-trial-session.js
+ - create-winner-connected-account.js
+ - creator-waitlist-signup.js
+ - debug-prize-distribution.js
+ - debug-stripe-account.js
+ - debug-user.js
+ - delete-account.ts
+ - delete-prize-assignment.js
+ - delete-user.js
+ - deposit-prize-money.js
+ - draftPress.ts
+ - ensure-todays-curriculum-assignment.ts
+ - exercise-doc-validator.ts
+ - files-browse.ts
+ - firebase-next-api.ts
+ - fitclub-daily-drop.ts
+ - fitclub-nightly-recap.ts
+ - fix-email-mismatch.js
+ - fix-null-creator.js
+ - fix-stripe-account-id.js
+ - force-account-update.js
+ - founder-budget-parse-expenses.ts
+ - fwp-workout-generation-background.ts
+ - fwp-workout-generation-status.ts
+ - fwp-workout-generation.ts
+ - generate-equity-document.ts
+ - generate-gif-for-exercise-video.js
+ - generate-legal-document.ts
+ - generate-macra-daily-insight.ts
+ - generate-macra-meal-plan.ts
+ - generate-macra-onboarding-narration.ts
+ - generate-remote-login-token.js
+ - generate-workout-from-body-parts.js
+ - generateCaption.ts
+ - generateKpiSnapshot.ts
+ - get-1on1-training.js
+ - get-all-workout-summaries.js
+ - get-body-weight.js
+ - get-challenge-by-id.js
+ - get-challenges.js
+ - get-coach-profile.js
+ - get-dashboard-link-unified.js
+ - get-dashboard-link.js
+ - get-earnings.js
+ - get-equity-document-preview.ts
+ - get-exercise.js
+ - get-fatburn-summaries.js
+ - get-followers.js
+ - get-following.js
+ - get-massage-lead-job.ts
+ - get-monthly-statement.js
+ - get-pilot-operational-state.js
+ - get-pilot-survey-prompt-state.js
+ - get-prize-assignments.js
+ - get-prize-escrow.js
+ - get-pulsecheck-app-branding.js
+ - get-pulsecheck-athlete-billing-context.js
+ - get-pulsecheck-athlete-invoices.js
+ - get-pulsecheck-coach-earnings.js
+ - get-pulsecheck-scorecard.ts
+ - get-pulsecheck-team-showing-up-history.ts
+ - get-pulsecheck-team-standings.ts
+ - get-recent-payment-intents.js
+ - get-run-round-leaderboard.js
+ - get-run-summaries.js
+ - get-stretch-summaries.js
+ - get-unified-earnings.js
+ - get-user-by-id.js
+ - get-user-profile.js
+ - get-user-videos.js
+ - get-user-workouts.js
+ - get-vision-runtime-package-manifest.js
+ - get-winner-prize-history.js
+ - get-winner-prize-info.js
+ - get-workout-summaries.js
+ - google-health-auth-start.js
+ - google-health-callback.js
+ - google-health-disconnect.js
+ - google-health-status.js
+ - google-health-sync.js
+ - google-health-utils.js
+ - google-health-webhook.js
+ - google-secret-manager-utils.js
+ - handle-onelink-redirect.js
+ - health-check-stripe-accounts.js
+ - hello-world.js
+ - inferExerciseBodyParts.js
+ - ingest-health-connect-recovery.ts
+ - initiate-unified-payout.js
+ - join-challenge.js
+ - journal-extract.js
+ - journal-guide.js
+ - journal-safety-screen.js
+ - journal-week-summary.js
+ - junior-lesson-conversation.ts
+ - link-referral.js
+ - list-admin-users.js
+ - list-pulsecheck-coach-services.js
+ - list-vision-runtime-package-manifests.js
+ - log-secure-access.js
+ - manage-pulsecheck-athlete-invite.ts
+ - manage-pulsecheck-athlete-subscription-offer.js
+ - manage-pulsecheck-team-code.ts
+ - manage-pulsecheck-team-leaderboard.ts
+ - manage-subscription.js
+ - manual-deposit-repair.js
+ - manual-sync-meal-logs.js
+ - manual-sync-sessions.js
+ - manualTriggerMoveOfTheDay.js
+ - massage-lead-column-job.ts
+ - massage-lead-column.ts
+ - merge-accounts.js
+ - migrate-expiration-history.js
+ - mint-vision-pro-launch-token.js
+ - nora-athlete-reply.ts
+ - nora-estimate-meal.js
+ - nora-nutrition-chat.ts
+ - nora-red-team-job-cleanup.ts
+ - nora-red-team-release-gate.ts
+ - nora-red-team-run-background.ts
+ - nora-red-team-scheduled-suite-background.ts
+ - nora-red-team-scheduled-suite.ts
+ - nora-routine-generation-background.ts
+ - nora-routine-generation-status.ts
+ - nora-routine-generation.ts
+ - nora-save-conversation.js
+ - nora-save-derived.js
+ - notify-coach-connection.js
+ - notify-meal-logged.js
+ - og-article.ts
+ - og-image.ts
+ - openai-bridge.ts
+ - oura-auth-start.js
+ - oura-callback.js
+ - oura-disconnect.js
+ - oura-status.js
+ - oura-sync.js
+ - oura-utils.js
+ - parse-escalation-conditions-bulk.ts
+ - parse-phase-j-lift-summary.ts
+ - payout-prize-money.js
+ - pipelists-deadline-reminders.ts
+ - pipelists-email-sequences.ts
+ - polar-auth-start.js
+ - polar-callback.js
+ - polar-disconnect.js
+ - polar-status.js
+ - polar-sync.js
+ - polar-utils.js
+ - polar-webhook.js
+ - prepare-equity-package.ts
+ - prepare-equity-self-signature.ts
+ - process-massage-lead-job.ts
+ - pulse-ritual-early-access.js
+ - pulsecheck-admin-payouts.js
+ - pulsecheck-avatar-session.js
+ - pulsecheck-chat.js
+ - pulsecheck-clay-self-background.js
+ - pulsecheck-clay-self-cleanup.js
+ - pulsecheck-clay-self.js
+ - pulsecheck-coach-payout.js
+ - pulsecheck-consent-save.ts
+ - pulsecheck-escalation.js
+ - pulsecheck-notification-utils.js
+ - pulsecheck-report-delivery-status.js
+ - pulsecommand-register-device.js
+ - pulsecommand-roundtable-broadcast.js
+ - pulsecommand-roundtable-thread.js
+ - pulsecommand-send-operator-push.js
+ - push-leads-to-instantly.ts
+ - push-outreach-campaign-background.ts
+ - recompute-pilot-outcome-rollups.js
+ - record-checkin-signal-alignment.ts
+ - record-clinical-escalation.js
+ - record-equity-signature.ts
+ - record-evening-checkin.ts
+ - record-morning-checkin.ts
+ - record-pilot-survey-response.js
+ - record-pulsecheck-assignment-event.js
+ - refine-campaign-strategy.ts
+ - release-email-suppression.js
+ - render-meta.js
+ - repair-prize-funding-status.js
+ - repair-pulsecheck-daily-assignment.js
+ - report-pilot-escalation-reclassification.js
+ - report-pilot-outcome-reclassification.js
+ - request-pilot-watch-list.js
+ - reset-onboarding.js
+ - resolve-pulsecheck-coach-operating-context.ts
+ - resolve-verified-google-signin.js
+ - revise-equity-document.ts
+ - revise-legal-document.ts
+ - run-summary-dedupe.js
+ - save-fatburn-summary.js
+ - save-run-summary.js
+ - save-stretch-summary.js
+ - schedule-challenge-ending-soon-email.ts
+ - schedule-first-workout-celebration-email.ts
+ - schedule-inactivity-winback-email.ts
+ - schedule-irl-event-analytics-report-email.ts
+ - schedule-joined-round-no-workout-email.ts
+ - schedule-macra-inactivity-email.ts
+ - schedule-macra-retargeting-email.ts
+ - schedule-macra-tips-email.ts
+ - schedule-macra-web-offer-email.ts
+ - schedule-macra-welcome-email.ts
+ - schedule-streak-milestone-email.ts
+ - schedule-username-reminder-email.ts
+ - scheduleMoveOfTheDay.js
+ - scheduled-account-closure.js
+ - scheduled-athleticmind-snapshots.js
+ - scheduled-coach-reminders.ts
+ - scheduled-curriculum-assessment.ts
+ - scheduled-curriculum-reminder.ts
+ - scheduled-daily-curriculum-assignment.ts
+ - scheduled-device-history-sync.js
+ - scheduled-google-health-sync.js
+ - scheduled-group-meet-final-reminders.ts
+ - scheduled-group-meet-flex-prompts.ts
+ - scheduled-invite-accepted-outbox.ts
+ - scheduled-journal-safety-screen-sweep.js
+ - scheduled-mental-assignment-reminder.ts
+ - scheduled-mental-checkin.ts
+ - scheduled-nora-conversation-timeout-sweep.ts
+ - scheduled-nora-conversation.ts
+ - scheduled-pilot-metric-rollup-repair.js
+ - scheduled-polar-end-of-day-sync.js
+ - scheduled-pulsecheck-protocol-monitoring.ts
+ - scheduled-pulsecheck-team-showing-up-capture.ts
+ - scheduled-repair-run-round-duplicates.js
+ - scheduled-round-daily-summary.ts
+ - scheduled-smart-retry.js
+ - scheduled-sync-macra-appsflyer.ts
+ - send-approval-email.ts
+ - send-challenge-ending-soon-email.ts
+ - send-coach-connection-email.ts
+ - send-creator-waitlist-event-email.js
+ - send-first-workout-celebration-email.ts
+ - send-friend-email.ts
+ - send-fully-executed-email.ts
+ - send-host-validation-email.js
+ - send-inactivity-winback-email.ts
+ - send-investor-access-email.ts
+ - send-irl-event-analytics-report-email.ts
+ - send-joined-round-no-workout-email.ts
+ - send-macra-inactivity-email.ts
+ - send-macra-no-trial-challenge-email.ts
+ - send-macra-paywall-cancel-trust-email.ts
+ - send-macra-paywall-view-value-email.ts
+ - send-macra-tips-email.ts
+ - send-macra-trial-activation-email.ts
+ - send-macra-web-offer-email.ts
+ - send-macra-web-offer-proof-email.ts
+ - send-macra-welcome-email.ts
+ - send-new-follower-email.ts
+ - send-notification.js
+ - send-onboarding-email.ts
+ - send-password-reset-email.ts
+ - send-pulsecheck-admin-activation-email.ts
+ - send-pulsecheck-athlete-invite-email.ts
+ - send-pulsecheck-athlete-onboarded-email.js
+ - send-pulsecheck-invite-accepted-email.ts
+ - send-pulsecheck-meeting-invite.ts
+ - send-pulsecheck-pilot-activation-email.ts
+ - send-pulsecheck-pilot-activation-push.js
+ - send-pulsecheck-team-invite-email.ts
+ - send-review-draft-reminder.ts
+ - send-share-bonus-notification.js
+ - send-signed-confirmation.ts
+ - send-signing-request.ts
+ - send-sports-intelligence-report-email.js
+ - send-staff-invite-email.js
+ - send-streak-milestone-email.ts
+ - send-username-reminder-email.ts
+ - send-weekly-review-checkin.ts
+ - send-welcome-email.ts
+ - send-winner-notification-email.ts
+ - send-workout-notification.js
+ - setup-prize-test-scenario.js
+ - sitemap.js
+ - smart-retry-prize-distribution.js
+ - social-preview.js
+ - sports-intelligence-bridge.ts
+ - start-vision-pro-trial-session.js
+ - stripe-coach-webhook.js
+ - stripe-deposit-webhook.js
+ - stripe-webhook.js
+ - submit-pulsecheck-checkin.js
+ - sync-athlete-sport-mirror.js
+ - sync-campaign-analytics.ts
+ - sync-macra-appsflyer-raw-data.ts
+ - sync-pending-payouts.js
+ - sync-pilot-mental-performance-snapshot.js
+ - sync-revenuecat-subscription.js
+ - sync-stripe-subscription.js
+ - test-auto-retry.js
+ - test-complete-challenge.js
+ - test-sentiment.js
+ - test-stripe-urls.js
+ - test-user-data.js
+ - test-username-lookup.js
+ - trigger-challenge-status-update.js
+ - trigger-review-checkin.ts
+ - trigger-workout-inactivity-check.js
+ - triggerCalorieAnalysis.js
+ - triggerDraftPress.ts
+ - triggerGenerateKpiSnapshot.ts
+ - tts-mental-step.ts
+ - tts.js
+ - update-challenge-status.js
+ - update-prize-assignment.js
+ - user-profile.js
+ - user-stripe-subscriptions.js
+ - validate-promo-code.js
+ - validate-user-stripe-accounts.js
+ - verify-board-consent.ts
+ - verify-outreach-campaign-background.ts
+ - verify-subscription-simple.js
+ - verify-subscription.js
+ - vision-pro-reset-sounds.js
+ - vision-pro-trials-utils.js
+ - whoop-auth-start.js
+ - whoop-callback.js
+ - whoop-disconnect.js
+ - whoop-status.js
+ - whoop-sync.js
+ - whoop-utils.js
+ - whoop-webhook.js
+​
+---

@@ -1,0 +1,43 @@
+[Firebase Admin] Credential resolution {
+  runtime: 'netlify-function',
+  appName: '[DEFAULT]',
+  mode: 'prod',
+  source: 'prod:unresolved',
+  projectId: 'quicklifts-dd3f1'
+}
+[Firebase Admin] Credential env presence {
+  runtime: 'netlify-function',
+  appName: '[DEFAULT]',
+  mode: 'prod',
+  hasServiceAccount: false,
+  hasServiceAccountKey: false,
+  hasSecretKey: false,
+  hasPrivateKey: false,
+  hasClientEmail: false,
+  hasImpersonationTarget: false,
+  hasProjectId: false,
+  splitKeyParts: [
+    'FIREBASE_PRIVATE_KEY_1',
+    'FIREBASE_PRIVATE_KEY_2',
+    'FIREBASE_PRIVATE_KEY_3',
+    'FIREBASE_PRIVATE_KEY_4'
+  ],
+  splitKeyPresence: [ false, false, false, false ]
+}
+✔ record-clinical-escalation — _private surface exists (0.546167ms)
+✔ record-clinical-escalation — buildDedupeKey is deterministic + sport/family-aware (0.084167ms)
+✔ record-clinical-escalation — dayBucket buckets to fixed window starts (0.917ms)
+✔ record-clinical-escalation — isAdminClaim recognizes admin signals (0.062666ms)
+✔ record-clinical-escalation — clinician email surfaces athlete + team + 988 disclaimer (0.308541ms)
+✔ record-clinical-escalation — clinician SMS includes athlete + team + ack URL + 988 reminder (0.336ms)
+✔ record-clinical-escalation — escapes HTML in clinician email payload (0.15875ms)
+✔ record-clinical-escalation — resolveDesignatedClinician picks primary, falls back to oldest active (0.518791ms)
+✔ record-clinical-escalation — normalizeString trims + tolerates non-strings (0.070375ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 571.540167

@@ -1,0 +1,62 @@
+{
+  "createdAt": "2026-10-18T14:33:38.347839+00:00",
+  "evidence": [
+    {
+      "suite": "atomic consent",
+      "passed": 11,
+      "logPath": "/tmp/cohort-final-candidate-tests.log",
+      "logSha256": "2979db26773c2f6dff7770791a7e9b42eb247cc319f1cfbab69f1f2bc6831313"
+    },
+    {
+      "suite": "access rules local and scoped production",
+      "passed": 42,
+      "logPath": "/tmp/cohort-final-access-tests.log",
+      "logSha256": "07260186fbefa847efd05a4012072916553c623a91d39d2e869cb7240714a76c"
+    },
+    {
+      "suite": "escalation scopes both rule sets",
+      "passed": 2,
+      "logPath": "/tmp/cohort-escalation-scope.log",
+      "logSha256": "261f4fe841b9c0914ec4f9cf5780493c82cee11d7524dc6a3ff0fec07ed390d7"
+    },
+    {
+      "suite": "HTTP real emulator auth",
+      "passed": 1,
+      "logPath": "/tmp/cohort-consent-http.log",
+      "logSha256": "40f6498462dce39f40b32e048be372d2a84dd716bb642bf1cc4f8cfbbee9579e"
+    },
+    {
+      "suite": "browser progress save reopen stale terms",
+      "passed": 1,
+      "logPath": "/tmp/cohort-consent-browser.log",
+      "logSha256": "a9aed3dd78dc23ca5bbbc36b10992d19a52a721acb81df4931f05e9d520b5dbe"
+    },
+    {
+      "suite": "integration before final webhook and push refinements",
+      "passed": 69,
+      "logPath": "/tmp/cohort-integration-tests.log",
+      "logSha256": "b523595455218e5c8606dc4392e85e2dcbcb046f1ffd911ed3f5f3b7cf9372ad"
+    },
+    {
+      "suite": "provisioning outbox and configuration",
+      "passed": 80,
+      "logPath": "/tmp/cohort-provision-tests.log",
+      "logSha256": "5caa56c79aa10ef90139b6e4f25b7b20f7431cbee92b04d450c3dd6a0262f0c0"
+    },
+    {
+      "suite": "legacy roster protection",
+      "passed": 2,
+      "logPath": "/tmp/cohort-legacy-protection.log",
+      "logSha256": "4a5825e6a7dcbc755330736fdc3f95a247e4702a4be29ba9fa7580512229d42d"
+    },
+    {
+      "suite": "isolated Next production build",
+      "passed": true,
+      "candidate": "251a7f9ed",
+      "logPath": "/tmp/cohort-web-release-build.log",
+      "logSha256": "acf8207a0401b15a28a6abcc6f3e5bd58387475a09531a4f5fa8429a8953ce46",
+      "laterChanges": "Server JavaScript, rules and tests only; final webhook16 and push23 focused tests reported by agents; no Next app source changes."
+    }
+  ],
+  "notes": "Counts are per suite, overlap and must not be summed as unique tests. Browser uses isolated auth/router/service adapters; HTTP independently uses real emulator auth."
+}

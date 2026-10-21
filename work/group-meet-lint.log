@@ -1,0 +1,10 @@
+
+/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/src/components/group-meet/GroupMeetInviteAvailability.tsx
+  1:28  error  'useMemo' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/src/pages/admin/groupMeet.tsx
+   501:10  error  'testEmailSending' is assigned a value but never used. Allowed unused vars must match /^_/u         @typescript-eslint/no-unused-vars
+  2019:9   error  'sendStandaloneTestEmail' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+✖ 3 problems (3 errors, 0 warnings)
+

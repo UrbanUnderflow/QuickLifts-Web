@@ -1,0 +1,83 @@
+{
+  "observedDate": "2026-10-18",
+  "mode": "read-only",
+  "firebaseProject": "quicklifts-dd3f1",
+  "organizations": {
+    "total": 7,
+    "statuses": {
+      "active": 5,
+      "ready-for-activation": 2
+    },
+    "missingProductBrand": 7,
+    "appBrandingPresent": 0
+  },
+  "teams": {
+    "total": 10,
+    "statuses": {
+      "active": 5,
+      "ready-for-activation": 3,
+      "provisioning": 2
+    },
+    "danglingOrganizationLinks": 0
+  },
+  "memberships": {
+    "total": 69,
+    "statuses": {
+      "active": 20,
+      "removed": 2,
+      "missing": 47
+    },
+    "caution": "Missing status requires legacy-normalization review; not classified as invalid membership."
+  },
+  "appUpdate": {
+    "modalIsEnabled": false,
+    "pulsecheck-version": [
+      {
+        "version": "2.15",
+        "buildNumber": null,
+        "isCriticalUpdate": true
+      }
+    ],
+    "pulsecheck-versions": [
+      {
+        "version": "2.15",
+        "buildNumber": null,
+        "isCriticalUpdate": true
+      }
+    ]
+  },
+  "deployments": [
+    {
+      "site": "https://fitwithpulse.ai",
+      "state": "ready",
+      "id": "6ad0f9aa0394ace6ef91567b",
+      "commit": "052189804b42a6f1a4f873d54de9f15aef90c63b",
+      "createdUtc": "2026-10-15T16:04:58.672Z",
+      "publicHeadStatus": 200
+    },
+    {
+      "site": "https://theathleticmind.ai",
+      "state": "ready",
+      "id": "6ad2d24d9572266f24570ef0",
+      "commit": "9baa6390560e99317c1aa61930630c7b3ca155ec",
+      "createdUtc": "2026-10-17T01:41:33.146Z",
+      "publicHeadStatus": 200
+    }
+  ],
+  "limits": [
+    "No athlete content read for aggregate inventory",
+    "No production writes or deliveries",
+    "No authenticated browser walkthrough",
+    "No deployed rules comparison",
+    "No physical-device or app-store verification",
+    "No live partner receipt verification"
+  ],
+  "snapshotPhase": "initial-audit-before-authorized-product-correction",
+  "subsequentCorrection": {
+    "verifiedAt": "2026-10-18T13:28:38.461Z",
+    "missingProductBrand": 0,
+    "pulsecheckOrganizations": 6,
+    "athleticmindOrganizations": 1,
+    "evidence": "product-brand-verified.json"
+  }
+}

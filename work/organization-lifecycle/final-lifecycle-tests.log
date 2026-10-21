@@ -1,0 +1,14 @@
+✔ lifecycle mutation requires platform admin, open account and server-owned actor (2.719084ms)
+✔ exact name confirmation, 90day window, closed actor and restoration preserve configuration (1.338083ms)
+✔ bounded purge resumes, preserves unrelated org and personal/consent history, finishes tombstones (2.156084ms)
+✔ active lease prevents concurrent worker; expired lease retries purging state (0.27025ms)
+✔ stale ownership query cannot delete an operational record reassigned before commit (0.264209ms)
+✔ restore preserves absent original status rather than activating an unconfigured organization (0.280125ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 871.615125

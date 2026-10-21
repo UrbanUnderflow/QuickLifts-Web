@@ -1,0 +1,97 @@
+{
+  "verifiedAt": "2026-10-18T14:53:26.550Z",
+  "site": "https://fitwithpulse.ai",
+  "checks": [
+    {
+      "method": "POST",
+      "path": "/.netlify/functions/nora-save-conversation",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "body": "{\"error\":\"The conversation could not be saved safely.\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/.netlify/functions/nora-save-derived",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "body": "{\"error\":\"This record could not be saved safely.\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/.netlify/functions/pulsecheck-chat",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "body": "{\"error\":\"Sign in is required to chat with Nora.\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/.netlify/functions/pulsecheck-consent-save",
+      "status": 405,
+      "expected": 405,
+      "passed": true,
+      "body": "{\"error\":{\"code\":\"METHOD_NOT_ALLOWED\",\"message\":\"POST only\"}}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/pulsecheck/functions/pulsecheck-consent-save",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "body": "{\"error\":{\"code\":\"AUTH_REQUIRED\",\"message\":\"Sign in to continue.\"}}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/pulsecheck/functions/record-clinical-escalation",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "body": "{\"success\":false,\"error\":\"Missing or malformed Authorization header\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/pulsecheck/functions/clinical-responder",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "body": "{\"error\":\"Sign in is required.\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/pulsecheck/functions/delete-account",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "body": "{\"error\":\"Sign in again to request account deletion.\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/profiles/public?userId=cohort-synthetic-absent-20261018",
+      "status": 404,
+      "expected": 404,
+      "passed": true,
+      "body": "{\"profile\":null}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/profiles/directory?kind=forbidden",
+      "status": 400,
+      "expected": 400,
+      "passed": true,
+      "body": "{\"error\":\"Invalid profile search\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/pulsecheck/protect-legacy-roster",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "body": "{\"error\":\"Admin authentication required.\"}"
+    }
+  ],
+  "pageStatus": 200,
+  "servedAtomicMarker": true,
+  "limitations": "Unauthenticated negative-path and served-asset checks only; no live consent, profile, notification or clinical records created."
+}

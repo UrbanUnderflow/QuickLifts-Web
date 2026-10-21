@@ -1,0 +1,13 @@
+{
+  "verifiedAt": "2026-10-18T14:34:57.419Z",
+  "beforeRuleset": "projects/quicklifts-dd3f1/rulesets/5de284e4-a7cf-4297-9305-09fadca19119",
+  "afterRelease": {
+    "name": "projects/quicklifts-dd3f1/releases/cloud.firestore",
+    "rulesetName": "projects/quicklifts-dd3f1/rulesets/7353c80a-e9a1-42e0-bfab-11a350530bcd",
+    "createTime": "2023-06-30T10:39:14.376659Z",
+    "updateTime": "2026-10-18T14:34:56.547902Z"
+  },
+  "sourceSha256": "1dc30a2f98ba971b5daa5d5ef0048ff020453252d901052cd23f5af916e548ae",
+  "scope": "Only five server-owned OAuth/provider credential collections denied to clients and excluded from generic fallback; all unrelated production rules unchanged",
+  "readbackExact": true
+}

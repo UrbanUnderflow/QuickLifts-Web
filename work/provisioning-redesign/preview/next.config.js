@@ -1,0 +1,1 @@
+module.exports={experimental:{externalDir:true},distDir:".next",typescript:{ignoreBuildErrors:true}}

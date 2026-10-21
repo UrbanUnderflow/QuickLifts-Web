@@ -1,0 +1,24 @@
+{
+  "checkedAt": "2026-10-18T14:47:27.390Z",
+  "existing": true,
+  "result": {
+    "name": "projects/quicklifts-dd3f1/databases/(default)/collectionGroups/pulsecheck-clinical-escalations/indexes/CICAgNir3pgK",
+    "queryScope": "COLLECTION",
+    "fields": [
+      {
+        "fieldPath": "pagedClinicianMembershipId",
+        "order": "ASCENDING"
+      },
+      {
+        "fieldPath": "detectedAt",
+        "order": "DESCENDING"
+      },
+      {
+        "fieldPath": "__name__",
+        "order": "DESCENDING"
+      }
+    ],
+    "state": "READY",
+    "density": "SPARSE_ALL"
+  }
+}

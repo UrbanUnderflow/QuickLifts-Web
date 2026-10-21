@@ -55,7 +55,7 @@ function resolvePulseCheckPushTarget(userData = {}) {
   }
 
   const sourceApp = sanitizeName(userData.pushTokenSourceApp).toLowerCase();
-  if (sourceApp !== 'pulsecheck') {
+  if (!['pulsecheck', 'athleticmind'].includes(sourceApp)) {
     return {
       token: '',
       eligible: false,
@@ -66,15 +66,16 @@ function resolvePulseCheckPushTarget(userData = {}) {
   return { token, eligible: true, reason: 'eligible' };
 }
 
-// Only canonical installation ownership can authorize a PulseCheck delivery.
+// Only canonical installation ownership can authorize delivery to either shared app.
 // Legacy profile tokens are deliberately not a fallback after account switches.
-async function loadPulseCheckPushTarget(db, userId) {
+async function loadPulseCheckPushTarget(db, userId, requestedBrand = null) {
+  if (requestedBrand != null && !['pulsecheck', 'athleticmind'].includes(requestedBrand)) return { eligible: false, token: '', reason: 'invalid_app_brand' };
   if (!db || !userId) return { eligible: false, token: '', reason: 'missing_owner' };
   const user = await db.collection('users').doc(userId).get();
   if (!user.exists || user.data()?.accountClosureRequestedAt) return { eligible: false, token: '', reason: 'account_closed' };
   const snapshot = await db.collection('pulsecheck-push-installations').where('ownerUserId', '==', userId).get();
   const entries = snapshot.docs.map(doc => doc.data()).filter(record =>
-    record.ownerUserId === userId && record.sourceApp === 'pulsecheck' && sanitizeName(record.token) && !record.revokedAt);
+    record.ownerUserId === userId && ['pulsecheck', 'athleticmind'].includes(record.sourceApp) && (!requestedBrand || record.sourceApp === requestedBrand) && sanitizeName(record.token) && !record.revokedAt);
   entries.sort((a, b) => (b.updatedAt?.toMillis?.() || 0) - (a.updatedAt?.toMillis?.() || 0));
   const record = entries[0];
   return record ? { eligible: true, token: record.token, platform: record.platform, userId, reason: 'eligible' }

@@ -1,0 +1,14 @@
+✔ current signed authorization permits routine handoff (0.315458ms)
+✔ missing declined revoked expired and stale authorizations block routine transfer (0.07125ms)
+✔ urgent safety uses its separate basis; legacy deployments retain existing workflow (0.041542ms)
+✔ PulseCheck handler activates crisis wall and returns 988 without clinician lookup or email (2.488458ms)
+✔ AthleticMind handler still pages clinician and ignores client brand and organization override (0.877583ms)
+✔ AthleticMind still requires a configured clinician (0.197583ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 38.874959

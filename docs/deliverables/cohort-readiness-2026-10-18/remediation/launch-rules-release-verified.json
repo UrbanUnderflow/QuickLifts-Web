@@ -1,0 +1,13 @@
+{
+  "verifiedAt": "2026-10-18T14:40:33.453Z",
+  "beforeRuleset": "projects/quicklifts-dd3f1/rulesets/7353c80a-e9a1-42e0-bfab-11a350530bcd",
+  "afterRelease": {
+    "name": "projects/quicklifts-dd3f1/releases/cloud.firestore",
+    "rulesetName": "projects/quicklifts-dd3f1/rulesets/44dd800e-bdcb-4eb8-be32-44b93f4fde91",
+    "createTime": "2023-06-30T10:39:14.376659Z",
+    "updateTime": "2026-10-18T14:40:32.671478Z"
+  },
+  "sourceSha256": "95349635b58d7ed405af7ae648bd8bd646faf84fe6e9cf8ebf0e83f9b408eae3",
+  "scope": "Cohort privacy, atomic-consent ownership, private clinical/responder records, installation ownership and closure tombstones; unmarked user behavior and unrelated deployed rules preserved",
+  "readbackExact": true
+}

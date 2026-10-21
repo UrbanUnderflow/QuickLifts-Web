@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Clinical bridge athlete registration",
+  "type": "object",
+  "required": [
+    "externalId",
+    "source"
+  ],
+  "properties": {
+    "externalId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "email": {
+      "type": "string"
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "firstName": {
+      "type": "string"
+    },
+    "lastName": {
+      "type": "string"
+    },
+    "organizationId": {
+      "type": "string"
+    },
+    "teamId": {
+      "type": "string"
+    },
+    "source": {
+      "const": "pulsecheck"
+    },
+    "universityCode": {
+      "type": "string",
+      "pattern": "^[A-Z0-9][A-Z0-9_-]{0,63}$",
+      "description": "Optional partner university routing code from verified persisted organization configuration."
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

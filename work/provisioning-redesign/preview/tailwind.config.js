@@ -1,0 +1,1 @@
+module.exports={...require("../../../tailwind.config.js"),content:["./pages/**/*.tsx","../../../src/components/admin/ProgramProductConfiguration.tsx"]}

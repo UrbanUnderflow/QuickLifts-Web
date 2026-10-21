@@ -338,11 +338,13 @@ function isConversationClosure(message) {
   ]);
   if (exactClosures.has(normalized)) return true;
 
-  const wordCount = normalized.split(' ').filter(Boolean).length;
-  if (wordCount > 12) return false;
-  const hasClosure = /\b(?:thanks|thank you|got it|sounds good|that helps|that helped|appreciate it)\b/i.test(normalized);
-  const continuesConversation = /\b(?:but|however|although|want|need|can you|could you|would you|question|talk|discuss|help me|also)\b/i.test(normalized);
-  return hasClosure && !continuesConversation;
+  // Polite thanks can accompany a substantive answer or another request. Only
+  // treat a complete acknowledgment as closure, never a substring of a turn.
+  const remainder = normalized
+    .replace(/\b(?:thank you(?: so much| very much)?|thanks(?: so much| a lot)?|got it|sounds good|that (?:really )?helps|that helped|(?:i )?appreciate (?:it|that|you)|that(?: is|'s) all|okay|ok|all right|alright|nora)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return remainder.length === 0 && /\b(?:thanks|thank you|got it|sounds good|that (?:really )?helps|that helped|appreciate|okay|ok|all right|alright)\b/.test(normalized);
 }
 
 function isExplicitHealthDataRequest(message) {

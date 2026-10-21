@@ -29,6 +29,7 @@ const {
   buildPulseCallbackUrl,
   createClinicalBridge,
   resolveClinicalBridgeConfig,
+  resolveClinicalUniversityCode,
 } = require('./lib/clinical-bridge');
 
 // Escalation Tier enum values
@@ -2392,11 +2393,28 @@ async function resolveCriticalSourceScope(runtimeDb, userId, preferred = null) {
     : scopes.length === 1 ? scopes[0] : null;
   if (!selected) return null;
   const team = await runtimeDb.collection(TEAMS_COLLECTION).doc(selected.teamId).get();
-  if (!team.exists || team.data()?.organizationId !== selected.organizationId) return null;
+  if (!team.exists || team.data()?.organizationId !== selected.organizationId || await organizationIncidentUnavailable(runtimeDb, selected)) return null;
   return { teamId: selected.teamId, organizationId: selected.organizationId, teamMembershipId: selected.membershipId };
 }
 
+// A closed organization cannot keep delivering through historical incidents.
+// Legacy unscoped personal incidents retain their existing resource routing.
+async function organizationIncidentUnavailable(runtimeDb, record = {}) {
+  let organizationId = normalizeString(record.organizationId);
+  const inactive = data => !data || data.deletedAt != null || data.archivedAt != null || data.revokedAt != null || (data.status && data.status !== 'active');
+  if (normalizeString(record.teamId)) {
+    const team = await runtimeDb.collection(TEAMS_COLLECTION).doc(record.teamId).get();
+    if (!team.exists || inactive(team.data())) return true;
+    const parentId = normalizeString(team.data().organizationId);
+    if (organizationId && parentId !== organizationId) return true;
+    organizationId = parentId;
+  }
+  if (!organizationId) return false;
+  const organization = await runtimeDb.collection('pulsecheck-organizations').doc(organizationId).get();
+  return !organization.exists || inactive(organization.data());
+}
 async function resolveEmergencyProgram(runtimeDb, record = {}) {
+  if (await organizationIncidentUnavailable(runtimeDb, record)) return 'unknown';
   const teamId = normalizeString(record.teamId);
   if (!teamId) return 'unknown';
   const teamSnapshot = await runtimeDb.collection(TEAMS_COLLECTION).doc(teamId).get();
@@ -2450,6 +2468,7 @@ async function notifyCoach(body, runtimeDb = db) {
   if (Number(safetyRecord.tier) === EscalationTier.CriticalRisk) {
     return { statusCode: 200, headers, body: JSON.stringify({ success: false, reason: 'clinical_emergency_route_only' }) };
   }
+  if (await organizationIncidentUnavailable(runtimeDb, safetyRecord)) return { statusCode: 200, headers, body: JSON.stringify({ success: false, reason: 'organization_unavailable' }) };
   const selection = supportSelectionFromRecord(safetyRecord);
   const enforceEventRecipient = await isExplicitAthleticMindIncident(runtimeDb, safetyRecord);
   if (enforceEventRecipient) {
@@ -2559,6 +2578,7 @@ async function notifyCoach(body, runtimeDb = db) {
   // Create notification for coach
   // Note: This would integrate with your push notification system
   // For now, we create a notification document
+  if (await organizationIncidentUnavailable(runtimeDb, safetyRecord)) return { statusCode: 200, headers, body: JSON.stringify({ success: false, reason: 'organization_unavailable' }) };
   await runtimeDb.collection('notifications').add({
     userId: targetCoachId,
     type: 'escalation-alert',
@@ -2586,7 +2606,7 @@ async function notifyCoach(body, runtimeDb = db) {
     const athlete = athleteSnap.exists ? (athleteSnap.data() || {}) : {};
     const athleteName = (athlete.displayName || athlete.username || 'An athlete').trim();
 
-    if (coachEmail) {
+    if (coachEmail && !await organizationIncidentUnavailable(runtimeDb, safetyRecord)) {
       const siteUrl = process.env.SITE_URL || '';
       const result = await sendCoachEscalationEmail({
         coachEmail,
@@ -2721,6 +2741,7 @@ async function notifyCoach(body, runtimeDb = db) {
       if (smsTarget?.phone) {
         const siteUrl = process.env.SITE_URL || '';
         const smsBody = buildCoachEscalationSms({ tier, siteUrl });
+        if (await organizationIncidentUnavailable(runtimeDb, safetyRecord)) return { statusCode: 200, headers, body: JSON.stringify({ success: false, reason: 'organization_unavailable' }) };
         const smsResult = await sendTwilioSms({ to: smsTarget.phone, body: smsBody });
         console.log('[pulsecheck-escalation] Coach SMS sent (best-effort):', {
           success: smsResult?.success,
@@ -3322,6 +3343,7 @@ async function performClinicalHandoff(
   providedSupportContext = null,
   bridgeFactory = createClinicalBridge,
 ) {
+  if (Number(escalationData?.tier) === EscalationTier.CriticalRisk && await organizationIncidentUnavailable(runtimeDb, { ...escalationData, teamId: escalationData?.teamId || providedSupportContext?.teamId })) return applyEmergencyResourcesOnly(userId, escalationId, runtimeDb);
   const athleticMindEmergency = Number(escalationData?.tier) === EscalationTier.CriticalRisk
     && await isExplicitAthleticMindIncident(runtimeDb, {
       ...escalationData,
@@ -3487,6 +3509,10 @@ async function performClinicalHandoff(
     severity: d.data().severity
   }));
 
+  // Resolve optional partner routing from persisted configuration only. Ignore
+  // any universityCode on the browser request, athlete profile, or incident.
+  const universityCode = await resolveClinicalUniversityCode(runtimeDb, { teamId, organizationId });
+
   // Build handoff payload
   const consentTimestamp = Number(escalationData?.consentTimestamp || 0);
   const stateSnapshot = buildClinicalStateSnapshotEnvelope(escalationData);
@@ -3515,6 +3541,7 @@ async function performClinicalHandoff(
     escalationTimestamp: Date.now(),
     pulseApiCallback: buildPulseCallbackUrl(),
     payloadVersion: 'pulse-manas-v1-draft',
+    ...(universityCode ? { universityCode } : {}),
     organizationId: organizationId || null,
     teamId: teamId || null,
     routingContext: {
@@ -3587,8 +3614,10 @@ async function performClinicalHandoff(
       throw Object.assign(new Error('A verified live AuntEdna bridge is required for emergency delivery.'), { code: 'ATHLETICMIND_EMERGENCY_LIVE_BRIDGE_REQUIRED' });
     }
     if (athleticMindEmergency) await runtimeDb.collection(ATHLETE_SAFETY_STATE_COLLECTION).doc(userId).set({ emergencySupportMode: 'auntedna', emergencyHandoffStatus: 'pending' }, { merge: true });
+    if (await organizationIncidentUnavailable(runtimeDb, { teamId, organizationId })) throw Object.assign(new Error('This organization is unavailable.'), { code: 'ORGANIZATION_UNAVAILABLE' });
     const athleteUpsert = await bridge.upsertAthlete({
       externalId: userId,
+      ...(universityCode ? { universityCode } : {}),
       ...(shortUser.displayName ? { displayName: shortUser.displayName } : {}),
       ...(shortUser.email ? { email: shortUser.email } : {}),
       ...(organizationId ? { organizationId } : {}),
@@ -3610,6 +3639,7 @@ async function performClinicalHandoff(
     }, { merge: true });
 
     handoffPhase = 'escalation_create';
+    if (await organizationIncidentUnavailable(runtimeDb, { teamId, organizationId })) throw Object.assign(new Error('This organization is unavailable.'), { code: 'ORGANIZATION_UNAVAILABLE' });
     result = await bridge.createEscalation(payload);
     console.log('[pulsecheck-escalation] Clinical bridge response:', {
       provider: clinicalBridgeConfig.provider,
@@ -3743,6 +3773,7 @@ async function triggerCriticalHandoff(userId, conversationId, escalationId, esca
         resolvedSupportContext,
       );
   
+  if (result.resourcesOnly === true) return { ...result, coachNotification };
   const emergencyHandoffStatus = result.success === true ? 'received' : result.status === 'already_initiated' ? 'pending' : 'failed';
   await runtimeDb.collection(ATHLETE_SAFETY_STATE_COLLECTION).doc(userId).set({ emergencySupportMode: 'auntedna', emergencyHandoffStatus }, { merge: true });
   await runtimeDb.collection('escalation-records').doc(escalationId).set({ emergencySupportMode: 'auntedna', emergencyHandoffStatus }, { merge: true });

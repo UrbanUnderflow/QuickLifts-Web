@@ -1,3 +1,4 @@
+import { organizationTeamIsActive } from './lib/organization-access';
 import { runLinearRuntime, linearRuntimeEnabled } from '../../src/api/firebase/dailyCurriculum/linearRuntimeAdmin';
 import type { Handler } from '@netlify/functions';
 import * as admin from 'firebase-admin';
@@ -177,6 +178,10 @@ export const handler: Handler = async (event) => {
       headers: RESPONSE_HEADERS,
       body: JSON.stringify({ error: 'no_athlete_membership' }),
     };
+  }
+
+  if ((athleteMembership.status && athleteMembership.status !== 'active') || athleteMembership.deletedAt || athleteMembership.archivedAt || athleteMembership.revokedAt || !await organizationTeamIsActive(db, athleteMembership.teamId, athleteMembership.organizationId)) {
+    return { statusCode: 403, headers: RESPONSE_HEADERS, body: JSON.stringify({ error: 'inactive_program_scope' }) };
   }
 
   const tz =

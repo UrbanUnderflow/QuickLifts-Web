@@ -1,0 +1,44 @@
+✔ team scope requires a live organization and matching binding (0.526375ms)
+✔ a restored parent allows existing active team scope again (0.11ms)
+✔ lifecycle mutation requires platform admin, open account and server-owned actor (3.315542ms)
+✔ exact name confirmation, 90day window, closed actor and restoration preserve configuration (1.272292ms)
+✔ bounded purge resumes, preserves unrelated org and personal/consent history, finishes tombstones (2.009625ms)
+✔ active lease prevents concurrent worker; expired lease retries purging state (0.202375ms)
+✔ stale ownership query cannot delete an operational record reassigned before commit (0.434667ms)
+✔ restore preserves absent original status rather than activating an unconfigured organization (0.259542ms)
+✔ intended authorized recipient gets only allowed report fields (2.6865ms)
+✔ invalid links, non-GET and unauthenticated requests reject (1.089291ms)
+✔ report only opens for intended UID even when the requester might have team access (0.401375ms)
+✔ revoked staff, closed accounts, inactive teams and narrowed roster deny historical report (2.005125ms)
+✔ removed or cross-organization athlete denies stale named report (0.68725ms)
+✔ malformed report audience fails closed; unfinished content returns preparation status (0.927ms)
+✔ assigned staff can open a report when every listed athlete remains assigned (0.206709ms)
+✔ lost provisioning response retries return the same entity; separate operations remain separate (2.32225ms)
+✔ notification outage remains pending; retry uses verified recipient; sent replay never sends again (1.877334ms)
+✔ removed recipient and inactive enrollment cancel delivery (0.332458ms)
+✔ existing lease prevents concurrent delivery and expired lease is recoverable (0.341375ms)
+✔ public sender rejects unauthenticated and forged membership requests without delivering (1.761166ms)
+✔ ambiguous provider delivery is held for reconciliation and cannot be replayed (0.278708ms)
+✔ worker that loses its lease before dispatch cannot deliver (0.152ms)
+✔ interrupted dispatch becomes needs-review after lease expiry without resending (0.096417ms)
+✔ authorized report schedule saves only team config with server-owned audit fields (1.998667ms)
+✔ unauthorized, closed, unknown-field, and inaccessible-recipient writes do not persist (1.111916ms)
+✔ New York 8 AM follows daylight saving and waits for hour and start date (10.688625ms)
+✔ invalid settings reject impossible dates, unknown zones, hours, recipients and enabled empty lists (0.880209ms)
+✔ daily uses only previous day with escaped names and concise participation, no weekly insights (0.472084ms)
+✔ weekly tells named athletes and days story without opportunity rates (0.203333ms)
+✔ Monday sends daily and weekly once; repeat run skips sent records (1.874708ms)
+✔ revoked staff never receives a report (0.572792ms)
+✔ authorization revoked during preparation is rechecked before email (0.614791ms)
+✔ failed sends and ambiguous skipped sends remain failed and retryable (1.577625ms)
+✔ suppressed recipients are recorded as suppressed, never falsely sent (0.845542ms)
+✔ athlete removed during preparation stops stale named report delivery (0.467209ms)
+✔ an active delivery lease prevents a second worker from sending (0.172ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2164.522125

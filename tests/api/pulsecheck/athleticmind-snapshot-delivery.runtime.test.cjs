@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
+const { AuntEdnaClinicalBridge } = require('../../../netlify/functions/lib/clinical-bridge');
 const {
   getDailySnapshotWindow, deliverAthleticMindSnapshot, verifiedDestination, verifiedReceipt, DELIVERY_COLLECTION, WATERMARK_COLLECTION,
 } = require('../../../netlify/functions/lib/athleticmind-snapshot-delivery');
@@ -93,6 +94,67 @@ test('push is disabled without every explicit program and destination gate', asy
   }
   assert.equal(verifiedDestination({ ...config, enabled: false }, bridgeConfig, env), null);
   assert.equal(verifiedDestination({ ...config, receiver: { ...receiver, verifiedAt: null } }, bridgeConfig, env), null);
+});
+test('dedicated snapshot URL and key reach only the verified snapshot receiver without changing clinical config', async () => {
+  const snapshotReceiver = { ...receiver, baseUrl: 'https://snapshot-api.manasinsights.me', path: '/daily-snapshots' };
+  const snapshotEnv = {
+    ...env,
+    ATHLETICMIND_SNAPSHOT_PUSH_BASE_URL: snapshotReceiver.baseUrl,
+    ATHLETICMIND_SNAPSHOT_PUSH_PATH: snapshotReceiver.path,
+    ATHLETICMIND_SNAPSHOT_PUSH_API_KEY: 'synthetic-dedicated-receiver-key',
+    ATHLETICMIND_SNAPSHOT_PUSH_CREDENTIAL_MODE: 'live',
+  };
+  const originalClinicalConfig = structuredClone(bridgeConfig);
+  const db = fixture({ 'pulsecheck-teams/synthetic-team': { organizationId: 'synthetic-org', snapshotDelivery: { ...config, receiver: snapshotReceiver } } });
+  let sent = 0;
+  const result = await deliverAthleticMindSnapshot(db, input, dependencies({
+    env: snapshotEnv,
+    bridgeFactory: transportConfig => new AuntEdnaClinicalBridge(transportConfig, async (url, options) => {
+      sent++;
+      assert.equal(url, `${snapshotReceiver.baseUrl}${snapshotReceiver.path}`);
+      assert.equal(options.headers.Authorization, 'Bearer synthetic-dedicated-receiver-key');
+      assert.notEqual(options.headers.Authorization, `Bearer ${bridgeConfig.apiKey}`);
+      const snapshot = JSON.parse(options.body);
+      return { ok: true, status: 200, text: async () => JSON.stringify({ success: true, data: { snapshotId: snapshot.snapshotId, receiptId: 'synthetic-receipt', status: 'accepted' } }) };
+    }),
+  }));
+  assert.equal(result.status, 'delivered');
+  assert.equal(sent, 1);
+  assert.deepEqual(bridgeConfig, originalClinicalConfig);
+  assert.equal(JSON.stringify([...db.records]).includes(snapshotEnv.ATHLETICMIND_SNAPSHOT_PUSH_API_KEY), false);
+});
+test('partial, non-live, unverified, or disabled dedicated configuration never falls back to clinical credentials', async () => {
+  const dedicated = {
+    ...env,
+    ATHLETICMIND_SNAPSHOT_PUSH_BASE_URL: receiver.baseUrl,
+    ATHLETICMIND_SNAPSHOT_PUSH_PATH: receiver.path,
+    ATHLETICMIND_SNAPSHOT_PUSH_API_KEY: 'synthetic-dedicated-receiver-key',
+    ATHLETICMIND_SNAPSHOT_PUSH_CREDENTIAL_MODE: 'live',
+  };
+  const invalid = [
+    { ...dedicated, ATHLETICMIND_SNAPSHOT_PUSH_API_KEY: '' },
+    { ...dedicated, ATHLETICMIND_SNAPSHOT_PUSH_API_KEY: 'ae_pk_test_synthetic' },
+    { ...dedicated, ATHLETICMIND_SNAPSHOT_PUSH_CREDENTIAL_MODE: 'test' },
+    { ...dedicated, ATHLETICMIND_SNAPSHOT_PUSH_BASE_URL: 'http://partner-api.manasinsights.me/partner' },
+    { ...dedicated, ATHLETICMIND_SNAPSHOT_PUSH_PATH: '/unverified' },
+    { ...dedicated, ATHLETICMIND_SNAPSHOT_PUSH_ENABLED: 'false' },
+  ];
+  for (const key of Object.keys(dedicated).filter(key => key.startsWith('ATHLETICMIND_SNAPSHOT_PUSH_') && key !== 'ATHLETICMIND_SNAPSHOT_PUSH_ENABLED')) {
+    const partial = { ...dedicated };
+    delete partial[key];
+    invalid.push(partial);
+  }
+  for (const invalidEnv of invalid) {
+    const db = fixture();
+    assert.equal((await deliverAthleticMindSnapshot(db, input, dependencies({
+      env: invalidEnv,
+      assemble: () => { throw new Error('Must never assemble'); },
+      bridgeFactory: () => { throw new Error('Must never construct transport'); },
+    }))).status, 'disabled');
+    assert.equal(jobs(db).length, 0);
+  }
+  assert.equal(verifiedDestination({ ...config, enabled: false }, bridgeConfig, dedicated), null);
+  assert.equal(verifiedDestination({ ...config, receiver: { ...receiver, status: 'pending' } }, bridgeConfig, dedicated), null);
 });
 test('PulseCheck display override and missing product never activate export', async () => {
   for (const organization of [{ productBrand: 'pulsecheck', appBranding: { pulsecheck: 'athleticmind' } }, {}]) {

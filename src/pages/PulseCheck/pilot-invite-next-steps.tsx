@@ -1,3 +1,4 @@
+import { getNativeAppDistribution, normalizeNativeProductBrand, type NativeProductBrand } from '../../utils/pulsecheckAppDistribution';
 import React, { useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -9,6 +10,7 @@ import type { PulseCheckPilotInviteConfig } from '../../api/firebase/pulsecheckP
 type InviteMode = 'new-account' | 'existing-account';
 
 type PilotInviteNextStepsProps = {
+  productBrand: NativeProductBrand;
   mode: InviteMode;
   organizationName: string;
   teamName: string;
@@ -99,6 +101,7 @@ const applyConfigLayer = (base: PulseCheckPilotInviteConfig, data: Record<string
 });
 
 const PilotInviteNextStepsPage = ({
+  productBrand,
   mode,
   organizationName,
   teamName,
@@ -114,7 +117,10 @@ const PilotInviteNextStepsPage = ({
     if (!organizationId || !teamId) return '/PulseCheck';
     return `/PulseCheck/athlete-onboarding?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`;
   }, [organizationId, teamId]);
-  const nativeAppHref = `pulsecheck://open${
+  const appDistribution = getNativeAppDistribution(productBrand);
+  const iosUrl = productBrand === 'athleticmind' ? appDistribution.iosUrl : resolvePulseCheckIosAppUrl(config.iosAppUrl);
+  const androidUrl = productBrand === 'athleticmind' ? appDistribution.androidUrl : resolvePulseCheckAndroidAppUrl(config.androidAppUrl);
+  const nativeAppHref = `${appDistribution.scheme}://open${
     inviteToken ? `?inviteToken=${encodeURIComponent(inviteToken)}` : ''
   }`;
 
@@ -208,22 +214,24 @@ const PilotInviteNextStepsPage = ({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <a
-                  href={resolvePulseCheckIosAppUrl(config.iosAppUrl) || PULSECHECK_IOS_APP_STORE_URL}
+                  href={iosUrl || undefined}
+                  aria-disabled={!iosUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
                 >
                   <Download className="h-4 w-4" />
-                  iPhone App Store
+                  {iosUrl ? 'iPhone App Store' : 'iPhone download coming soon'}
                 </a>
                 <a
-                  href={resolvePulseCheckAndroidAppUrl(config.androidAppUrl)}
+                  href={androidUrl || undefined}
+                  aria-disabled={!androidUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
                 >
                   <Smartphone className="h-4 w-4" />
-                  Android Play Store
+                  {androidUrl ? 'Android Play Store' : 'Android download coming soon'}
                 </a>
               </div>
 
@@ -233,7 +241,7 @@ const PilotInviteNextStepsPage = ({
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
                 >
                   <Smartphone className="h-4 w-4" />
-                  Open PulseCheck App
+                  Open {appDistribution.name} App
                 </a>
                 {mode === 'new-account' ? (
                   <Link
@@ -298,11 +306,14 @@ export const getServerSideProps: GetServerSideProps<PilotInviteNextStepsProps> =
     ).catch(() => null);
   };
 
-  const [organizationConfigData, teamConfigData, pilotConfigData] = await Promise.all([
+  const [organizationData, organizationConfigData, teamConfigData, pilotConfigData] = await Promise.all([
+    readConfigDoc('pulsecheck-organizations', organizationId),
     readConfigDoc(ORGANIZATION_INVITE_DEFAULTS_COLLECTION, organizationId),
     readConfigDoc(TEAM_INVITE_DEFAULTS_COLLECTION, teamId),
     readConfigDoc(PILOT_INVITE_CONFIGS_COLLECTION, pilotId),
   ]);
+
+  if (organizationId && !organizationData) return { notFound: true };
 
   const config = applyConfigLayer(
     applyConfigLayer(
@@ -314,6 +325,7 @@ export const getServerSideProps: GetServerSideProps<PilotInviteNextStepsProps> =
 
   return {
     props: {
+      productBrand: normalizeNativeProductBrand(organizationData?.productBrand),
       mode,
       organizationName,
       teamName,

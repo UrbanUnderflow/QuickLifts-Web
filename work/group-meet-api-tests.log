@@ -1,0 +1,139 @@
+[group-meet-public] Failed to start Google Calendar connect: {
+  debugId: 'e3508952-debb-47aa-911e-b5ea1cf2abf1',
+  token: 'guest-token',
+  debug: {
+    code: 'secret_manager_permission_denied',
+    hint: 'Grant the production runtime service account Secret Manager Secret Accessor on the guest Google OAuth secret.'
+  },
+  message: 'Permission denied while reading Secret Manager.',
+  stack: 'Error: Permission denied while reading Secret Manager.\n' +
+    '    at buildGuestGoogleCalendarConnectUrl (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/group-meet.runtime.test.cjs:625:15)\n' +
+    '    at handler (/private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-group-meet-runtime-2TUKvA/src/pages/api/group-meet/[token]/calendar/google/connect/start.js:26:94)\n' +
+    '    at async TestContext.<anonymous> (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/group-meet.runtime.test.cjs:642:3)\n' +
+    '    at async Test.run (node:internal/test_runner/test:1389:7)\n' +
+    '    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)'
+}
+✔ computeGroupMeetAnalysis ranks a full-match window ahead of partial overlap (1099.154042ms)
+✔ getGoogleCalendarSetupStatus reports Secret Manager-backed service-account readiness (0.773417ms)
+✖ getGoogleCalendarSetupStatus blocks scheduling when delegated mailbox is missing (0.446208ms)
+✔ convertLocalDateMinutesToUtcIso respects timezone offsets and DST boundaries (5.093542ms)
+✔ public guest invite endpoint resolves an invite by stored token and honors localhost dev firebase (674.277667ms)
+✔ public guest invite save triggers host notification context after a participant responds (719.857709ms)
+✔ public guest invite remains open for saves after the deadline until the request is explicitly closed (680.731208ms)
+✔ guest Google Calendar config retries after an initial Secret Manager failure (702.829542ms)
+✔ guest Google Calendar config defaults to the canonical Secret Manager secret name without an env pointer (692.286959ms)
+✔ guest Google connect start route returns structured debug metadata on failure (711.801666ms)
+✔ guest Google connect start route still returns an auth url after the deadline while the request remains open (689.433625ms)
+✔ public flex endpoint adds the selected slot and notifies the host (708.009916ms)
+✔ public flex endpoint remains usable after the deadline while the request is still collecting (697.009792ms)
+✔ guest Google debug classification explains generic config-unavailable failures (0.357375ms)
+✔ guest Google scope helper recognizes free-busy calendar scopes (0.121ms)
+✔ guest Google access token helper forces reconnect when the stored grant lacks free-busy calendar access (0.793416ms)
+✔ unauthorized admin PUT cannot validate or mutate settings (7.089833ms)
+✔ admin rejects invalid settings before saving (10.71375ms)
+✔ admin/group-meet/booking rejects unsupported methods before side effects (2.375792ms)
+✔ group-meet/book/[slug] rejects unsupported methods before side effects (2.884667ms)
+✔ group-meet/booking/[token] rejects unsupported methods before side effects (2.586209ms)
+✔ public GET exposes only public profile and ignores environment selectors (2.615042ms)
+✔ public paused page errors preserve status and do not fetch slots (1.875542ms)
+✔ create retry uses reconciliation resolver when page is paused or renamed (1.968125ms)
+✔ private GET is uncached and refreshes confirmation without creating a booking (1.8245ms)
+✔ private reschedule availability uses token-scoped slots (1.742708ms)
+✔ rate-limit rejection stops public create before profile or provider work (1.730209ms)
+✔ concurrent requests with different durations cannot reserve the same time (18.177125ms)
+✔ idempotent retries reuse event and token and reject altered request payloads (4.65375ms)
+✔ uncertain provider success is reconciled without issuing another insert (7.515375ms)
+✔ cancellation is idempotent and cancelled meetings cannot reschedule (6.383666ms)
+✔ past meetings cannot be cancelled and invalid management links reveal no record (3.599375ms)
+✔ rescheduling updates the existing event and frees the original reservation (8.955042ms)
+✔ disabled booking profile blocks new reservations but still allows cancellation (6.179792ms)
+✔ calendar availability fails closed for missing calendar (3.510792ms)
+✔ calendar availability fails closed for calendar error (3.240583ms)
+✔ calendar availability fails closed for invalid date (3.228708ms)
+✔ provider busy conflict rejects booking and releases its reservation (3.199834ms)
+✔ persistent write throttle enforces the limit independently from reads and stores no raw IP (0.799834ms)
+✔ rescheduling can overlap its own event and ignores transparent, cancelled, and declined events (8.501833ms)
+✔ rescheduling retains the busy block from another timed event (9.559875ms)
+✔ rescheduling retains the busy block from an all-day event (9.528792ms)
+✔ definitive provider rejection releases the reservation for a corrected new request (6.37525ms)
+✔ saved request recovers through its original slug after pause and rename (3.9995ms)
+✔ management retry reconciles a pending write and becomes an idempotent no-op (3.495542ms)
+✔ admin authorization rejects missing, invalid, non-admin, and dev-mode identities (6.572625ms)
+✔ E2E environment refuses all real calendar requests before contacting Google (0.447667ms)
+✔ confirmation and private management expose the persisted invite email without adding it to public profile (3.993083ms)
+[group-meet-admin] Failed to create request: Error: Unexpected extra request document creation.
+    at Object.doc (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/_runtimeHarness.cjs:709:21)
+    at handler (/private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-group-meet-runtime-Q9IMFp/src/pages/api/admin/group-meet/index.js:159:91)
+    at async TestContext.<anonymous> (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/request-create.runtime.test.cjs:107:3)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+✖ POST on Group Meet create rejects requests that do not include host availability (1109.56725ms)
+✔ POST on Group Meet create rejects requests that are not built from saved contacts (0.147375ms)
+✖ POST on Group Meet create stores a draft request and leaves guest invites unsent (0.481167ms)
+✔ PATCH on Group Meet detail clears derived scheduling state when timing rules change (1091.570666ms)
+✔ resolveGroupMeetStatusFromInvites treats a sent invite as an active request even if raw status is draft (0.415166ms)
+✔ hasGroupMeetInviteBeenSent treats emailedAt as sent even when emailStatus has not been updated yet (0.084917ms)
+✔ DELETE on Group Meet invite removes the guest and updates the scheduled calendar invite attendee list (1105.030625ms)
+✔ DELETE on Group Meet invite rejects attempts to remove the host (0.188708ms)
+ℹ tests 56
+ℹ suites 0
+ℹ pass 53
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7422.019541
+
+✖ failing tests:
+
+test at tests/api/group-meet/group-meet.runtime.test.cjs:182:1
+✖ getGoogleCalendarSetupStatus blocks scheduling when delegated mailbox is missing (0.446208ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/group-meet.runtime.test.cjs:199:14
+      at async TestContext.<anonymous> (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/group-meet.runtime.test.cjs:183:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/api/group-meet/request-create.runtime.test.cjs:9:1
+✖ POST on Group Meet create rejects requests that do not include host availability (1109.56725ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  200 !== 400
+  
+      at TestContext.<anonymous> (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/request-create.runtime.test.cjs:36:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/api/group-meet/request-create.runtime.test.cjs:72:1
+✖ POST on Group Meet create stores a draft request and leaves guest invites unsent (0.481167ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  500 !== 200
+  
+      at TestContext.<anonymous> (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/group-meet/request-create.runtime.test.cjs:109:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 500,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

@@ -1,0 +1,206 @@
+TAP version 13
+# Subtest: request and authentication errors use the stable response contract
+not ok 1 - request and authentication errors use the stable response contract
+  ---
+  duration_ms: 1.929583
+  type: 'test'
+  location: '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs:172:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../../../content/consents/defaults.json'
+    Require stack:
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/types.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/pages/api/pulsecheck/team-invite/redeem.js
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+    wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)
+    Module._load (node:internal/modules/cjs/loader:1294:5)
+    Module.patchedLoad (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs:120:25)
+    wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    Module.require (node:internal/modules/cjs/loader:1617:12)
+    require (node:internal/modules/helpers:153:16)
+    Object.<anonymous> (/private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js:13:41)
+  ...
+# Subtest: invite lifecycle and email errors are distinct and do not expose the target email
+not ok 2 - invite lifecycle and email errors are distinct and do not expose the target email
+  ---
+  duration_ms: 0.61525
+  type: 'test'
+  location: '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs:210:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../../../content/consents/defaults.json'
+    Require stack:
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/types.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/pages/api/pulsecheck/team-invite/redeem.js
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+    wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)
+    Module._load (node:internal/modules/cjs/loader:1294:5)
+    Module.patchedLoad (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs:120:25)
+    wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    Module.require (node:internal/modules/cjs/loader:1617:12)
+    require (node:internal/modules/helpers:153:16)
+    Object.<anonymous> (/private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js:13:41)
+  ...
+# Subtest: organization, team, and pilot scope failures identify the broken level
+not ok 3 - organization, team, and pilot scope failures identify the broken level
+  ---
+  duration_ms: 0.744667
+  type: 'test'
+  location: '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs:272:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../../../content/consents/defaults.json'
+    Require stack:
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/types.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/pages/api/pulsecheck/team-invite/redeem.js
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+    wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)
+    Module._load (node:internal/modules/cjs/loader:1294:5)
+    Module.patchedLoad (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs:120:25)
+    wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    Module.require (node:internal/modules/cjs/loader:1617:12)
+    require (node:internal/modules/helpers:153:16)
+    Object.<anonymous> (/private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js:13:41)
+  ...
+# Subtest: pilot schedule errors tell the client whether enrollment is early, ended, or invalid
+not ok 4 - pilot schedule errors tell the client whether enrollment is early, ended, or invalid
+  ---
+  duration_ms: 0.273208
+  type: 'test'
+  location: '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs:335:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../../../content/consents/defaults.json'
+    Require stack:
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/types.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/pages/api/pulsecheck/team-invite/redeem.js
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+    wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)
+    Module._load (node:internal/modules/cjs/loader:1294:5)
+    Module.patchedLoad (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs:120:25)
+    wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    Module.require (node:internal/modules/cjs/loader:1617:12)
+    require (node:internal/modules/helpers:153:16)
+    Object.<anonymous> (/private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js:13:41)
+  ...
+# Subtest: cohort, existing enrollment, and app-access errors retain corrective detail
+not ok 5 - cohort, existing enrollment, and app-access errors retain corrective detail
+  ---
+  duration_ms: 0.227375
+  type: 'test'
+  location: '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs:363:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../../../content/consents/defaults.json'
+    Require stack:
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/types.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/pages/api/pulsecheck/team-invite/redeem.js
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+    wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)
+    Module._load (node:internal/modules/cjs/loader:1294:5)
+    Module.patchedLoad (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs:120:25)
+    wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    Module.require (node:internal/modules/cjs/loader:1617:12)
+    require (node:internal/modules/helpers:153:16)
+    Object.<anonymous> (/private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js:13:41)
+  ...
+# Subtest: unexpected infrastructure failures return only the safe internal error
+not ok 6 - unexpected infrastructure failures return only the safe internal error
+  ---
+  duration_ms: 0.22025
+  type: 'test'
+  location: '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs:404:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../../../content/consents/defaults.json'
+    Require stack:
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/types.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/pages/api/pulsecheck/team-invite/redeem.js
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+    wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)
+    Module._load (node:internal/modules/cjs/loader:1294:5)
+    Module.patchedLoad (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs:120:25)
+    wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    Module.require (node:internal/modules/cjs/loader:1617:12)
+    require (node:internal/modules/helpers:153:16)
+    Object.<anonymous> (/private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js:13:41)
+  ...
+# Subtest: the stable error contract does not change a successful redemption response
+not ok 7 - the stable error contract does not change a successful redemption response
+  ---
+  duration_ms: 0.1985
+  type: 'test'
+  location: '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs:413:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../../../content/consents/defaults.json'
+    Require stack:
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/types.js
+    - /private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/pages/api/pulsecheck/team-invite/redeem.js
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs
+    - /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/team-invite-redemption-errors.runtime.test.cjs
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+    wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)
+    Module._load (node:internal/modules/cjs/loader:1294:5)
+    Module.patchedLoad (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/firebase-admin/_runtimeHarness.cjs:120:25)
+    wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    Module.require (node:internal/modules/cjs/loader:1617:12)
+    require (node:internal/modules/helpers:153:16)
+    Object.<anonymous> (/private/var/folders/bc/fcdjljdj1fd0xsly6ssdw8wc0000gn/T/ql-team-invite-redemption-errors-fnc1Oy/api/firebase/pulsecheckProvisioning/consentPolicy.js:13:41)
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 0
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1470.555125

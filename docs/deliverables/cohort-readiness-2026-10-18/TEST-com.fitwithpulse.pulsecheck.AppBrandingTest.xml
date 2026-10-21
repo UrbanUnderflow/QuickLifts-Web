@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.fitwithpulse.pulsecheck.AppBrandingTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-10-18T13:20:29.484Z" hostname="Tremaines-MacBook-Pro.local" time="0.002">
+  <properties/>
+  <testcase name="eachAppKeepsItsOwnDefault" classname="com.fitwithpulse.pulsecheck.AppBrandingTest" time="0.002"/>
+  <testcase name="invalidAndProductSettingsCannotOverrideTheBrand" classname="com.fitwithpulse.pulsecheck.AppBrandingTest" time="0.0"/>
+  <testcase name="overridesAreIndependent" classname="com.fitwithpulse.pulsecheck.AppBrandingTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,796 @@
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+  ▲ Next.js 14.2.35
+  - Experiments (use with caution):
+    · webpackBuildWorker
+
+   Skipping linting
+   Checking validity of types ...
+   Creating an optimized production build ...
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: browsers data (caniuse-lite) is 9 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: caniuse-lite is outdated. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: browsers data (caniuse-lite) is 9 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully
+   Collecting page data ...
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:32:52.617Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:32:52.618Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✗ Missing or placeholder'
+  },
+  timestamp: '2026-10-20T00:32:52.618Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: undefined,
+  authDomain: undefined,
+  projectId: undefined,
+  storageBucket: undefined,
+  messagingSenderId: undefined,
+  appId: undefined,
+  timestamp: '2026-10-20T00:32:52.618Z'
+}
+[Firebase] Error during initialization: Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:32:52.653Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:32:52.654Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✗ Missing or placeholder'
+  },
+  timestamp: '2026-10-20T00:32:52.654Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: undefined,
+  authDomain: undefined,
+  projectId: undefined,
+  storageBucket: undefined,
+  messagingSenderId: undefined,
+  appId: undefined,
+  timestamp: '2026-10-20T00:32:52.654Z'
+}
+[Firebase] Error during initialization: Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:32:52.655Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:32:52.657Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✗ Missing or placeholder'
+  },
+  timestamp: '2026-10-20T00:32:52.657Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: undefined,
+  authDomain: undefined,
+  projectId: undefined,
+  storageBucket: undefined,
+  messagingSenderId: undefined,
+  appId: undefined,
+  timestamp: '2026-10-20T00:32:52.657Z'
+}
+[Firebase] Error during initialization: Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:32:52.689Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:32:52.691Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✗ Missing or placeholder'
+  },
+  timestamp: '2026-10-20T00:32:52.691Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: undefined,
+  authDomain: undefined,
+  projectId: undefined,
+  storageBucket: undefined,
+  messagingSenderId: undefined,
+  appId: undefined,
+  timestamp: '2026-10-20T00:32:52.691Z'
+}
+[Firebase] Error during initialization: Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:32:52.703Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:32:52.705Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✗ Missing or placeholder'
+  },
+  timestamp: '2026-10-20T00:32:52.705Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: undefined,
+  authDomain: undefined,
+  projectId: undefined,
+  storageBucket: undefined,
+  messagingSenderId: undefined,
+  appId: undefined,
+  timestamp: '2026-10-20T00:32:52.705Z'
+}
+[Firebase] Error during initialization: Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+[Firebase] Initial mode (server): {
+  isDev: false,
+  source: 'server production default',
+  timestamp: '2026-10-20T00:32:52.761Z'
+}
+[Firebase] Starting initialization: {
+  environment: 'production',
+  isLocalhost: false,
+  timestamp: '2026-10-20T00:32:52.762Z'
+}
+[Firebase Config] Environment Check: {
+  isDev: false,
+  isLocalhost: false,
+  nodeEnv: 'production',
+  envVarsPresent: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: '✗ Missing or placeholder',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: '✗ Missing or placeholder'
+  },
+  timestamp: '2026-10-20T00:32:52.762Z'
+}
+[Firebase Config] Final Configuration: {
+  mode: 'production',
+  apiKey: undefined,
+  authDomain: undefined,
+  projectId: undefined,
+  storageBucket: undefined,
+  messagingSenderId: undefined,
+  appId: undefined,
+  timestamp: '2026-10-20T00:32:52.762Z'
+}
+[Firebase] Error during initialization: Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+Error: 
+    Missing or placeholder Firebase configuration for production mode.
+    Please ensure these environment variables contain real Firebase web app values:
+    NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
+    1. Create a .env.local file in your project root
+    2. Add all required Firebase environment variables
+    3. Restart your Next.js development server
+        
+    at S (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:17)
+    at C (/Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:363)
+    at /Users/tremainegrant/Documents/Codex/2026-10-19/we-x20/work/organization-release/.next/server/chunks/77187.js:15:1291
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+> Build error occurred
+Error: Failed to collect page data for /PulseCheck/fitbit
+    at /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/next/dist/build/utils.js:1269:15
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  type: 'Error'
+}

@@ -1,3 +1,4 @@
+import { getNativeAppDistribution, normalizeNativeProductBrand, type NativeProductBrand } from '../../utils/pulsecheckAppDistribution';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -19,15 +20,6 @@ import {
   resolvePulseCheckInvitePreviewImage,
 } from '../../utils/pulsecheckInviteLinks';
 
-// Bare store links. Used only when there's no invite context to build an
-// attributed OneLink from (e.g. malformed return URL) — a fresh install via
-// these loses all AppsFlyer attribution, which is the exact bug this page
-// otherwise avoids. See downloadUrls below.
-const PULSECHECK_IOS_APP_STORE_URL =
-  'https://apps.apple.com/app/pulsecheck-mindset-coaching/id6747253393';
-const PULSECHECK_ANDROID_PLAY_STORE_URL =
-  'https://play.google.com/store/apps/details?id=com.fitwithpulse.pulsecheck';
-
 type ConfirmationState = 'waiting-for-account' | 'confirming' | 'confirmed' | 'pending' | 'error';
 
 const singleQueryValue = (value: string | string[] | undefined) =>
@@ -40,6 +32,7 @@ const AthleteSubscriptionCompletePage = ({
   inviteContext,
 }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
   const router = useRouter();
+  const appDistribution = getNativeAppDistribution(inviteContext?.productBrand);
   const [authReady, setAuthReady] = useState(false);
   const [authUser, setAuthUser] = useState<FirebaseAuthUser | null>(null);
   const [state, setState] = useState<ConfirmationState>('waiting-for-account');
@@ -59,8 +52,8 @@ const AthleteSubscriptionCompletePage = ({
       resumeInvite: '1',
     });
     if (forceDevFirebase) params.set('devFirebase', '1');
-    return `pulsecheck://open?${params.toString()}`;
-  }, [forceDevFirebase, inviteToken]);
+    return `${appDistribution.scheme}://open?${params.toString()}`;
+  }, [forceDevFirebase, inviteToken, appDistribution.scheme]);
   const offerUrl = useMemo(
     () =>
       buildPulseCheckAthleteOfferWebUrl(
@@ -81,9 +74,12 @@ const AthleteSubscriptionCompletePage = ({
   // instead of the paywall.
   const downloadUrls = useMemo(() => {
     if (!inviteToken || !inviteContext) {
-      return { ios: PULSECHECK_IOS_APP_STORE_URL, android: PULSECHECK_ANDROID_PLAY_STORE_URL };
+      return { ios: null, android: null };
     }
 
+    if (appDistribution.brand === 'athleticmind' && !appDistribution.oneLinkUrl) {
+      return { ios: appDistribution.iosUrl, android: appDistribution.androidUrl };
+    }
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
     const resumeOfferUrl = buildPulseCheckAthleteOfferWebUrl(inviteToken, origin, forceDevFirebase);
     const resumeFallbackPath = `${resumeOfferUrl}${resumeOfferUrl.includes('?') ? '&' : '?'}checkoutComplete=1`;
@@ -96,11 +92,12 @@ const AthleteSubscriptionCompletePage = ({
       pilotName: inviteContext.pilotName,
       cohortName: inviteContext.cohortName,
       imageUrl: inviteContext.previewImageUrl,
+      productBrand: inviteContext.productBrand,
     });
     // AppsFlyer OneLink detects the visiting device and routes to the correct
     // store on its own — the same link works for both buttons.
     return { ios: oneLink, android: oneLink };
-  }, [forceDevFirebase, inviteContext, inviteToken]);
+  }, [forceDevFirebase, inviteContext, inviteToken, appDistribution.brand, appDistribution.iosUrl, appDistribution.androidUrl, appDistribution.oneLinkUrl]);
 
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
@@ -195,7 +192,7 @@ const AthleteSubscriptionCompletePage = ({
   }, [attempt, confirmSubscription]);
 
   const handleOpenInstalledApp = useCallback(() => {
-    if (!inviteToken) return;
+    if (!inviteToken || !inviteContext) return;
 
     try {
       window.sessionStorage.setItem('pulsecheck-pending-invite-token', inviteToken);
@@ -215,7 +212,7 @@ const AthleteSubscriptionCompletePage = ({
         // Standard browser tabs remain on this page if they cannot be closed.
       }
     }, 750);
-  }, [appOpenUrl, inviteToken]);
+  }, [appOpenUrl, inviteToken, inviteContext]);
 
   const confirmed = state === 'confirmed';
   const busy = state === 'confirming';
@@ -302,6 +299,7 @@ const AthleteSubscriptionCompletePage = ({
                     <button
                       type="button"
                       onClick={handleOpenInstalledApp}
+                      disabled={!inviteContext}
                       className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black"
                     >
                       I already have the app
@@ -311,28 +309,30 @@ const AthleteSubscriptionCompletePage = ({
 
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">Step 1</p>
-                    <h2 className="mt-2 text-lg font-semibold">Download PulseCheck</h2>
+                    <h2 className="mt-2 text-lg font-semibold">Download {appDistribution.name}</h2>
                     <p className="mt-2 text-sm leading-6 text-zinc-400">
                       Install the app from your phone&apos;s app store.
                     </p>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       <a
-                        href={downloadUrls.ios}
+                        href={downloadUrls.ios || undefined}
+                        aria-disabled={!downloadUrls.ios}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black"
                       >
                         <Download className="h-4 w-4" />
-                        Download for iPhone
+                        {downloadUrls.ios ? 'Download for iPhone' : 'iPhone download coming soon'}
                       </a>
                       <a
-                        href={downloadUrls.android}
+                        href={downloadUrls.android || undefined}
+                        aria-disabled={!downloadUrls.android}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white"
                       >
                         <Smartphone className="h-4 w-4" />
-                        Download for Android
+                        {downloadUrls.android ? 'Download for Android' : 'Android download coming soon'}
                       </a>
                     </div>
                   </div>
@@ -346,9 +346,10 @@ const AthleteSubscriptionCompletePage = ({
                     <button
                       type="button"
                       onClick={handleOpenInstalledApp}
+                      disabled={!inviteContext}
                       className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black"
                     >
-                      Open PulseCheck
+                      Open {appDistribution.name}
                       <ArrowRight className="h-4 w-4" />
                     </button>
                   </div>
@@ -374,6 +375,7 @@ const AthleteSubscriptionCompletePage = ({
 };
 
 type AthleteSubscriptionCompleteInviteContext = {
+  productBrand: NativeProductBrand;
   teamName: string;
   organizationName: string;
   pilotName: string;
@@ -408,6 +410,7 @@ export const getServerSideProps: GetServerSideProps<{
       firestore.collection('pulsecheck-teams').doc(String(invite.teamId || '')).get(),
     ]);
 
+    if (!organizationSnap.exists) return { props: { inviteContext: null } };
     const organizationName = String(organizationSnap.data()?.displayName || 'PulseCheck Organization');
     const teamName = String(teamSnap.data()?.displayName || 'Team');
     const organizationImageUrl = String(organizationSnap.data()?.invitePreviewImageUrl || '');
@@ -416,6 +419,7 @@ export const getServerSideProps: GetServerSideProps<{
     return {
       props: {
         inviteContext: {
+          productBrand: normalizeNativeProductBrand(organizationSnap.data()?.productBrand),
           teamName,
           organizationName,
           pilotName: String(invite.pilotName || ''),

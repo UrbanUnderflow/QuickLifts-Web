@@ -6,6 +6,7 @@ import { parseContactImport, selectNewContacts, type ImportedContact } from '../
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { NextPage } from 'next';
 import PipeListsSaveStatus, { saveFailureDetails, type SaveFailure } from '../components/pipelists/PipeListsSaveStatus';
+import PipeListsReadableText from '../components/pipelists/PipeListsReadableText';
 import { runPipeListSaveWithRetry } from '../utils/pipelistsAutosave';
 import PipeListsEmailSequence from '../components/pipelists/PipeListsEmailSequence';
 import PipeListsEmailTracking, { EmailTrackingBadge } from '../components/pipelists/PipeListsEmailTracking';
@@ -9945,11 +9946,12 @@ Rules:
   const renderDetailField = (label: string, value: React.ReactNode, wide = false, showWhenEmpty = false) => {
     const isEmpty = isEmptyDetailValue(value);
     if (isEmpty && !showWhenEmpty) return null;
+    const isLongText = ['Description', 'Next Step', 'Notes'].includes(label) && typeof value === 'string' && !isEmpty;
 
     return (
-      <div key={label} className={`rounded-md border border-stone-100 bg-[#FAFAF7] px-3 py-2 ${wide ? 'md:col-span-2' : ''}`}>
-        <p className="text-xs font-semibold uppercase text-stone-400">{label}</p>
-        <div className="mt-1 break-words text-sm leading-6 text-stone-700">{isEmpty ? 'Not set' : value}</div>
+      <div key={label} className={`min-w-0 rounded-md border ${isLongText ? 'border-stone-200 bg-white p-4 sm:p-5' : 'border-stone-100 bg-[#FAFAF7] px-3 py-2'} ${wide ? 'md:col-span-2' : ''}`}>
+        <p className={`text-xs font-semibold uppercase ${isLongText ? 'mb-3 tracking-wide text-stone-600' : 'text-stone-400'}`}>{label}</p>
+        <div className="mt-1 break-words text-sm leading-6 text-stone-700">{isLongText ? <PipeListsReadableText text={value as string} /> : isEmpty ? 'Not set' : value}</div>
       </div>
     );
   };

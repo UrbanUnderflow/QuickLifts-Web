@@ -1,0 +1,14 @@
+? Select a deploy
+
+* indicates a deploy created by you (Use arrow keys)
+❯ (6ad5300) Branch Deploy* 
+  (6ad52f1) Production* [24D[24CWarning: Detected unsettled top-level await at file:///Users/tremainegrant/Documents/GitHub/QuickLifts-Web/node_modules/netlify-cli/bin/run.js:66
+await main()
+^
+
+
+
+ ›   Error: Netlify CLI has terminated unexpectedly.
+
+Please report this problem with reproduction steps at https://ntl.fyi/cli-error including the error details below.
+

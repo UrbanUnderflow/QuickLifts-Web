@@ -24,6 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const ref = db.collection('pulsecheck-organizations').doc(organizationId);
       const [organization, closure] = await Promise.all([tx.get(ref), tx.get(db.collection('account-closure-jobs').doc(actor.uid))]);
       if (!organization.exists || closure.exists) throw new Error('Organization configuration is not available.');
+      if (organization.data()?.lifecycleState || organization.data()?.deletedAt) throw new Error('Restore this organization before changing its configuration.');
       tx.update(ref, patch);
     });
     return res.status(200).json({ success: true });

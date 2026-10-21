@@ -40,6 +40,7 @@ const {
   isCoachSharingDeclined,
   isCoachHandoffRequest,
   isCoachIdentityQuestion,
+  isConversationClosure,
 } = require('./utils/noraEngagementPolicy');
 const {
   runtimeHelpers: escalationRuntime,
@@ -607,11 +608,12 @@ function extractJsonObject(text) {
   return null;
 }
 
-async function callOpenAiJson({ systemPrompt, userPayload }) {
+async function callOpenAiJson({ systemPrompt, userPayload, signal }) {
   const apiKey = process.env.OPEN_AI_SECRET_KEY;
   if (!apiKey) return null;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    signal: signal || AbortSignal.timeout(8000),
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -834,7 +836,7 @@ async function getCurrentStateSnapshot(db, userId, todaysNoraAssignment) {
   return { id: doc.id, ...(doc.data() || {}) };
 }
 
-async function deriveConversationSignalAnalysis({ message, recentMessages, snapshot, assignment }) {
+async function deriveConversationSignalAnalysis({ message, recentMessages, snapshot, assignment, signal }) {
   if (!snapshot) {
     return null;
   }
@@ -853,6 +855,7 @@ async function deriveConversationSignalAnalysis({ message, recentMessages, snaps
 
   try {
     const raw = await callOpenAiJson({
+      signal,
       systemPrompt: [
         'You detect whether an athlete chat message creates a meaningful PulseCheck state correction for Nora.',
         'Return only valid JSON.',
@@ -2110,26 +2113,7 @@ async function recoverSnapshotFromSavedConversation({
 }
 
 function isConversationAcknowledgment(message) {
-  const normalized = String(message || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9' ]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return new Set([
-    'thanks',
-    'thanks nora',
-    'thank you',
-    'thank you nora',
-    'got it',
-    'okay',
-    'ok',
-    'sounds good',
-    'that helps',
-    'that helped',
-    'appreciate it',
-    'i appreciate it',
-  ]).has(normalized);
+  return isConversationClosure(message);
 }
 
 function classifyResponseContext(userMessage, lastNoraResponseLength) {
@@ -2202,6 +2186,9 @@ function classifyResponseContext(userMessage, lastNoraResponseLength) {
 }
 
 exports.handler = async (event, context) => {
+  // A single budget covers every model stage, including validation and repairs.
+  // Leave time for transport/persistence before the native client's 30s HTTP deadline.
+  const requestSignal = AbortSignal.timeout(14000);
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
@@ -2466,7 +2453,31 @@ exports.handler = async (event, context) => {
     let athleteMentalProgress = null;
     let currentStateSnapshot = null;
     let conversationSignalEvent = null;
-    const storagePolicy = await assessNoraStorage({message, recentMessages, healthContext, userContext, systemPromptContext});
+    let newConvoId = conversationId || convo?.id || convoRef.id;
+    // These independent checks inspect the same authenticated input. Overlap
+    // their network waits, then fail closed before drafting or changing state.
+    const [storagePolicy, escalation] = await Promise.all([
+      assessNoraStorage({message, recentMessages, healthContext, userContext, systemPromptContext}, { signal: requestSignal }),
+      classifyEscalation(db, userId, message, recentMessages, newConvoId, { signal: requestSignal })
+        .catch((classificationError) => {
+          console.error('[pulsecheck-chat] Escalation classification failed:', classificationError);
+          return null;
+        }),
+    ]);
+    if (!escalation) {
+      console.error('[pulsecheck-chat] Refusing to deliver an unclassified assistant response.');
+      return {
+        statusCode: 503,
+        headers,
+        body: JSON.stringify({
+          error: 'Nora could not process that message because the live safety check was unavailable. Please try again. If you may be in immediate danger or need urgent help, call 911 or call or text 988 now.',
+          errorCode: 'ESCALATION_CLASSIFICATION_UNAVAILABLE',
+          conversationId: newConvoId,
+          messageProcessed: false,
+        }),
+      };
+    }
+
     let assignmentRefreshApplied = false;
     try {
       [todaysNoraAssignment, athleteMentalProgress] = await Promise.all([
@@ -2487,17 +2498,17 @@ exports.handler = async (event, context) => {
       timestamp: nowSec,
       messageType: 'text'
     };
-    let newConvoId = conversationId || convo?.id || convoRef.id;
 
     try {
       const signalAnalysis = journalAnalysis || storagePolicy.restricted ? null : await deriveConversationSignalAnalysis({
+        signal: requestSignal,
         message,
         recentMessages,
         snapshot: currentStateSnapshot,
         assignment: todaysNoraAssignment,
       });
 
-      if (signalAnalysis?.shouldCreateEvent && currentStateSnapshot) {
+      if (!requestSignal.aborted && signalAnalysis?.shouldCreateEvent && currentStateSnapshot) {
         const eventRef = db.collection(CONVERSATION_SIGNAL_EVENTS_COLLECTION).doc();
         const eventAt = Date.now();
         const refreshedSnapshot = refreshSnapshotFromConversationSignal({
@@ -2592,9 +2603,19 @@ exports.handler = async (event, context) => {
     // Response Context Detection (for natural conversation flow)
     // =========================================================================
     
+    // A spent model budget cannot begin a new ordinary turn or side effect.
+    // Preserve the existing deterministic safety path for urgent concerns.
+    if (!escalation.shouldEscalate && escalation.tier === 0) requestSignal.throwIfAborted();
+
     // Detect response context
     const responseContext = classifyResponseContext(message, lastNoraResponseLength);
-    const conversationLane = classifyNoraConversationLane(message);
+    const requestedLane = classifyNoraConversationLane(message);
+    const conversationLane = requestedLane === NoraConversationLane.CriticalSafety
+      || escalation.classificationFamily === EscalationClassificationFamily.CriticalSafety
+      ? NoraConversationLane.CriticalSafety
+      : escalation.classificationFamily === EscalationClassificationFamily.CareEscalation || escalation.requiresClinicalHandoff
+        ? NoraConversationLane.ClinicalCare
+        : requestedLane;
     console.log(`[pulsecheck-chat] Response context: ${responseContext.context}, word range: ${responseContext.wordRange.min}-${responseContext.wordRange.max}`);
     console.log(`[pulsecheck-chat] Nora conversation lane: ${conversationLane}`);
     
@@ -2720,12 +2741,14 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     const onboarding = userDataForPrefs?.mentalTrainingPreferences?.assignmentRemindersOnboarding || {};
     const onboardingState = onboarding?.state || 'none';
 
-    const handledAcknowledgment = responseContext.context === 'acknowledgment';
+    const handledAcknowledgment = conversationLane === NoraConversationLane.Closure;
     const boundaryResponse = buildNoraBoundaryResponse(conversationLane, { athleteMessage: message });
     const handledBoundary = Boolean(boundaryResponse);
     let assistantMessage = handledAcknowledgment ? "You're welcome." : boundaryResponse;
     let coachHandoffOutcome = null;
     let handledOnboarding = handledAcknowledgment || handledBoundary;
+
+    if (!handledBoundary) requestSignal.throwIfAborted();
 
     if (!storagePolicy.restricted && !handledOnboarding && onboardingState === 'asked') {
       const yn = parseYesNo(message);
@@ -2913,6 +2936,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       }
 
       const completionRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        signal: requestSignal,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -3072,12 +3096,13 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
 
     if (!engagementEvaluation.passed && !handledOnboarding) {
       const apiKey = process.env.OPEN_AI_SECRET_KEY;
-      for (let attempt = 1; apiKey && attempt <= 2 && !engagementEvaluation.passed; attempt += 1) {
+      for (let attempt = 1; apiKey && !requestSignal.aborted && attempt <= 2 && !engagementEvaluation.passed; attempt += 1) {
         try {
           const failedDimensions = engagementEvaluation.failures
             .map((failure) => `${failure.id}: ${failure.detail}`)
             .join('\n');
           const revisionRes = await fetch('https://api.openai.com/v1/chat/completions', {
+            signal: requestSignal,
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -3173,10 +3198,10 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       throw new Error('NORA_ENGAGEMENT_FALLBACK_FAILED');
     }
 
-    // Build the assistant message now, but do not persist either turn until the
-    // live escalation classifier has completed. A classifier outage must not
-    // leave an assistant reply in history while the API reports that the
-    // message was not processed.
+    if (!handledBoundary) requestSignal.throwIfAborted();
+
+    // Both checks completed before drafting. Persist only the final reviewed
+    // response, so failed generation never leaves a processed reply in history.
     const aiMsg = {
       trustedSource,
       id: cryptoRandomId(),
@@ -3186,51 +3211,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       messageType: 'text'
     };
 
-    // === ESCALATION CLASSIFICATION AND SERVER-OWNED ORCHESTRATION ===
-    let escalation = null;
     let escalationOutcome = null;
-
-    console.log('[pulsecheck-chat] ========== ESCALATION FLOW START ==========');
-    console.log('[pulsecheck-chat] Escalation parameters:', {
-      userId: userId.slice(0, 8) + '...',
-      messageLength: message.length,
-      recentMessagesCount: recentMessages?.length || 0,
-      conversationId: newConvoId
-    });
-
-    try {
-      console.log('[pulsecheck-chat] [1/5] Starting escalation classification...');
-      const classificationStartTime = Date.now();
-      escalation = await classifyEscalation(
-        db,
-        userId,
-        message,
-        recentMessages,
-        newConvoId
-      );
-      console.log(`[pulsecheck-chat] [2/5] Classification completed in ${Date.now() - classificationStartTime}ms`, {
-        tier: escalation?.tier,
-        shouldEscalate: escalation?.shouldEscalate,
-        category: escalation?.category,
-        confidence: escalation?.confidence,
-      });
-    } catch (classificationError) {
-      console.error('[pulsecheck-chat] Escalation classification failed:', classificationError);
-    }
-
-    if (!escalation) {
-      console.error('[pulsecheck-chat] Refusing to deliver an unclassified assistant response.');
-      return {
-        statusCode: 503,
-        headers,
-        body: JSON.stringify({
-          error: 'Nora could not process that message because the live safety check was unavailable. Please try again. If you may be in immediate danger or need urgent help, call 911 or call or text 988 now.',
-          errorCode: 'ESCALATION_CLASSIFICATION_UNAVAILABLE',
-          conversationId: newConvoId,
-          messageProcessed: false,
-        }),
-      };
-    }
 
     const classifiedBoundaryLane = conversationLane === NoraConversationLane.CriticalSafety
       || escalation.classificationFamily === EscalationClassificationFamily.CriticalSafety
@@ -3458,13 +3439,14 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     // Return more detailed error for debugging (but don't expose sensitive info)
     const errorMessage = error.message || 'Unknown error';
     const isDevelopment = process.env.NETLIFY_DEV === 'true' || process.env.NODE_ENV === 'development';
+    const responseTimedOut = error.name === 'TimeoutError' || error.name === 'AbortError';
     
     return { 
-      statusCode: 500, 
+      statusCode: responseTimedOut ? 504 : 500,
       headers, 
       body: JSON.stringify({ 
-        error: 'Server error',
-        errorCode: error.message === 'NORA_ENGAGEMENT_FALLBACK_FAILED' ? 'NORA_ENGAGEMENT_FALLBACK_FAILED' : 'NORA_RUNTIME_FAILURE',
+        error: responseTimedOut ? 'Nora took too long to respond. Please try again.' : 'Server error',
+        errorCode: responseTimedOut ? 'NORA_RESPONSE_TIMEOUT' : error.message === 'NORA_ENGAGEMENT_FALLBACK_FAILED' ? 'NORA_ENGAGEMENT_FALLBACK_FAILED' : 'NORA_RUNTIME_FAILURE',
         detail: isDevelopment ? errorMessage : undefined,
         type: error.name || 'Error'
       }) 
@@ -3662,6 +3644,7 @@ ${LOSS_OF_FUNCTION_PROMPT_NOTE}`;
           maxOutputTokens: 200,
         })
       : await fetch('https://api.openai.com/v1/chat/completions', {
+          signal: options.signal || AbortSignal.timeout(15000),
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

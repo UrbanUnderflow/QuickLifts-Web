@@ -1,0 +1,563 @@
+✔ scope gate applies the canonical seven-lane priority (5.496875ms)
+✔ coach identity and handoff responses stay direct and product-grounded (9.911375ms)
+✔ external handoff claims require a confirmed tool result (0.278167ms)
+✔ a failed coach send remains an honest coach-handoff response (0.20625ms)
+✔ cross-athlete and hidden-policy requests receive deterministic privacy boundaries (1.671166ms)
+✔ ordinary competition nerves stay in performance coaching (0.112875ms)
+✔ clinical and critical boundaries earn a complete rubric score (1.328584ms)
+✔ requests for coercion or shame receive an autonomy-supportive boundary (1.13625ms)
+✔ secrecy and exclusivity requests receive an immediate relationship boundary (0.798041ms)
+✔ clinical boundary directly refuses treatment pressure and keeps the handoff active (0.286333ms)
+✔ performance response earns 10 only when it stays grounded and non-clinical (0.295375ms)
+✔ grounded fallbacks pass across every lane (6.894875ms)
+✔ grounded food-plan fallback uses athlete words instead of scripted food cases (0.803333ms)
+✔ food-plan concerns reject generic performance pivots (0.315125ms)
+✔ rubric rejects unrequested calorie pivots, therapy claims, pressure, and note creation (0.238167ms)
+✔ rubric rejects the subtle drifts found in live conversation review (0.959083ms)
+✔ direct health-data answers stay within the requested domain and stop (0.202792ms)
+✔ state words must come from the athlete or recent athlete context (0.143833ms)
+✔ an explicit tracking decline is never treated as note consent (0.60425ms)
+✔ tracking pressure cannot erase a decline from the prior athlete turn (0.734042ms)
+✔ production chat imports the scope gate, scores replies, and can replace care-lane output (0.810875ms)
+✔ withdrawn sharing consent blocks coach handoff and supplies a clear boundary (0.145ms)
+✔ direct cue requests get a usable cue and app failures keep their support intent (0.686167ms)
+✔ a direct sleep answer stays relevant when it uses slept instead of sleep (0.076875ms)
+✔ voice cleanup preserves a supplied mental cue instead of substituting breathing (1.670041ms)
+✔ critical outage fallback does not imply a support operation is underway (0.087083ms)
+✔ cancelled coach message status stays in the handoff lane in either word order (0.128917ms)
+✔ supported meal card fallback stays useful without claiming a save (0.586958ms)
+✔ granular cue requests retain topic and assault reporting routes to care (0.60875ms)
+✔ protected record and staff privacy fallbacks remain relevant and pass response checks (0.55425ms)
+✔ polite thanks does not discard a substantive check-in or question (0.103458ms)
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'warn' }
+{ component: 'pulsecheck-chat', level: 'error' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+✔ classifies acknowledgments as conversational closure before turn-taking (13.429208ms)
+✔ coach handoff brief explains why meal-plan context is being sent (1.599125ms)
+✔ generic coach handoff shares only the selected current context (0.593542ms)
+✔ explicit coach-message authorization isolates the exact athlete-written message (1.034917ms)
+✔ coach-message status and retry follow-ups do not create a duplicate action (1.32475ms)
+✔ web athlete chat callers attach Firebase bearer tokens and canonical user ids (0.738833ms)
+✔ returns deterministic Tier 3 when hard-risk language is present during classifier outage (1.29ms)
+✔ returns deterministic Tier 3 for imminent harm to others and immediate abuse (1.452666ms)
+✔ does not turn loss of daily function alone into deterministic Tier 3 (0.517833ms)
+✔ production escalation classifier accepts injected conditions and bridge transport (2.972708ms)
+✔ Tier 3 chat outcome preserves the record and partial-failure details (0.630458ms)
+✔ chat fails closed before deciding whether to create an escalation when classification is unavailable (0.6955ms)
+✔ keeps substantive short messages in normal conversation (0.633625ms)
+✔ rejects anonymous athlete chat before reading private context (1.555958ms)
+✔ rejects a valid caller claiming another athlete identity (1.204625ms)
+✔ synthetic red-team chat fails closed outside the signed development account boundary (1.32625ms)
+✔ recovers today conversation context when message timestamps use Apple reference-date seconds (2.43325ms)
+✔ recovers today conversation context when message timestamps are stored as Firestore timestamp objects (1.328041ms)
+✔ recovers from the most recent material user message instead of only the latest neutral reply (0.976166ms)
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'error' }
+[pulsecheck-escalation] Created escalation: {
+  id: 'escalation-1',
+  userId: 'athlete-...',
+  tier: 2,
+  category: 'loss_of_function'
+}
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'error' }
+[pulsecheck-escalation] Triggering critical handoff: escalation-1
+[pulsecheck-escalation] Created escalation: {
+  id: 'escalation-1',
+  userId: 'athlete-...',
+  tier: 3,
+  category: 'safety'
+}
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'error' }
+[pulsecheck-escalation] Triggering critical handoff: escalation-1
+[pulsecheck-escalation] Created escalation: {
+  id: 'escalation-1',
+  userId: 'athlete-...',
+  tier: 3,
+  category: 'safety'
+}
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'warn' }
+{ component: 'classifyEscalation', level: 'warn' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'pulsecheck-chat', level: 'error' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'warn' }
+{ component: 'classifyEscalation', level: 'warn' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'pulsecheck-chat', level: 'error' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'warn' }
+{ component: 'classifyEscalation', level: 'warn' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+✔ downgrades benign performance stress escalation requests before record creation (221.03575ms)
+✔ elevates loss-of-function language into a true care escalation (5.010958ms)
+✔ dedupes same-conversation escalation records within the merge window (3.939958ms)
+✔ withdrawn consent prevents every coach-message database operation (1.639125ms)
+✔ synthetic runtime preflight checks identity and closure before personal data reads (0.521667ms)
+✔ production cannot activate the synthetic preflight (0.337334ms)
+✔ direct chat refuses an athlete with no team (junior default) before reading private context or calling the model (0.461583ms)
+✔ direct chat refuses a junior team athlete before reading private context or calling the model (0.396375ms)
+✔ direct chat refuses a rookie override on a pro team before reading private context or calling the model (0.327917ms)
+✔ direct chat refuses an athlete whose only pro team is paused before reading private context or calling the model (0.43975ms)
+✔ direct chat opens for a pro override on a junior team (1.357416ms)
+✔ signed synthetic red-team accounts in development skip the track gate (0.783042ms)
+✔ Tier 1 chat notification obeys authoritative program configuration {"productBrand":"athleticmind"} (0.714958ms)
+✔ Tier 1 chat notification obeys authoritative program configuration {"productBrand":"pulsecheck","appBranding":{"pulsecheck":"athleticmind"}} (1.068875ms)
+✔ Tier 1 chat notification obeys authoritative program configuration {} (0.322458ms)
+✔ journal conversations and legacy journal copies cannot become recovered performance signals (0.33775ms)
+✔ legacy raw journal sharing cannot bypass the saved entry permission flow (0.672291ms)
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'error' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'warn' }
+{ component: 'classifyEscalation', level: 'warn' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'classifyEscalation', level: 'error' }
+{ component: 'pulsecheck-chat', level: 'error' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'warn' }
+{ component: 'classifyEscalation', level: 'warn' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'classifyEscalation', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'log' }
+{ component: 'pulsecheck-chat', level: 'error' }
+{ component: 'pulsecheck-chat', level: 'error' }
+{ component: 'pulsecheck-chat', level: 'error' }
+✔ voice turn overlaps storage and safety checks and waits for both before drafting (28.788959ms)
+✔ failed safety check returns an unprocessed 503 before drafting or writing a turn (0.919125ms)
+✔ reply timeout returns a retryable timeout without persisting a failed conversation turn (1.067959ms)
+[pulsecheck-escalation] Created escalation: {
+  id: 'escalation-1',
+  userId: 'nora-red...',
+  tier: 3,
+  category: 'immediate_safety'
+}
+[pulsecheck-escalation] Consent accepted: escalation-1
+[pulsecheck-escalation] Consent accepted: escalation-1
+[pulsecheck-escalation] Consent declined: escalation-1
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'clinical-case-1',
+  requestId: 'escalation-request-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: undefined,
+  escalationId: 'clinical-case-1',
+  requestId: null
+}
+[pulsecheck-escalation] Clinical bridge request failed: Error: Athlete upsert rejected.
+    at Object.performClinicalHandoff (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/netlify/functions/pulsecheck-escalation.js:3599:27)
+    at async TestContext.<anonymous> (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/pulsecheck-escalation.runtime.test.cjs:986:18)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  code: 'ATHLETE_REJECTED'
+}
+[pulsecheck-escalation] Tier 3 safety-state write failed; continuing provider handoff: {
+  code: 'SAFETY_STATE_UNAVAILABLE',
+  message: 'Safety-state storage unavailable.'
+}
+[pulsecheck-escalation] Coach notification failed; continuing clinical handoff: {
+  code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+  message: 'Notification provider unavailable.'
+}
+[pulsecheck-escalation] Created escalation: {
+  id: 'escalation-1',
+  userId: 'athlete-...',
+  tier: 2,
+  category: 'persistent-distress'
+}
+[pulsecheck-escalation] Triggering critical handoff: escalation-1
+[pulsecheck-escalation] Triggering critical handoff: escalation-1
+[pulsecheck-escalation] Triggering critical handoff: escalation-1
+[pulsecheck-escalation] Triggering critical handoff: escalation-1
+[pulsecheck-escalation] Critical handoff complete: { success: false, status: 'failed', emergencyHandoffStatus: 'failed' }
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: null,
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge request failed: { code: 'CLINICAL_BRIDGE_REQUEST_FAILED', phase: 'escalation_create' }
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+✔ synthetic Tier 3 staging uses the production escalation record path without contacting anyone (7.408542ms)
+✔ dispatcher rejects anonymous requests before Firestore access (0.630917ms)
+✔ dispatcher blocks athlete actions for a different user id (0.69075ms)
+✔ care-state authorization is owner-bound while admins may reconcile unscoped legacy state (0.529958ms)
+✔ support-options authorization is owner-bound (0.59575ms)
+✔ dispatcher reserves record creation and direct handoff for admins and trusted runtime code (0.438041ms)
+✔ support options return eligible Tier 2 recipients and exclude non-athlete-data roles (1.7075ms)
+✔ clinical Tier 2 support options stay locked to the configured care route (0.812208ms)
+✔ accepted Tier 2 consent records the selected support recipient (1.354583ms)
+✔ accepted consent retries return completed state without a duplicate handoff (0.743041ms)
+✔ failed handoff returns 502 with recorded consent and retry does not duplicate provider work (0.593417ms)
+✔ a conflicting second consent decision fails explicitly without changing the first decision (0.554083ms)
+✔ real handoff upserts the athlete before creating the clinical case (2.884333ms)
+✔ clinical handoff does not invent a display name for an incomplete athlete profile (1.128917ms)
+✔ athlete upsert failure stops case creation and records the failed phase (0.806292ms)
+✔ Tier 3 provider handoff still runs when the private safety-state write fails (0.792958ms)
+✔ coach notification failure is contained so a clinical handoff can continue (0.554083ms)
+✔ resolve awaits provider confirmation before closing a linked record (0.637ms)
+✔ provider resolution failure leaves the local record open with an explicit failure state (0.575875ms)
+✔ provider-confirmed case resolution never clears the protective safety state (0.790458ms)
+✔ resolution leaves safety state untouched when clearance is omitted (0.361209ms)
+✔ provider resolution failure never clears safety state even when requested (0.549375ms)
+✔ care-state reconciliation mirrors only recognized coarse safety fields (0.670167ms)
+✔ care-state provider failures and ambiguous responses do not write or clear safety state (0.54975ms)
+✔ care-state clear requires an explicit successful provider clear state (0.375541ms)
+✔ safeguarding never auto-selects or notifies a connected coach (1.066709ms)
+✔ coach delivery blocks an excluded recipient: excludedRecipientIds (0.462542ms)
+✔ coach delivery blocks an excluded recipient: implicatedCoachId (0.251625ms)
+✔ journal Tier 2 escalations key on the entry and never write a conversation document (0.748042ms)
+✔ journal escalations are refused when the entry does not belong to the athlete (0.667833ms)
+✔ program brand controls new routes while existing cases retain their route (0.538166ms)
+✔ private concern does not notify a coach for monitor signal (0.766041ms)
+✔ private concern does not notify a coach for pending elevated concern (0.35875ms)
+✔ private concern does not notify a coach for accepted clinical route (0.338875ms)
+✔ private concern does not notify a coach for different named recipient (0.359416ms)
+✔ an accepted named staff selection reaches only that recipient without connection lookup (0.472792ms)
+✔ program scope rejects inferred Athletic Mind configuration: {"productBrand":"pulsecheck","appBranding":{"pulsecheck":"athleticmind"}} (0.2745ms)
+✔ program scope rejects inferred Athletic Mind configuration: {} (0.499083ms)
+✔ program scope rejects inferred Athletic Mind configuration: {"productBrand":"invalid"} (0.223042ms)
+✔ Athletic Mind incident scope cannot be inferred from another membership or mismatched organization (0.23475ms)
+✔ noncritical notifyCoach preserves connection fallback for {"productBrand":"pulsecheck","appBranding":{"pulsecheck":"athleticmind"}} (0.469208ms)
+✔ noncritical notifyCoach preserves connection fallback for {} (0.5035ms)
+✔ critical direct coach notification is blocked regardless of product {"productBrand":"pulsecheck","appBranding":{"pulsecheck":"athleticmind"}} (0.4595ms)
+✔ critical direct coach notification is blocked regardless of product {} (0.584291ms)
+✔ critical direct coach notification is blocked regardless of product {"productBrand":"athleticmind"} (0.265917ms)
+✔ critical PulseCheck or unknown program provides resources without any handoff {"productBrand":"pulsecheck"} (0.468833ms)
+✔ critical PulseCheck or unknown program provides resources without any handoff {} (0.317209ms)
+✔ critical PulseCheck or unknown program provides resources without any handoff {"productBrand":"invalid"} (0.281375ms)
+✔ Athletic Mind emergency delivery stays off and visibly failed until enabled (0.488417ms)
+✔ Athletic Mind emergency packet excludes unrelated profile, conversation, notes and state data (51.699959ms)
+✔ unconfirmed Athletic Mind emergency response fails visibly {"deliveryMode":"mock"} (0.867125ms)
+✔ unconfirmed Athletic Mind emergency response fails visibly {"httpStatus":503} (0.602ms)
+✔ unconfirmed Athletic Mind emergency response fails visibly {"data":{}} (0.647291ms)
+✔ unconfirmed Athletic Mind emergency response fails visibly {"escalationId":null} (0.584417ms)
+✔ unconfirmed Athletic Mind emergency response fails visibly {"data":{"status":"failed"}} (0.633417ms)
+✔ lost emergency acknowledgement is retryable with the same incident ID and successful receipt dedupes (0.782792ms)
+✔ critical source scope requires unique membership or matching persisted conversation scope (0.648292ms)
+✔ private emergency actions deny role-only access but retain athlete handoff retry (0.446917ms)
+✔ routine handoff refuses absent current membership before content or delivery (0.430833ms)
+✔ routine handoff refuses ended-team before delivery (0.39825ms)
+✔ routine handoff refuses archived-organization before delivery (0.321833ms)
+✔ routine handoff refuses wrong-organization before delivery (0.266875ms)
+✔ routine handoff refuses revoked-membership before delivery (0.902875ms)
+ℹ tests 133
+ℹ suites 0
+ℹ pass 133
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 355.500625

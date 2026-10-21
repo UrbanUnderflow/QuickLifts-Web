@@ -1,3 +1,4 @@
+import { organizationTeamIsActive } from './lib/organization-access';
 import type { Handler } from '@netlify/functions';
 import { getFirestore, initAdmin } from './utils/getServiceAccount';
 import {
@@ -118,6 +119,7 @@ export const handler: Handler = async () => {
     summary.triggersFired += candidates.length;
 
     for (const candidate of candidates) {
+      if (!await organizationTeamIsActive(db, m.teamId, m.organizationId)) continue;
       const branchId = triggerToBranchId(candidate.trigger);
       let branch = await getConversationBranch(branchId).catch(() => null);
       if (!branch) {
@@ -165,6 +167,7 @@ export const handler: Handler = async () => {
       const target = await loadPulseCheckPushTarget(db, m.userId);
       if (!target?.token) continue;
       const opener = conversation.turns[0];
+      if (!await organizationTeamIsActive(db, m.teamId, m.organizationId)) continue;
       const result = await sendPush(messaging, target.token, 'Nora', opener.text, {
         recipientUserId: m.userId, _pushPlatform: target.platform || "",
         type: 'nora_conversation',

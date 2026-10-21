@@ -1,0 +1,541 @@
+✔ clinical and escalation collections cannot use the signed-in compatibility fallback (0.454333ms)
+✖ private athlete safety state is owner/admin/scoped-clinician readable and client-write-denied (0.998958ms)
+✔ clinical safety writers target the private safety collection instead of root user documents (0.225875ms)
+✔ clinical audit collections are admin-readable and reject all client writes (0.316916ms)
+✔ clinical escalation clients have bounded reads and acknowledgement-only writes (2.38375ms)
+✔ native acknowledgements are owner-bound, minimal, and append-only (2.103167ms)
+✔ users cannot create or change server-owned crisis and clinical care state (0.64925ms)
+✔ escalation conditions remain admin-managed (0.173667ms)
+✔ clinical staff queue queries constrain both team and athlete before reading (0.178375ms)
+✔ clinical queue composite indexes are checked in for admin and scoped queries (0.178875ms)
+[pulsecheck-escalation] Created escalation: {
+  id: 'escalation-1',
+  userId: 'nora-red...',
+  tier: 3,
+  category: 'immediate_safety'
+}
+[pulsecheck-escalation] Consent accepted: escalation-1
+[pulsecheck-escalation] Consent accepted: escalation-1
+[pulsecheck-escalation] Consent declined: escalation-1
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'clinical-case-1',
+  requestId: 'escalation-request-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: undefined,
+  escalationId: 'clinical-case-1',
+  requestId: null
+}
+[pulsecheck-escalation] Clinical bridge request failed: Error: Athlete upsert rejected.
+    at Object.performClinicalHandoff (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/netlify/functions/pulsecheck-escalation.js:3588:27)
+    at async TestContext.<anonymous> (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/pulsecheck-escalation.runtime.test.cjs:971:18)
+    at async Test.run (node:internal/test_runner/test:1389:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+  code: 'ATHLETE_REJECTED'
+}
+[pulsecheck-escalation] Tier 3 safety-state write failed; continuing provider handoff: {
+  code: 'SAFETY_STATE_UNAVAILABLE',
+  message: 'Safety-state storage unavailable.'
+}
+[pulsecheck-escalation] Coach notification failed; continuing clinical handoff: {
+  code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+  message: 'Notification provider unavailable.'
+}
+[pulsecheck-escalation] Created escalation: {
+  id: 'escalation-1',
+  userId: 'athlete-...',
+  tier: 2,
+  category: 'persistent-distress'
+}
+[pulsecheck-escalation] Triggering critical handoff: escalation-1
+[pulsecheck-escalation] Triggering critical handoff: escalation-1
+[pulsecheck-escalation] Triggering critical handoff: escalation-1
+[pulsecheck-escalation] Triggering critical handoff: escalation-1
+[pulsecheck-escalation] Critical handoff complete: { success: false, status: 'failed', emergencyHandoffStatus: 'failed' }
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: null,
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+[pulsecheck-escalation] Clinical bridge request failed: { code: 'CLINICAL_BRIDGE_REQUEST_FAILED', phase: 'escalation_create' }
+[pulsecheck-escalation] Clinical bridge response: {
+  provider: 'auntedna',
+  success: true,
+  status: 'received',
+  escalationId: 'case-1',
+  requestId: 'receipt-1'
+}
+✔ synthetic Tier 3 staging uses the production escalation record path without contacting anyone (4.855291ms)
+✔ dispatcher rejects anonymous requests before Firestore access (0.59025ms)
+✔ dispatcher blocks athlete actions for a different user id (0.477625ms)
+✔ care-state authorization is owner-bound while admins may reconcile unscoped legacy state (0.319667ms)
+✔ support-options authorization is owner-bound (0.239125ms)
+✔ dispatcher reserves record creation and direct handoff for admins and trusted runtime code (0.22225ms)
+✔ support options return eligible Tier 2 recipients and exclude non-athlete-data roles (1.729833ms)
+✔ clinical Tier 2 support options stay locked to the configured care route (0.675875ms)
+✔ accepted Tier 2 consent records the selected support recipient (1.034167ms)
+✔ accepted consent retries return completed state without a duplicate handoff (0.628333ms)
+✔ failed handoff returns 502 with recorded consent and retry does not duplicate provider work (0.377292ms)
+✔ a conflicting second consent decision fails explicitly without changing the first decision (0.287833ms)
+✔ real handoff upserts the athlete before creating the clinical case (1.412917ms)
+✔ clinical handoff does not invent a display name for an incomplete athlete profile (0.64975ms)
+✔ athlete upsert failure stops case creation and records the failed phase (0.51025ms)
+✔ Tier 3 provider handoff still runs when the private safety-state write fails (0.376708ms)
+✔ coach notification failure is contained so a clinical handoff can continue (0.283667ms)
+✔ resolve awaits provider confirmation before closing a linked record (0.353417ms)
+✔ provider resolution failure leaves the local record open with an explicit failure state (0.529042ms)
+✔ provider-confirmed case resolution never clears the protective safety state (0.698667ms)
+✔ resolution leaves safety state untouched when clearance is omitted (0.261ms)
+✔ provider resolution failure never clears safety state even when requested (0.206625ms)
+✔ care-state reconciliation mirrors only recognized coarse safety fields (0.328167ms)
+✔ care-state provider failures and ambiguous responses do not write or clear safety state (0.208791ms)
+✔ care-state clear requires an explicit successful provider clear state (0.195042ms)
+✔ safeguarding never auto-selects or notifies a connected coach (0.663375ms)
+✔ coach delivery blocks an excluded recipient: excludedRecipientIds (0.281208ms)
+✔ coach delivery blocks an excluded recipient: implicatedCoachId (0.179833ms)
+✔ journal Tier 2 escalations key on the entry and never write a conversation document (0.47875ms)
+✔ journal escalations are refused when the entry does not belong to the athlete (0.294542ms)
+✔ program brand controls new routes while existing cases retain their route (0.210042ms)
+✔ private concern does not notify a coach for monitor signal (0.364ms)
+✔ private concern does not notify a coach for pending elevated concern (0.150459ms)
+✔ private concern does not notify a coach for accepted clinical route (0.149334ms)
+✔ private concern does not notify a coach for different named recipient (0.16075ms)
+✔ an accepted named staff selection reaches only that recipient without connection lookup (0.288916ms)
+✔ program scope rejects inferred Athletic Mind configuration: {"productBrand":"pulsecheck","appBranding":{"pulsecheck":"athleticmind"}} (0.227834ms)
+✔ program scope rejects inferred Athletic Mind configuration: {} (0.37375ms)
+✔ program scope rejects inferred Athletic Mind configuration: {"productBrand":"invalid"} (0.148166ms)
+✔ Athletic Mind incident scope cannot be inferred from another membership or mismatched organization (0.166958ms)
+✔ noncritical notifyCoach preserves connection fallback for {"productBrand":"pulsecheck","appBranding":{"pulsecheck":"athleticmind"}} (0.226042ms)
+✔ noncritical notifyCoach preserves connection fallback for {} (0.175459ms)
+✔ critical direct coach notification is blocked regardless of product {"productBrand":"pulsecheck","appBranding":{"pulsecheck":"athleticmind"}} (0.177875ms)
+✔ critical direct coach notification is blocked regardless of product {} (0.26475ms)
+✔ critical direct coach notification is blocked regardless of product {"productBrand":"athleticmind"} (0.132334ms)
+✔ critical PulseCheck or unknown program provides resources without any handoff {"productBrand":"pulsecheck"} (0.637167ms)
+✔ critical PulseCheck or unknown program provides resources without any handoff {} (0.362042ms)
+✔ critical PulseCheck or unknown program provides resources without any handoff {"productBrand":"invalid"} (0.207833ms)
+✔ Athletic Mind emergency delivery stays off and visibly failed until enabled (0.428083ms)
+✔ Athletic Mind emergency packet excludes unrelated profile, conversation, notes and state data (25.222417ms)
+✔ unconfirmed Athletic Mind emergency response fails visibly {"deliveryMode":"mock"} (0.507167ms)
+✔ unconfirmed Athletic Mind emergency response fails visibly {"httpStatus":503} (0.330333ms)
+✔ unconfirmed Athletic Mind emergency response fails visibly {"data":{}} (0.274875ms)
+✔ unconfirmed Athletic Mind emergency response fails visibly {"escalationId":null} (0.226709ms)
+✔ unconfirmed Athletic Mind emergency response fails visibly {"data":{"status":"failed"}} (0.213667ms)
+✔ lost emergency acknowledgement is retryable with the same incident ID and successful receipt dedupes (0.428083ms)
+✔ critical source scope requires unique membership or matching persisted conversation scope (0.293542ms)
+✔ private emergency actions deny role-only access but retain athlete handoff retry (0.231709ms)
+[Firebase Admin] Credential resolution {
+  runtime: 'netlify-function',
+  appName: '[DEFAULT]',
+  mode: 'prod',
+  source: 'prod:unresolved',
+  projectId: 'quicklifts-dd3f1'
+}
+[Firebase Admin] Credential env presence {
+  runtime: 'netlify-function',
+  appName: '[DEFAULT]',
+  mode: 'prod',
+  hasServiceAccount: false,
+  hasServiceAccountKey: false,
+  hasSecretKey: false,
+  hasPrivateKey: false,
+  hasClientEmail: false,
+  hasImpersonationTarget: false,
+  hasProjectId: false,
+  splitKeyParts: [
+    'FIREBASE_PRIVATE_KEY_1',
+    'FIREBASE_PRIVATE_KEY_2',
+    'FIREBASE_PRIVATE_KEY_3',
+    'FIREBASE_PRIVATE_KEY_4'
+  ],
+  splitKeyPresence: [ false, false, false, false ]
+}
+node:internal/modules/esm/resolve:1008
+    throw error;
+    ^
+
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/netlify/functions/utils/getServiceAccount' imported from /Users/tremainegrant/Documents/GitHub/QuickLifts-Web/netlify/functions/utils/emailSequenceHelpers.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:271:11)
+    at moduleResolve (node:internal/modules/esm/resolve:865:10)
+    at defaultResolve (node:internal/modules/esm/resolve:992:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:701:20)
+    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:721:38)
+    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:759:56)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:600:27)
+    at ModuleJobSync.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJobSync.link (node:internal/modules/esm/module_job:489:17)
+    at new ModuleJobSync (node:internal/modules/esm/module_job:479:26) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///Users/tremainegrant/Documents/GitHub/QuickLifts-Web/netlify/functions/utils/getServiceAccount'
+}
+
+Node.js v24.19.0
+✖ tests/api/pulsecheck/record-clinical-escalation.runtime.test.cjs (93.309667ms)
+✔ PulseCheck handler activates crisis wall and returns 988 without clinician lookup or email (3.463291ms)
+✔ AthleticMind handler still pages clinician and ignores client brand and organization override (0.904167ms)
+✔ AthleticMind still requires a configured clinician (0.204166ms)
+ℹ tests 72
+ℹ suites 0
+ℹ pass 70
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 102.011875
+
+✖ failing tests:
+
+test at tests/api/pulsecheck/clinical-firestore-rules.runtime.test.cjs:41:1
+✖ private athlete safety state is owner/admin/scoped-clinician readable and client-write-denied (0.998958ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /match \/pulsecheck-athlete-safety-state\/\{athleteUserId\}[\s\S]*request\.auth\.uid == athleteUserId[\s\S]*pcCanAccessClinicalTeamAthlete\([\s\S]*resource\.data\.teamId[\s\S]*athleteUserId[\s\S]*allow create, update, delete: if false;/. Input:
+  
+  "rules_version = '2';\n" +
+    'service cloud.firestore {\n' +
+    '  match /databases/{database}/documents {\n' +
+    '    function isSignedIn() {\n' +
+    "      return request.auth != null && request.auth.uid != 'nora-local-synthetic-tester';\n" +
+    '    }\n' +
+    '\n' +
+    '    function hasEmail() {\n' +
+    '      return isSignedIn() && request.auth.token.email != null;\n' +
+    '    }\n' +
+    '\n' +
+    '    function isAdminUser() {\n' +
+    '      return hasEmail()\n' +
+    '        && exists(/databases/$(database)/documents/admin/$(request.auth.token.email));\n' +
+    '    }\n' +
+    '\n' +
+    '    function isValidNorthStarPayload() {\n' +
+    '      return request.resource.data.title is string\n' +
+    '        && request.resource.data.description is string\n' +
+    '        && request.resource.data.objectives is list;\n' +
+    '    }\n' +
+    '\n' +
+    '    function isAdminManagedPublicReadCollection(collectionName) {\n' +
+    '      return collectionName in [\n' +
+    "        'app-sfx-assets',\n" +
+    "        'app-config',\n" +
+    "        'authorProfiles',\n" +
+    "        'daily-reflections',\n" +
+    "        'legal-documents',\n" +
+    "        'macra-version',\n" +
+    "        'macra-versions',\n" +
+    "        'pageMetaData',\n" +
+    "        'pressKitData',\n" +
+    "        'pressReleases',\n" +
+    "        'pulsecheck-sfx-assets',\n" +
+    "        'pulsecheck-version',\n" +
+    "        'pulsecheck-versions',\n" +
+    "        'researchArticles',\n" +
+    "        'shortLinks',\n" +
+    "        'version',\n" +
+    "        'versions'\n" +
+    '      ];\n' +
+    '    }\n' +
+    '\n' +
+    '    function isAdminOnlyCollection(collectionName) {\n' +
+    '      return collectionName in [\n' +
+    "        'agent-commands',\n" +
+    "        'agent-deliverables',\n" +
+    "        'agent-group-chats',\n" +
+    "        'agent-interventions',\n" +
+    "        'agent-onboarding',\n" +
+    "        'agent-outcomes',\n" +
+    "        'agent-presence',\n" +
+    "        'agent-tasks',\n" +
+    "        'corporate-partners',\n" +
+    "        'creator-prospects',\n" +
+    "        'email-sequence-config',\n" +
+    "        'email-templates',\n" +
+    "        'equity-convertible-notes',\n" +
+    "        'equity-documents',\n" +
+    "        'equity-grants',\n" +
+    "        'equity-pool',\n" +
+    "        'equity-stakeholders',\n" +
+    "        'errorLogs',\n" +
+    "        'fitnessSeeker_leads',\n" +
+    "        'founder-budgets',\n" +
+    "        'friends-business-updates',\n" +
+    "        'friends-of-business',\n" +
+    "        'functionMetadata',\n" +
+    "        'investorAccess',\n" +
+    "        'investorAccessLogs',\n" +
+    "        'lead-list-items',\n" +
+    "        'lead-lists',\n" +
+    "        'lead-massage-jobs',\n" +
+    "        'notification-logs',\n" +
+    "        'northstar-proposed-objectives',\n" +
+    "        'outreach_campaigns',\n" +
+    "        'payoutRecords',\n" +
+    "        'progress-timeline',\n" +
+    "        'pulsecheck-conversation-tree',\n" +
+    "        'pulsecheck-nora-translation-log',\n" +
+    "        'pulsecheck-off-limits-config',\n" +
+    "        'pulsecheck-translation-table',\n" +
+    "        'pulsecheck-user-revenue-summaries',\n" +
+    "        'researchArticleAccess',\n" +
+    "        'revenue-calculations',\n" +
+    "        'university-prospects',\n" +
+    "        'venture-prospects'\n" +
+    '      ];\n' +
+    '    }\n' +
+    '\n' +
+    '    function isPurchaseLogCollection(collectionName) {\n' +
+    '      return collectionName in [\n' +
+    "        'Macra-purchase-logs',\n" +
+    "        'PulseRitual-purchase-logs'\n" +
+    '      ];\n' +
+    '    }\n' +
+    '\n' +
+    '    function isLockedPrivateCollection(collectionName) {\n' +
+    '      return collectionName in [\n' +
+    "        'admin',\n" +
+    "        'beta',\n" +
+    "        'payments',\n" +
+    "        'subscriptions'\n" +
+    '      ];\n' +
+    '    }\n' +
+    '\n' +
+    '    function isAthleticMindHubCollection(collectionName) {\n' +
+    '      return collectionName in [\n' +
+    "        'athletic-mind-hub-contacts',\n" +
+    "        'athletic-mind-hub-updates',\n" +
+    "        'athletic-mind-hub-wiki-blocks'\n" +
+    '      ];\n' +
+    '    }\n' +
+    '\n' +
+    '    function isAthleticMindHubPermissionCollection(collectionName) {\n' +
+    '      return collectionName in [\n' +
+    "        'athletic-mind-hub-members',\n" +
+    "        'athletic-mind-hub-invites'\n" +
+    '      ];\n' +
+    '    }\n' +
+    '\n' +
+    '    function isAthleticMindHubFounder() {\n' +
+    "      return hasEmail() && request.auth.token.email == 'tre@fitwithpulse.ai';\n" +
+    '    }\n' +
+    '\n' +
+    '    function athleticMindHubMemberPath(userId) {\n' +
+    '      return /databases/$(database)/documents/athletic-mind-hub-members/$(userId);\n' +
+    '    }\n' +
+    '\n' +
+    '    function isAthleticMindHubMember() {\n' +
+    '      return isSignedIn() && exists(athleticMindHubMemberPath(request.auth.uid));\n' +
+    '    }\n' +
+    '\n' +
+    '    function isAthleticMindHubAdmin() {\n' +
+    '      return isAthleticMindHubFounder()\n' +
+    '        || (\n' +
+    '          isAthleticMindHubMember()\n' +
+    "          && get(athleticMindHubMemberPath(request.auth.uid)).data.permission == 'admin'\n" +
+    '        );\n' +
+    '    }\n' +
+    '\n' +
+    '    function canReadAthleticMindHub() {\n' +
+    '      return isAthleticMindHubAdmin() || isAthleticMindHubMember();\n' +
+    '    }\n' +
+    '\n' +
+    '    function canEditAthleticMindHubWiki() {\n' +
+    '      return isAthleticMindHubAdmin()\n' +
+    '        || (\n' +
+    '          isAthleticMindHubMember()\n' +
+    "          && get(athleticMindHubMemberPath(request.auth.uid)).data.permission in ['wikiEditor', 'admin']\n" +
+    '        );\n' +
+    '    }\n' +
+    '\n' +
+    '    function isExplicitlyRuledCollection(collectionName) {\n' +
+    '      // Staff reports are accessible only through role-checked server APIs.\n' +
+    '\n' +
+    "      return collectionName == 'coach-team-insight-reports' || collectionName in ['groupMeetBookingSettings', 'groupMeetBookings', 'groupMeetBookingLimits'] || collectionName == 'pulsecheck-restricted-questionnaire-submissions' || collectionName.matches('nora-red-team-.*') || collectionName in [\n" +
+    "        'admin-settings',\n" +
+    "        'conversations',\n" +
+    "        'conversationSummaries',\n" +
+    "        'user-mental-notes',\n" +
+    "        'athletic-mind-hub-change-log',\n" +
+    "        'athlete-mental-progress',\n" +
+    "        'beta-applications',\n" +
+    "        'clinical-bridge-smoke-test-runs',\n" +
+    "        'coachAthletes',\n" +
+    "        'coach-notifications',\n" +
+    "        'coach-nora-vault',\n" +
+    "        'coach-athlete-conversations',\n" +
+    "        'coach-athlete-messages',\n" +
+    "        'coachScheduleImportJobs',\n" +
+    "        'pulsecheck-coach-services',\n" +
+    "        'pulsecheck-coach-service-orders',\n" +
+    "        'pulsecheck-coach-payout-requests',\n" +
+    "        'pulsecheck-coach-payout-states',\n" +
+    "        'pulsecheck-assessment-purchases',\n" +
+    "        'pulsecheck-athlete-app-checkout-locks',\n" +
+    "        'pulsecheck-athlete-app-checkouts',\n" +
+    "        'pulsecheck-athlete-app-commercialization',\n" +
+    "        'pulsecheck-athlete-app-entitlements',\n" +
+    "        'pulsecheck-team-payment-notifications',\n" +
+    "        'pulsecheck-athlete-app-invite-checkout-locks',\n" +
+    "        'pulsecheck-athlete-app-offers',\n" +
+    "        'pulsecheck-athlete-app-revenue-events',\n" +
+    "        'pulsecheck-athlete-safety-state',\n" +
+    "        'pulsecheck-clinical-escalations',\n" +
+    "        'pulsecheck-clinical-webhook-events',\n" +
+    "        'athleticmind-snapshot-pulls',\n" +
+    "        'athleticmind-snapshots',\n" +
+    "        'athleticmind-snapshot-deliveries',\n" +
+    "        'athleticmind-snapshot-watermarks',\n" +
+    "        'athleticmind-snapshot-scheduler',\n" +
+    "        'systemOverviewShareUnlockAttempts',\n" +
+    "        'developerDocsUnlockAttempts',\n" +
+    "        'partner-api-access-requests',\n" +
+    "        'partner-api-keys',\n" +
+    "        'partner-api-key-audit',\n" +
+    "        'partner-api-key-rate-limits',\n" +
+    "        'systemOverviewShareLinks',\n" +
+    "        'pulsecheck-referral-attributions',\n" +
+    "        'coach-team-schedule',\n" +
+    "        'company-config',\n" +
+    "        'curriculum-notes',\n" +
+    "        'pulsecheck-linear-curriculum',\n" +
+    "        'pulsecheck-evidence-journals',\n" +
+    "        'pulsecheck-trainer-sharing',\n" +
+    "        'pulsecheck-activity-records',\n" +
+    "        'dailySentimentAnalysis',\n" +
+    "        'document-notes',\n" +
+    "        'escalation-conditions',\n" +
+    "        'escalation-records',\n" +
+    "        'health-context-source-records',\n" +
+    "        'health-context-source-status',\n" +
+    "        'health-context-snapshots',\n" +
+    "        'health-context-snapshot-revisions',\n" +
+    "        'health-context-assembly-traces',\n" +
+    "        'junior-curriculum',\n" +
+    "        'junior-progress',\n" +
+    "        'mental-training-education-progress',\n" +
+    "        'mental-curriculum-assignments',\n" +
+    "        'mental-check-ins',\n" +
+    "        'mental-exercises',\n" +
+    "        'mental-recommendations',\n" +
+    "        'programming-access',\n" +
+    "        'pulsecheck-invite-activities',\n" +
+    "        'pulsecheck-invite-links',\n" +
+    "        'pulsecheck-organizations',\n" +
+    "        'pulsecheck-organization-memberships',\n" +
+    "        'pulsecheck-pilots',\n" +
+    "        'pulsecheck-pilot-cohorts',\n" +
+    "        'pulsecheck-pilot-enrollments',\n" +
+    "        'pulsecheck-provisioning-audit-events',\n" +
+    "        'pulsecheck-push-installations',\n" +
+    "        'pulsecheck-morning-checkins',\n" +
+    "        'pulsecheck-scorecards',\n" +
+    "        'pulsecheck-teams',\n" +
+    "        'pulsecheck-team-memberships',\n" +
+    "        'pulsecheck-daily-assignments',\n" +
+    "        'round-exports',\n" +
+    "        'sim-modules',\n" +
+    "        'sim-completions',\n" +
+    "        'signingRequests',\n" +
+    "        'stripeConnect',\n" +
+    "        'teams',\n" +
+    "        'transactions',\n" +
+    "        'users',\n" +
+    "        'user-reports'\n" +
+    '      ] || isAdminManagedPublicReadCollection(collectionName)\n' +
+    '        || isAdminOnlyCollection(collectionName)\n' +
+    '        || isAthleticMindHubCollection(collectionName)\n' +
+    '        || isAthleticMindHubPermissionCollection(collectionName)\n' +
+    '        || isPurchaseLogCollection(collectionName)\n' +
+    '        || isLockedPrivateCollection(collectionName);\n' +
+    '    }\n' +
+    '\n' +
+    '    // PulseCheck provisioning helpers. Membership docs are keyed `${teamId}_${uid}`,\n' +
+    "    // so the requester's own membership on a team is a deterministic lookup.\n" +
+    '    function pcMembershipPath(teamId) {\n' +
+    "      return /databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + request.auth.uid);\n" +
+    '    }\n' +
+    '    function pcUserMembershipPath(teamId, userId) {\n' +
+    "      return /databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + userId);\n" +
+    '    }\n' +
+    '    function pcTeamPath(teamId) {\n' +
+    '      return /databases/$(database)/documents/pulsecheck-teams/$(teamId);\n' +
+    '    }\n' +
+    '    function pcOrganizationPath(organizationId) {\n' +
+    '      return /databases/$(database)/documents/pulsecheck-organizations/$(organizationId);\n' +
+    '    }\n' +
+    '    function pcPilotPath(pilotId) {\n' +
+    '      return /databases/$(database)/documents/pulsecheck-pilots/$(pilotId);\n' +
+    '    }\n' +
+    '    function pcMembershipDataIsActive(data) {\n' +
+    "      return (!('status' in data) || data.status == 'active')\n" +
+    "        && (!('revokedAt' in data) || data.revokedAt == null);\n" +
+    '    }\n' +
+    '    function pcTeamIsActive(teamId) {\n' +
+    '      return exists(pcTeamPath(teamId))\n' +
+    "        && get(pcTeamPath(teamId)).data.status == 'active'\n" +
+    "        && (!('archivedAt' in get(pcTeamPath(teamId)).data)\n" +
+    '          || get(pcTeamPath(teamId)).data.archivedAt == null)\n' +
+    "        && (!('deletedAt' in get(pcTeamPath(teamId)).data)\n" +
+    '          || get(pcTeamPath(teamId)).data.deletedAt == null);\n' +
+    '    }\n' +
+    '    function pcTeamOrganizationIsActive(teamId) {\n' +
+    '      let team = get(pcTeamPath(teamId)).data;\n' +
+    '      return pcTeamIsActive(teamId)\n' +
+    '        && team.organizationId is string\n' +
+    '        && t'... 126414 more characters
+  
+      at TestContext.<anonymous> (/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/tests/api/pulsecheck/clinical-firestore-rules.runtime.test.cjs:42:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function isSignedIn() {\n      return request.auth != null && request.auth.uid != 'nora-local-synthetic-tester';\n    }\n\n    function hasEmail() {\n      return isSignedIn() && request.auth.token.email != null;\n    }\n\n    function isAdminUser() {\n      return hasEmail()\n        && exists(/databases/$(database)/documents/admin/$(request.auth.token.email));\n    }\n\n    function isValidNorthStarPayload() {\n      return request.resource.data.title is string\n        && request.resource.data.description is string\n        && request.resource.data.objectives is list;\n    }\n\n    function isAdminManagedPublicReadCollection(collectionName) {\n      return collectionName in [\n        'app-sfx-assets',\n        'app-config',\n        'authorProfiles',\n        'daily-reflections',\n        'legal-documents',\n        'macra-version',\n        'macra-versions',\n        'pageMetaData',\n        'pressKitData',\n        'pressReleases',\n        'pulsecheck-sfx-assets',\n        'pulsecheck-version',\n        'pulsecheck-versions',\n        'researchArticles',\n        'shortLinks',\n        'version',\n        'versions'\n      ];\n    }\n\n    function isAdminOnlyCollection(collectionName) {\n      return collectionName in [\n        'agent-commands',\n        'agent-deliverables',\n        'agent-group-chats',\n        'agent-interventions',\n        'agent-onboarding',\n        'agent-outcomes',\n        'agent-presence',\n        'agent-tasks',\n        'corporate-partners',\n        'creator-prospects',\n        'email-sequence-config',\n        'email-templates',\n        'equity-convertible-notes',\n        'equity-documents',\n        'equity-grants',\n        'equity-pool',\n        'equity-stakeholders',\n        'errorLogs',\n        'fitnessSeeker_leads',\n        'founder-budgets',\n        'friends-business-updates',\n        'friends-of-business',\n        'functionMetadata',\n        'investorAccess',\n        'investorAccessLogs',\n        'lead-list-items',\n        'lead-lists',\n        'lead-massage-jobs',\n        'notification-logs',\n        'northstar-proposed-objectives',\n        'outreach_campaigns',\n        'payoutRecords',\n        'progress-timeline',\n        'pulsecheck-conversation-tree',\n        'pulsecheck-nora-translation-log',\n        'pulsecheck-off-limits-config',\n        'pulsecheck-translation-table',\n        'pulsecheck-user-revenue-summaries',\n        'researchArticleAccess',\n        'revenue-calculations',\n        'university-prospects',\n        'venture-prospects'\n      ];\n    }\n\n    function isPurchaseLogCollection(collectionName) {\n      return collectionName in [\n        'Macra-purchase-logs',\n        'PulseRitual-purchase-logs'\n      ];\n    }\n\n    function isLockedPrivateCollection(collectionName) {\n      return collectionName in [\n        'admin',\n        'beta',\n        'payments',\n        'subscriptions'\n      ];\n    }\n\n    function isAthleticMindHubCollection(collectionName) {\n      return collectionName in [\n        'athletic-mind-hub-contacts',\n        'athletic-mind-hub-updates',\n        'athletic-mind-hub-wiki-blocks'\n      ];\n    }\n\n    function isAthleticMindHubPermissionCollection(collectionName) {\n      return collectionName in [\n        'athletic-mind-hub-members',\n        'athletic-mind-hub-invites'\n      ];\n    }\n\n    function isAthleticMindHubFounder() {\n      return hasEmail() && request.auth.token.email == 'tre@fitwithpulse.ai';\n    }\n\n    function athleticMindHubMemberPath(userId) {\n      return /databases/$(database)/documents/athletic-mind-hub-members/$(userId);\n    }\n\n    function isAthleticMindHubMember() {\n      return isSignedIn() && exists(athleticMindHubMemberPath(request.auth.uid));\n    }\n\n    function isAthleticMindHubAdmin() {\n      return isAthleticMindHubFounder()\n        || (\n          isAthleticMindHubMember()\n          && get(athleticMindHubMemberPath(request.auth.uid)).data.permission == 'admin'\n        );\n    }\n\n    function canReadAthleticMindHub() {\n      return isAthleticMindHubAdmin() || isAthleticMindHubMember();\n    }\n\n    function canEditAthleticMindHubWiki() {\n      return isAthleticMindHubAdmin()\n        || (\n          isAthleticMindHubMember()\n          && get(athleticMindHubMemberPath(request.auth.uid)).data.permission in ['wikiEditor', 'admin']\n        );\n    }\n\n    function isExplicitlyRuledCollection(collectionName) {\n      // Staff reports are accessible only through role-checked server APIs.\n\n      return collectionName == 'coach-team-insight-reports' || collectionName in ['groupMeetBookingSettings', 'groupMeetBookings', 'groupMeetBookingLimits'] || collectionName == 'pulsecheck-restricted-questionnaire-submissions' || collectionName.matches('nora-red-team-.*') || collectionName in [\n        'admin-settings',\n        'conversations',\n        'conversationSummaries',\n        'user-mental-notes',\n        'athletic-mind-hub-change-log',\n        'athlete-mental-progress',\n        'beta-applications',\n        'clinical-bridge-smoke-test-runs',\n        'coachAthletes',\n        'coach-notifications',\n        'coach-nora-vault',\n        'coach-athlete-conversations',\n        'coach-athlete-messages',\n        'coachScheduleImportJobs',\n        'pulsecheck-coach-services',\n        'pulsecheck-coach-service-orders',\n        'pulsecheck-coach-payout-requests',\n        'pulsecheck-coach-payout-states',\n        'pulsecheck-assessment-purchases',\n        'pulsecheck-athlete-app-checkout-locks',\n        'pulsecheck-athlete-app-checkouts',\n        'pulsecheck-athlete-app-commercialization',\n        'pulsecheck-athlete-app-entitlements',\n        'pulsecheck-team-payment-notifications',\n        'pulsecheck-athlete-app-invite-checkout-locks',\n        'pulsecheck-athlete-app-offers',\n        'pulsecheck-athlete-app-revenue-events',\n        'pulsecheck-athlete-safety-state',\n        'pulsecheck-clinical-escalations',\n        'pulsecheck-clinical-webhook-events',\n        'athleticmind-snapshot-pulls',\n        'athleticmind-snapshots',\n        'athleticmind-snapshot-deliveries',\n        'athleticmind-snapshot-watermarks',\n        'athleticmind-snapshot-scheduler',\n        'systemOverviewShareUnlockAttempts',\n        'developerDocsUnlockAttempts',\n        'partner-api-access-requests',\n        'partner-api-keys',\n        'partner-api-key-audit',\n        'partner-api-key-rate-limits',\n        'systemOverviewShareLinks',\n        'pulsecheck-referral-attributions',\n        'coach-team-schedule',\n        'company-config',\n        'curriculum-notes',\n        'pulsecheck-linear-curriculum',\n        'pulsecheck-evidence-journals',\n        'pulsecheck-trainer-sharing',\n        'pulsecheck-activity-records',\n        'dailySentimentAnalysis',\n        'document-notes',\n        'escalation-conditions',\n        'escalation-records',\n        'health-context-source-records',\n        'health-context-source-status',\n        'health-context-snapshots',\n        'health-context-snapshot-revisions',\n        'health-context-assembly-traces',\n        'junior-curriculum',\n        'junior-progress',\n        'mental-training-education-progress',\n        'mental-curriculum-assignments',\n        'mental-check-ins',\n        'mental-exercises',\n        'mental-recommendations',\n        'programming-access',\n        'pulsecheck-invite-activities',\n        'pulsecheck-invite-links',\n        'pulsecheck-organizations',\n        'pulsecheck-organization-memberships',\n        'pulsecheck-pilots',\n        'pulsecheck-pilot-cohorts',\n        'pulsecheck-pilot-enrollments',\n        'pulsecheck-provisioning-audit-events',\n        'pulsecheck-push-installations',\n        'pulsecheck-morning-checkins',\n        'pulsecheck-scorecards',\n        'pulsecheck-teams',\n        'pulsecheck-team-memberships',\n        'pulsecheck-daily-assignments',\n        'round-exports',\n        'sim-modules',\n        'sim-completions',\n        'signingRequests',\n        'stripeConnect',\n        'teams',\n        'transactions',\n        'users',\n        'user-reports'\n      ] || isAdminManagedPublicReadCollection(collectionName)\n        || isAdminOnlyCollection(collectionName)\n        || isAthleticMindHubCollection(collectionName)\n        || isAthleticMindHubPermissionCollection(collectionName)\n        || isPurchaseLogCollection(collectionName)\n        || isLockedPrivateCollection(collectionName);\n    }\n\n    // PulseCheck provisioning helpers. Membership docs are keyed `${teamId}_${uid}`,\n    // so the requester's own membership on a team is a deterministic lookup.\n    function pcMembershipPath(teamId) {\n      return /databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + request.auth.uid);\n    }\n    function pcUserMembershipPath(teamId, userId) {\n      return /databases/$(database)/documents/pulsecheck-team-memberships/$(teamId + '_' + userId);\n    }\n    function pcTeamPath(teamId) {\n      return /databases/$(database)/documents/pulsecheck-teams/$(teamId);\n    }\n    function pcOrganizationPath(organizationId) {\n      return /databases/$(database)/documents/pulsecheck-organizations/$(organizationId);\n    }\n    function pcPilotPath(pilotId) {\n      return /databases/$(database)/documents/pulsecheck-pilots/$(pilotId);\n    }\n    function pcMembershipDataIsActive(data) {\n      return (!('status' in data) || data.status == 'active')\n        && (!('revokedAt' in data) || data.revokedAt == null);\n    }\n    function pcTeamIsActive(teamId) {\n      return exists(pcTeamPath(teamId))\n        && get(pcTeamPath(teamId)).data.status == 'active'\n        && (!('archivedAt' in get(pcTeamPath(teamId)).data)\n          || get(pcTeamPath(teamId)).data.archivedAt == null)\n        && (!('deletedAt' in get(pcTeamPath(teamId)).data)\n          || get(pcTeamPath(teamId)).data.deletedAt == null);\n    }\n    function pcTeamOrganizationIsActive(teamId) {\n      let team = get(pcTeamPath(teamId)).data;\n      return pcTeamIsActive(teamId)\n        && team.organizationId is string\n        && t"... 126414 more characters,
+    expected: /match \/pulsecheck-athlete-safety-state\/\{athleteUserId\}[\s\S]*request\.auth\.uid == athleteUserId[\s\S]*pcCanAccessClinicalTeamAthlete\([\s\S]*resource\.data\.teamId[\s\S]*athleteUserId[\s\S]*allow create, update, delete: if false;/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/api/pulsecheck/record-clinical-escalation.runtime.test.cjs:1:1
+✖ tests/api/pulsecheck/record-clinical-escalation.runtime.test.cjs (93.309667ms)
+  'test failed'

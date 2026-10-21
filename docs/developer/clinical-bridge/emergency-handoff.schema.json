@@ -114,6 +114,11 @@
         }
       },
       "additionalProperties": false
+    },
+    "universityCode": {
+      "type": "string",
+      "pattern": "^[A-Z0-9][A-Z0-9_-]{0,63}$",
+      "description": "Optional partner university routing code from verified persisted organization configuration. Missing code must never block an emergency."
     }
   },
   "additionalProperties": false

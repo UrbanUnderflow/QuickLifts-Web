@@ -1,0 +1,11 @@
+const fs=require('node:fs');const {resolveAdminCredential}=require('../../scripts/lib/resolveAdminCredential');
+(async()=>{const before=JSON.parse(fs.readFileSync('work/organization-lifecycle/rules-before.json','utf8')),content=fs.readFileSync('work/organization-lifecycle/scoped.rules','utf8');const token=await resolveAdminCredential({quiet:true}).getAccessToken();
+const api=async(path,method='GET',body)=>{const res=await fetch('https://firebaserules.googleapis.com/v1/'+path,{method,headers:{Authorization:'Bearer '+token.access_token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const data=await res.json();if(!res.ok)throw Error('Rules request failed '+res.status+': '+JSON.stringify(data.error?.message));return data;};
+const name='projects/quicklifts-dd3f1/releases/cloud.firestore';
+if((await api(name)).rulesetName!==before.release.rulesetName)throw Error('Production rules changed; rebuild candidate');
+const files=before.rules.source.files.map(f=>f.name==='firestore.rules'?{...f,content}:f);
+const created=await api('projects/quicklifts-dd3f1/rulesets','POST',{source:{files}});
+if((await api(name)).rulesetName!==before.release.rulesetName)throw Error('Production rules changed before publish');
+await api(name,'PATCH',{release:{name,rulesetName:created.name},updateMask:'rulesetName'});
+const live=await api(name);if(live.rulesetName!==created.name)throw Error('Release verification failed');const verified=await api(created.name);if(verified.source.files.find(f=>f.name==='firestore.rules').content!==content)throw Error('Rules content mismatch');
+fs.writeFileSync('work/organization-lifecycle/rules-published.json',JSON.stringify({release:live,verifiedAt:new Date().toISOString()}));console.log(JSON.stringify({verified:true,ruleset:created.name}));})().catch(e=>{console.error(e.message);process.exit(1)});

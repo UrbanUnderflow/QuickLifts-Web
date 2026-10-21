@@ -1,0 +1,24 @@
+i  emulators: Starting emulators: firestore
+i  emulators: Detected demo project ID "demo-consent-summary", emulated services will use a demo configuration and attempts to access non-emulated services for this project will fail.
+⚠  hub: emulator hub unable to start on port 4400, starting on 4401 instead.
+⚠  logging: Logging Emulator unable to start on port 4500, starting on 4501 instead.
+⚠  firestore: Cloud Firestore rules file /tmp/consent-verification-emulator/Users/tremainegrant/Documents/GitHub/QuickLifts-Web/firestore.rules specified in firebase.json does not exist.
+⚠  firestore: The emulator will default to allowing all reads and writes. Learn more about this option: https://firebase.google.com/docs/emulator-suite/install_and_configure#security_rules_configuration.
+i  firestore: Firestore Emulator logging to firestore-debug.log
+✔  firestore: Firestore Emulator UI websocket is running on 9151.
+i  Running script: node --test /tmp/consent-verification-emulator/summary-privacy-test.cjs
+✔ deployed rules: unrelated signed-in membership consent-summary read ALLOWED (privacy gap) (692.399625ms)
+✔ local rules: unrelated signed-in membership consent-summary read DENIED (917.949875ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1694.7925
+✔  Script exited successfully (code 0)
+i  emulators: Shutting down emulators.
+i  firestore: Stopping Firestore Emulator
+i  hub: Stopping emulator hub
+i  logging: Stopping Logging Emulator

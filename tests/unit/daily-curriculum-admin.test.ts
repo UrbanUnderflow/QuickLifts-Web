@@ -9,6 +9,7 @@ import {
 type Seed = Record<string, Record<string, Record<string, unknown>>>;
 
 const createFakeFirestore = (seed: Seed = {}) => {
+  seed = { 'pulsecheck-teams': { 'team-1': { status: 'active', organizationId: 'org-1' } }, 'pulsecheck-organizations': { 'org-1': { status: 'active' } }, ...seed };
   const collections = new Map<string, Map<string, Record<string, unknown>>>();
 
   for (const [collectionName, docs] of Object.entries(seed)) {
@@ -455,3 +456,10 @@ test('admin curriculum assessment writes monthly rollup doc', async () => {
   assert.equal(result, null);
   assert.deepEqual([...collections.get('pulsecheck-daily-assignments')!.entries()], [['historical', historical]]);
  });
+
+test('decommissioned organization cannot generate curriculum', async () => {
+  const { db, collections } = createFakeFirestore({ 'pulsecheck-organizations': { 'org-1': { status: 'deleted', deletedAt: 1 } } });
+  const result = await generateDailyAssignmentAdmin(db as any, { athleteUserId: 'athlete-1', teamId: 'team-1', sourceDate: '2026-10-19' } as any);
+  assert.equal(result, null);
+  assert.equal(collections.get('pulsecheck-daily-assignments')?.size || 0, 0);
+});

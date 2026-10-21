@@ -1,3 +1,6 @@
+import AthleteActivationQR from '../../components/admin/AthleteActivationQR';
+import OrganizationLifecycle from '../../components/admin/OrganizationLifecycle';
+import TeamReportDelivery from '../../components/admin/TeamReportDelivery';
 import ui from '../../components/admin/ProvisioningWorkspace.module.css';
 import ProgramProductConfiguration, { ProductConfigurationFields } from '../../components/admin/ProgramProductConfiguration';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -751,6 +754,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const currentUser = useUser();
   const dispatch = useDispatch();
   const [organizations, setOrganizations] = useState<PulseCheckOrganization[]>([]);
+  const [organizationToDelete, setOrganizationToDelete] = useState<PulseCheckOrganization | null>(null);
   const [teams, setTeams] = useState<PulseCheckTeam[]>([]);
   const [pilots, setPilots] = useState<PulseCheckPilot[]>([]);
   const [pilotCohorts, setPilotCohorts] = useState<PulseCheckPilotCohort[]>([]);
@@ -4038,6 +4042,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                           </div>
 
                           <div className="pcp-org-actions">
+                            <button type="button" className="pcp-ab" onClick={(event) => { event.stopPropagation(); setOrganizationToDelete(organization); }}>Delete organization</button>
                             <span className={`pcp-status pcp-org-status-tr ${getDashboardStatusClassName(orgStatus)}`}>{orgStatus.label}</span>
                             <button
                               type="button"
@@ -4287,6 +4292,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   <div className="pcp-team-body" style={{ display: 'block', marginTop: 12 }}>
                                     <div className="pcp-team-shell">
                                       <div className="pcp-team-grid">
+                                        <CollapsibleCard
+                                          title="Coach report delivery"
+                                          open={expandedOrgCardKeys.has(`${team.id}:reports`)}
+                                          onToggle={() => toggleOrgCard(`${team.id}:reports`)}
+                                          preview="Daily participation and Monday weekly reports."
+                                        >
+                                          {expandedOrgCardKeys.has(`${team.id}:reports`) ? <TeamReportDelivery teamId={team.id} /> : null}
+                                        </CollapsibleCard>
                                         <CollapsibleCard
                                           title="Invite Artwork · This team"
                                           open={teamArtworkOpen}
@@ -5587,6 +5600,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                           {creatingPilotInvite ? <Loader2 /> : <Clipboard />}
                                                           {reusablePilotInvite ? 'Copy Invite' : 'Create Invite'}
                                                         </button>
+                                                        {reusablePilotInvite && <AthleteActivationQR token={reusablePilotInvite.token} label={`${team.displayName} · ${pilot.name}`} />}
                                                       </div>
                                                     </div>
                                                   );
@@ -5635,6 +5649,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                           {cohortInviteCreatingId === cohort.id ? <Loader2 /> : <Clipboard />}
                                                           {reusableCohortInvite ? 'Copy Invite' : 'Create Invite'}
                                                         </button>
+                                                        {reusableCohortInvite && <AthleteActivationQR token={reusableCohortInvite.token} label={`${team.displayName} · ${cohort.name}`} />}
                                                       </div>
                                                     );
                                                   })
@@ -5718,6 +5733,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   })
                 )}
               </div>
+              <OrganizationLifecycle target={organizationToDelete} onClose={() => setOrganizationToDelete(null)} onChanged={async () => { setSelectedOrganizationId(null); await loadData(); }} />
             </main>
           </div>
 

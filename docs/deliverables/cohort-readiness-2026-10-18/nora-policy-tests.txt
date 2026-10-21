@@ -1,0 +1,38 @@
+✔ scope gate applies the canonical seven-lane priority (3.761083ms)
+✔ coach identity and handoff responses stay direct and product-grounded (6.565709ms)
+✔ external handoff claims require a confirmed tool result (0.509625ms)
+✔ a failed coach send remains an honest coach-handoff response (0.176667ms)
+✔ cross-athlete and hidden-policy requests receive deterministic privacy boundaries (1.027542ms)
+✔ ordinary competition nerves stay in performance coaching (0.04875ms)
+✔ clinical and critical boundaries earn a complete rubric score (0.6155ms)
+✔ requests for coercion or shame receive an autonomy-supportive boundary (0.53975ms)
+✔ secrecy and exclusivity requests receive an immediate relationship boundary (0.552916ms)
+✔ clinical boundary directly refuses treatment pressure and keeps the handoff active (0.202ms)
+✔ performance response earns 10 only when it stays grounded and non-clinical (0.151375ms)
+✔ grounded fallbacks pass across every lane (4.29375ms)
+✔ grounded food-plan fallback uses athlete words instead of scripted food cases (0.469458ms)
+✔ food-plan concerns reject generic performance pivots (0.149459ms)
+✔ rubric rejects unrequested calorie pivots, therapy claims, pressure, and note creation (0.146208ms)
+✔ rubric rejects the subtle drifts found in live conversation review (0.596083ms)
+✔ direct health-data answers stay within the requested domain and stop (0.137459ms)
+✔ state words must come from the athlete or recent athlete context (0.095416ms)
+✔ an explicit tracking decline is never treated as note consent (0.429958ms)
+✔ tracking pressure cannot erase a decline from the prior athlete turn (0.33425ms)
+✔ production chat imports the scope gate, scores replies, and can replace care-lane output (0.522875ms)
+✔ withdrawn sharing consent blocks coach handoff and supplies a clear boundary (0.082459ms)
+✔ direct cue requests get a usable cue and app failures keep their support intent (0.508208ms)
+✔ a direct sleep answer stays relevant when it uses slept instead of sleep (0.039542ms)
+✔ voice cleanup preserves a supplied mental cue instead of substituting breathing (4.074959ms)
+✔ critical outage fallback does not imply a support operation is underway (0.051917ms)
+✔ cancelled coach message status stays in the handoff lane in either word order (0.09075ms)
+✔ supported meal card fallback stays useful without claiming a save (0.417584ms)
+✔ granular cue requests retain topic and assault reporting routes to care (0.271417ms)
+✔ protected record and staff privacy fallbacks remain relevant and pass response checks (0.36025ms)
+ℹ tests 30
+ℹ suites 0
+ℹ pass 30
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 64.113375
