@@ -1,4 +1,4 @@
-import { normalizeLeadTags } from '../utils/pipelistsTags';
+import { matchesLeadTagFilters, normalizeLeadTags } from '../utils/pipelistsTags';
 import { preserveStoredUniversityList } from '../utils/pipelistsPersistence';
 import { getLinkedLeads, normalizeLinkedLeadIds, setLeadLink } from '../utils/pipelistsLinkedLeads';
 import { reconcilePipeListStages } from '../utils/pipelistsStages';
@@ -3504,6 +3504,7 @@ const PipelinePage: NextPage = () => {
   const [metricsPeriod, setMetricsPeriod] = useState<MetricsPeriod>('90');
   const [runbookHasUnsavedChanges, setRunbookHasUnsavedChanges] = useState(false);
   const [query, setQuery] = useState('');
+  const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [stageFilters, setStageFilters] = useState<string[]>([]);
   const [priorityFilters, setPriorityFilters] = useState<PipelinePriority[]>([]);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
@@ -3792,6 +3793,7 @@ const PipelinePage: NextPage = () => {
   useEffect(() => {
     setStageFilters([]);
     setPriorityFilters([]);
+    setTagFilters([]);
   }, [activeList.id, user?.uid]);
 
   useEffect(() => {
@@ -4992,6 +4994,12 @@ const PipelinePage: NextPage = () => {
   const logTargetListItems = logTargetList.items.filter((item) => !isItemDeleted(item));
   const logTargetItem = logTargetListItems.find((item) => item.id === logTargetItemId) || logTargetListItems[0] || null;
 
+  const availableTagFilters = useMemo(
+    () => normalizeLeadTags(activeListItems.flatMap((item) => normalizeLeadTags(item.tags)))
+      .sort((left, right) => left.localeCompare(right)),
+    [activeListItems],
+  );
+
   const filteredItems = useMemo(() => {
     const search = query.trim().toLowerCase();
 
@@ -5027,7 +5035,7 @@ const PipelinePage: NextPage = () => {
             .toLowerCase()
             .includes(search);
 
-        return matchesSelectedCategories && matchesQuery;
+        return matchesSelectedCategories && matchesQuery && matchesLeadTagFilters(item.tags, tagFilters);
       })
       .sort((left, right) => {
         if (sortColumn) {
@@ -5086,6 +5094,7 @@ const PipelinePage: NextPage = () => {
     sortColumn,
     sortDirection,
     stageFilters,
+    tagFilters,
   ]);
 
   const filteredItemIds = useMemo(() => filteredItems.map((item) => item.id), [filteredItems]);
@@ -6944,6 +6953,7 @@ Rules:
     setSelectedLogItemId(nextItem.id);
     setStageFilters([]);
     setPriorityFilters([]);
+    setTagFilters([]);
     setViewMode('pipeline');
     setLeadGenMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
   };
@@ -7007,6 +7017,7 @@ Rules:
     setSelectedLogItemId(nextItem.id);
     setStageFilters([]);
     setPriorityFilters([]);
+    setTagFilters([]);
     setViewMode('pipeline');
     setPastedLeadListMessage({ type: 'success', text: `Added ${nextItem.title} to ${activeList.name}.` });
   };
@@ -7255,7 +7266,7 @@ Rules:
         ? { ...list, items: [...selectNewContacts(items, list.items), ...list.items] } : list));
       setContactImport(null);
       setContactImportMessage({ type: 'success', text: `${items.length} contacts added. ${contactImport.rows.length - rows.length} duplicates skipped.` });
-      setQuery(''); setStageFilters([]); setPriorityFilters([]);
+      setQuery(''); setStageFilters([]); setPriorityFilters([]); setTagFilters([]);
     } catch (error) {
       setContactImportMessage({ type: 'error', text: readFirestoreError(error, 'Import failed. Your contact file is ready to retry.') });
     } finally {
@@ -7578,6 +7589,7 @@ Rules:
     );
     setStageFilters([]);
     setPriorityFilters([]);
+    setTagFilters([]);
     setSelectedLogItemId(nextItem.id);
     setViewMode('pipeline');
     setToastMessage({
@@ -7634,6 +7646,7 @@ Rules:
       );
     setStageFilters([]);
     setPriorityFilters([]);
+    setTagFilters([]);
       setSelectedDetailItemId(nextItem.id);
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
@@ -7776,6 +7789,7 @@ Rules:
       );
     setStageFilters([]);
     setPriorityFilters([]);
+    setTagFilters([]);
       setSelectedDetailItemId(nextItem.id);
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
@@ -7994,6 +8008,7 @@ Rules:
     setActiveListId(nextList.id);
     setStageFilters([]);
     setPriorityFilters([]);
+    setTagFilters([]);
     setNewListName('');
     setDraft(defaultDraft(nextList.stages[0]?.id));
     setSelectedLogItemId('');
@@ -8446,6 +8461,7 @@ Rules:
     setActiveListId(targetListId);
     setStageFilters([]);
     setPriorityFilters([]);
+    setTagFilters([]);
     setQuery('');
     setSelectedDetailItemId(itemId);
     setSelectedLogItemId(itemId);
@@ -8594,6 +8610,7 @@ Rules:
     setActiveListId(nextLists[0].id);
     setStageFilters([]);
     setPriorityFilters([]);
+    setTagFilters([]);
     setSelectedLogItemId('');
     setLogDraft(defaultLogDraft(nextLists[0].templateKey));
     setDetailModalMode('details');
@@ -10798,6 +10815,7 @@ Rules:
                           setViewMode('pipeline');
                           setStageFilters([]);
                           setPriorityFilters([]);
+                          setTagFilters([]);
                           setSelectedLogItemId('');
                           setLogDraft(defaultLogDraft(list.templateKey));
                           setDraft(defaultDraft(list.stages[0]?.id));
@@ -11368,12 +11386,40 @@ Rules:
                       </div>
                     )}
 
+                    <div className="inline-flex h-11 items-center gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-stone-500">
+                      <Filter className="h-4 w-4" />
+                      <select
+                        value=""
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          if (value === '__clear') setTagFilters([]);
+                          else if (value.startsWith('tag:')) {
+                            setTagFilters((current) => toggleFilterSelection(current, value.slice(4)));
+                          }
+                        }}
+                        className="max-w-[240px] bg-transparent text-sm text-stone-700 outline-none"
+                        aria-label="Add or remove tag filters"
+                      >
+                        <option value="" disabled>
+                          {tagFilters.length === 0 ? 'All tags' : `${tagFilters.length} ${tagFilters.length === 1 ? 'tag' : 'tags'} selected`}
+                        </option>
+                        {tagFilters.length > 0 && <option value="__clear">Clear tag filters</option>}
+                        {availableTagFilters.length === 0 && <option disabled>No tags added yet</option>}
+                        {availableTagFilters.map((tag) => (
+                          <option key={tag.toLowerCase()} value={`tag:${tag.toLowerCase()}`}>
+                            {tagFilters.includes(tag.toLowerCase()) ? `Remove ${tag}` : `Add ${tag}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => {
                         setQuery('');
                         setStageFilters([]);
                         setPriorityFilters([]);
+                        setTagFilters([]);
                         setSortColumn(null);
                         setSortDirection('asc');
                       }}
@@ -11497,6 +11543,24 @@ Rules:
 
                 {isInvestorUpdateContactsList && <MessageBanner message={friendsImportMessage} />}
                 {activeList.templateKey === 'vc' && <MessageBanner message={vcSourceEnrichmentMessage} />}
+                {tagFilters.length > 0 && (
+                  <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="Selected tag filters">
+                    <span className="text-xs text-stone-500">Matches any selected tag:</span>
+                    {tagFilters.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setTagFilters((current) => toggleFilterSelection(current, tag))}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-white px-3 py-1 text-xs font-medium text-stone-700 hover:bg-stone-100"
+                        aria-label={`Remove tag filter ${tag}`}
+                      >
+                        {availableTagFilters.find((candidate) => candidate.toLowerCase() === tag) || tag}
+                        <X className="h-3 w-3" aria-hidden="true" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <MessageBanner message={bulkActionMessage} />
                 <MessageBanner message={contactImportMessage} />
 
@@ -12458,13 +12522,13 @@ Rules:
                             {invite.listAccess.map((entry) => (
                               <label
                                 key={entry.listId}
-                                className="flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2"
+                                className="flex min-w-0 cursor-pointer flex-col items-stretch gap-2 rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2"
                               >
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <span className={`h-2 w-2 shrink-0 rounded-full ${entry.accent}`} />
-                                  <span className="truncate text-sm font-medium text-stone-700">{entry.listName}</span>
+                                <span className="flex min-w-0 items-start gap-2">
+                                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${entry.accent}`} />
+                                  <span className="min-w-0 whitespace-normal break-words text-sm font-medium text-stone-700">{entry.listName}</span>
                                 </span>
-                                <span className="flex shrink-0 items-center gap-1.5">
+                                <span className="flex flex-wrap items-center gap-1.5">
                                   <select
                                     aria-label={`Access to ${entry.listName} for ${memberLabel}`}
                                     title={`${entry.listName}: change access`}

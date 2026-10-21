@@ -11,3 +11,10 @@ export const normalizeLeadTags = (value: unknown): string[] => {
     return [tag];
   });
 };
+
+/** Match any selected tag; an empty selection includes tagged and untagged leads. */
+export const matchesLeadTagFilters = (tags: unknown, selectedTags: readonly string[]): boolean => {
+  const filters = normalizeLeadTags(selectedTags).map((tag) => tag.toLowerCase());
+  if (filters.length === 0) return true;
+  return normalizeLeadTags(tags).some((tag) => filters.includes(tag.toLowerCase()));
+};
