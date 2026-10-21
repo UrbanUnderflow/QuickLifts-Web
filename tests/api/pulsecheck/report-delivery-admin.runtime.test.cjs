@@ -30,3 +30,9 @@ test('unauthorized, closed, unknown-field, and inaccessible-recipient writes do 
     const { f, res } = await call(options); assert.equal(res.statusCode, expected); assert.ok(!f.getDocument('coach-team-insight-reports/delivery/configs/team'));
   }
 });
+test('admin can persist per-recipient CC mapping', async () => {
+  const recipientCc = { coach: [{ email: 'copy@example.test', name: 'Copy' }] };
+  const { f, res } = await call({ patch: { recipientCc } });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(f.getDocument('coach-team-insight-reports/delivery/configs/team').recipientCc, recipientCc);
+});

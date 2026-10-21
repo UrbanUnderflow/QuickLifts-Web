@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { auth, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 
-type Config = { teamId: string; dailyEnabled: boolean; weeklyEnabled: boolean; timeZone: string; sendHour: number; startDate: string; recipientUids: string[] };
+type Config = { teamId: string; dailyEnabled: boolean; weeklyEnabled: boolean; timeZone: string; sendHour: number; startDate: string; recipientUids: string[]; recipientCc?: Record<string, Array<{ email: string; name?: string }>> };
 type Recipient = { uid: string; email: string; name?: string };
 type Delivery = { id: string; kind?: string; reportDate?: string; status?: string; recipientEmail?: string; lastError?: string; sentAt?: string | null };
 
@@ -25,11 +25,12 @@ export default function TeamReportDelivery({ teamId }: { teamId: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
+  const [ccDrafts, setCcDrafts] = useState<Record<string, string>>({});
   useEffect(() => {
     let active = true;
     setLoading(true); setStatus(''); setConfig(null);
     request(teamId).then(body => {
-      if (active) { setConfig(body.config); setRecipients(body.recipients); setDeliveries(body.deliveries); }
+      if (active) { setConfig(body.config); setCcDrafts(Object.fromEntries(Object.entries(body.config.recipientCc || {}).map(([uid, entries]) => [uid, (entries as Array<{email: string; name?: string}>).map(person => person.name ? `${person.name} <${person.email}>` : person.email).join('\n')]))); setRecipients(body.recipients); setDeliveries(body.deliveries); }
     }).catch(error => { if (active) setStatus(error.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [teamId]);
@@ -51,10 +52,20 @@ export default function TeamReportDelivery({ teamId }: { teamId: string }) {
         {recipients.length ? recipients.map(person => <label key={person.uid} style={{ display: 'block', marginTop: 10, overflowWrap: 'anywhere' }}><input type="checkbox" checked={config.recipientUids.includes(person.uid)} onChange={event => update({ recipientUids: event.target.checked ? [...config.recipientUids, person.uid] : config.recipientUids.filter(uid => uid !== person.uid) })} /> {person.name || person.email}{person.name ? ` · ${person.email}` : ''}</label>) : <p>No eligible team staff with an email address. Add staff with participation access before enabling delivery.</p>}
         {config.recipientUids.some(uid => !recipients.some(person => person.uid === uid)) && <p role="alert">A saved recipient no longer has eligible team access. Save to remove unavailable recipients.</p>}
       </fieldset>
+      {recipients.filter(person => config.recipientUids.includes(person.uid)).map(person => <label key={`cc-${person.uid}`} className="pcp-fld" style={{ display: 'block', marginBottom: 16 }}>
+        <span className="pcp-flbl">CC on reports to {person.email}</span>
+        <textarea className="pcp-finp" rows={3} value={ccDrafts[person.uid] || ''} onChange={event => { setCcDrafts({ ...ccDrafts, [person.uid]: event.target.value }); setStatus(''); }} placeholder="One email per line, or Name <email@example.com>" />
+      </label>)}
+      <p style={{ fontSize: 13 }}>CC recipients receive the daily and weekly email content. Being copied does not grant access to the secure report link.</p>
       <button type="button" className="pcp-ab pcp-ab-g" onClick={async () => {
         setSaving(true); setStatus('');
         try {
-          const next = { ...config, recipientUids: config.recipientUids.filter(uid => recipients.some(person => person.uid === uid)) };
+          const recipientUids = config.recipientUids.filter(uid => recipients.some(person => person.uid === uid));
+          const recipientCc = Object.fromEntries(recipientUids.map(uid => [uid, (ccDrafts[uid] || '').split('\n').map(line => line.trim()).filter(Boolean).map(line => {
+            const named = line.match(/^([^<>]+)<([^<>]+)>$/);
+            return named ? { name: named[1].trim(), email: named[2].trim() } : { email: line };
+          })]));
+          const next = { ...config, recipientUids, recipientCc };
           const result = await request(teamId, next); setConfig(result.config); setStatus('Report delivery settings saved.');
         } catch (error) { setStatus(error instanceof Error ? error.message : 'Unable to save report settings.'); }
         finally { setSaving(false); }

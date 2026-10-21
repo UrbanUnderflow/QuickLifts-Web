@@ -88,3 +88,23 @@ test('an active delivery lease prevents a second worker from sending', async () 
   let sent = 0; const result = await runner.runReportDeliveries(f.db, monday, { prepare, send: async () => { sent++; return { success: true }; } });
   assert.deepEqual(result, { sent: 0, failed: 0, skipped: 2 }); assert.equal(sent, 0);
 });
+test('CC addresses normalize, deduplicate and reject malformed or unselected recipients', () => {
+  assert.deepEqual(helpers.validateDeliveryConfig({ ...config, recipientCc: { coach: [{ email: ' COPY@example.test ', name: ' Name ' }, { email: 'copy@example.test' }] } }).recipientCc, { coach: [{ email: 'copy@example.test', name: 'Name' }] });
+  for (const recipientCc of [{ other: [{ email: 'copy@example.test' }] }, { coach: [{ email: 'x@example.test\r\nBcc: another@example.test' }] }, { coach: [{ email: 'copy@example.test', name: '<script>' }] }, { coach: Array(21).fill({ email: 'copy@example.test' }) }, []]) assert.throws(() => helpers.validateDeliveryConfig({ ...config, recipientCc }));
+});
+test('daily and weekly CC stays with its primary recipient and checks suppression for everyone', async () => {
+  const f = fixture({ [`${prefix}/configs`]: [{ id: 'team', data: { ...config, recipientUids: ['coach', 'other'], recipientCc: { coach: [{ email: 'copy@example.test' }, { email: 'coach@example.test' }] } } }],
+    users: [{ id: 'coach', data: { email: 'coach@example.test' } }, { id: 'other', data: { email: 'other@example.test' } }],
+    'pulsecheck-team-memberships': ['coach', 'other', 'athlete'].map(userId => ({ id: `team_${userId}`, data: { userId, teamId: 'team', organizationId: 'org', role: userId === 'athlete' ? 'athlete' : 'coach', status: 'active' } })),
+  });
+  const sent = [];
+  const result = await runner.runReportDeliveries(f.db, monday, { prepare, send: async args => { sent.push(args); return { success: true, messageId: 'test' }; } });
+  assert.equal(result.sent, 4);
+  for (const args of sent) { assert.deepEqual(args.cc, args.toEmail === 'coach@example.test' ? [{ email: 'copy@example.test' }] : []); assert.equal(args.checkAllRecipientSuppression, true); assert.equal(args.failClosedOnSuppressionError, true); }
+  assert.deepEqual(record(f, 'daily').cc, [{ email: 'copy@example.test' }]);
+});
+test('CC removal while preparing is honored before provider delivery', async () => {
+  const f = fixture({ [`${prefix}/configs`]: [{ id: 'team', data: { ...config, recipientCc: { coach: [{ email: 'old@example.test' }] } } }] });
+  await runner.runReportDeliveries(f.db, monday, { prepare: async () => { await f.db.collection(`${prefix}/configs`).doc('team').update({ recipientCc: {} }); return prepare(); }, send: async args => { assert.deepEqual(args.cc, []); return { success: true, messageId: 'test' }; } });
+  assert.equal(record(f, 'daily').status, 'sent');
+});

@@ -11,3 +11,5 @@ Configuration and delivery records live in server-only subcollections beneath `c
 Recent delivery records distinguish sent, failed, suppressed, preparing, and sending; errors appear in Provisioning. Provider acceptance is recorded as sent, not proof of inbox receipt. Retrying after provider acceptance but before local acknowledgement can remain ambiguous; do not manually erase deduplication records to resend.
 
 No mood answers, recovery values, journal text, or Nora conversations appear in these participation reports. Email content and the protected report link use the same saved report.
+
+Administrators can configure CC addresses separately for each selected primary recipient in Provisioning. `recipientCc` maps the primary UID to up to 20 email/name entries and applies to both daily and weekly reports. CC recipients receive the report email content; being copied does not grant dashboard or secure report-link access. All destinations are checked for suppression; a suppression blocks that entire email copy and is recorded in delivery history. CC changes apply to future unsent reports, without resending accepted reports.

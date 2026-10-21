@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!(await db.collection('pulsecheck-teams').doc(teamId).get()).exists) return res.status(404).json({ error: 'Team not found.' });
     const configRef = db.collection('coach-team-insight-reports').doc('delivery').collection('configs').doc(teamId);
     if (req.method === 'POST') {
-      const allowed = new Set(['teamId', 'dailyEnabled', 'weeklyEnabled', 'timeZone', 'sendHour', 'startDate', 'recipientUids']);
+      const allowed = new Set(['teamId', 'dailyEnabled', 'weeklyEnabled', 'timeZone', 'sendHour', 'startDate', 'recipientUids', 'recipientCc']);
       if (Object.keys(req.body || {}).some(key => !allowed.has(key))) return res.status(400).json({ error: 'Unsupported report setting.' });
       const config = validateDeliveryConfig(req.body);
       await resolveReportRecipients(db, teamId, config.recipientUids);
@@ -40,12 +40,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }));
     const recipients = candidates.flat().sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email));
     const stored = saved.data();
-    const config = stored ? { teamId, dailyEnabled: stored.dailyEnabled === true, weeklyEnabled: stored.weeklyEnabled === true, timeZone: stored.timeZone, sendHour: stored.sendHour, startDate: stored.startDate, recipientUids: stored.recipientUids || [] } : {
+    const config = stored ? { teamId, dailyEnabled: stored.dailyEnabled === true, weeklyEnabled: stored.weeklyEnabled === true, timeZone: stored.timeZone, sendHour: stored.sendHour, startDate: stored.startDate, recipientUids: stored.recipientUids || [], recipientCc: stored.recipientCc || {} } : {
       teamId, dailyEnabled: false, weeklyEnabled: false, timeZone: 'America/New_York', sendHour: 8,
-      startDate: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()), recipientUids: [],
+      startDate: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()), recipientUids: [], recipientCc: {},
     };
     const iso = (value: any): string | null => value?.toDate ? value.toDate().toISOString() : typeof value === 'number' ? new Date(value).toISOString() : typeof value === 'string' ? value : null;
-    const deliveries = deliverySnapshot.docs.map(doc => { const d = doc.data(); return { id: doc.id, kind: d.kind, reportDate: d.reportDate, status: d.status, recipientEmail: d.recipientEmail || null, lastError: d.lastError || null, sentAt: iso(d.sentAt), updatedAt: iso(d.updatedAt) }; }).sort((a, b) => (b.updatedAt || b.sentAt || '').localeCompare(a.updatedAt || a.sentAt || '')).slice(0, 10);
+    const deliveries = deliverySnapshot.docs.map(doc => { const d = doc.data(); return { id: doc.id, kind: d.kind, reportDate: d.reportDate, status: d.status, recipientEmail: d.recipientEmail || null, cc: d.cc || [], lastError: d.lastError || null, sentAt: iso(d.sentAt), updatedAt: iso(d.updatedAt) }; }).sort((a, b) => (b.updatedAt || b.sentAt || '').localeCompare(a.updatedAt || a.sentAt || '')).slice(0, 10);
     return res.status(200).json({ config, recipients, deliveries });
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : 'Unable to manage report delivery.' });

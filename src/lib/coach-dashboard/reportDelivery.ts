@@ -3,7 +3,8 @@ import type { firestore } from 'firebase-admin';
 import { loadTeamAccess, validTeamId, visibleAthlete, activeRecord } from './access';
 import { loadDashboard } from './data';
 import type { TeamParticipation } from './types';
-export type DeliveryConfig={teamId:string;dailyEnabled:boolean;weeklyEnabled:boolean;timeZone:string;sendHour:number;startDate:string;recipientUids:string[]};
+export type ReportCcRecipient={email:string;name?:string};
+export type DeliveryConfig={teamId:string;dailyEnabled:boolean;weeklyEnabled:boolean;timeZone:string;sendHour:number;startDate:string;recipientUids:string[];recipientCc?:Record<string,ReportCcRecipient[]>};
 export type ReportKind='daily'|'weekly';
 const DAY=86400000;
 export function validateDeliveryConfig(v:any):DeliveryConfig{
@@ -14,7 +15,22 @@ export function validateDeliveryConfig(v:any):DeliveryConfig{
  if(!Array.isArray(v.recipientUids)||v.recipientUids.length>30||v.recipientUids.some((id:unknown)=>!validTeamId(id)))throw new Error('Choose valid team recipients.');
  const recipientUids=[...new Set<string>(v.recipientUids)];
  if((v.dailyEnabled||v.weeklyEnabled)&&!recipientUids.length)throw new Error('Choose at least one authorized recipient.');
- return {teamId:v.teamId,dailyEnabled:v.dailyEnabled,weeklyEnabled:v.weeklyEnabled,timeZone:v.timeZone,sendHour:v.sendHour,startDate:v.startDate,recipientUids};
+ const recipientCc:Record<string,ReportCcRecipient[]>={};
+ if(v.recipientCc!==undefined){
+  if(!v.recipientCc||typeof v.recipientCc!=='object'||Array.isArray(v.recipientCc))throw new Error('Choose valid CC recipients.');
+  for(const [uid,entries] of Object.entries(v.recipientCc)){
+   if(!recipientUids.includes(uid)||!Array.isArray(entries)||entries.length>20)throw new Error('CC recipients must belong to a selected report recipient, with at most 20 addresses.');
+   const seen=new Set<string>();const normalized:ReportCcRecipient[]=[];
+   for(const entry of entries){
+    if(!entry||typeof entry!=='object'||Object.keys(entry).some(key=>!['email','name'].includes(key))||typeof entry.email!=='string'||entry.email.length>254||! /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$/.test(entry.email.trim()))throw new Error('Enter valid CC email addresses.');
+    if(entry.name!==undefined&&(typeof entry.name!=='string'||entry.name.length>120||/[<>\x00-\x1f\x7f]/.test(entry.name)))throw new Error('Enter a valid CC display name.');
+    const email=entry.email.trim().toLowerCase(),name=entry.name?.trim();
+    if(!seen.has(email)){normalized.push({email,...(name?{name}:{})});seen.add(email);}
+   }
+   if(normalized.length)recipientCc[uid]=normalized;
+  }
+ }
+ return {teamId:v.teamId,dailyEnabled:v.dailyEnabled,weeklyEnabled:v.weeklyEnabled,timeZone:v.timeZone,sendHour:v.sendHour,startDate:v.startDate,recipientUids,recipientCc};
 }
 export async function resolveReportRecipients(db:firestore.Firestore,teamId:string,uids:string[]){
  const results=[];
