@@ -8,7 +8,7 @@ export const createDeveloperDocsUnlockHandler = (dependencies: { db?: any } = {}
   // Ordinary browser forms work even before client JavaScript loads or after autofill.
   const nativeForm = String(req.headers?.['content-type'] || '').split(';')[0].trim().toLowerCase() === 'application/x-www-form-urlencoded';
   const respond = (status:number, error:string, code:string) => {
-    if (nativeForm) { res.setHeader('Location', `/developer/api/${slug}?accessError=${code}`); res.statusCode = 303; return res.end(); }
+    if (nativeForm) { res.setHeader('Location', `/developer/api/${slug}?accessError=${code}`); return res.status(303).end(); }
     return res.status(status).json({ error });
   };
   try { await ensureDeveloperDocsRuntimeConfig(); } catch { return respond(503, 'Documentation access is temporarily unavailable.', 'unavailable'); }
@@ -20,7 +20,7 @@ export const createDeveloperDocsUnlockHandler = (dependencies: { db?: any } = {}
     if (!await consumeDeveloperDocsAttempt(db, slug, address)) { res.setHeader('Retry-After', '900'); return respond(429, 'Too many attempts. Try again later.', 'rate_limited'); }
     if (!developerDocsPasswordValid(req.body.password)) return respond(401, 'Incorrect password.', 'incorrect');
     res.setHeader('Set-Cookie', developerDocsCookie(slug));
-    if (nativeForm) { res.setHeader('Location', `/developer/api/${slug}`); res.statusCode = 303; return res.end(); }
+    if (nativeForm) { res.setHeader('Location', `/developer/api/${slug}`); return res.status(303).end(); }
     return res.status(200).json({ success: true });
   } catch { return respond(503, 'Documentation access is temporarily unavailable.', 'unavailable'); }
 };

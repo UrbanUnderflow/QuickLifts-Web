@@ -332,6 +332,8 @@ export function createFirebaseNextApiHandler(
           headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
           body: JSON.stringify({ error: "invalid_json" }),
         }; }
+      } else if (matchedEntry.pattern === "/api/developer/docs/[slug]/unlock" && contentType.split(";")[0].trim() === "application/x-www-form-urlencoded") {
+        scopedBody = Object.fromEntries(new URLSearchParams(raw.toString("utf8")));
       } else scopedBody = raw.length ? raw.toString("utf8") : undefined;
     }
     const params = matchRoutePattern(matchedEntry.pattern, originalPath) || {};

@@ -90,3 +90,80 @@ for (const route of ['/api/evidence-journal', '/api/evidence-journal/sharing', '
     assert.ok(toml.includes(`from = "${route}"\n  to = "/.netlify/functions/firebase-next-api?originalPath=${route}"\n  status = 200\n  force = true`));
   });
 }
+
+function loadDocsModule(relative, cache = {}) {
+  const filename = path.resolve(root, relative);
+  if (cache[filename]) return cache[filename].exports;
+  const module = { exports: {} };
+  cache[filename] = module;
+  const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
+  const req = name => {
+    if (name.endsWith('/partner-runtime-config')) return { ensurePartnerRuntimeConfig: async () => {} };
+    if (name.startsWith('.')) return loadDocsModule(path.resolve(path.dirname(filename), `${name}.ts`), cache);
+    return require(name);
+  };
+  new Function('require', 'module', 'exports', code)(req, module, module.exports);
+  return module.exports;
+}
+const formEvent = (route, body, encoded = false) => ({ ...event(route, body, encoded), headers: { 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8' } });
+
+test('actual docs unlock through bridge accepts native raw/base64 forms and preserves redirects and cookies', async () => {
+  const keys = ['DEVELOPER_DOCS_PASSWORD_HASH', 'DEVELOPER_DOCS_PASSWORD_SALT', 'DEVELOPER_DOCS_COOKIE_SECRET'];
+  const prior = Object.fromEntries(keys.map(key => [key, process.env[key]]));
+  const password = 'Synthetic + & é Password';
+  const access = loadDocsModule('src/lib/systemOverviewShareAccess.ts');
+  const hashed = access.createPasscodeHash(password);
+  Object.assign(process.env, { DEVELOPER_DOCS_PASSWORD_HASH: hashed.hash, DEVELOPER_DOCS_PASSWORD_SALT: hashed.salt, DEVELOPER_DOCS_COOKIE_SECRET: 'synthetic-docs-bridge-cookie-secret-only' });
+  const rows = new Map();
+  const db = { collection: () => ({ doc: key => ({ key }) }), runTransaction: fn => fn({ get: async ref => ({ data: () => rows.get(ref.key) }), set: (ref, value) => rows.set(ref.key, value) }) };
+  try {
+    const unlock = loadDocsModule('src/pages/api/developer/docs/[slug]/unlock.ts').createDeveloperDocsUnlockHandler({ db });
+    const helper = loadDocsModule('src/lib/developerDocsServer.ts');
+    const bridge = loadBridge().createFirebaseNextApiHandler([{ pattern: '/api/developer/docs/[slug]/unlock', loadHandler: async () => ({ default: unlock }) }]);
+    for (const slug of ['auntedna', 'athleticmind-snapshots', 'clinical-bridge']) {
+      const route = `/api/developer/docs/${slug}/unlock`;
+      for (const encoded of [false, true]) {
+        const success = await bridge(formEvent(route, new URLSearchParams({ password, next: 'https://untrusted.invalid' }).toString(), encoded));
+        assert.equal(success.statusCode, 303);
+        assert.equal(success.headers.Location, `/developer/api/${slug}`);
+        assert.equal(success.body, '');
+        assert.match(success.headers['Set-Cookie'], /HttpOnly/);
+        const cookie = success.headers['Set-Cookie'].split(';')[0].split('=')[1];
+        assert.equal(helper.developerDocsAuthorized(slug, cookie), true);
+        for (const [value, code] of [['wrong', 'incorrect'], ['', 'missing']]) {
+          const rejected = await bridge(formEvent(route, new URLSearchParams({ password: value }).toString(), encoded));
+          assert.equal(rejected.statusCode, 303);
+          assert.equal(rejected.headers.Location, `/developer/api/${slug}?accessError=${code}`);
+          assert.equal(rejected.headers['Set-Cookie'], undefined);
+        }
+      }
+    }
+  } finally {
+    for (const key of keys) if (prior[key] === undefined) delete process.env[key]; else process.env[key] = prior[key];
+  }
+});
+
+test('native docs form decoding preserves 8192-byte limit before handler loading', async () => {
+  for (const encoded of [false, true]) {
+    const bridge = loadBridge();
+    const route = '/api/developer/docs/auntedna/unlock';
+    const atLimit = 'password=' + 'x'.repeat(8192 - 9);
+    assert.equal((await bridge.handler(formEvent(route, atLimit, encoded))).statusCode, 200);
+    const imports = bridge.imports.length;
+    assert.equal((await bridge.handler(formEvent(route, atLimit + 'x', encoded))).statusCode, 413);
+    assert.equal(bridge.imports.length, imports);
+  }
+});
+
+test('native form decoding is restricted to docs unlock routes', async () => {
+  for (const route of ['/api/developer/partner/auntedna/login', '/api/admin/partner-api-keys', '/api/developer/access-requests', '/api/evidence-journal', '/api/admin/group-meet']) {
+    for (const encoded of [false, true]) {
+      const bridge = loadBridge();
+      const response = await bridge.handler(formEvent(route, 'password=synthetic%2Bvalue', encoded));
+      assert.equal(response.statusCode, 200);
+      const payload = JSON.parse(response.body);
+      if (route === '/api/admin/group-meet' && encoded) assert.equal(payload.isBuffer, true);
+      else assert.equal(payload.body, 'password=synthetic%2Bvalue');
+    }
+  }
+});
