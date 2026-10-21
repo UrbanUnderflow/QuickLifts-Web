@@ -507,7 +507,7 @@
 
 [functions]
   directory = "netlify/functions"
-  included_files = ["netlify/functions/**"]
+  included_files = ["netlify/functions/*", "netlify/functions/!(lib)/**", "netlify/functions/lib/*", "netlify/functions/lib/!(clay-skill-style)/**"]
   node_bundler = "esbuild"
 
 [functions.nora-red-team-run-background]
@@ -783,25 +783,43 @@
   status = 200
   force = true
 
+# Keep the native image decoder and its Linux binaries in each Clay function.
+[functions.pulsecheck-clay-self]
+  node_bundler = "nft"
+  external_node_modules = ["sharp"]
+
+[functions.pulsecheck-clay-self-background]
+  node_bundler = "nft"
+  external_node_modules = ["sharp"]
+
 # Remove abandoned Clay Self reference photos after one hour.
 [functions.pulsecheck-clay-self-cleanup]
   schedule = "15 * * * *"
-
-# Preserve native sharp dependencies for private personalized scene generation.
-[functions.pulsecheck-clay-scenes]
   node_bundler = "nft"
+  external_node_modules = ["sharp"]
+
+# Private personalized skill scenes use traced native image dependencies.
+[functions.pulsecheck-clay-scenes]
+  included_files = ["netlify/functions/lib/clay-skill-style/**"]
+  node_bundler = "nft"
+  external_node_modules = ["sharp"]
 
 [functions.pulsecheck-clay-scenes-background]
+  included_files = ["netlify/functions/lib/clay-skill-style/**"]
   node_bundler = "nft"
+  external_node_modules = ["sharp"]
 
 [functions.pulsecheck-clay-scenes-cleanup]
+  included_files = ["netlify/functions/lib/clay-skill-style/**"]
   node_bundler = "nft"
+  external_node_modules = ["sharp"]
   schedule = "35 * * * *"
 
-# Team-configured coach reports, managed in Provisioning. Local-time gating and dedupe run server-side.
+
+# Team report delivery is configured in Provisioning.
 [functions.scheduled-coach-participation-reports]
   schedule = "*/5 * * * *"
 
-# Permanently decommission organizations after the server-enforced 90-day restore window.
+# Complete organization decommissioning after the 90-day restore window.
 [functions.scheduled-organization-deletion]
   schedule = "*/5 * * * *"
