@@ -5,6 +5,7 @@ const compiled = compileTypeScriptRuntime({ cacheKey: 'report-delivery-admin', e
 const config = { teamId: 'team', dailyEnabled: true, weeklyEnabled: true, timeZone: 'America/New_York', sendHour: 8, startDate: '2026-10-26', recipientUids: ['coach'] };
 async function call(options = {}) {
   const f = createFirestoreAdminMock({ collections: {
+    'coach-team-insight-reports/delivery/configs': options.saved ? [{ id: 'team', data: options.saved }] : [],
     admin: options.notAdmin ? [] : [{ id: 'admin@example.test', data: {} }],
     'pulsecheck-teams': [{ id: 'team', data: {} }],
     'account-closure-jobs': options.closed ? [{ id: 'actor', data: {} }] : [],
@@ -35,4 +36,18 @@ test('admin can persist per-recipient CC mapping', async () => {
   const { f, res } = await call({ patch: { recipientCc } });
   assert.equal(res.statusCode, 200);
   assert.deepEqual(f.getDocument('coach-team-insight-reports/delivery/configs/team').recipientCc, recipientCc);
+});
+
+test('older dashboards preserve saved CCs only for retained primary recipients', async () => {
+  const retained = [{ email: 'copy@example.test' }];
+  const { f, res } = await call({ saved: { ...config, recipientCc: { coach: retained, removed: [{ email: 'removed@example.test' }] } }, patch: { sendHour: 9 } });
+  assert.equal(res.statusCode, 200);
+  const saved = f.getDocument('coach-team-insight-reports/delivery/configs/team');
+  assert.deepEqual(saved.recipientCc, { coach: retained });
+  assert.equal(saved.sendHour, 9);
+});
+test('an explicit empty CC mapping clears previously saved CCs', async () => {
+  const { f, res } = await call({ saved: { ...config, recipientCc: { coach: [{ email: 'copy@example.test' }] } }, patch: { recipientCc: {} } });
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(f.getDocument('coach-team-insight-reports/delivery/configs/team').recipientCc, {});
 });

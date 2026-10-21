@@ -24,9 +24,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'POST') {
       const allowed = new Set(['teamId', 'dailyEnabled', 'weeklyEnabled', 'timeZone', 'sendHour', 'startDate', 'recipientUids', 'recipientCc']);
       if (Object.keys(req.body || {}).some(key => !allowed.has(key))) return res.status(400).json({ error: 'Unsupported report setting.' });
-      const config = validateDeliveryConfig(req.body);
-      await resolveReportRecipients(db, teamId, config.recipientUids);
-      await configRef.set({ ...config, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: actor.uid });
+      const requested = validateDeliveryConfig(req.body);
+      await resolveReportRecipients(db, teamId, requested.recipientUids);
+      const config = await db.runTransaction(async transaction => {
+        const saved = (await transaction.get(configRef)).data();
+        // Older open dashboards omit CC settings. Preserve the latest saved mapping
+        // for retained recipients; an explicit empty mapping still clears all CCs.
+        const recipientCc = Object.prototype.hasOwnProperty.call(req.body, 'recipientCc')
+          ? requested.recipientCc
+          : Object.fromEntries(Object.entries(saved?.recipientCc || {}).filter(([uid]) => requested.recipientUids.includes(uid)));
+        const next = validateDeliveryConfig({ ...requested, recipientCc });
+        transaction.set(configRef, { ...next, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: actor.uid });
+        return next;
+      });
       return res.status(200).json({ config });
     }
     const [saved, memberships, deliverySnapshot] = await Promise.all([
