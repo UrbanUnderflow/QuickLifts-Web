@@ -524,7 +524,7 @@ export interface PulseCheckOrganizationImplementationMetadata {
   notes?: string;
 }
 
-export type PulseCheckAppExperience = { ios: 'standard' | 'clay' };
+export type PulseCheckAppExperience = Partial<Record<'ios' | 'android', 'standard' | 'clay'>>;
 export type PulseCheckProductBrand = 'athleticmind' | 'pulsecheck';
 export type PulseCheckAppBranding = Partial<Record<PulseCheckProductBrand, PulseCheckProductBrand>>;
 

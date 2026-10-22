@@ -3258,7 +3258,11 @@ export const pulseCheckProvisioningService = {
     }
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedId), {
       ...(input.productBrand !== undefined ? { productBrand: validateProductBrand(input.productBrand) } : {}),
-      ...(input.appExperience !== undefined ? { appExperience: normalizeAppExperience(input.appExperience) } : {}),
+      ...(input.appExperience !== undefined ? Object.fromEntries(
+        Object.entries(normalizeAppExperience(input.appExperience))
+          .filter(([platform]) => Object.prototype.hasOwnProperty.call(input.appExperience, platform))
+          .map(([platform, appearance]) => [`appExperience.${platform}`, appearance])
+      ) : {}),
       ...(input.appBranding !== undefined ? { appBranding: normalizeAppBranding(input.appBranding) } : {}),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),

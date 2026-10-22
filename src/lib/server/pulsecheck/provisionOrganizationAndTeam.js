@@ -441,7 +441,7 @@ async function upsertPulseCheckOrganization({ adminApp, input }) {
       productBrand: input.organization.productBrand === undefined
         ? (organizationData?.productBrand || organizationPayload.productBrand)
         : organizationPayload.productBrand,
-      appExperience: input.organization.appExperience === undefined ? resolveAppExperience(organizationData?.appExperience) : organizationPayload.appExperience,
+      appExperience: normalizeAppExperience(input.organization.appExperience, organizationData?.appExperience),
       appBranding: input.organization.appBranding === undefined
         ? (organizationData?.appBranding || organizationPayload.appBranding)
         : organizationPayload.appBranding,
@@ -514,7 +514,7 @@ async function provisionPulseCheckOrganizationAndTeam({ adminApp, input }) {
       productBrand: input.organization.productBrand === undefined
         ? (organizationData?.productBrand || organizationPayload.productBrand)
         : organizationPayload.productBrand,
-      appExperience: input.organization.appExperience === undefined ? resolveAppExperience(organizationData?.appExperience) : organizationPayload.appExperience,
+      appExperience: normalizeAppExperience(input.organization.appExperience, organizationData?.appExperience),
       appBranding: input.organization.appBranding === undefined
         ? (organizationData?.appBranding || organizationPayload.appBranding)
         : organizationPayload.appBranding,
