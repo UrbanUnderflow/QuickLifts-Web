@@ -2009,9 +2009,6 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     if (selectedInviteScopeKind === 'team') {
       return 'Activate this team before sharing athlete invitations.';
     }
-    if (selectedPilotEnrollmentAcceptance?.reason === 'not-started') {
-      return `${detail?.pilot.name || 'This pilot'} has not started, so enrollment is not open yet.`;
-    }
     if (selectedPilotEnrollmentAcceptance?.reason === 'invalid-schedule') {
       return `${detail?.pilot.name || 'This pilot'} needs a valid enrollment schedule before athletes can join.`;
     }

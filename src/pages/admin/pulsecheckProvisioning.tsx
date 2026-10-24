@@ -1,3 +1,5 @@
+import TeamClinicalStaff from '../../components/admin/TeamClinicalStaff';
+import TeamAthleteActivation from '../../components/admin/TeamAthleteActivation';
 import AthleteActivationQR from '../../components/admin/AthleteActivationQR';
 import OrganizationLifecycle from '../../components/admin/OrganizationLifecycle';
 import TeamReportDelivery from '../../components/admin/TeamReportDelivery';
@@ -791,6 +793,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [cohortSubmitting, setCohortSubmitting] = useState(false);
   const [cohortInviteCreatingId, setCohortInviteCreatingId] = useState<string | null>(null);
   const [pilotInviteCreatingId, setPilotInviteCreatingId] = useState<string | null>(null);
+  const [pilotInviteErrors, setPilotInviteErrors] = useState<Record<string, string>>({});
   const [activationCreatingTeamId, setActivationCreatingTeamId] = useState<string | null>(null);
   const [clinicianLinkCreatingProfileId, setClinicianLinkCreatingProfileId] = useState<string | null>(null);
   const [adminLinkCreatingEmail, setAdminLinkCreatingEmail] = useState<string | null>(null);
@@ -2876,6 +2879,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   // pilot with no cohort — for pilots that aren't using cohorts.
   const handleCreatePilotInviteLink = async (pilot: PulseCheckPilot) => {
     setPilotInviteCreatingId(pilot.id);
+    setPilotInviteErrors(previous => ({ ...previous, [pilot.id]: '' }));
     setMessage(null);
 
     try {
@@ -2904,7 +2908,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
       });
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create pilot athlete invite:', error);
-      setMessage({ type: 'error', text: 'Failed to create pilot athlete invite.' });
+      const text = error instanceof Error ? error.message : 'Failed to create pilot athlete invite.';
+      setPilotInviteErrors(previous => ({ ...previous, [pilot.id]: text }));
+      setMessage({ type: 'error', text });
     } finally {
       setPilotInviteCreatingId(null);
     }
@@ -4292,6 +4298,21 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   <div className="pcp-team-body" style={{ display: 'block', marginTop: 12 }}>
                                     <div className="pcp-team-shell">
                                       <div className="pcp-team-grid">
+                                        <CollapsibleCard title="Designated clinical staff"
+                                          open={expandedOrgCardKeys.has(`${team.id}:clinicalstaff`)}
+                                          onToggle={() => toggleOrgCard(`${team.id}:clinicalstaff`)}
+                                          preview="Your own primary and backup contacts. Independent of AuntEdna.">
+                                          {expandedOrgCardKeys.has(`${team.id}:clinicalstaff`) ? <TeamClinicalStaff teamId={team.id} currentRoute={team.defaultEscalationRoute} /> : null}
+                                        </CollapsibleCard>
+                                        <CollapsibleCard title="Athlete activation QR"
+                                          open={expandedOrgCardKeys.has(`${team.id}:activationqr`)}
+                                          onToggle={() => toggleOrgCard(`${team.id}:activationqr`)}
+                                          preview="A reusable team invitation and an explicit app installation choice.">
+                                          <TeamAthleteActivation organizationId={organization.id} teamId={team.id}
+                                            label={`${organization.displayName} · ${team.displayName}`}
+                                            active={organization.status === 'active' && team.status === 'active'}
+                                            createdByUserId={currentUser?.id || ''} createdByEmail={currentUser?.email || ''} />
+                                        </CollapsibleCard>
                                         <CollapsibleCard
                                           title="Coach report delivery"
                                           open={expandedOrgCardKeys.has(`${team.id}:reports`)}
@@ -5579,6 +5600,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                             ? 'Reusable link · enrolls athletes straight into the pilot'
                                                             : 'Create a reusable link that adds athletes to the pilot without a cohort'}
                                                         </div>
+                                                        {pilotInviteErrors[pilot.id] && <p role="alert" style={{ color: '#9c3025', marginTop: 8 }}>{pilotInviteErrors[pilot.id]}</p>}
                                                       </div>
                                                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                                                         <button

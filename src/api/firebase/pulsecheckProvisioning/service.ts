@@ -1754,7 +1754,7 @@ const removeAthleteFromTeamLocally = async (input: {
 };
 
 async function replaceProvisioningInvite(payload: Record<string, any>, previousRefs: any[], reuse = false, replace = true): Promise<string> {
-  const scope = JSON.stringify([payload.inviteType, payload.teamId, payload.targetEmail?.toLowerCase() || '', payload.teamMembershipRole || '', payload.pilotId || '', payload.cohortId || '', payload.redemptionMode || '', payload.recipientName || '', payload.clinicianProfileId || '', replace ? '' : payload.token]);
+  const scope = JSON.stringify([payload.inviteType, payload.teamId, payload.targetEmail?.toLowerCase() || '', payload.teamMembershipRole || '', payload.pilotId || '', payload.cohortId || '', payload.redemptionMode || '', payload.recipientName || '', payload.clinicianProfileId || '', replace ? '' : payload.token, ...(payload.distributionBrand ? [payload.distributionBrand] : [])]);
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(scope));
   const pointerKey = Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
   return replaceInviteAtomically({ runTransaction: (body: any) => runTransaction(db, body),
@@ -3258,7 +3258,11 @@ export const pulseCheckProvisioningService = {
     }
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedId), {
       ...(input.productBrand !== undefined ? { productBrand: validateProductBrand(input.productBrand) } : {}),
-      ...(input.appExperience !== undefined ? { appExperience: normalizeAppExperience(input.appExperience) } : {}),
+      ...(input.appExperience !== undefined ? Object.fromEntries(
+        Object.entries(normalizeAppExperience(input.appExperience))
+          .filter(([platform]) => Object.prototype.hasOwnProperty.call(input.appExperience, platform))
+          .map(([platform, appearance]) => [`appExperience.${platform}`, appearance])
+      ) : {}),
       ...(input.appBranding !== undefined ? { appBranding: normalizeAppBranding(input.appBranding) } : {}),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
@@ -3723,6 +3727,7 @@ export const pulseCheckProvisioningService = {
         (link.organizationId || '') === normalizedOrganizationId &&
         (link.teamId || '') === normalizedTeamId &&
         (link.teamMembershipRole || '') === normalizedRole &&
+        (link.distributionBrand || '') === (input.distributionBrand || '') &&
         normalizeEmail(link.targetEmail || '') === normalizedTargetEmail &&
         (
           normalizedTargetEmail ||
@@ -3793,13 +3798,11 @@ export const pulseCheckProvisioningService = {
       const pilotEnrollmentAcceptance = resolvePulseCheckPilotEnrollmentAcceptance(pilotData);
       if (!pilotEnrollmentAcceptance.acceptsEnrollment) {
         const reasonMessage =
-          pilotEnrollmentAcceptance.reason === 'not-started'
-            ? 'has not started yet'
-            : pilotEnrollmentAcceptance.reason === 'ended'
-              ? 'has ended'
-              : pilotEnrollmentAcceptance.reason === 'invalid-schedule'
-                ? 'has an invalid schedule'
-                : 'is not active';
+          pilotEnrollmentAcceptance.reason === 'ended'
+            ? 'has ended'
+            : pilotEnrollmentAcceptance.reason === 'invalid-schedule'
+              ? 'has an invalid schedule'
+              : 'is not active';
         throw new Error(`The invite pilot ${reasonMessage} and cannot accept enrollment.`);
       }
     }
@@ -3852,10 +3855,12 @@ export const pulseCheckProvisioningService = {
           cohortName: normalizeString(input.cohortName),
           imageUrl: previewImageUrl,
           productBrand: organizationData.productBrand,
+          distributionBrand: input.distributionBrand,
         });
 
     const payload = {
       inviteType: 'team-access',
+      ...(input.distributionBrand ? { distributionBrand: input.distributionBrand } : {}),
       ...(normalizedRole === 'athlete' && redemptionMode === 'general' && !normalizedTargetEmail ? { activationCode: token.replace(/-/g, '').slice(0, 16).toUpperCase() } : {}),
       status: 'active',
       redemptionMode,

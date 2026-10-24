@@ -27,12 +27,15 @@ export function ProductConfigurationFields({ value, onChange, disabled = false }
       </label>)}
     </div>
     <p style={{ fontSize: 13 }}>App branding takes effect after the athlete joins this program. Branding does not change care routing or staff permissions.</p>
-    <label className="pcp-fld"><span className="pcp-flbl">iOS app appearance</span>
-      <select className="pcp-finp pcp-select" value={value.appExperience?.ios || 'standard'} onChange={event => onChange({ ...value, appExperience: { ios: event.target.value as 'standard' | 'clay' } })}>
-        <option value="standard">Standard</option><option value="clay">Clay</option>
-      </select>
-    </label>
-    <p style={{ fontSize: 13 }}>Choose the visual experience for members using the iOS app.</p>
+    <div className="pcp-fg">
+      {(['ios', 'android'] as const).map(platform => <label className="pcp-fld" key={platform}>
+        <span className="pcp-flbl">{platform === 'ios' ? 'iOS' : 'Android'} app appearance</span>
+        <select className="pcp-finp pcp-select" value={value.appExperience?.[platform] || 'standard'} onChange={event => onChange({ ...value, appExperience: { ...value.appExperience, [platform]: event.target.value as 'standard' | 'clay' } })}>
+          <option value="standard">Standard</option><option value="clay">Clay</option>
+        </select>
+      </label>)}
+    </div>
+    <p style={{ fontSize: 13 }}>Choose each platform’s visual experience independently. Appearance does not change branding, permissions, or the support pathway.</p>
   </fieldset>;
 }
 
@@ -42,7 +45,7 @@ export default function ProgramProductConfiguration({ configuration, onSave }: {
   const [value, setValue] = useState(configuration);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
-  useEffect(() => { setValue(configuration); }, [configuration.productBrand, configuration.appBranding?.pulsecheck, configuration.appBranding?.athleticmind, configuration.appExperience?.ios]);
+  useEffect(() => { setValue(configuration); }, [configuration.productBrand, configuration.appBranding?.pulsecheck, configuration.appBranding?.athleticmind, configuration.appExperience?.ios, configuration.appExperience?.android]);
   return <section style={{ padding: 20, marginBottom: 20, border: '1px solid rgba(128,128,128,.3)', borderRadius: 16 }}>
     <h3>Product and app branding</h3>
     <ProductConfigurationFields value={value} onChange={next => { setValue(next); setStatus(''); }} disabled={saving} />

@@ -35,3 +35,13 @@ test('AthleticMind rejects PulseCheck store listings and template, accepts confi
   delete process.env.NEXT_PUBLIC_ATHLETICMIND_IOS_APP_STORE_URL;
   delete process.env.NEXT_PUBLIC_ATHLETICMIND_ANDROID_PLAY_STORE_URL;
 });
+
+test('explicit temporary installation override retains the invitation token', () => {
+  const link = new URL(buildPulseCheckTeamInviteOneLink({
+    token: 'umes-golf-synthetic', role: 'athlete', productBrand: 'athleticmind',
+    distributionBrand: 'pulsecheck', fallbackPath: '/PulseCheck/team-invite/umes-golf-synthetic',
+  }));
+  assert.equal(link.hostname, 'pulsecheckapp.onelink.me');
+  assert.equal(link.searchParams.get('deep_link_sub2'), 'umes-golf-synthetic');
+  assert.equal(link.searchParams.get('inviteToken'), 'umes-golf-synthetic');
+});

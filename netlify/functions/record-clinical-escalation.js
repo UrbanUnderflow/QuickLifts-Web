@@ -221,7 +221,8 @@ async function runIncident({ db, decoded, body, email = sendBrevoTransactionalEm
   if (decoded.uid !== athleteUserId && !isAdminClaim(decoded)) return json(403, { error: 'You may only record your own safety event.' });
   const scope = await athleteScope(db, athleteUserId, teamId);
   if (body.organizationId && body.organizationId !== scope.organizationId) return json(403, { error: 'Organization does not match current membership.' });
-  const hotlineOnly = scope.organization.productBrand === 'pulsecheck';
+  // A program may temporarily use athlete-initiated 988 while clinical coverage is prepared.
+  const hotlineOnly = scope.organization.productBrand === 'pulsecheck' || scope.team.defaultEscalationRoute === 'hotline';
   const clinician = hotlineOnly ? null : await resolveDesignatedClinician(db, teamId, scope, athleteUserId);
   if (!hotlineOnly && !clinician) return json(409, { error: 'No active designated clinician covers this athlete.' });
   const detectedAt = Number.isFinite(Number(body.detectedAt)) ? Number(body.detectedAt) : now();
@@ -239,7 +240,7 @@ async function runIncident({ db, decoded, body, email = sendBrevoTransactionalEm
     const previous = snap.exists ? snap.data() : null;
     if ((await tx.get(db.collection('account-closure-jobs').doc(decoded.uid))).exists) throw Object.assign(new Error('Account closure is in progress.'), { statusCode: 403 });
     const currentScope = await athleteScope(db, athleteUserId, teamId, ref => tx.get(ref));
-    if (currentScope.organizationId !== scope.organizationId || currentScope.organization.productBrand !== scope.organization.productBrand) throw Object.assign(new Error('Program scope changed.'), { statusCode: 409 });
+    if (currentScope.organizationId !== scope.organizationId || currentScope.organization.productBrand !== scope.organization.productBrand || currentScope.team.defaultEscalationRoute !== scope.team.defaultEscalationRoute) throw Object.assign(new Error('Program scope changed.'), { statusCode: 409 });
     if (clinician) {
       const currentResponder = await tx.get(db.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(clinician.membershipId));
       if (!currentResponder.exists || !responderAllowed(currentResponder.data(), currentScope, athleteUserId, teamId)) throw Object.assign(new Error('Responder access changed.'), { statusCode: 403 });
@@ -299,7 +300,8 @@ async function runIncident({ db, decoded, body, email = sendBrevoTransactionalEm
       // Revalidate current tenant/responder authorization immediately before disclosure.
       const freshScope = await athleteScope(db, athleteUserId, teamId);
       const fresh = await db.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(clinician.membershipId).get();
-      if (!fresh.exists || !responderAllowed(fresh.data(), freshScope, athleteUserId, teamId)
+      if (freshScope.organization.productBrand === 'pulsecheck' || freshScope.team.defaultEscalationRoute === 'hotline'
+        || !fresh.exists || !responderAllowed(fresh.data(), freshScope, athleteUserId, teamId)
         || normalizeString(fresh.data().email || fresh.data().workEmail).toLowerCase() !== clinician.email
         || (normalizeString(fresh.data().phone) || null) !== clinician.phone) throw Object.assign(new Error('Responder access changed.'), { statusCode: 403 });
       const acknowledgeUrl = buildAcknowledgeUrl(id);

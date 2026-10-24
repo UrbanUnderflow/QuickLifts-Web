@@ -237,6 +237,7 @@ service cloud.firestore {
         'pulsecheck-push-installations',
         'pulsecheck-morning-checkins',
         'pulsecheck-scorecards',
+        'pulsecheck-team-escalation-settings',
         'pulsecheck-teams',
         'pulsecheck-team-memberships',
         'pulsecheck-daily-assignments',
@@ -3036,6 +3037,9 @@ service cloud.firestore {
     match /pulsecheck-athlete-app-commercialization/{documentId} {
       allow read, create, update, delete: if false;
     }
+
+    // Private clinical contacts are managed only through the authenticated admin API.
+    match /pulsecheck-team-escalation-settings/{document=**} { allow read, write: if false; }
 
     match /pulsecheck-teams/{teamId} {
       allow read: if isAdminUser() || pcHasActiveTeamMembership(teamId);

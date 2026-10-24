@@ -52,3 +52,16 @@ test('legacy OneLink is accepted and malformed input is a 400', () => {
  assert.equal(activationIdentifier('https://fitwithpulse.onelink.me/uT14?inviteToken=token'), 'token');
  for(const input of [null, {}, 'https://fitwithpulse.ai/team-invite/%xx', 'x'.repeat(4097)]) assert.throws(() => activationIdentifier(input), {code:'CODE_INVALID', status:400});
 });
+
+test('future reporting start permits QR and code preview with exact pilot context', async () => {
+ const d = records();
+ Object.assign(d['pulsecheck-pilots'].pilot, {
+   startAt: new Date('2026-10-28T04:00:00Z'), endAt: new Date('2027-02-15T04:00:00Z'),
+ });
+ for (const identifier of ['token', 'ABC123']) {
+   const result = await resolveActivation(database(d), identifier, new Date('2026-10-24T12:00:00Z'));
+   assert.equal(result.teamId, 'team');
+   assert.equal(result.cohortId, 'cohort');
+ }
+ assert.equal((d['pulsecheck-pilots'].pilot as any).startAt.toISOString(), '2026-10-28T04:00:00.000Z');
+});

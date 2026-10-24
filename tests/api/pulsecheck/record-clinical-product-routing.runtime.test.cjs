@@ -48,6 +48,18 @@ test('PulseCheck uses only resources and safety state, ignores supplied brand', 
  const f=fixture('pulsecheck'); const r=await f.request({productBrand:'athleticmind'});
  assert.equal(r.statusCode,200); assert.equal(body(r).supportRoute,'hotline'); assert.equal(body(r).providerConfirmed,false); assert.equal(f.emails.length,0); assert.equal(f.texts.length,0);
 });
+test('AthleticMind explicit team hotline skips available clinician and draft contact configuration', async () => {
+ const f=fixture(); f.data.get('pulsecheck-teams/team').defaultEscalationRoute='hotline';
+ f.data.set('pulsecheck-team-escalation-settings/team',{status:'draft',primary:{email:'draft@example.test',phone:'+14105550123'}});
+ const r=await f.request({defaultEscalationRoute:'clinician'});
+ assert.equal(r.statusCode,200); assert.equal(body(r).supportRoute,'hotline');
+ assert.equal(f.emails.length,0); assert.equal(f.texts.length,0); assert.equal(body(r).providerConfirmed,false);
+});
+test('PulseCheck remains hotline even with explicit clinician team route', async () => {
+ const f=fixture('pulsecheck'); f.data.get('pulsecheck-teams/team').defaultEscalationRoute='clinician';
+ const r=await f.request(); assert.equal(r.statusCode,200); assert.equal(body(r).supportRoute,'hotline');
+ assert.equal(f.emails.length,0); assert.equal(f.texts.length,0);
+});
 test('AthleticMind routes to current designated clinician with no contact/evidence in response', async () => {
  const f=fixture(); const r=await f.request({evidence:[{label:'secret',excerpt:'private content'}]});
  assert.equal(r.statusCode,200); assert.equal(f.emails.length,1); assert.equal(f.texts.length,1); assert.equal(body(r).clinician,undefined);

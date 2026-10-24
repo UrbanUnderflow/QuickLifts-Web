@@ -24,7 +24,7 @@ const EFFECTIVE_DATE = 'April 8, 2026';
 const quickFacts = [
   {
     title: 'Company-wide baseline policy',
-    body: 'This policy covers Pulse Intelligence Labs services broadly, including Fit With Pulse, Pulse, QuickLifts, PulseCheck, Group Meet, and related pilots, apps, sites, and integrations.',
+    body: 'This policy covers Pulse Intelligence Labs services broadly, including Fit With Pulse, Pulse, QuickLifts, PulseCheck, The Athletic Mind, Group Meet, and related pilots, apps, sites, and integrations.',
   },
   {
     title: 'Supplemental notices still matter',
@@ -40,7 +40,7 @@ const sections: Section[] = [
   {
     title: 'Scope',
     body: [
-      'This Privacy Policy applies to the websites, mobile apps, pilots, beta features, hosted workflows, integrations, and related services offered by Pulse Intelligence Labs, Inc., including Fit With Pulse, Pulse, QuickLifts, PulseCheck, Group Meet, and other products we make available from time to time.',
+      'This Privacy Policy applies to the websites, mobile apps, pilots, beta features, hosted workflows, integrations, and related services offered by Pulse Intelligence Labs, Inc., including Fit With Pulse, Pulse, QuickLifts, PulseCheck, The Athletic Mind, Group Meet, and other products we make available from time to time.',
       'Additional product-specific, pilot-specific, organization-sponsored, or integration-specific notices may also apply. Those supplemental notices explain details for a particular workflow and should be read together with this policy.',
     ],
   },
@@ -207,7 +207,7 @@ const PrivacyPolicy: NextPage<PrivacyPolicyPageProps> = ({ metaData }) => {
           <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">How Pulse Intelligence Labs handles Fit With Pulse and PulseCheck data.</h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-300 sm:text-lg">
             Effective date: {EFFECTIVE_DATE}. This is the company-wide baseline privacy policy for Fit With Pulse, Pulse,
-            QuickLifts, PulseCheck, Group Meet, and related websites, apps, pilots, and hosted workflows.
+            QuickLifts, PulseCheck, The Athletic Mind, Group Meet, and related websites, apps, pilots, and hosted workflows.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href="/terms" className="inline-flex items-center justify-center rounded-full bg-[#E0FE10] px-5 py-3 font-semibold text-black transition hover:bg-lime-300">

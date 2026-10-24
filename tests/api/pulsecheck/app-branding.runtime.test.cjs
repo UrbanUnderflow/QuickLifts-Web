@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createFirestoreAdminMock } = require('../firebase-admin/_runtimeHarness.cjs');
 const { loadAppBranding, createHandler } = require('../../../netlify/functions/get-pulsecheck-app-branding');
-const defaults = {appExperience:{ios:'standard'},appBranding:{pulsecheck:'pulsecheck',athleticmind:'athleticmind'}};
+const defaults = {appExperience:{ios:'standard',android:'standard'},appBranding:{pulsecheck:'pulsecheck',athleticmind:'athleticmind'}};
 function fixture({members,teams,orgs} = {}) {
   return createFirestoreAdminMock({collections:{
     'pulsecheck-team-memberships': members || [{id:'m',data:{userId:'user',teamId:'team',organizationId:'org',status:'active'}}],
@@ -11,7 +11,7 @@ function fixture({members,teams,orgs} = {}) {
   }}).db;
 }
 test('active organization app override is returned without product or clinical fields', async () => {
-  assert.deepEqual(await loadAppBranding(fixture(),'user'),{appExperience:{ios:'standard'},appBranding:{pulsecheck:'athleticmind',athleticmind:'athleticmind'}});
+  assert.deepEqual(await loadAppBranding(fixture(),'user'),{appExperience:{ios:'standard',android:'standard'},appBranding:{pulsecheck:'athleticmind',athleticmind:'athleticmind'}});
 });
 test('product profile alone never changes app identity', async () => {
   assert.deepEqual(await loadAppBranding(fixture({orgs:[{id:'org',data:{status:'active',productBrand:'athleticmind'}}]}),'user'),defaults);
@@ -41,17 +41,17 @@ test('endpoint requires auth, validates context and returns private no-store res
   const response=await handler(event);
   assert.equal(response.statusCode,200);
   assert.equal(response.headers['Cache-Control'],'no-store');
-  assert.deepEqual(JSON.parse(response.body),{appExperience:{ios:'standard'},appBranding:{pulsecheck:'athleticmind',athleticmind:'athleticmind'}});
+  assert.deepEqual(JSON.parse(response.body),{appExperience:{ios:'standard',android:'standard'},appBranding:{pulsecheck:'athleticmind',athleticmind:'athleticmind'}});
   assert.equal((await createHandler({authorize:async()=>{throw Error('expired')}})(event)).statusCode,401);
 });
 
 test('Clay appearance is independent of branding and requires one verified organization',async()=>{
- const orgs=[{id:'org',data:{status:'active',productBrand:'pulsecheck',appExperience:{ios:'clay'}}}];
- assert.deepEqual((await loadAppBranding(fixture({orgs}),'user','team')).appExperience,{ios:'clay'});
- for(const value of [undefined,{ios:'unknown'},null])assert.deepEqual((await loadAppBranding(fixture({orgs:[{id:'org',data:{status:'active',appExperience:value}}]}),'user')).appExperience,{ios:'standard'});
+ const orgs=[{id:'org',data:{status:'active',productBrand:'pulsecheck',appExperience:{ios:'clay',android:'standard'}}}];
+ assert.deepEqual((await loadAppBranding(fixture({orgs}),'user','team')).appExperience,{ios:'clay',android:'standard'});
+ for(const value of [undefined,{ios:'unknown'},null])assert.deepEqual((await loadAppBranding(fixture({orgs:[{id:'org',data:{status:'active',appExperience:value}}]}),'user')).appExperience,{ios:'standard',android:'standard'});
  const db=fixture({members:[{id:'m',data:{userId:'user',teamId:'team',organizationId:'org',status:'active'}},{id:'n',data:{userId:'user',teamId:'team2',organizationId:'org2',status:'active'}}],teams:[{id:'team',data:{organizationId:'org',status:'active'}},{id:'team2',data:{organizationId:'org2',status:'active'}}],orgs:[...orgs,{id:'org2',data:{status:'active'}}]});
- assert.deepEqual((await loadAppBranding(db,'user')).appExperience,{ios:'standard'});
- assert.deepEqual((await loadAppBranding(db,'user','team')).appExperience,{ios:'clay'});
+ assert.deepEqual((await loadAppBranding(db,'user')).appExperience,{ios:'standard',android:'standard'});
+ assert.deepEqual((await loadAppBranding(db,'user','team')).appExperience,{ios:'clay',android:'standard'});
  await db.collection('account-closure-jobs').doc('user').set({status:'pending'});
  await assert.rejects(loadAppBranding(db,'user','team'),e=>e.statusCode===403);
 });
@@ -59,11 +59,11 @@ function primaryFixture(coachMembers=[{teamId:'team',organizationId:'org',role:'
  const f=createFirestoreAdminMock({collections:{users:[{id:'user',data:{primaryCoachUserId}}],
  'pulsecheck-team-memberships':[{id:'a',data:{userId:'user',teamId:'team',organizationId:'org',role:'athlete',status:'active'}},{id:'b',data:{userId:'user',teamId:'team2',organizationId:'org2',role:'athlete',status:'active'}},...coachMembers.map((m,i)=>({id:`coach-${i}`,data:{userId:'coach',status:'active',...m}}))],
  'pulsecheck-teams':[{id:'team',data:{organizationId:'org',status:'active'}},{id:'team2',data:{organizationId:'org2',status:'active'}}],
- 'pulsecheck-organizations':[{id:'org',data:{status:'active',appExperience:{ios:'clay'},appBranding:{pulsecheck:'athleticmind'}}},{id:'org2',data:{status:'active',appExperience:{ios:'standard'}}}]}});return f;
+ 'pulsecheck-organizations':[{id:'org',data:{status:'active',appExperience:{ios:'clay',android:'standard'},appBranding:{pulsecheck:'athleticmind'}}},{id:'org2',data:{status:'active',appExperience:{ios:'standard',android:'standard'}}}]}});return f;
 }
 test('saved primary coach resolves appearance only across multiple organizations',async()=>{
- const result=await loadAppBranding(primaryFixture().db,'user');assert.deepEqual(result.appExperience,{ios:'clay'});assert.deepEqual(result.appBranding,defaults.appBranding);
- const selected=await loadAppBranding(primaryFixture().db,'user','team2');assert.deepEqual(selected.appExperience,{ios:'standard'});
+ const result=await loadAppBranding(primaryFixture().db,'user');assert.deepEqual(result.appExperience,{ios:'clay',android:'standard'});assert.deepEqual(result.appBranding,defaults.appBranding);
+ const selected=await loadAppBranding(primaryFixture().db,'user','team2');assert.deepEqual(selected.appExperience,{ios:'standard',android:'standard'});
  const titled=primaryFixture([{teamId:'team',organizationId:'org',role:'performance-staff',title:'Head Coach'}]);assert.equal((await loadAppBranding(titled.db,'user')).appExperience.ios,'clay');
 });
 test('missing foreign revoked inactive mismatched or ambiguous primary coach defaults to standard',async()=>{
@@ -75,4 +75,11 @@ test('multiple verified shared teams in one organization remain unambiguous',asy
  await f.db.collection('pulsecheck-teams').doc('team3').set({organizationId:'org',status:'active'});await f.db.collection('pulsecheck-team-memberships').doc('c').set({userId:'user',teamId:'team3',organizationId:'org',role:'athlete',status:'active'});
  assert.equal((await loadAppBranding(f.db,'user')).appExperience.ios,'clay');
  await f.db.collection('pulsecheck-teams').doc('team').set({status:'archived'},{merge:true});await f.db.collection('pulsecheck-teams').doc('team3').set({status:'archived'},{merge:true});assert.equal((await loadAppBranding(f.db,'user')).appExperience.ios,'standard');
+});
+
+test('authorized Android appearance is independent of iOS and defaults for missing data',async()=>{
+ const orgs=[{id:'org',data:{status:'active',productBrand:'pulsecheck',appExperience:{ios:'standard',android:'clay'}}}];
+ assert.deepEqual((await loadAppBranding(fixture({orgs}),'user','team')).appExperience,{ios:'standard',android:'clay'});
+ const legacy=[{id:'org',data:{status:'active',appExperience:{ios:'clay'}}}];
+ assert.deepEqual((await loadAppBranding(fixture({orgs:legacy}),'user')).appExperience,{ios:'clay',android:'standard'});
 });

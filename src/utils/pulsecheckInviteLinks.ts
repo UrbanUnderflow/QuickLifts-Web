@@ -90,6 +90,7 @@ export const buildPulseCheckTeamInviteOneLink = ({
   cohortName,
   imageUrl,
   productBrand,
+  distributionBrand,
 }: {
   token: string;
   fallbackPath: string;
@@ -100,10 +101,12 @@ export const buildPulseCheckTeamInviteOneLink = ({
   cohortName?: string | null;
   imageUrl?: string | null;
   productBrand?: unknown;
+  /** Explicit install destination override; never changes program care or branding. */
+  distributionBrand?: 'pulsecheck' | 'athleticmind';
 }): string => {
-  const app = getNativeAppDistribution(productBrand);
+  const app = getNativeAppDistribution(distributionBrand ?? productBrand);
   // Unconfigured AthleticMind distribution stays on the invite web page. Never
-  // send a university recipient through the PulseCheck store template.
+  // send a university recipient through PulseCheck without an explicit override.
   const brandedFallbackPath = app.brand === 'athleticmind'
     ? fallbackPath.replace('/PulseCheck/team-invite/', '/AthleticMind/team-invite/')
     : fallbackPath;
