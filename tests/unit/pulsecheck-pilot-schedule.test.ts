@@ -175,7 +175,7 @@ test('explicit schedule edits reopen only completed pilots with a non-ended wind
   );
 });
 
-test('accepts enrollment only inside an active pilot schedule window', () => {
+test('accepts active pilot enrollment through the end date', () => {
   const now = new Date('2026-08-24T04:00:00.000Z');
 
   assert.deepEqual(
@@ -204,7 +204,7 @@ test('accepts enrollment only inside an active pilot schedule window', () => {
   );
 });
 
-test('rejects active pilots before their start and after their end', () => {
+test('allows onboarding before the reporting start but rejects ended pilots', () => {
   const now = new Date('2026-08-24T04:00:00.000Z');
 
   assert.deepEqual(
@@ -212,7 +212,7 @@ test('rejects active pilots before their start and after their end', () => {
       { status: 'active', startAt: new Date('2026-08-25T04:00:00.000Z') },
       now
     ),
-    { acceptsEnrollment: false, reason: 'not-started' }
+    { acceptsEnrollment: true, reason: 'accepting' }
   );
   assert.deepEqual(
     resolvePulseCheckPilotEnrollmentAcceptance(
@@ -223,7 +223,7 @@ test('rejects active pilots before their start and after their end', () => {
   );
 });
 
-test('rejects inactive pilots and invalid schedule values', () => {
+test('rejects inactive pilots but start metadata never gates onboarding', () => {
   const now = new Date('2026-08-24T04:00:00.000Z');
 
   for (const status of ['draft', 'paused', 'completed', 'archived', '']) {
@@ -238,7 +238,7 @@ test('rejects inactive pilots and invalid schedule values', () => {
       { status: 'active', startAt: 'not-a-firestore-date' },
       now
     ),
-    { acceptsEnrollment: false, reason: 'invalid-schedule' }
+    { acceptsEnrollment: true, reason: 'accepting' }
   );
   assert.deepEqual(
     resolvePulseCheckPilotEnrollmentAcceptance(
@@ -249,6 +249,11 @@ test('rejects inactive pilots and invalid schedule values', () => {
       },
       now
     ),
-    { acceptsEnrollment: false, reason: 'invalid-schedule' }
+    { acceptsEnrollment: true, reason: 'accepting' }
   );
+});
+
+ test('invalid end dates still block enrollment', () => {
+  assert.deepEqual(resolvePulseCheckPilotEnrollmentAcceptance({status: 'active', endAt: 'invalid'}),
+    {acceptsEnrollment: false, reason: 'invalid-schedule'});
 });

@@ -587,13 +587,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const pilotEnrollmentAcceptance = resolvePulseCheckPilotEnrollmentAcceptance(pilotData);
         if (!pilotEnrollmentAcceptance.acceptsEnrollment) {
           const code: TeamInviteRedemptionErrorCode =
-            pilotEnrollmentAcceptance.reason === 'not-started'
-              ? 'PILOT_ENROLLMENT_NOT_STARTED'
-              : pilotEnrollmentAcceptance.reason === 'ended'
-                ? 'PILOT_ENROLLMENT_ENDED'
-                : pilotEnrollmentAcceptance.reason === 'invalid-schedule'
-                  ? 'PILOT_SCHEDULE_INVALID'
-                  : 'PILOT_INACTIVE';
+            pilotEnrollmentAcceptance.reason === 'ended'
+              ? 'PILOT_ENROLLMENT_ENDED'
+              : pilotEnrollmentAcceptance.reason === 'invalid-schedule'
+                ? 'PILOT_SCHEDULE_INVALID'
+                : 'PILOT_INACTIVE';
           throw teamInviteRedemptionError(code);
         }
       }

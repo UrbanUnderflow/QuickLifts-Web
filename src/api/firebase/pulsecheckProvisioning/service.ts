@@ -3797,9 +3797,7 @@ export const pulseCheckProvisioningService = {
       const pilotEnrollmentAcceptance = resolvePulseCheckPilotEnrollmentAcceptance(pilotData);
       if (!pilotEnrollmentAcceptance.acceptsEnrollment) {
         const reasonMessage =
-          pilotEnrollmentAcceptance.reason === 'not-started'
-            ? 'has not started yet'
-            : pilotEnrollmentAcceptance.reason === 'ended'
+          pilotEnrollmentAcceptance.reason === 'ended'
               ? 'has ended'
               : pilotEnrollmentAcceptance.reason === 'invalid-schedule'
                 ? 'has an invalid schedule'

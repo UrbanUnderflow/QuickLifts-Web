@@ -12,7 +12,6 @@ type TimestampLike = {
 export type PulseCheckPilotEnrollmentAcceptanceReason =
   | 'accepting'
   | 'inactive'
-  | 'not-started'
   | 'ended'
   | 'invalid-schedule';
 
@@ -97,9 +96,9 @@ export const shouldReopenPulseCheckPilotAfterScheduleUpdate = (
 };
 
 /**
- * One enrollment gate shared by invite issuance and redemption. Active legacy
- * pilots without dates remain open, while an explicitly scheduled pilot only
- * accepts enrollment from its start instant through its end instant.
+ * Shared by invitation creation, activation previews, and redemption. Start
+ * dates are reporting metadata, never an onboarding gate. Lifecycle status and
+ * the end date still determine whether enrollment is open.
  */
 export const resolvePulseCheckPilotEnrollmentAcceptance = (
   pilot: PulseCheckPilotEnrollmentSchedule,
@@ -110,20 +109,14 @@ export const resolvePulseCheckPilotEnrollmentAcceptance = (
   }
 
   const now = toPulseCheckPilotScheduleDate(nowValue);
-  const startAt = toPulseCheckPilotScheduleDate(pilot.startAt);
   const endAt = toPulseCheckPilotScheduleDate(pilot.endAt);
   if (
     !now ||
-    (hasScheduleValue(pilot.startAt) && !startAt) ||
-    (hasScheduleValue(pilot.endAt) && !endAt) ||
-    (startAt && endAt && startAt.getTime() > endAt.getTime())
+    (hasScheduleValue(pilot.endAt) && !endAt)
   ) {
     return { acceptsEnrollment: false, reason: 'invalid-schedule' };
   }
 
-  if (startAt && now.getTime() < startAt.getTime()) {
-    return { acceptsEnrollment: false, reason: 'not-started' };
-  }
   if (endAt && now.getTime() > endAt.getTime()) {
     return { acceptsEnrollment: false, reason: 'ended' };
   }
