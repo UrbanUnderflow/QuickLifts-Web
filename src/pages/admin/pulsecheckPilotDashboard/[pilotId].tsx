@@ -1,3 +1,4 @@
+import PilotLiveOnboarding from '../../../components/admin/pilot-dashboard/PilotLiveOnboarding';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -96,7 +97,7 @@ import type {
   PulseCheckPilotHypothesis,
 } from '../../../api/firebase/pulsecheckPilotDashboard/types';
 
-type DetailTab = 'overview' | 'people' | 'activity-outcomes' | 'operations' | 'insights-research' | 'manage-pilot';
+type DetailTab = 'onboarding' | 'overview' | 'people' | 'activity-outcomes' | 'operations' | 'insights-research' | 'manage-pilot';
 type InsightSection = 'learning' | 'hypotheses' | 'reports';
 type PilotRosterView = 'participants' | 'eligible';
 type PilotScheduleLengthDraft = '14' | '30' | '60' | '90' | 'custom';
@@ -174,6 +175,7 @@ const CONFIDENCE_OPTIONS: Array<{ value: PilotHypothesisConfidenceLevel; label: 
 
 const tabs: Array<{ id: DetailTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
+  { id: 'onboarding', label: 'Onboarding' },
   { id: 'people', label: 'People' },
   { id: 'activity-outcomes', label: 'Activity & outcomes' },
   { id: 'operations', label: 'Operations' },
@@ -4156,6 +4158,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
                     </div>
                   ) : null}
+
+              {activeTab === 'onboarding' ? <PilotLiveOnboarding detail={detail} demo={demoModeEnabled} /> : null}
 
               {(['overview', 'people', 'activity-outcomes', 'operations', 'manage-pilot'] as DetailTab[]).includes(activeTab) ? (
                 <div className="mt-6 space-y-6">
