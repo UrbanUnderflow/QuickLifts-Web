@@ -1,4 +1,4 @@
-/** Draft contact planning only. Activation requires verified responders and delivery setup. */
+/** Private, administrator-owned clinical notification contacts. */
 export type ClinicalContact = { name: string; email: string; phone: string };
 export type DesignatedClinicalStaff = {
   primary: ClinicalContact;
@@ -7,7 +7,7 @@ export type DesignatedClinicalStaff = {
   coverage: { mode: 'scheduled' | 'always'; days: number[]; start: string; end: string };
   acknowledgmentMinutes: number;
 };
-export type SavedClinicalStaff = DesignatedClinicalStaff & { status: 'draft'; revision: number };
+export type SavedClinicalStaff = DesignatedClinicalStaff & { status: 'draft' | 'active'; revision: number };
 export const emptyClinicalStaff = (): DesignatedClinicalStaff => ({
   primary: { name: '', email: '', phone: '' }, backup: null, timeZone: 'America/New_York',
   coverage: { mode: 'scheduled', days: [1, 2, 3, 4, 5], start: '09:00', end: '17:00' }, acknowledgmentMinutes: 5,

@@ -8,7 +8,7 @@ test('sends only audited health fields and mirrors only references',async()=>{
  const receipt=await submitAuntEdnaBaseline(input,'test-athlete',config,async(url,opts)=>{
  assert.equal(url,'https://partner-api.auntedna.ai/partner/athletes/test-athlete/baseline');assert.equal(opts.headers['X-Pulse-Integration'],'true');assert.equal(opts.redirect,'error');
  const body=JSON.parse(opts.body);assert.equal(body.ownershipVersion,'cau-routing-v3');assert.equal(body.universityCode,'SANDBOX');assert.equal(Object.keys(body.fields).length,19);assert.equal(body.fields['cau-starting-point-46'],undefined);return Response.json(envelope);
- });const mirror=baselineMirror(input,receipt);assert.equal(Object.keys(mirror.fields).length,5);assert.equal(JSON.stringify(mirror).includes('Less than 5 hours'),false);assert.equal(mirror.auntEdnaReferences['cau-starting-point-39'].baselineId,'baseline');
+ });const mirror=baselineMirror(input,receipt);assert.equal(Object.keys(mirror.fields).length,1);assert.equal(JSON.stringify(mirror).includes('Less than 5 hours'),false);assert.equal(mirror.auntEdnaReferences['cau-starting-point-39'].baselineId,'baseline');
 });
 test('rejects crossed environments before transmission',async()=>{
  await assert.rejects(submitAuntEdnaBaseline(input,'test-athlete',{...config,universityCode:'CAU'},()=>{throw Error('must not call')}),/environment/);

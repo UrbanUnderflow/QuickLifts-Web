@@ -1,3 +1,4 @@
+import { healthBaselineConsentDocuments } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
 import { isHealthBaselineEnabled } from '../../api/firebase/pulsecheckProvisioning/healthBaselinePolicy';
 import { useRouter } from 'next/router';
 import CoachSurveyUserTestResults from '../../components/admin/CoachSurveyUserTestResults';
@@ -5062,6 +5063,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                       </div>
                                       {(() => {
                                         const consentDraft = getTeamConsentDraft(team);
+                                        const effectiveConsentCount = healthBaselineConsentDocuments(consentDraft, team, organization, organization.configuredProductBrand).filter(doc => doc.category !== 'staff').length;
                                         const consentDirty = isTeamConsentDirty(team);
                                         const consentSaving = teamConsentSavingId === team.id;
                                         const consentInputStyle: React.CSSProperties = {
@@ -5106,14 +5108,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             title="Consent Forms"
                                             open={teamConsentCardOpen}
                                             onToggle={() => toggleOrgCard(`${team.id}:consent`)}
-                                            preview={`${consentDraft.length} consent${consentDraft.length === 1 ? '' : 's'} athletes accept at intake. Open to edit.`}
+                                            preview={`${effectiveConsentCount} agreement${effectiveConsentCount === 1 ? '' : 's'} athletes review when joining. Open to edit.`}
                                             className="pcp-card pcp-tracker-card"
                                           >
                                             <div className="pcp-tracker-copy" style={{ marginTop: 0 }}>
                                               Choose the audience and purpose for each set of terms. Athletes decide separately about participation, health authorization, and research. Staff see staff responsibilities. A new version requires a new decision. This editor changes terms; participants make their own decisions. Health authorization is included automatically while the health baseline is on; use the separate health baseline setting to turn that step off.
                                             </div>
                                             <div style={{ marginTop: 12, fontSize: 13, color: '#22302e' }}>
-                                              {consentDraft.length} consent{consentDraft.length === 1 ? '' : 's'}
+                                              {effectiveConsentCount} active agreement{effectiveConsentCount === 1 ? '' : 's'} · {consentDraft.length} saved form{consentDraft.length === 1 ? '' : 's'}
                                               {consentDirty ? <span style={{ color: '#65716c' }}> · unsaved changes</span> : null}
                                             </div>
                                             <div style={{ marginTop: 12 }}>

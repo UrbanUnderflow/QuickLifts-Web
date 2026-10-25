@@ -1,6 +1,5 @@
-import { healthBaselineConsentDocuments } from '../../../../api/firebase/pulsecheckProvisioning/consentPolicy';
-import { isHealthBaselineEnabled } from '../../../../api/firebase/pulsecheckProvisioning/healthBaselinePolicy';
-import { hasCompletedEntryOnboarding, hasCompletedRequiredConsents } from '../../../../api/firebase/pulsecheckProvisioning/accessState';
+import { baselineHealthContext, saveBaselineHealthDecision } from '../../../../lib/questionnaires/cau-health';
+import { resolveBaselineConnection } from '../../../../lib/questionnaires/auntedna-connection';
 import { resolveStandardBaselineAssignment } from '../../../../lib/questionnaires/standard-assignment';
 import { createHash } from 'crypto';
 import { deriveAdministrativeAnswers, applyAdministrativeAnswers } from '../../../../lib/questionnaires/cau-derived';
@@ -36,64 +35,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Completed historical baselines remain completed; unfinished drafts start in a separate namespace.
     const previous = await Promise.all(PREVIOUS_QUESTIONNAIRE_VERSIONS.map(version => collection.doc(`baseline_${user.uid}_${version}`).get()));
     const completed = [existing, legacy, ...previous].some(snapshot => baselineComplete(snapshot.data(), user.uid));
-    let healthSharingAllowed = false;
-    let healthBaselineEnabled = true;
-    let healthAuthorizationRequired = false;
-    let healthAuthorizationUrl: string | null = null;
-    let healthAuthorizationDecision: 'accepted' | 'declined' | 'revoked' | 'pending' | 'disabled' = 'pending';
-    let sportName = 'Sport';
-    if (active && assignment?.scope === 'individual') {
-      const profile = (await db.collection('users').doc(user.uid).get()).data();
-      sportName = typeof profile?.sport === 'string' && profile.sport.trim() ? profile.sport.trim().slice(0,120) : 'Sport';
-    }
-    if (active && assignment?.teamId) {
-      const memberRef = db.collection('pulsecheck-team-memberships').doc(assignment.teamMembershipId || `${assignment.teamId}_${user.uid}`);
-      const [memberSnap, teamSnap, evidence] = await Promise.all([
-        memberRef.get(), db.collection('pulsecheck-teams').doc(assignment.teamId).get(),
-        memberRef.collection('consent-events').orderBy('recordedAt', 'desc').limit(1).get(),
-      ]);
-      const member = memberSnap.data(), latest = evidence.docs[0]?.data();
-      const team = teamSnap.data();
-      const organizationId = team?.organizationId || member?.organizationId;
-      const organization = typeof organizationId === 'string' && organizationId
-        ? (await db.collection('pulsecheck-organizations').doc(organizationId).get()).data() : null;
-      healthBaselineEnabled = isHealthBaselineEnabled(team, organization);
-      const provisionedSport = team?.sportOrProgram;
-      if (typeof provisionedSport === 'string' && provisionedSport.trim()) sportName = provisionedSport.trim().slice(0, 120);
-      active = member?.status === 'active' && !member.revokedAt;
-      const documents = teamSnap.data()?.requiredConsents || member?.athleteOnboarding?.requiredConsents || [];
-      const onboarding = member?.athleteOnboarding;
-      // Existing clients also poll this endpoint before onboarding. Never put the survey ahead of consent.
-      active = active && (!onboarding?.entryOnboardingStep || hasCompletedEntryOnboarding(onboarding))
-        && onboarding?.productConsentAccepted !== false
-        && hasCompletedRequiredConsents({...onboarding,requiredConsents:documents.filter((document: any) => document.category !== 'health_authorization')});
-      // A newly introduced optional health decision must not erase the baseline requirement.
-      // Entry eligibility above still uses the already-provisioned required documents.
-      const authorizationDocuments = healthBaselineConsentDocuments(documents, team, organization, organization?.productBrand);
-      const healthDocs = authorizationDocuments.filter((d: any) => d.category === 'health_authorization');
-      const accepts = (decisions: any) => healthDocs.every((d: any) => {
-        const entry = decisions?.[d.id];
-        return entry?.decision === 'accepted' && entry.version === d.version && entry.document?.body === d.body &&
-          entry.document?.category === 'health_authorization' && Boolean(entry.signedName?.trim()) &&
-          (!entry.expiresAt || Date.parse(entry.expiresAt) > Date.now());
-      });
-      healthSharingAllowed = healthBaselineEnabled && member?.status === 'active' && !member.revokedAt && latest?.actorUserId === user.uid &&
-        healthDocs.length > 0 && accepts(member?.athleteOnboarding?.consentDecisions) && accepts(latest?.decisions);
-      const validDecline = (doc: any, decisions: any) => {
-        const entry = decisions?.[doc.id];
-        return entry && ['declined', 'revoked'].includes(entry.decision) && entry.version === doc.version
-          && entry.document?.body === doc.body && entry.document?.category === 'health_authorization';
-      };
-      const declined = healthDocs.find((doc: any) => latest?.actorUserId === user.uid
-        && validDecline(doc, onboarding?.consentDecisions) && validDecline(doc, latest?.decisions)
-        && onboarding?.consentDecisions?.[doc.id]?.decision === latest?.decisions?.[doc.id]?.decision);
-      healthAuthorizationDecision = !healthBaselineEnabled ? 'disabled' : healthSharingAllowed ? 'accepted'
-        : declined ? onboarding.consentDecisions[declined.id].decision : 'pending';
-      healthAuthorizationRequired = healthBaselineEnabled && healthAuthorizationDecision === 'pending';
-      if (typeof organizationId === 'string' && organizationId && typeof assignment.teamId === 'string') {
-        healthAuthorizationUrl = `/PulseCheck/athlete-onboarding?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(assignment.teamId)}`;
-      }
-    }
+    const health = await baselineHealthContext(db, user.uid, assignment);
+    active = active && health.eligible;
+    const { healthSharingAllowed, healthBaselineEnabled, healthAuthorizationRequired, healthAuthorizationUrl,
+      healthAuthorizationDecision, sportName } = health;
     const draftRef = collection.doc(`performance_draft_${user.uid}_${QUESTIONNAIRE_VERSION}`);
     let draft = active && enabled && !completed ? (await draftRef.get()).data() : null;
     if (!draft && active && enabled && !completed) {
@@ -116,13 +61,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const canonical = active && enabled ? (await db.collection('athlete-mental-progress').doc(user.uid).get()).data()?.mentalSkillsBaseline : null;
     const skills = completedStartingProfile(canonical) ? {completed:true,result:canonical,reused:true} : savedSkills ? {...savedSkills,completed:false} : null;
     const pendingAttempt = active && !completed ? (await collection.doc(`attempt_${user.uid}_${QUESTIONNAIRE_VERSION}`).get()).data() : null;
-    const clinicalDeliveryAvailable = assignment?.environment === 'test'
-      ? assignment.universityCode === 'SANDBOX' && Boolean(process.env.AUNTEDNA_PARTNER_TEST_KEY?.startsWith('ae_pk_test_'))
-      : assignment?.environment === 'live' && assignment.universityCode === 'CAU' && Boolean(process.env.AUNTEDNA_PARTNER_LIVE_KEY?.startsWith('ae_pk_live_'));
+    const connection = active ? resolveBaselineConnection(health.organizationId, assignment?.teamId, health.organization, assignment) : null;
+    const clinicalDeliveryAvailable = Boolean(connection);
     if (req.method === 'GET') return res.json({ required: Boolean(active && !completed), completed, version: VERSION, questionnaireVersion: QUESTIONNAIRE_VERSION,
-      available: Boolean(active && enabled), draft: draft || null, skills, healthSharingAllowed, healthBaselineEnabled, healthAuthorizationRequired, healthAuthorizationUrl, healthAuthorizationDecision, submissionSharing: typeof pendingAttempt?.shareHealth === 'boolean' ? pendingAttempt.shareHealth : null, healthCollectionAvailable: clinicalDeliveryAvailable, sportName, questionnaireUrl: 'https://fitwithpulse.ai/PulseCheck/baseline' });
+      available: Boolean(active && enabled), draft: draft || null, skills, healthSharingAllowed, healthBaselineEnabled, healthAuthorizationRequired, healthAuthorizationUrl, healthAuthorizationDecision, healthDocuments: active ? health.healthDocuments : [], healthConsentDecisions: active ? Object.fromEntries(health.healthDocuments.filter(document => health.decisions[document.id]).map(document => [document.id, health.decisions[document.id]])) : {}, submissionSharing: typeof pendingAttempt?.shareHealth === 'boolean' ? pendingAttempt.shareHealth : null, healthCollectionAvailable: clinicalDeliveryAvailable, sportName, questionnaireUrl: 'https://fitwithpulse.ai/PulseCheck/baseline' });
     if (!isCurrentQuestionnaire(req.body)) return res.status(409).json({error:'This questionnaire has changed. Reload the page to continue with the current version.'});
     if (!assignment || !active || !enabled) return res.status(503).json({ error: 'Your questionnaire is not available yet. Please contact your program team.' });
+    if (req.body?.action === 'saveHealthDecision') {
+      try {
+        await saveBaselineHealthDecision(db, user.uid, health, req.body.decisions, () => admin.firestore.FieldValue.serverTimestamp());
+        return res.json({ saved: true });
+      } catch { return res.status(409).json({ error: 'Your health choice could not be saved. Review the current terms and retry.' }); }
+    }
     if (completed) return res.json({ saved: true, completed: true });
     if (['saveSkillsDraft','completeSkills'].includes(req.body?.action)) {
       if (completedStartingProfile(canonical)) return res.json({skills});
@@ -144,11 +94,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try { const draft = await savePerformanceDraft(db, draftRef, req.body.draft, user.uid); return res.json({draft}); }
       catch { return res.status(409).json({error:'Progress could not be saved. Retry, or reopen this questionnaire if another tab changed it.'}); }
     }
+    if (healthAuthorizationRequired) return res.status(409).json({ error: 'Review your health authorization and record your choice before submitting.' });
     if (!completedStartingProfile(canonical)) return res.status(400).json({error:'Finish your starting profile before submitting.'});
     if (req.body?.completedSections?.performance !== true || req.body?.completedSections?.health !== true || typeof req.body.shareHealth !== 'boolean') return res.status(400).json({ error: 'Finish both sections before submitting.' });
     // Stable assignment ID and authenticated UID bind retries across web and apps.
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(assignment.submissionId || '')) return res.status(503).json({ error: 'Your questionnaire setup needs review.' });
-    const input = applyAdministrativeAnswers({ ...req.body, submissionId: `sp2-${createHash('sha256').update(assignment.submissionId).digest('hex')}`, email: user.email || req.body.email }, await deriveAdministrativeAnswers(db,user.uid));
+    const input = applyAdministrativeAnswers({ ...req.body, submissionId: `sp2-${createHash('sha256').update(`${assignment.submissionId}:${QUESTIONNAIRE_VERSION}`).digest('hex')}`, email: user.email || req.body.email }, await deriveAdministrativeAnswers(db,user.uid));
     let split;
     try { split = splitSubmission(input); } catch { return res.status(400).json({ error: 'Please check your answers before submitting.' }); }
     if (req.body.shareHealth !== false && (!healthSharingAllowed || !clinicalDeliveryAvailable)) return res.status(403).json({ error: 'Review your health-sharing authorization, or complete performance only.' });
@@ -180,11 +131,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await create(input.submissionId, mirror);
     } else {
       if (!healthSharingAllowed) return res.status(403).json({ error: 'Review your health-sharing authorization, or complete performance only.' });
-      const environment = assignment.environment;
-      if (environment !== 'test' && environment !== 'live') return res.status(503).json({ error: 'Your questionnaire setup needs review.' });
-      const apiKey = environment === 'test' ? process.env.AUNTEDNA_PARTNER_TEST_KEY : process.env.AUNTEDNA_PARTNER_LIVE_KEY;
-      if (!apiKey) return res.status(503).json({ error: 'The questionnaire connection is not available yet.' });
-      await deliverQuestionnaire(input, user.uid, { environment, apiKey, universityCode: assignment.universityCode }, {
+      if (!connection) return res.status(503).json({ error: 'The questionnaire connection is not available yet.' });
+      await deliverQuestionnaire(input, user.uid, connection, {
         get: async () => { const doc = await recordRef.get(); return doc.exists ? doc.data() as any : null; }, create,
       });
     }

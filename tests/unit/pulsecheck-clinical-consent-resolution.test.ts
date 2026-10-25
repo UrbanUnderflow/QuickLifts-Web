@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { selectConsentDocumentsForProduct, PARTICIPATION_CONSENT, HEALTH_CONSENT, RESEARCH_CONSENT } from '../../src/api/firebase/pulsecheckProvisioning/consentPolicy';
+import { healthBaselineConsentDocuments, selectConsentDocumentsForProduct, PARTICIPATION_CONSENT, HEALTH_CONSENT, RESEARCH_CONSENT } from '../../src/api/firebase/pulsecheckProvisioning/consentPolicy';
 const require = createRequire(import.meta.url);
 const { resolveClinicalConsentDocuments, clinicalAuthorizationAllowsTransfer } = require('../../netlify/functions/lib/clinical-authorization.js');
 for (const productBrand of ['pulsecheck', 'athleticmind']) {
@@ -10,7 +10,7 @@ for (const productBrand of ['pulsecheck', 'athleticmind']) {
     assert.deepEqual(resolveClinicalConsentDocuments({ teamDocuments: docs, productBrand }), selectConsentDocumentsForProduct(docs, productBrand));
     assert.deepEqual(resolveClinicalConsentDocuments({ productBrand }), selectConsentDocumentsForProduct(docs, productBrand));
     const custom = { ...PARTICIPATION_CONSENT, id: 'institution-participation', body: 'Custom institution agreement', version: 'v4' };
-    assert.deepEqual(resolveClinicalConsentDocuments({ teamDocuments: [custom], pilot: { studyMode: 'research' }, productBrand }), selectConsentDocumentsForProduct([custom, RESEARCH_CONSENT], productBrand));
+    assert.deepEqual(resolveClinicalConsentDocuments({ teamDocuments: [custom], pilot: { studyMode: 'research' }, productBrand }), healthBaselineConsentDocuments([custom, RESEARCH_CONSENT], undefined, undefined, productBrand));
   });
 }
 test('routine authorization fails closed for absent scope, absent health terms, ended participation, old receipts and refusal', () => {

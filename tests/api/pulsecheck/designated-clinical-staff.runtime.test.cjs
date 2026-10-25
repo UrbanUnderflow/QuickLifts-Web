@@ -22,7 +22,7 @@ function fixture() {
   const snap = key => ({ id: key.split('/').at(-1), exists: rows.has(key), data: () => structuredClone(rows.get(key)) });
   const ref = key => ({ path: key, id: key.split('/').at(-1), get: async () => snap(key), collection: name => collection(`${key}/${name}`) });
   const collection = key => ({ doc: id => ref(`${key}/${id || `generated-${++sequence}`}`) });
-  const db = { collection, async runTransaction(fn) { const pending = []; const result = await fn({ get: r => r.get(), set: (r,v) => pending.push([r.path,structuredClone(v)]) }); for (const [key,v] of pending) { rows.set(key,v); writes.push(key); } return result; } };
+  const db = { collection, async runTransaction(fn) { const pending = []; const result = await fn({ get: r => r.get(), set: (r,v,o) => pending.push([r.path,structuredClone(v),o]) }); for (const [key,v,o] of pending) { rows.set(key,o?.merge?{...rows.get(key),...v}:v); writes.push(key); } return result; } };
   const app = { auth: () => ({ verifyIdToken: async (...args) => { verified.push(args); if (rejectToken) throw new Error('revoked'); return { uid: 'admin-user', email: 'admin@example.test' }; } }), firestore: () => db };
   const firebase = { __esModule: true, default: { firestore: { FieldValue: { serverTimestamp: () => 123 } } }, getFirebaseAdminApp: dev => { modes.push(dev); return app; } };
   const handler = compile('src/pages/api/admin/pulsecheck/designated-clinical-staff.ts', name => name.endsWith('firebase-admin') ? firebase : name.endsWith('designatedClinicalStaff') ? validator : require(name)).default;
@@ -39,7 +39,7 @@ test('contact settings reject unauthenticated, revoked, nonadmin and closed-acco
 });
 test('draft contact persistence is private, audited, versioned and never changes live team routing or memberships', async () => {
   const f=fixture(); const original=structuredClone(f.rows.get('pulsecheck-teams/team'));
-  assert.deepEqual((await f.call()).body,{config:null});
+  assert.equal((await f.call()).body.config,null);
   const r=await f.call('PUT',{teamId:'team',configuration:valid(),expectedRevision:0});
   assert.equal(r.code,200); assert.equal(r.body.config.status,'draft'); assert.equal(r.body.config.revision,1); assert.equal(r.body.config.updatedBy,'admin-user');
   assert.deepEqual(f.rows.get('pulsecheck-teams/team'),original);
@@ -63,4 +63,20 @@ test('invalid contacts, coverage, injected activation and malformed scope are re
   const f=fixture(); assert.equal((await f.call('GET',null,undefined,{teamId:'../other'})).code,400);
   assert.equal((await f.call('PUT',{teamId:'team',configuration:valid(),expectedRevision:0,activate:true})).code,400);
   assert.equal(f.writes.length,0);
+});
+
+
+test('activation requires configured delivery and pins scoped primary contacts without granting record access', async()=>{
+ const f=fixture();const input={teamId:'team',configuration:valid(),expectedRevision:0,action:'activate'};
+ delete process.env.BREVO_MARKETING_KEY;delete process.env.BREVO_API_KEY;
+ assert.equal((await f.call('PUT',input)).code,400);assert.equal(f.writes.length,0);
+ process.env.BREVO_API_KEY='synthetic-email-key';
+ try {
+  const active=await f.call('PUT',input);assert.equal(active.code,200);assert.equal(active.body.config.status,'active');
+  const team=f.rows.get('pulsecheck-teams/team');assert.equal(team.clinicalDeliveryMode,'designated_staff');assert.equal(team.organizationId,'org');
+  assert.ok(f.writes.every(key=>key.startsWith('pulsecheck-team-escalation-settings/')||key==='pulsecheck-teams/team'));
+  assert.equal((await f.call('PUT',{...input,expectedRevision:1,action:'save'})).code,400);
+  assert.equal((await f.call('PUT',{...input,expectedRevision:1,action:'deactivate'})).body.config.status,'draft');
+  assert.equal(f.rows.get('pulsecheck-teams/team').clinicalDeliveryMode,'resources_only');
+ } finally {delete process.env.BREVO_API_KEY;}
 });

@@ -1,3 +1,4 @@
+const { resolveDesignatedClinicalRoute, deliverDesignatedClinicalAlert } = require('./lib/designated-clinical-delivery');
 const { resolveProgramProductConfig, resolveIncidentSupportRoute } = require('./lib/program-product-config');
 const { clinicalAuthorizationAllowsTransfer, resolveClinicalConsentDocuments } = require('./lib/clinical-authorization');
 /**
@@ -1099,7 +1100,7 @@ async function resolveEscalationSupportContext({
   const athleticMindEmergency = Number(escalationData?.tier) === EscalationTier.CriticalRisk
     && await isExplicitAthleticMindIncident(runtimeDb, { teamId, organizationId: team?.organizationId });
   return {
-    route: athleticMindEmergency ? 'clinician' : resolveIncidentSupportRoute(escalationData, product, normalizeTeamEscalationRoute(team?.defaultEscalationRoute)),
+    route: athleticMindEmergency ? 'clinician' : resolveIncidentSupportRoute(escalationData, team?.clinicalDeliveryMode === 'designated_staff' ? {...product,designatedStaffEnabled:true} : product, normalizeTeamEscalationRoute(team?.defaultEscalationRoute)),
     product,
     teamId,
     team,
@@ -1206,8 +1207,10 @@ async function executeCriticalSafetyOperations({
   );
   let program = 'unknown';
   try { program = await resolveEmergencyProgram(runtimeDb, { ...escalationData, teamId: safetyTeamId }); } catch (_error) { /* Unknown scope keeps resources available. */ }
-  const initialEmergencyMode = program === 'athleticmind' ? 'auntedna' : 'resources_only';
-  const initialEmergencyStatus = program === 'athleticmind'
+  let staffRoute = null;
+  try {staffRoute = await resolveDesignatedClinicalRoute(runtimeDb, { teamId:safetyTeamId, userId, membershipId:escalationData?.teamMembershipId || supportContext?.pilotContext?.teamMembershipId });} catch { /* Route lookup must never prevent the safety-state write. */ }
+  const initialEmergencyMode = staffRoute ? 'designated_staff' : program === 'athleticmind' ? 'auntedna' : 'resources_only';
+  const initialEmergencyStatus = staffRoute ? 'pending' : program === 'athleticmind'
     ? process.env.ATHLETICMIND_EMERGENCY_HANDOFF_ENABLED === 'true' ? 'pending' : 'failed'
     : 'not_applicable';
   let safetyStateWriteStatus = 'pending';
@@ -3343,16 +3346,28 @@ async function performClinicalHandoff(
   providedSupportContext = null,
   bridgeFactory = createClinicalBridge,
 ) {
+  const staffRoute = !escalationData?.clinicalReferenceId ? await resolveDesignatedClinicalRoute(runtimeDb, {
+    teamId:escalationData?.teamId || providedSupportContext?.teamId || providedSupportContext?.pilotContext?.teamId,
+    userId, membershipId:escalationData?.teamMembershipId || providedSupportContext?.pilotContext?.teamMembershipId,
+  }) : null;
+  if (!staffRoute && !escalationData?.clinicalReferenceId) {
+    const teamId = escalationData?.teamId || providedSupportContext?.teamId || providedSupportContext?.pilotContext?.teamId;
+    const team = teamId ? (await runtimeDb.collection(TEAMS_COLLECTION).doc(teamId).get()).data() : null;
+    if (team?.clinicalDeliveryMode === 'designated_staff') {
+      if (Number(escalationData?.tier) === EscalationTier.CriticalRisk) return applyEmergencyResourcesOnly(userId, escalationId, runtimeDb);
+      return {success:false,supportRoute:'clinician',error:{code:'CLINICAL_STAFF_UNAVAILABLE',message:'Your program’s clinical contact is unavailable. Delivery has not been confirmed.'}};
+    }
+  }
   if (Number(escalationData?.tier) === EscalationTier.CriticalRisk && await organizationIncidentUnavailable(runtimeDb, { ...escalationData, teamId: escalationData?.teamId || providedSupportContext?.teamId })) return applyEmergencyResourcesOnly(userId, escalationId, runtimeDb);
   const athleticMindEmergency = Number(escalationData?.tier) === EscalationTier.CriticalRisk
     && await isExplicitAthleticMindIncident(runtimeDb, {
       ...escalationData,
       teamId: escalationData?.teamId || providedSupportContext?.teamId || providedSupportContext?.pilotContext?.teamId,
     });
-  if (Number(escalationData?.tier) === EscalationTier.CriticalRisk && !athleticMindEmergency) {
+  if (Number(escalationData?.tier) === EscalationTier.CriticalRisk && !athleticMindEmergency && !staffRoute) {
     return applyEmergencyResourcesOnly(userId, escalationId, runtimeDb);
   }
-  if (athleticMindEmergency && process.env.ATHLETICMIND_EMERGENCY_HANDOFF_ENABLED !== 'true') {
+  if (athleticMindEmergency && !staffRoute && process.env.ATHLETICMIND_EMERGENCY_HANDOFF_ENABLED !== 'true') {
     const error = { code: 'ATHLETICMIND_EMERGENCY_HANDOFF_DISABLED', message: 'The AuntEdna emergency handoff is not configured for live delivery. Emergency resources remain available.' };
     await runtimeDb.collection('escalation-records').doc(escalationId).set({ handoffStatus: HandoffStatus.Failed, handoffFailureCode: error.code, handoffFailureReason: error.message, handoffFailedAt: Math.floor(Date.now() / 1000), supportRoute: 'clinician' }, { merge: true });
     return { success: false, status: 'failed', supportRoute: 'clinician', error };
@@ -3468,6 +3483,13 @@ async function performClinicalHandoff(
       || !clinicalAuthorizationAllowsTransfer({ documents, decisions: signedDecisions, participationEnded, tier: escalationData.tier })) {
       return { success: false, supportRoute: 'clinician', error: { code: 'HEALTH_AUTHORIZATION_REQUIRED', message: 'Review your health information authorization before this clinical transfer. Other program features remain available.' } };
     }
+  }
+
+  if (staffRoute) {
+    if (Number(escalationData.tier) === 2 && escalationData.consentStatus !== ConsentStatus.Accepted) {
+      return { success:false, supportRoute:'clinician', error:{code:'CONSENT_REQUIRED',message:'Choose whether to send this support request.'} };
+    }
+    return deliverDesignatedClinicalAlert(runtimeDb, { config:staffRoute, userId, escalationId, tier:Number(escalationData.tier) });
   }
 
   // Load conversation for summary. A journal escalation has no conversation; its summary is the approved excerpt.
@@ -3758,10 +3780,14 @@ async function triggerCriticalHandoff(userId, conversationId, escalationId, esca
     escalationData,
   }, runtimeDb);
 
+  const staffRoute = !escalationData?.clinicalReferenceId ? await resolveDesignatedClinicalRoute(runtimeDb, {
+    teamId:escalationData?.teamId || resolvedSupportContext?.teamId || resolvedSupportContext?.pilotContext?.teamId,
+    userId, membershipId:escalationData?.teamMembershipId || resolvedSupportContext?.pilotContext?.teamMembershipId,
+  }) : null;
   const athleticMindEmergency = await isExplicitAthleticMindIncident(runtimeDb, { ...escalationData, teamId: escalationData?.teamId || resolvedSupportContext?.teamId });
   const coachNotification = { success: false, status: 'not_delivered', reason: 'clinical_emergency_route_only' };
-  if (!athleticMindEmergency) return { ...await applyEmergencyResourcesOnly(userId, escalationId, runtimeDb), coachNotification };
-  if (athleticMindEmergency) resolvedSupportContext.route = 'clinician';
+  if (!athleticMindEmergency && !staffRoute) return { ...await applyEmergencyResourcesOnly(userId, escalationId, runtimeDb), coachNotification };
+  if (athleticMindEmergency || staffRoute) resolvedSupportContext.route = 'clinician';
   const result = resolvedSupportContext.route === 'hotline'
     ? await applyHotlineSupportRouting(userId, escalationId, escalationData, resolvedSupportContext, true, runtimeDb)
     : await performClinicalHandoff(
@@ -3774,11 +3800,11 @@ async function triggerCriticalHandoff(userId, conversationId, escalationId, esca
       );
   
   if (result.resourcesOnly === true) return { ...result, coachNotification };
-  const emergencyHandoffStatus = result.success === true ? 'received' : result.status === 'already_initiated' ? 'pending' : 'failed';
-  await runtimeDb.collection(ATHLETE_SAFETY_STATE_COLLECTION).doc(userId).set({ emergencySupportMode: 'auntedna', emergencyHandoffStatus }, { merge: true });
-  await runtimeDb.collection('escalation-records').doc(escalationId).set({ emergencySupportMode: 'auntedna', emergencyHandoffStatus }, { merge: true });
-  console.log('[pulsecheck-escalation] Critical handoff complete:', { success: result.success, status: result.status, emergencyHandoffStatus });
-  return { ...result, coachNotification, emergencySupportMode: 'auntedna', emergencyHandoffStatus };
+  const emergencySupportMode = result.emergencySupportMode || 'auntedna';
+  const emergencyHandoffStatus = result.emergencyHandoffStatus || (result.success === true ? 'received' : result.status === 'already_initiated' ? 'pending' : 'failed');
+  await runtimeDb.collection(ATHLETE_SAFETY_STATE_COLLECTION).doc(userId).set({ emergencySupportMode, emergencyHandoffStatus }, { merge: true });
+  await runtimeDb.collection('escalation-records').doc(escalationId).set({ emergencySupportMode, emergencyHandoffStatus }, { merge: true });
+  return { ...result, coachNotification, emergencySupportMode, emergencyHandoffStatus };
 }
 
 /**

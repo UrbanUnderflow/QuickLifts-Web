@@ -1,3 +1,6 @@
+import ConsentChoices from '../../../components/pulsecheck/consent/ConsentChoices';
+import type { ConsentDecisions } from '../../../api/firebase/pulsecheckProvisioning/consentPolicy';
+import type { PulseCheckRequiredConsentDocument } from '../../../api/firebase/pulsecheckProvisioning/types';
 import ConsolidatedSkillsBaseline, { ConsolidatedSkillsDraft } from '../../../components/mentaltraining/ConsolidatedSkillsBaseline';
 import { QUESTIONNAIRE_VERSION } from '../../../lib/questionnaires/cau';
 import { onAuthStateChanged, signInWithEmailAndPassword, signInWithCustomToken, signOut, User } from 'firebase/auth';
@@ -306,7 +309,10 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   const [saved, setSaved] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [status, setStatus] = useState<{available: boolean; completed: boolean; required?: boolean; healthSharingAllowed: boolean; healthCollectionAvailable?: boolean; submissionSharing?: boolean | null; sportName?: string} | null>(null);
+  const [status, setStatus] = useState<{available: boolean; completed: boolean; required?: boolean; healthSharingAllowed: boolean; healthBaselineEnabled?: boolean; healthAuthorizationRequired?: boolean; healthAuthorizationDecision?: string; healthDocuments?: PulseCheckRequiredConsentDocument[]; healthConsentDecisions?: ConsentDecisions; healthCollectionAvailable?: boolean; submissionSharing?: boolean | null; sportName?: string} | null>(null);
+  const [healthChoices, setHealthChoices] = useState<ConsentDecisions>({});
+  const [reviewHealthChoice, setReviewHealthChoice] = useState(false);
+  const [consentSaving, setConsentSaving] = useState(false);
   const [shareHealth, setShareHealth] = useState(true);
   const [submittedOnce, setSubmittedOnce] = useState(false);
   const [sharingLocked, setSharingLocked] = useState(false);
@@ -340,6 +346,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     sessionUid.current = next?.uid || null;
     setPriorSubmission(false);skillsRevision.current=0;setSkillsState(null);setShowSkills(false);setPerformanceQuestionsComplete(false);
     draftRevision.current = 0; draftBusy.current = false; setDraftSaving(false); setDraftSaved(false);
+    setHealthChoices({});setReviewHealthChoice(false);setConsentSaving(false);
     setSignOutError(''); setUser(next); setAuthReady(true); setStatus(null); setAnswers({}); setStarted(false);
     setCompleted({performance:false,health:false}); setPositions({performance:0,health:0}); setIndex(0); setTrack(null);
     clearTimeout(timer.current); setReceipt(null); setSaved(false); setSaving(false); setSubmittedOnce(false); setSharingLocked(false); setShareHealth(true); setError('');
@@ -348,8 +355,8 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       headers: {...testHeaders(), Authorization: `Bearer ${token}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod'},
     })).then(async response => { const result = await response.json(); if (!response.ok) throw Error(result.error || 'Could not check your questionnaire. Refresh to try again.'); if (!result.completed && result.questionnaireVersion !== QUESTIONNAIRE_VERSION) throw Error('The questionnaire has been updated. Refresh this page to continue.'); return result; })
       .then(result => { if (sessionUid.current === next.uid) {setStatus(result);setSaved(result.completed);
-        const sharing = typeof result.submissionSharing === 'boolean' ? result.submissionSharing : result.healthSharingAllowed && result.healthCollectionAvailable !== false;
-        setShareHealth(sharing); setSharingLocked(typeof result.submissionSharing === 'boolean');
+        const sharing = typeof result.submissionSharing === 'boolean' ? result.submissionSharing : result.healthBaselineEnabled !== false && !['declined','revoked','disabled'].includes(result.healthAuthorizationDecision || '');
+        setHealthChoices(result.healthConsentDecisions || {});setShareHealth(sharing); setSharingLocked(typeof result.submissionSharing === 'boolean');
         setCompleted(old=>({...old,health:!sharing}));setReceipt(result.receipt || null);
         setPriorSubmission(result.questionnaireSubmitted === true);setSkillsState(result.skills || null);skillsRevision.current=result.skills?.revision || 0;
         if (result.draft?.version === QUESTIONNAIRE_VERSION && !result.completed) {
@@ -426,9 +433,34 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     if(complete && result.completed){setSaved(true);setReceipt(result.receipt || null);}
     if(complete){setCompleted(old=>({...old,performance:performanceQuestionsComplete && result.skills.completed}));setShowSkills(false);setTrack(null);}
   }
+  async function saveHealthChoice() {
+    if (!user || consentSaving) return;
+    const uid = user.uid;
+    setConsentSaving(true);setError('');
+    try {
+      const headers = {...testHeaders(), 'Content-Type':'application/json', Authorization:`Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode':isUsingDevFirebase()?'dev':'prod'};
+      const response = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify({questionnaireVersion:QUESTIONNAIRE_VERSION,action:'saveHealthDecision',decisions:Object.fromEntries(Object.entries(healthChoices).filter(([id])=>status?.healthDocuments?.some(document=>document.id===id)))})});
+      const result = await response.json();
+      if (!response.ok || !result.saved) throw Error(result.error || 'Your choice could not be saved. Try again.');
+      const checked = await fetch(endpoint, {headers});
+      const latest = await checked.json();
+      if (!checked.ok || latest.healthAuthorizationRequired) throw Error('Review every current health agreement and save your choice.');
+      if (sessionUid.current !== uid) return;
+      setStatus(latest);setHealthChoices(latest.healthConsentDecisions || {});setReviewHealthChoice(false);
+      if (typeof latest.submissionSharing !== 'boolean') {
+        const sharing = latest.healthBaselineEnabled !== false && latest.healthSharingAllowed;
+        setShareHealth(sharing);
+        setCompleted(old => ({...old,health:!sharing}));
+        if (!sharing) setAnswers(old => Object.fromEntries(Object.entries(old).filter(([id])=>questionCustodian(id)==='PulseCheck')));
+      }
+    } catch(e) { if (sessionUid.current === uid) setError(e instanceof Error ? e.message : 'Your choice could not be saved. Try again.'); }
+    finally { if (sessionUid.current === uid) setConsentSaving(false); }
+  }
   async function submit() {
     if (saving || saved || !user) return;
     if (!collectionEnabled) { setError('Saving is temporarily unavailable. Please try again shortly.'); return; }
+    if (status?.healthAuthorizationRequired) {setReviewHealthChoice(true);return;}
+    if (shareHealth && status?.healthCollectionAvailable === false) {setError('Your program’s health connection is not ready. Your answers remain on this page. Try again later or choose Complete performance only.');return;}
     if (!completed.performance) { openTrack('performance'); return; }
     if (!completed.health) { openTrack('health'); return; }
     setSaving(true); setSubmittedOnce(true); setError('');
@@ -452,7 +484,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
             const reserved = typeof latest.submissionSharing === 'boolean';
             setSharingLocked(reserved);
             if (reserved) setShareHealth(latest.submissionSharing);
-            else if (!latest.healthSharingAllowed || latest.healthCollectionAvailable === false) {
+            else if (latest.healthBaselineEnabled === false || ['declined','revoked'].includes(latest.healthAuthorizationDecision)) {
               setShareHealth(false);setCompleted(old=>({...old,health:true}));
               setAnswers(old=>Object.fromEntries(Object.entries(old).filter(([id])=>questionCustodian(id)==='PulseCheck')));
             }
@@ -487,12 +519,12 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         </Disclosure>
 
         <div className="cau-track-list">
-          {(['performance', 'health'] as const).map(section => {
+          {(['performance', ...(status.healthBaselineEnabled === false ? [] : ['health'])] as ('performance'|'health')[]).map(section => {
             const accentClass = section === 'health' ? 'cau-accent-health' : 'cau-accent-performance';
             const Icon = section === 'health' ? HeartPulse : Target;
-            const healthUnavailable = section === 'health' && (priorSubmission || !status.healthSharingAllowed || status.healthCollectionAvailable === false || !shareHealth);
+            const healthUnavailable = section === 'health' && (priorSubmission || !status.healthSharingAllowed || !shareHealth);
             return (
-              <button key={section} type="button" data-selected={completed[section]} onClick={() => { if (saving) return; if (sharingLocked) {setError('Saving has started. Press Submit answers to finish or retry this submission.');return;} if (healthUnavailable) { setError(!status.healthSharingAllowed ? 'Health sharing follows your consent choices. You can complete performance only.' : 'Health sharing is unavailable for your account right now. You can complete performance only.'); return; } openTrack(section); }} className={`cau-btn cau-track-card ${accentClass}`}>
+              <button key={section} type="button" data-selected={completed[section]} onClick={() => { if (saving) return; if (sharingLocked) {setError('Saving has started. Press Submit answers to finish or retry this submission.');return;} if (healthUnavailable) { if (!sandboxTest && status.healthDocuments?.length) setReviewHealthChoice(true); else setError('Health sharing follows your consent choices. You can complete performance only.'); return; } openTrack(section); }} className={`cau-btn cau-track-card ${accentClass}`}>
                 <span className="cau-track-icon"><Icon size={18} /></span>
                 <span className="cau-track-copy">
                   <span className="cau-track-title">{completed[section] && <Check size={14} />}{section === 'health' ? 'Well-being and support' : 'Performance baseline'}</span>
@@ -505,15 +537,17 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           })}
         </div>
 
-        {!sandboxTest && !sharingLocked && !submittedOnce && (
+        {!sandboxTest && status.healthBaselineEnabled !== false && !sharingLocked && !submittedOnce && (
           <button type="button" className="cau-btn cau-btn-ghost" style={{ justifyContent: 'center', width: '100%' }} onClick={() => { setShareHealth(false); setAnswers(old => Object.fromEntries(Object.entries(old).filter(([id]) => questionCustodian(id) === 'PulseCheck'))); setCompleted(old => ({ ...old, health: true })); }}>
             Complete performance only
           </button>
         )}
 
+        {status.healthBaselineEnabled !== false && !sandboxTest && !sharingLocked && <button type="button" className="cau-btn cau-btn-ghost" onClick={()=>setReviewHealthChoice(true)}>Review health authorization</button>}
+        {shareHealth && status.healthCollectionAvailable === false && <p role="status" className="cau-muted-sm">Your program’s health connection is not ready. Your health answers stay on this page until delivery can be confirmed. You can return later or choose Complete performance only.</p>}
         {!shareHealth && <p className="cau-muted-sm">Your health responses will remain unshared. Complete the performance section, then submit to finish your baseline.</p>}
         {sharingLocked && !saved && <p className="cau-muted-sm">Your sharing choice is saved for this submission. If saving was interrupted, press Submit answers to retry.</p>}
-        <p className="cau-muted-sm">{Number(completed.performance) + Number(completed.health)} of 2 sections complete. Performance progress saves as you go. Well-being answers save when you submit; keep this page open until then.</p>
+        <p className="cau-muted-sm">{status.healthBaselineEnabled === false ? `${Number(completed.performance)} of 1 sections complete.` : `${Number(completed.performance) + Number(completed.health)} of 2 sections complete.`} Performance progress saves as you go. Well-being answers save when you submit; keep this page open until then.</p>
 
         {!priorSubmission && !submittedOnce && !sharingLocked && completed.health && completed.performance && (
           <Disclosure summary="Review all answers">
@@ -705,6 +739,15 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       );
     }
 
+    if ((status.healthAuthorizationRequired || reviewHealthChoice) && status.healthBaselineEnabled !== false) {
+      return <div className="cau-stage">
+        <h1 className="cau-h1">Your health authorization</h1>
+        <ConsentChoices documents={status.healthDocuments || []} decisions={healthChoices} onChange={setHealthChoices} name={name} />
+        {error && <ErrorBanner>{error}</ErrorBanner>}
+        <button type="button" disabled={consentSaving} className="cau-btn cau-btn-primary" onClick={saveHealthChoice}>{consentSaving ? 'Saving choice…' : 'Save health choice and continue'}</button>
+        {!status.healthAuthorizationRequired && <button type="button" className="cau-btn cau-btn-ghost" onClick={()=>setReviewHealthChoice(false)}>Back to baseline</button>}
+      </div>;
+    }
     if (!started) {
       const accountFields = <>
           <label className="cau-field">
@@ -720,8 +763,8 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim()) {setError('Enter your name to begin.');return;} setError('');setStarted(true); }} className="cau-stage cau-form">
           <p className="cau-eyebrow" style={{color:'#d7ef00'}}>Your baseline</p>
           <h1 className="cau-h1">Let’s find your starting point.</h1>
-          <p className="cau-body">Tell us how you’ve been feeling and which mental skills you’ve used.</p>
-          <div className="cau-intro-parts"><div className="cau-intro-part"><span>01</span><strong>How you’ve been feeling</strong></div><div className="cau-intro-part"><span>02</span><strong>Your mental skills</strong></div></div>
+          <p className="cau-body">{shareHealth ? 'Tell us how you’ve been feeling and which mental skills you’ve used.' : 'Tell us your training goal and which mental skills you’ve used.'}</p>
+          <div className="cau-intro-parts">{shareHealth && <div className="cau-intro-part"><span>01</span><strong>How you’ve been feeling</strong></div>}<div className="cau-intro-part"><span>{shareHealth ? '02' : '01'}</span><strong>Your mental skills</strong></div></div>
           <h2 className="cau-h2">A few things to know</h2>
           <div className="cau-intro-facts"><p><Check size={21}/>Answer honestly. You can skip questions.</p><p><HeartPulse size={21}/>Your mental-health answers are not shared with coaches or teammates.</p><p><Target size={21}/>Health sharing is your choice.</p></div>
           <Disclosure summary="How your answers are used"><p className="cau-body-sm">{source.purpose}</p><p className="cau-body-sm">This questionnaire supports onboarding, service delivery, and internal pilot evaluation. It is not a diagnostic assessment or an IRB-approved research study.</p><p className="cau-body-sm">Health sharing follows your current authorization. This questionnaire is not monitored as an emergency service.</p></Disclosure>

@@ -316,6 +316,9 @@ exports.handler = async (event) => {
       currentStreak: Number(existingProgress.currentStreak || 0),
       longestStreak: Number(existingProgress.longestStreak || 0),
       taxonomyProfile,
+      // Preserve real task observations separately from unmeasured broad skills.
+      ...(mentalSkillsBaseline?.assessmentKind === 'self_report_starting_profile' && existingProgress.taxonomyProfile?.taskEvidence
+        ? { taskEvidence: existingProgress.taxonomyProfile.taskEvidence } : {}),
       lastProfileSyncAt: completedAt,
       profileVersion: profileSnapshotRuntime.PROFILE_VERSION,
       trustDispositionBaseline,

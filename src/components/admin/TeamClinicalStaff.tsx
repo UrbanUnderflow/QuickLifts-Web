@@ -2,19 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { auth, getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 import { ClinicalContact, DesignatedClinicalStaff, SavedClinicalStaff, emptyClinicalStaff, validateClinicalStaff } from '../../lib/pulsecheck/designatedClinicalStaff';
 
-async function request(teamId: string, configuration?: DesignatedClinicalStaff, expectedRevision = 0) {
+async function request(teamId: string, configuration?: DesignatedClinicalStaff, expectedRevision = 0, action: 'save' | 'activate' | 'deactivate' = 'save') {
   const token = await auth.currentUser?.getIdToken();
   if (!token) throw new Error('Sign in to manage clinical staff.');
   const response = await fetch(`/api/admin/pulsecheck/designated-clinical-staff?teamId=${encodeURIComponent(teamId)}`, {
     method: configuration ? 'PUT' : 'GET', headers: { ...getFirebaseModeRequestHeaders(), Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    ...(configuration ? { body: JSON.stringify({ teamId, configuration, expectedRevision }) } : {}),
+    ...(configuration ? { body: JSON.stringify({ teamId, configuration, expectedRevision, action }) } : {}),
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'Clinical staff settings are unavailable.');
-  return result.config as SavedClinicalStaff | null;
+  return result as { config: SavedClinicalStaff | null; delivery: { email: boolean; sms: boolean } };
 }
 export default function TeamClinicalStaff({ teamId, currentRoute }: { teamId: string; currentRoute: string }) {
   const [config, setConfig] = useState<DesignatedClinicalStaff>(emptyClinicalStaff);
+  const [delivery, setDelivery] = useState({email:false,sms:false});
+  const [activeDelivery, setActiveDelivery] = useState(false);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -24,9 +26,10 @@ export default function TeamClinicalStaff({ teamId, currentRoute }: { teamId: st
   useEffect(() => {
     let active = true;
     setLoading(true); setLoaded(false); setError('');
-    request(teamId).then(value => {
+    request(teamId).then(({config:value,delivery}) => {
       if (!active) return;
       setConfig(value ? { primary: value.primary, backup: value.backup, coverage: value.coverage, timeZone: value.timeZone, acknowledgmentMinutes: value.acknowledgmentMinutes } : emptyClinicalStaff());
+      setDelivery(delivery);setActiveDelivery(value?.status === 'active');
       setRevision(value?.revision || 0); setLoaded(true);
     }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -49,9 +52,11 @@ export default function TeamClinicalStaff({ teamId, currentRoute }: { teamId: st
   };
   if (loading) return <p role="status">Loading clinical staff settings…</p>;
   return <div>
-    <p>Choose your program’s own clinical contacts. An AuntEdna profile is optional and managed separately.</p>
-    <div className="pcp-warn-box"><strong>Setup only · Delivery inactive</strong><p>Save the people and coverage you want to use. Phone calls, emails and backup escalation need verified staff access and delivery setup before activation.</p>
-      <p>Current team route: <strong>{currentRoute === 'hotline' ? '988' : 'Clinician'}</strong>. Saving this draft keeps that route in place.</p></div>
+    <p>Choose the clinical staff member who should receive your team’s support alerts.</p>
+    <div className="pcp-warn-box"><strong>{activeDelivery ? 'Clinical staff alerts active' : 'Clinical staff alerts inactive'}</strong>
+      <p>{delivery.email ? 'Email delivery is configured.' : 'Email delivery needs setup before activation.'} {delivery.sms ? 'Text alerts are also configured.' : 'Text delivery is not configured. The phone number is retained as a contact number; no calls are placed.'}</p>
+      <p>Alerts include the athlete’s name and contact information, with no conversation, journal or baseline answers. Sending an alert does not confirm a clinician response. Urgent resources remain available.</p>
+      <p>Current team route: <strong>{currentRoute === 'hotline' ? '988' : 'Clinician'}</strong>.</p></div>
     <fieldset disabled={!loaded || saving} style={{ border: 0, padding: 0, minWidth: 0 }}>
       {contactFields('primary', 'Primary clinical contact')}
       <label><input type="checkbox" checked={!!config.backup} onChange={e => update({ backup: e.target.checked ? { name: '', email: '', phone: '' } : null })} /> Add a backup clinical contact</label>
@@ -67,17 +72,32 @@ export default function TeamClinicalStaff({ teamId, currentRoute }: { teamId: st
         <p>Hours apply to the primary and backup contacts. Outside these hours, plan to keep 988 available. Overnight or different backup schedules require additional setup.</p>
       </>}
       <label className="pcp-fld" style={{ margin: '16px 0' }}><span className="pcp-flbl">Planned acknowledgment window (minutes)</span><input className="pcp-finp" type="number" min={1} max={30} value={config.acknowledgmentMinutes} onChange={e => update({ acknowledgmentMinutes: Number(e.target.value) })} /></label>
-      <p>This is the planned time before trying the backup, not a promised clinical response time. Saving a contact does not grant access to athlete records.</p>
+      <p>This is a planning note. Timed acknowledgment and backup reminders are not enabled. The backup receives email only if primary delivery reports a confirmed failure. Saving a contact does not grant access to athlete records.</p>
       <button type="button" className="pcp-ab pcp-ab-t" onClick={async () => {
         setError(''); setStatus(''); setSaving(true);
         try {
           const validated = validateClinicalStaff(config);
           const saved = await request(teamId, validated, revision);
-          setConfig(validated); setRevision(saved!.revision);
+          setConfig(validated); setRevision(saved.config!.revision);setActiveDelivery(saved.config?.status === 'active');
           setStatus('Clinical staff draft saved. Current routing is unchanged.');
         } catch (e) { setError(e instanceof Error ? e.message : 'Unable to save.'); }
         finally { setSaving(false); }
-      }}>{saving ? 'Saving…' : 'Save clinical staff draft'}</button>
+      }} disabled={activeDelivery}>{saving ? 'Saving…' : 'Save clinical staff draft'}</button>
+      <button type="button" className="pcp-ab pcp-ab-t" disabled={!delivery.email} onClick={async()=>{
+        setError('');setStatus('');setSaving(true);
+        try {
+          const validated=validateClinicalStaff(config);
+          const result=await request(teamId,validated,revision,'activate');
+          setConfig(validated);setRevision(result.config!.revision);setActiveDelivery(true);
+          setStatus('Clinical staff alerts activated. New support requests use these contacts during scheduled coverage.');
+        } catch(e) {setError(e instanceof Error?e.message:'Unable to activate alerts.');}
+        finally {setSaving(false);}
+      }}>Activate clinical staff alerts</button>
+      {activeDelivery && <button type="button" className="pcp-ab" onClick={async()=>{
+        setError('');setStatus('');setSaving(true);
+        try {const result=await request(teamId,config,revision,'deactivate');setRevision(result.config!.revision);setActiveDelivery(false);setStatus('Clinical staff alerts deactivated. Urgent resources remain available.');}
+        catch(e){setError(e instanceof Error?e.message:'Unable to deactivate alerts.');}finally{setSaving(false);}
+      }}>Deactivate alerts</button>}
     </fieldset>
     {error && <p role="alert">{error}</p>}{status && <p role="status">{status}</p>}
   </div>;

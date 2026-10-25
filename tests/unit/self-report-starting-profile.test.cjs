@@ -20,9 +20,9 @@ test('unfinished v1 drafts migrate reported values without carrying authored cha
  const clean=validateSkillsDraft(raw);assert.equal(clean.version,2);assert.equal(clean.step,'tools');assert.equal(clean.evidence,undefined);assert.deepEqual(clean.answeredFamiliarity,['attention_cues']);assert.equal(clean.familiarity.attention_cues,'practiced_it');
 });
 test('unknown or duplicate reported fields and malformed ratings cannot complete',()=>{
- for(const patch of [{version:3},{assessmentKind:'demonstrated_ability'},{step:'attention'},{currentState:{...draft().currentState,rest:0}},{familiarity:{}},{answeredFamiliarity:['attention_cues','attention_cues']},{answeredFamiliarity:['made_up']}])assert.throws(()=>validateSkillsDraft({...draft(),...patch},true));
+ for(const patch of [{version:3},{assessmentKind:'demonstrated_ability'},{step:'attention'},{familiarity:{}},{answeredFamiliarity:['attention_cues','attention_cues']},{answeredFamiliarity:['made_up']}])assert.throws(()=>validateSkillsDraft({...draft(),...patch},true));
  const profile=skillsResult(validateSkillsDraft(draft(),true));
- for(const patch of [{version:5},{assessmentKind:'fake'},{familiarity:{}},{currentState:{...profile.currentState,energy:5.5}},{answeredFamiliarity:['made_up']}])assert.throws(()=>normalizeSelfReportStartingProfile({...profile,...patch}));
+ for(const patch of [{version:5},{assessmentKind:'fake'},{familiarity:{}},{answeredFamiliarity:['made_up']}])assert.throws(()=>normalizeSelfReportStartingProfile({...profile,...patch}));
 });
 test('canonical completion recognizes old v5 and explicit v6 but not unmarked new versions',()=>{
  assert.equal(completedStartingProfile({version:5}),true);assert.equal(completedStartingProfile(skillsResult(validateSkillsDraft(draft(),true))),true);assert.equal(completedStartingProfile({version:6}),false);assert.equal(completedStartingProfile(null),false);
@@ -32,13 +32,15 @@ test('a completed v1 private draft with failed canonical save retries from store
  let previous={completed:true,revision:2,draft:stored,result:{version:5,overallCompetencyScore:99}};
  const db={runTransaction:async fn=>fn({get:async()=>({data:()=>previous}),set:(_r,v)=>{previous=v;}})};
  const result=await saveSkills(db,{}, {draft:draft(),revision:0},'athlete',true,'Golf');
- assert.equal(result.result.version,6);assert.equal(result.result.currentState.energy,4);assert.equal(result.result.familiarity.attention_cues,'use_it');assert.equal(result.result.overallCompetencyScore,undefined);assert.equal(result.revision,3);
+ assert.equal(result.result.version,6);assert.equal(result.result.currentState,undefined);assert.equal(result.result.familiarity.attention_cues,'use_it');assert.equal(result.result.overallCompetencyScore,undefined);assert.equal(result.revision,3);
 });
 
 test('canonical completion persists the unscored profile with a null taxonomy and provisional plan',async()=>{
  const Module=require('node:module'),originalLoad=Module._load;
  let persisted,profilePassed;
- const progressRef={get:async()=>({exists:false}),set:async value=>{persisted=value;}};
+ const observations={observations:[{sessionId:'genuine-session',metricValue:325}],usableSessionCount:1};
+ const existing={taxonomyProfile:{abilityScores:{invented:99},taskEvidence:observations},simSessionHistory:['genuine-session']};
+ const progressRef={get:async()=>({exists:true,data:()=>existing}),set:async value=>{persisted=value;}};
  const noMemberships={where(){return this;},get:async()=>({docs:[]})};
  const db={collection:name=>name==='athlete-mental-progress'?{doc:()=>progressRef}:noMemberships};
  const admin={auth:()=>({verifyIdToken:async()=>({uid:'athlete'})}),firestore:Object.assign(()=>db,{Timestamp:{fromMillis:n=>n}})};
@@ -57,5 +59,5 @@ test('canonical completion persists the unscored profile with a null taxonomy an
  try{const filename=path.resolve('netlify/functions/complete-pulsecheck-baseline.js');delete require.cache[filename];handler=require(filename).handler;}finally{Module._load=originalLoad;}
  const profile=skillsResult(validateSkillsDraft(draft(),true),'Golf');
  const result=await handler({httpMethod:'POST',headers:{authorization:'Bearer synthetic'},body:JSON.stringify({userId:'athlete',mentalSkillsBaseline:{...profile,overallCompetencyScore:100,evidence:[{score:100}]}})});
- assert.equal(result.statusCode,200);assert.equal(profilePassed,null);assert.equal(persisted.taxonomyProfile,null);assert.deepEqual(persisted.activeProgram,{isProvisional:true});assert.equal(persisted.mentalSkillsBaseline.version,6);assert.equal(persisted.mentalSkillsBaseline.overallCompetencyScore,undefined);assert.equal(persisted.mentalSkillsBaseline.evidence,undefined);
+ assert.equal(result.statusCode,200);assert.equal(profilePassed,null);assert.equal(persisted.taxonomyProfile,null);assert.deepEqual(persisted.activeProgram,{isProvisional:true});assert.equal(persisted.mentalSkillsBaseline.version,6);assert.equal(persisted.mentalSkillsBaseline.overallCompetencyScore,undefined);assert.equal(persisted.mentalSkillsBaseline.evidence,undefined);assert.deepEqual(persisted.taskEvidence,observations);assert.deepEqual(persisted.simSessionHistory,['genuine-session']);
 });

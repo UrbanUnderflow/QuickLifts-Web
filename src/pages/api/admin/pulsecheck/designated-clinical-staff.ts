@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import admin, { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
 import { validateClinicalStaff } from '../../../../lib/pulsecheck/designatedClinicalStaff';
 
-/** Contact setup is private and draft-only. It never changes an athlete's live care route. */
+/** Explicit activation enables minimal staff alerts; it never grants access to athlete records. */
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Cache-Control', 'no-store');
   if (!['GET', 'PUT'].includes(req.method || '')) { res.setHeader('Allow', 'GET, PUT'); return res.status(405).json({ error: 'GET or PUT required.' }); }
@@ -22,8 +22,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const ref = db.collection('pulsecheck-team-escalation-settings').doc(teamId);
     const team = await teamRef.get();
     if (!team.exists) return res.status(404).json({ error: 'Team not found.' });
-    if (req.method === 'GET') return res.status(200).json({ config: (await ref.get()).data() || null });
-    if (Object.keys(req.body || {}).some(k => !['teamId', 'configuration', 'expectedRevision'].includes(k))) return res.status(400).json({ error: 'Unsupported setting.' });
+    const delivery = { email: Boolean(process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY),
+      sms: Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER) };
+    if (req.method === 'GET') return res.status(200).json({ config: (await ref.get()).data() || null, delivery });
+    if (Object.keys(req.body || {}).some(k => !['teamId', 'configuration', 'expectedRevision', 'action'].includes(k))) return res.status(400).json({ error: 'Unsupported setting.' });
+    const action = req.body.action || 'save';
+    if (!['save', 'activate', 'deactivate'].includes(action)) return res.status(400).json({ error: 'Choose a valid contact action.' });
+    if (action === 'activate' && !delivery.email) return res.status(400).json({ error: 'Configure email delivery before activating clinical staff alerts.' });
     const config = validateClinicalStaff(req.body.configuration);
     const expected = req.body.expectedRevision;
     if (!Number.isInteger(expected) || expected < 0) return res.status(400).json({ error: 'Reload these settings before saving.' });
@@ -33,9 +38,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const prior = await tx.get(ref);
       if (!currentTeam.exists || !org.exists || [currentTeam.data(), org.data()].some(d => d?.lifecycleState || d?.deletedAt || ['archived', 'decommissioned'].includes(d?.status))) throw new Error('Restore this program before changing its clinical staff settings.');
       if ((prior.data()?.revision || 0) !== expected) throw Object.assign(new Error('These settings changed in another session. Reload before saving.'), { statusCode: 409 });
-      const next = { ...config, status: 'draft', revision: expected + 1, organizationId: org.id, teamId, updatedBy: actor.uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+      if (action === 'activate' && [currentTeam.data(), org.data()].some(d => d?.status !== 'active')) throw new Error('Activate this program before enabling clinical staff alerts.');
+      if (action === 'save' && prior.data()?.status === 'active') throw new Error('Deactivate alerts before saving a draft, or explicitly activate the updated contacts.');
+      const next = { ...config, status: action === 'activate' ? 'active' : 'draft', revision: expected + 1, organizationId: org.id, teamId, updatedBy: actor.uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
       tx.set(ref, next);
-      tx.set(ref.collection('audit').doc(), { action: 'draft-saved', revision: next.revision, actorUserId: actor.uid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+      if (action === 'activate') tx.set(teamRef, { defaultEscalationRoute: 'clinician', clinicalDeliveryMode: 'designated_staff' }, { merge: true });
+      if (action === 'deactivate' && currentTeam.data()?.clinicalDeliveryMode === 'designated_staff') tx.set(teamRef, { defaultEscalationRoute: 'hotline', clinicalDeliveryMode: 'resources_only' }, { merge: true });
+      tx.set(ref.collection('audit').doc(), { action, revision: next.revision, actorUserId: actor.uid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
       return next;
     });
     return res.status(200).json({ config: saved });
