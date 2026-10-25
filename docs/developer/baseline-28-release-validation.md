@@ -28,13 +28,15 @@ No production contact, billing/access setting, consent receipt, clinical record 
 
 - TypeScript: passed after dependency installation from the frozen pnpm lockfile.
 - Scoped ESLint: passed. Repository-wide lint has 398 existing findings outside this change; no blanket cleanup was attempted.
-- Baseline, version/history/migration, provider contract, profile, designated staff and escalation Node tests: passed. Dedicated final logs are under `/tmp/baseline-*-tests.log` on this machine.
+- Baseline, version/history/migration, provider contract, profile, designated staff and escalation Node tests: 149 passed. Dedicated final logs are under `/tmp/baseline-*-tests.log` on this machine. The separate legacy clinical-escalation suite passed all nine tests with the TypeScript loader. Nora engagement and red-team gates also passed.
 - Consent/access/profile policy tests: 34 passed.
 - Published developer artifact/schema tests: 10 passed.
 - Firestore emulator atomic-consent tests: 21 passed, including re-consent, signer/scope rejection, individual decisions, receipt preservation, retries and injected write failures.
 - Real shared baseline component in offline Chromium: seven scenarios passed; 20 questionnaire prompts + eight experience ratings, mobile widths 320/390/430, enlarged text, interrupted final submission, off/decline/unready behavior, prior completion and native session bridge. No external traffic or clinical submissions.
 - iOS simulator: PulseCheck full application build plus six focused health-policy/crisis-copy/combined-gate tests passed. The first attempt required installing Apple's missing Metal toolchain; a later compiler timeout was repaired in MainTabView. Physical device testing is not established; the attached development phone is unpaired.
-- Android: PulseCheck and AthleticMind unit tests/debug assembly passed. No physical-device delivery evidence is claimed.
+- Android: PulseCheck and AthleticMind each passed 226 unit tests across 40 suites and debug assembly. AthleticMind also passed its full iOS simulator build. No physical-device delivery evidence is claimed.
+- The actual provisioning clinical-contact component passed offline save/activate/deactivate and stale-request browser checks. No real email or SMS was sent.
+- Baseline completion targets its own trusted Netlify deployment. The origin is baked into the Next API bundle at build time because Netlify does not expose DEPLOY_URL automatically at function runtime. Unit checks cover preview/production host validation and fallback behavior.
 - Both repositories: scoped diff and whitespace checks passed.
 
 ## Live state inspected, read-only
@@ -42,6 +44,16 @@ No production contact, billing/access setting, consent receipt, clinical record 
 Production Netlify site `quickliftsapp` / `05a6cac5-9994-4883-9e90-5adb69528bda` remained at deploy `6ade484ca99d20b6b4b435d9`, commit `46ace5a748e1fa85e73b51e21e7bda4c5d2b6c74`. Its repository/main configuration is correct. Signed-in production provisioning renders the UMES organization and its existing designated-clinical-staff draft form. Coach surveys remain present.
 
 Verified UMES Golf team: `fc02cbd64a7fefd5adc97701482fe2d9b147f48ea6dd56168622132824475f95`. Organization: `9b72a5f5a31c1a16c91138ca9e7f8fa1d0c57b7062ef56851479274245fc0351`. Both active, AthleticMind brand. The team still has hotline routing and no saved designated contact. Brevo email credentials are present; Twilio SMS and outbound AuntEdna baseline credentials are absent.
+
+## Hosted candidate receipt
+
+Netlify hosted Git build `6ade69a117f6495918d971e2` produced ready branch deploy `6ade69a117f6495918d971e4` for web code commit `86014adab719074a9c66be422c9be26646770bde`. Native candidate commit is `2516269`. Both are pushed on `codex/baseline-28-health-checkpoint-2026-10-25`; main was not changed. This document was updated afterward to record evidence, without changing deployed code.
+
+Exact candidate: https://6ade69a117f6495918d971e4--quickliftsapp.netlify.app/PulseCheck/baseline
+
+The actual hosted baseline entry rendered and completed account initialization to its sign-in screen. Anonymous baseline API access returned 401. A read-only request authenticated as the existing operator returned 200 from the designated-clinical-staff admin API for UMES Golf: contact absent, email configured, SMS not configured. Authenticated baseline submission was not exercised on the live database; the operator had no existing assignment and none was created for testing. Offline browser and emulator checks provide the save/consent evidence, not a live protected-answer receipt.
+
+Production remained on deploy `6ade484ca99d20b6b4b435d9` / commit `46ace5a748e1fa85e73b51e21e7bda4c5d2b6c74`. No production publication or local Netlify upload was performed.
 
 ## Remaining release decisions and evidence
 
