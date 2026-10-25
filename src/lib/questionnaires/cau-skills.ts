@@ -1,3 +1,4 @@
+import { scenarioArchetypeForSport } from '../../api/firebase/mentaltraining/sportScenarioArchetypes';
 import {
   MENTAL_SKILL_FAMILIES, MENTAL_SKILL_FAMILIARITY_LEVELS, scoreMentalSkillsBaseline,
   BASELINE_SETBACK_RESPONSE_PROFILES, BASELINE_REFLECTION_RESPONSE_PROFILES,
@@ -5,7 +6,9 @@ import {
   baselineAttentionResponseProfiles, baselineSelfTalkResponseProfiles, baselineSportPack, scoreSequenceOrder,
 } from '../../api/firebase/mentaltraining/mentalSkillsBaseline';
 const steps = ['intro','state','tools','belief','reflection','body','breath','visualization','attention','emotion','coherence','result'];
-const pack = baselineSportPack('net_racket');
+function scoringContext(sportName: string) {
+ const sportArchetype = scenarioArchetypeForSport(sportName);
+ const pack = baselineSportPack(sportArchetype);
 const profiles: Record<string, any[]> = {
  setback: BASELINE_SETBACK_RESPONSE_PROFILES, reflection: BASELINE_REFLECTION_RESPONSE_PROFILES,
  body_signal: BASELINE_BODY_AWARENESS_RESPONSE_PROFILES, guided_breath: BASELINE_BREATH_PRACTICE_RESPONSE_PROFILES,
@@ -19,7 +22,10 @@ const pairs: Record<string, [string,string,string][]> = {
  attention:[['attention_cues','choose','score']], emotion:[['emotional_regulation','choose','emotionalRegulationScore'],['self_talk_reframing','understand','selfTalkScore']],
 };
 const optionIds = new Set(Object.values(profiles).flat().map(p=>p.id));
-export function validateSkillsDraft(input: any, complete = false) {
+ return { sportArchetype, profiles, optionIds, pairs };
+}
+export function validateSkillsDraft(input: any, complete = false, sportName = 'Sport') {
+ const { profiles, optionIds, pairs } = scoringContext(sportName);
  if (!input || input.version !== 1 || !steps.includes(input.step)) throw Error('Invalid skills step.');
  const state: any = {};
  if (!['drained','off','okay','solid','locked_in'].includes(input.currentState?.mood)) throw Error('Invalid mood.');
@@ -49,18 +55,18 @@ export function validateSkillsDraft(input: any, complete = false) {
  if(complete && (Object.keys(pairs).some(id=>!evidence.some(e=>e.challengeId===id))||order.length!==4||chain.length!==4||!input.breathComplete||!input.breathPracticeSelected))throw Error('Finish every skills activity.');
  return {version:1,step:complete?'result':input.step,currentState:state,familiarity,evidence,selected:input.selected||null,breathComplete:input.breathComplete,breathPracticeSelected:input.breathPracticeSelected||null,visualizationOrder:order,coherenceOrder:chain};
 }
-export function skillsResult(draft: ReturnType<typeof validateSkillsDraft>) {
- return scoreMentalSkillsBaseline({source:'consolidated-cau-baseline',sportName:'Volleyball',sportArchetype:'net_racket',currentState:draft.currentState,familiarity:draft.familiarity,evidence:draft.evidence});
+export function skillsResult(draft: ReturnType<typeof validateSkillsDraft>, sportName = 'Sport') {
+ return scoreMentalSkillsBaseline({source:'consolidated-athlete-baseline',sportName,sportArchetype:scenarioArchetypeForSport(sportName),currentState:draft.currentState,familiarity:draft.familiarity,evidence:draft.evidence});
 }
-export async function saveSkills(db:any,ref:any,input:any,uid:string,complete:boolean){
- const draft=validateSkillsDraft(input.draft,complete);
+export async function saveSkills(db:any,ref:any,input:any,uid:string,complete:boolean,sportName = 'Sport'){
+ const draft=validateSkillsDraft(input.draft,complete,sportName);
  if(!Number.isInteger(input.revision)||input.revision<0)throw Error('Invalid revision.');
  return db.runTransaction(async(tx:any)=>{
   const previous=(await tx.get(ref)).data();
   if(previous?.completed)return previous;
   if(previous?.revision===input.revision+1&&JSON.stringify(previous.draft)===JSON.stringify(draft))return previous;
   if((previous?.revision||0)!==input.revision)throw Error('Skills changed in another tab. Reopen to continue.');
-  const value={ownerUid:uid,version:1,revision:input.revision+1,draft,completed:complete,...(complete?{result:skillsResult(draft)}:{}),updatedAt:new Date().toISOString()};
+  const value={ownerUid:uid,version:1,revision:input.revision+1,draft,completed:complete,...(complete?{result:skillsResult(draft,sportName)}:{}),updatedAt:new Date().toISOString()};
   // Strip undefined optional scorer properties for Firestore.
   const safe=JSON.parse(JSON.stringify(value));tx.set(ref,safe);return safe;
  });

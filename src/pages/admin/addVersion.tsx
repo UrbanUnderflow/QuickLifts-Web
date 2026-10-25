@@ -1,3 +1,7 @@
+import ExistingReleaseHighlightsEditor from '../../components/admin/ExistingReleaseHighlightsEditor';
+import AppMessageEditor from '../../components/admin/AppMessageEditor';
+import InAppAnnouncementEditor from '../../components/admin/InAppAnnouncementEditor';
+import { emptyInAppMessage, validateInAppMessage } from '../../utils/inAppMessages';
 import React, { useEffect, useState } from 'react';
 import { collection, doc, getDoc, getDocs, serverTimestamp, setDoc } from 'firebase/firestore';
 import { firebaseStorageService } from '../../api/firebase/storage/service';
@@ -32,7 +36,7 @@ const sanitizeStorageSegment = (value: string) =>
 const sanitizeFileName = (value: string) =>
   value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-');
 
-const PRODUCT_TABS: AppVersionProduct[] = ['fitWithPulse', 'pulseCheck', 'macra'];
+const PRODUCT_TABS: AppVersionProduct[] = ['fitWithPulse', 'pulseCheck', 'athleticMind', 'macra'];
 
 const getLatestVersionFromCollections = async (
   product: AppVersionProduct
@@ -92,6 +96,9 @@ const AddVersionPage = () => {
   const [buildNumber, setBuildNumber] = useState('');
   const [changeNotes, setChangeNotes] = useState<string[]>(['']);
   const [isCriticalUpdate, setIsCriticalUpdate] = useState(false);
+  const [whatsNew,setWhatsNew] = useState(emptyInAppMessage);
+  const [editingHighlightsRelease,setEditingHighlightsRelease] = useState<AppVersionDocument | null>(null);
+  const [releaseRefresh,setReleaseRefresh] = useState(0);
   const [selectedVideo, setSelectedVideo] = useState<SelectedVideo | null>(null);
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [loading, setLoading] = useState(false);
@@ -106,6 +113,7 @@ const AddVersionPage = () => {
   const requiresBuildNumber = activeProduct === 'fitWithPulse';
 
   useEffect(() => {
+    let active = true;
     const fetchLatestVersion = async () => {
       try {
         setLoadingLatest(true);
@@ -113,17 +121,19 @@ const AddVersionPage = () => {
           getLatestVersionFromCollections(activeProduct),
           getUpdateModalConfig(activeProduct),
         ]);
+        if (!active) return;
         setLatestVersion(latest);
         setIsUpdateModalEnabled(modalEnabled);
       } catch (fetchError) {
         console.error('Error fetching latest version', fetchError);
       } finally {
-        setLoadingLatest(false);
+        if (active) setLoadingLatest(false);
       }
     };
 
     fetchLatestVersion();
-  }, [activeProduct, success]);
+    return () => { active = false; };
+  }, [activeProduct, success, releaseRefresh]);
 
   const clearSelectedMedia = () => {
     if (selectedVideo) {
@@ -261,6 +271,7 @@ const AddVersionPage = () => {
     }
 
     try {
+      const releaseMessage = activeProduct === 'pulseCheck' || activeProduct === 'athleticMind' ? validateInAppMessage(whatsNew) : undefined;
       const uploadedMedia = await uploadReleaseMedia(normalizedVersion);
       setLoadingMessage('Writing release notes...');
       await adminMethods.addVersion(
@@ -269,7 +280,8 @@ const AddVersionPage = () => {
         normalizedBuildNumber || undefined,
         notesArray,
         isCriticalUpdate,
-        uploadedMedia
+        uploadedMedia,
+        releaseMessage
       );
 
       setSuccess('Version added successfully!');
@@ -277,6 +289,7 @@ const AddVersionPage = () => {
       setBuildNumber('');
       setChangeNotes(['']);
       setIsCriticalUpdate(false);
+      setWhatsNew(emptyInAppMessage());
       clearSelectedMedia();
     } catch (submitError: any) {
       setError(submitError?.message || 'Failed to add version.');
@@ -313,6 +326,7 @@ const AddVersionPage = () => {
 
   const autoIncrementBuild = () => {
     setBuildNumber(incrementBuildNumber(latestVersion?.buildNumber));
+    setWhatsNew(latestVersion?.whatsNew || emptyInAppMessage());
   };
 
   const latestVideoCount = latestVersion?.media.filter((item) => item.type === 'video').length ?? 0;
@@ -379,6 +393,8 @@ const AddVersionPage = () => {
                     setBuildNumber('');
                     setChangeNotes(['']);
                     setIsCriticalUpdate(false);
+                    setWhatsNew(emptyInAppMessage());
+                    setEditingHighlightsRelease(null);
                   }}
                   className={`rounded-xl border px-4 py-3 text-left transition ${
                     isActive
@@ -392,12 +408,14 @@ const AddVersionPage = () => {
                       ? 'Legacy Fit With Pulse live release feed'
                       : product === 'pulseCheck'
                         ? 'PulseCheck live release feed'
-                        : 'Macra live release feed'}
+                        : product === 'athleticMind' ? 'AthleticMind live release feed' : 'Macra live release feed'}
                   </div>
                 </button>
               );
             })}
           </div>
+
+          {(activeProduct === 'pulseCheck' || activeProduct === 'athleticMind') && <InAppAnnouncementEditor key={activeProduct} product={activeProduct}/>}
 
           <div className="relative bg-[#1a1e24] rounded-xl p-6 mb-6 shadow-xl overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500 via-orange-500 to-red-500"></div>
@@ -479,6 +497,7 @@ const AddVersionPage = () => {
               <h2 className="text-lg font-semibold text-white">
                 {APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel} Live Published Release
               </h2>
+              {latestVersion && (activeProduct === 'pulseCheck' || activeProduct === 'athleticMind') && <button type="button" onClick={()=>setEditingHighlightsRelease(latestVersion)} className="ml-auto rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-200">Edit these highlights</button>}
               {latestVersion?.isCriticalUpdate && (
                 <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
                   Critical
@@ -531,6 +550,8 @@ const AddVersionPage = () => {
               <div className="text-gray-400 text-sm">No versions available</div>
             )}
           </div>
+
+          {editingHighlightsRelease && <ExistingReleaseHighlightsEditor key={`${activeProduct}-${editingHighlightsRelease.version}`} product={activeProduct} release={editingHighlightsRelease} onClose={()=>setEditingHighlightsRelease(null)} onSaved={()=>{setSuccess(`Highlights updated for ${editingHighlightsRelease.version}.`);setReleaseRefresh(value=>value+1);}}/>}
 
           <div className="relative bg-[#1a1e24] rounded-xl p-6 mb-6 shadow-xl overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
@@ -728,6 +749,12 @@ const AddVersionPage = () => {
                   )}
                 </div>
               </div>
+
+              {(activeProduct === 'pulseCheck' || activeProduct === 'athleticMind') && <section className="rounded-2xl border border-zinc-600 bg-[#171d22] p-5">
+                <h2 className="mb-2 text-xl font-semibold text-white">What’s new after installation</h2>
+                <p className="mb-6 text-sm leading-6 text-zinc-400">These highlights appear once when an account is using this published version. The update-available screen and critical upgrade setting stay separate.</p>
+                <AppMessageEditor value={whatsNew} onChange={setWhatsNew} label="Show these highlights for this release" eyebrow="WHAT’S NEW"/>
+              </section>}
 
               <div className="relative flex items-center bg-[#262a30] p-4 rounded-lg overflow-hidden">
                 <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-orange-500 to-red-500"></div>

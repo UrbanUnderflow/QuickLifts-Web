@@ -9,17 +9,17 @@ const admin={auth:()=>({verifyIdToken:async token=>{if(token!=='valid')throw Err
 require.cache[path.resolve('src/lib/firebase-admin.ts')]={id:path.resolve('src/lib/firebase-admin.ts'),filename:path.resolve('src/lib/firebase-admin.ts'),loaded:true,exports:{__esModule:true,default:admin,getFirebaseAdminApp:()=>({})}};
 const handler=require(path.resolve('src/pages/api/pulsecheck/questionnaire/cau-team-test.ts')).default;
 function setup(){records=new Map();writes=[];providerCalls=0;process.env.CAU_TEAM_TEST_INVITE='test-invite';process.env.CAU_TEAM_TEST_CAMPAIGN='test-campaign';process.env.CAU_TEAM_TEST_EXPIRES_AT='2099-01-01T00:00:00Z';process.env.AUNTEDNA_PARTNER_TEST_KEY='ae_pk_test_fake';
- records.set('pulsecheck-restricted-questionnaire-submissions/sandbox_skills_test-campaign_'+require('crypto').createHash('sha256').update('test-campaign:athlete').digest('hex').slice(0,32)+'_cau-starting-point-v2',{completed:true,result:{version:5}});
+ records.set('pulsecheck-restricted-questionnaire-submissions/sandbox_skills_test-campaign_'+require('crypto').createHash('sha256').update('test-campaign:athlete').digest('hex').slice(0,32)+'_athlete-starting-point-v1',{completed:true,result:{version:5}});
  global.fetch=async(url,opts)=>{providerCalls++;const body=JSON.parse(opts.body);assert.equal(body.universityCode,'SANDBOX');assert.equal(body.identity.email.includes('athlete@'),false);assert.equal(Object.keys(body.fields).length,19);assert.equal(body.fields['cau-starting-point-46'],undefined);return Response.json({success:true,requestId:'request',data:{baselineId:'baseline',athleteId:'ae-athlete',externalId:url.split('/').at(-2),submissionId:body.submissionId,receivedAt:'2026-09-18T12:00:00Z',created:true}});};
 }
-async function call(method,body,invite='test-invite',token='valid'){let result={status:200};const res={setHeader(){},status(n){result.status=n;return this;},json(v){result.body=v;return this;},end(){return this;}};await handler({method,headers:{authorization:'Bearer '+token,'x-questionnaire-test':invite},body:method==='POST'?{questionnaireVersion:'cau-starting-point-v2',...body}:body},res);return result;}
-const body={questionnaireVersion:'cau-starting-point-v2',name:'Fictional Athlete',email:'test@example.com',answers:{'cau-starting-point-39':'Less than 5 hours'},completedSections:{performance:true,health:true},shareHealth:true};
+async function call(method,body,invite='test-invite',token='valid'){let result={status:200};const res={setHeader(){},status(n){result.status=n;return this;},json(v){result.body=v;return this;},end(){return this;}};await handler({method,headers:{authorization:'Bearer '+token,'x-questionnaire-test':invite},body:method==='POST'?{questionnaireVersion:'athlete-starting-point-v1',...body}:body},res);return result;}
+const body={questionnaireVersion:'athlete-starting-point-v1',name:'Fictional Athlete',email:'test@example.com',answers:{'cau-starting-point-39':'Less than 5 hours'},completedSections:{performance:true,health:true},shareHealth:true};
 test('team test requires invite, sign-in and completed sections',async()=>{setup();assert.equal((await call('GET',null,'wrong')).status,403);assert.equal((await call('GET',null,'test-invite','wrong')).status,401);assert.equal((await call('POST',{...body,completedSections:{performance:true,health:false}})).status,400);assert.equal(providerCalls,0);});
 test('sandbox routing, own receipt, reference-only persistence and duplicate prevention',async()=>{setup();const first=await call('POST',body);assert.equal(first.body.saved,true);assert.equal(first.body.receipt.baselineId,'baseline');assert.equal(JSON.stringify(writes).includes('Less than 5 hours'),false);assert.equal(writes.some(r=>r.kind==='assignment'),false);assert.equal((await call('GET')).body.completed,true);assert.equal((await call('POST',body)).body.receipt.baselineId,'baseline');assert.equal(providerCalls,1);});
 test('expired link and live key cannot activate sandbox',async()=>{setup();process.env.AUNTEDNA_PARTNER_TEST_KEY='ae_pk_live_wrong';assert.equal((await call('GET')).status,503);setup();process.env.CAU_TEAM_TEST_EXPIRES_AT='2020-01-01';assert.equal((await call('GET')).status,503);assert.equal(providerCalls,0);});
 
 test('performance drafts resume, reject clinical fields and stale writes, and retry safely',async()=>{
- setup();const draft={version:'cau-starting-point-v2',name:'Tester',answers:{'cau-starting-point-01':'Yes'},position:4,completed:false,revision:0};
+ setup();const draft={version:'athlete-starting-point-v1',name:'Tester',answers:{'cau-starting-point-01':'Yes'},position:4,completed:false,revision:0};
  const saved=await call('POST',{action:'savePerformanceDraft',draft});assert.equal(saved.body.draft.revision,1);
  const resumed=(await call('GET')).body;assert.equal(resumed.completed,false);assert.equal(resumed.draft.position,4);assert.equal(resumed.draft.answers['cau-starting-point-01'],'Yes');
  assert.equal((await call('POST',{action:'savePerformanceDraft',draft})).body.draft.revision,1);
@@ -53,9 +53,9 @@ test('retention is server gated with all 19 protected items external only',()=>{
  assert.equal(liveRetentionEnabled({retentionPolicyVersion:RETENTION_VERSION},'true'),true);
 });
 test('skills drafts resume and complete only after all activities, sandbox never unlocks real progress',async()=>{
- setup(); const key='pulsecheck-restricted-questionnaire-submissions/sandbox_skills_test-campaign_'+require('crypto').createHash('sha256').update('test-campaign:athlete').digest('hex').slice(0,32)+'_cau-starting-point-v2';records.delete(key);
+ setup(); const key='pulsecheck-restricted-questionnaire-submissions/sandbox_skills_test-campaign_'+require('crypto').createHash('sha256').update('test-campaign:athlete').digest('hex').slice(0,32)+'_athlete-starting-point-v1';records.delete(key);
  assert.equal((await call('POST',body)).status,400);
- const qdraft={version:'cau-starting-point-v2',name:'Tester',answers:{},position:0,completed:true,revision:0};
+ const qdraft={version:'athlete-starting-point-v1',name:'Tester',answers:{},position:0,completed:true,revision:0};
  await call('POST',{action:'savePerformanceDraft',draft:qdraft});
  const lib=require(path.resolve('src/api/firebase/mentaltraining/mentalSkillsBaseline.ts'));
  const draft={version:1,step:'state',currentState:{mood:'okay',rest:3,energy:3,confidence:3,motivation:3,sportConnection:3,selfBelief:3,improvementBelief:3},familiarity:Object.fromEntries(lib.MENTAL_SKILL_FAMILIES.map(f=>[f,'new_to_me'])),evidence:[],selected:null,breathComplete:false,breathPracticeSelected:null,visualizationOrder:[],coherenceOrder:[]};

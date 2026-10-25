@@ -1,3 +1,4 @@
+import type { InAppMessageContent } from '../../../utils/inAppMessages';
 import { Timestamp } from 'firebase/firestore';
 import { AppVersionMediaItem, AppVersionProduct } from '../../../utils/appVersioning';
 
@@ -105,7 +106,8 @@ export interface AdminService {
     buildNumber: string | undefined,
     changeNotes: string[],
     isCriticalUpdate: boolean,
-    media?: AppVersionMediaItem[]
+    media?: AppVersionMediaItem[],
+    whatsNew?: InAppMessageContent
   ) => Promise<boolean>;
   isAdmin: (email: string) => Promise<boolean>;
   setPageMetaData: (data: PageMetaData) => Promise<boolean>;

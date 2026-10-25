@@ -1,6 +1,7 @@
+import { type InAppMessageContent, normalizeInAppMessage, validateInAppMessage } from './inAppMessages';
 export type AppVersionMediaType = 'video' | 'image';
 
-export type AppVersionProduct = 'fitWithPulse' | 'pulseCheck' | 'macra';
+export type AppVersionProduct = 'fitWithPulse' | 'pulseCheck' | 'athleticMind' | 'macra';
 
 export interface AppVersionProductConfig {
   id: AppVersionProduct;
@@ -9,11 +10,13 @@ export interface AppVersionProductConfig {
   versionCollections: string[];
   updateModalConfigPath: readonly [string, string];
   storageRoot: string;
+  appIdentity: string;
 }
 
 export const APP_VERSION_PRODUCT_CONFIGS: Record<AppVersionProduct, AppVersionProductConfig> = {
   fitWithPulse: {
     id: 'fitWithPulse',
+    appIdentity: 'fitwithpulse',
     label: 'Fit With Pulse',
     shortLabel: 'Fit With Pulse',
     versionCollections: ['version', 'versions'],
@@ -22,14 +25,22 @@ export const APP_VERSION_PRODUCT_CONFIGS: Record<AppVersionProduct, AppVersionPr
   },
   pulseCheck: {
     id: 'pulseCheck',
+    appIdentity: 'pulsecheck',
     label: 'PulseCheck',
     shortLabel: 'PulseCheck',
     versionCollections: ['pulsecheck-version', 'pulsecheck-versions'],
     updateModalConfigPath: ['company-config', 'pulsecheck-app-update-modal'],
     storageRoot: 'press_assets/pulsecheck_app_updates',
   },
+  athleticMind: {
+    id: 'athleticMind', appIdentity: 'athleticmind', label: 'AthleticMind', shortLabel: 'AthleticMind',
+    versionCollections: ['athleticmind-version', 'athleticmind-versions'],
+    updateModalConfigPath: ['company-config', 'athleticmind-app-update-modal'],
+    storageRoot: 'press_assets/athleticmind_app_updates',
+  },
   macra: {
     id: 'macra',
+    appIdentity: 'macra',
     label: 'Macra',
     shortLabel: 'Macra',
     versionCollections: ['macra-version', 'macra-versions'],
@@ -53,6 +64,7 @@ export interface AppVersionDocument {
   changeNotes: string[];
   isCriticalUpdate: boolean;
   media: AppVersionMediaItem[];
+  whatsNew?: InAppMessageContent | null;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -250,6 +262,7 @@ export const normalizeAppVersionDocument = (
     changeNotes,
     isCriticalUpdate: Boolean(data.isCriticalUpdate ?? data.isCritical),
     media: normalizeAppVersionMedia(data),
+    whatsNew: normalizeInAppMessage(data.whatsNew),
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
@@ -259,7 +272,8 @@ export const buildAppVersionWritePayload = (
   changeNotes: string[],
   isCriticalUpdate: boolean,
   media: AppVersionMediaItem[],
-  buildNumber?: string
+  buildNumber?: string,
+  whatsNew?: InAppMessageContent
 ) => {
   const notesObject: { [key: string]: string } = {};
 
@@ -279,6 +293,7 @@ export const buildAppVersionWritePayload = (
 
   return {
     ...notesObject,
+    ...(whatsNew ? { whatsNew: validateInAppMessage(whatsNew) } : {}),
     buildNumber: buildNumber?.trim() || null,
     build: buildNumber?.trim() || null,
     changeNotes,
