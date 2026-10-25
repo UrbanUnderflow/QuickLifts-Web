@@ -3,15 +3,15 @@ const active = value => value?.status === 'active' && !value.revokedAt && !value
 const text = value => typeof value === 'string' ? value.trim() : '';
 
 /** The private settings document, verified program and athlete membership own the recipient. */
-async function resolveDesignatedClinicalRoute(db, { teamId, userId, membershipId } = {}) {
+async function resolveDesignatedClinicalRoute(db, { teamId, userId, membershipId } = {}, read = reference => reference.get()) {
   if (!text(teamId) || !text(userId)) return null;
-  const team = (await db.collection('pulsecheck-teams').doc(teamId).get()).data();
+  const team = (await read(db.collection('pulsecheck-teams').doc(teamId))).data();
   if (!active(team) || team.clinicalDeliveryMode !== 'designated_staff' || !text(team.organizationId)) return null;
   const [organization, settings, membership, closure] = await Promise.all([
-    db.collection('pulsecheck-organizations').doc(team.organizationId).get(),
-    db.collection('pulsecheck-team-escalation-settings').doc(teamId).get(),
-    db.collection('pulsecheck-team-memberships').doc(membershipId || `${teamId}_${userId}`).get(),
-    db.collection('account-closure-jobs').doc(userId).get(),
+    read(db.collection('pulsecheck-organizations').doc(team.organizationId)),
+    read(db.collection('pulsecheck-team-escalation-settings').doc(teamId)),
+    read(db.collection('pulsecheck-team-memberships').doc(membershipId || `${teamId}_${userId}`)),
+    read(db.collection('account-closure-jobs').doc(userId)),
   ]);
   const config = settings.data(), member = membership.data();
   if (closure.exists || !active(organization.data()) || !['pulsecheck','athleticmind'].includes(organization.data()?.productBrand) || !active(member) || member.userId !== userId || member.role !== 'athlete'
@@ -20,7 +20,7 @@ async function resolveDesignatedClinicalRoute(db, { teamId, userId, membershipId
     || !Number.isInteger(config.revision) || !text(config.primary?.name)
     || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(config.primary?.email || '')
     || !/^\+[1-9]\d{7,14}$/.test(config.primary?.phone || '')) return null;
-  return { ...config, teamName: text(team.teamName || team.name), member };
+  return { ...config, teamName: text(team.displayName || team.teamName || team.name), membershipId:membershipId || `${teamId}_${userId}`, member };
 }
 
 function withinCoverage(config, now = new Date()) {
@@ -49,6 +49,18 @@ async function defaultEmail(input) {
 /** Send minimum contact context only. Delivery acknowledgment is never a clinician response. */
 async function deliverDesignatedClinicalAlert(db, { config, userId, escalationId, tier }, transports = {}) {
   if (![2,3].includes(Number(tier))) throw Error('A clinical escalation is required.');
+  const incident = db.collection('escalation-records').doc(escalationId);
+  const routeClaim = await db.runTransaction(async tx => {
+    const prior = (await tx.get(incident)).data();
+    if (prior?.staffNotificationStatus === 'sent') return 'sent';
+    if (prior?.designatedClinicalStaffRevision != null && prior.designatedClinicalStaffRevision !== config.revision) return 'changed';
+    const current = await resolveDesignatedClinicalRoute(db, {teamId:config.teamId,userId,membershipId:config.membershipId}, reference=>tx.get(reference));
+    if (!current || current.revision !== config.revision) return 'changed';
+    tx.set(incident,{clinicalDeliveryMode:'designated_staff',designatedClinicalStaffRevision:config.revision},{merge:true});
+    return 'claimed';
+  });
+  if (routeClaim === 'sent') return {success:true,deduped:true,status:'sent',supportRoute:'clinician',emergencySupportMode:'designated_staff',emergencyHandoffStatus:'sent',providerConfirmed:false};
+  if (routeClaim === 'changed') return {success:false,status:'reconciliation_required',supportRoute:'clinician',emergencySupportMode:'designated_staff',emergencyHandoffStatus:'pending',providerConfirmed:false};
   if (!withinCoverage(config)) {
     await db.collection('escalation-records').doc(escalationId).set({staffNotificationStatus:'outside_coverage',handoffStatus:'failed',clinicalDeliveryMode:'designated_staff',providerConfirmed:false},{merge:true});
     return { success:false,status:'outside_coverage',emergencySupportMode:'designated_staff',emergencyHandoffStatus:'outside_coverage',supportRoute:'clinician',providerConfirmed:false };
@@ -63,6 +75,9 @@ async function deliverDesignatedClinicalAlert(db, { config, userId, escalationId
     const reference = db.collection('escalation-records').doc(escalationId).collection('staff-deliveries').doc(key);
     const claim = await db.runTransaction(async tx => {
       const prior = (await tx.get(reference)).data();
+      const current = await resolveDesignatedClinicalRoute(db, {teamId:config.teamId,userId,membershipId:config.membershipId}, ref=>tx.get(ref));
+      const recipient = slot === 'backup' ? current?.backup : current?.primary;
+      if (!current || current.revision !== config.revision || recipient?.email !== contact.email || recipient?.phone !== contact.phone) return 'changed';
       if (prior?.status === 'sent') return 'sent';
       // Unknown delivery outcomes require operator reconciliation, never blind duplicate alerts.
       if (['sending','unknown'].includes(prior?.status)) return 'pending';

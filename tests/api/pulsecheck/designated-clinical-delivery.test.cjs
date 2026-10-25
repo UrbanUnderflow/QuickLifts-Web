@@ -36,6 +36,7 @@ test('unconfirmed sends remain pending without blind duplicate delivery',async()
 });
 test('confirmed failures can retry, and only confirmed primary failure tries backup email',async()=>{
  const f=fixture();let sends=0;const c={...config(),backup:{name:'Backup',email:'backup@example.test',phone:'+14105550125'}};
+ f.rows.set('pulsecheck-team-escalation-settings/team',c);
  const result=await deliverDesignatedClinicalAlert(f.db,{config:c,userId:'athlete',escalationId:'incident',tier:3},{email:async p=>{sends++;return{success:p.contact.email.startsWith('backup'),messageId:p.contact.email.startsWith('backup')?'backup-email':null}},sms:async()=>({success:false})});
  assert.equal(sends,2);assert.equal(result.success,true);
 });
@@ -75,4 +76,26 @@ test('critical handoff uses active designated staff with AuntEdna disabled and n
   }
 
  }finally{Module._load=oldLoad;if(savedConfig)require.cache[configPath]=savedConfig;else delete require.cache[configPath];if(savedMetrics)require.cache[metricsPath]=savedMetrics;else delete require.cache[metricsPath];delete require.cache[escalationPath];}
+});
+
+
+test('contact edits cannot reroute an existing incident or send it again after success',async()=>{
+ const f=fixture();let sends=0;
+ const input={config:config(),userId:'athlete',escalationId:'incident',tier:3};
+ const transports={email:async()=>{sends++;return{success:true,messageId:'confirmed'}},sms:async()=>({success:false,skipped:true})};
+ assert.equal((await deliverDesignatedClinicalAlert(f.db,input,transports)).success,true);
+ const changed={...config(),revision:3,primary:{name:'Another clinician',email:'another@example.test',phone:'+14105550126'}};
+ f.rows.set('pulsecheck-team-escalation-settings/team',changed);
+ assert.equal((await deliverDesignatedClinicalAlert(f.db,{...input,config:changed},transports)).deduped,true);assert.equal(sends,1);
+ assert.equal(f.rows.get('escalation-records/incident').designatedClinicalStaffRevision,2);
+ const pending=fixture();pending.rows.set('escalation-records/incident',{designatedClinicalStaffRevision:1,staffNotificationStatus:'pending'});
+ assert.equal((await deliverDesignatedClinicalAlert(pending.db,input,transports)).status,'reconciliation_required');assert.equal(sends,1);
+});
+test('revoked contact configuration is rechecked immediately before every channel send',async()=>{
+ const f=fixture();let emails=0,sms=0;
+ const result=await deliverDesignatedClinicalAlert(f.db,{config:config(),userId:'athlete',escalationId:'incident',tier:3},{
+  email:async()=>{emails++;f.rows.set('pulsecheck-team-escalation-settings/team',{...config(),status:'draft'});return{success:true,messageId:'confirmed'};},
+  sms:async()=>{sms++;return{success:true,messageSid:'must-not-send'};},
+ });
+ assert.equal(result.success,true);assert.equal(emails,1);assert.equal(sms,0);
 });
