@@ -134,7 +134,7 @@ test('one-time development results exclude unrelated participants and programs',
  assert.equal((await readCoachSurveyUserTest(db)).responses.length,1);
  const route=fs.readFileSync('src/pages/api/admin/pulsecheck/coach-surveys.ts','utf8');
  assert.ok(route.indexOf('assertSurveyAdmin(getFirebaseAdminApp')<route.indexOf("req.query.userTest === '1'"));
- assert.ok(route.includes("process.env.COACH_SURVEY_FIREBASE_MODE !== 'dev'"));
+ assert.ok(route.includes('readCoachSurveyUserTest(identity.db)'));
 });
 test('cadence inherits default, team, coach and reset without touching another team',()=>{
  const {effectiveSchedule,cadenceDays}=require('../../src/lib/coachSurveys/cadence.ts');const v=enrollment();

@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const root = db.collection(COLLECTION).doc(ROOT);
     await db.runTransaction(async tx => {
       const stop = (await tx.get(root.collection('stop-tokens').doc(tokenDigest(token)))).data();
-      if (!stop && process.env.COACH_SURVEY_FIREBASE_MODE === 'dev') {
+      if (!stop) {
         // One-time test links have no enrollment to stop. Their existing capability
         // may confirm reminders are already off, without creating any records.
         const invite = (await tx.get(root.collection('invitations').doc(tokenDigest(token)))).data();

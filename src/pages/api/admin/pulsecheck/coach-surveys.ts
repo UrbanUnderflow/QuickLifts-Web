@@ -25,7 +25,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.json(await manageCoachSurvey(identity.db,identity.uid,req.body));
     }
     if (req.query.userTest === '1') {
-      if (process.env.COACH_SURVEY_FIREBASE_MODE !== 'dev') return res.status(404).end();
       return res.json(await readCoachSurveyUserTest(identity.db));
     }
     return res.json(await readCoachSurveys(identity.db,String(req.query.teamId||'')));

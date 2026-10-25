@@ -1,3 +1,4 @@
+import { useRouter } from 'next/router';
 import CoachSurveyUserTestResults from '../../components/admin/CoachSurveyUserTestResults';
 import TeamClinicalStaff from '../../components/admin/TeamClinicalStaff';
 import TeamAthleteActivation from '../../components/admin/TeamAthleteActivation';
@@ -755,6 +756,7 @@ const fetchTeamCode = async (
 };
 
 const PulseCheckProvisioningPage: React.FC = () => {
+  const router = useRouter();
   const currentUser = useUser();
   const dispatch = useDispatch();
   const [organizations, setOrganizations] = useState<PulseCheckOrganization[]>([]);
@@ -3868,7 +3870,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
             </aside>
 
             <main className="pcp-main">
-              {process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true' && <CoachSurveyUserTestResults />}
+              {(process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true' || router.query.coachSurveyTest === '1') && <CoachSurveyUserTestResults />}
               <div
                 id="organizations-directory"
                 className="pcp-page-head pcp-slide-up scroll-mt-24"
