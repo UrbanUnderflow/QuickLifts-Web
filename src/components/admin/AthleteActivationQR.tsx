@@ -26,7 +26,7 @@ export default function AthleteActivationQR({token, label}: {token: string; labe
         <img src={data.image} alt={`Activation QR for ${label}`} style={{width:'100%', maxWidth:300, margin:'16px auto'}} />
         <p>Or enter your activation code</p><strong style={{fontSize:20, letterSpacing:2, overflowWrap:'anywhere'}}>{data.code}</strong>
         <p style={{marginTop:16}}><a href={data.image} download={`team-activation-qr.png`}>Download QR for your activation slide</a></p>
-        {!new URL(data.url).hostname.endsWith('.onelink.me') && <p role="status" style={{marginTop:12}}>App-store routing is not configured for this product yet. This QR opens the invitation web page.</p>}
+        {!new URL(data.url).hostname.endsWith('.onelink.me') && <p role="status" style={{marginTop:12}}>This QR opens your team invitation with app download options.</p>}
       </div>
     </div>, document.body)}
   </>;
