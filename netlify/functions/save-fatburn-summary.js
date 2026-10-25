@@ -1,12 +1,13 @@
 const { admin } = require('./config/firebase');
 
 const db = admin.firestore();
+const { requireUser } = require('./config/require-user');
 
 exports.handler = async (event) => {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'POST, OPTIONS'
   };
 
@@ -37,6 +38,9 @@ exports.handler = async (event) => {
         body: JSON.stringify({ error: 'userId is required' })
       };
     }
+
+    const access = await requireUser(event, fatBurnSummary.userId);
+    if (access.error) return { statusCode: access.statusCode, headers, body: JSON.stringify({ success: false, error: access.error }) };
 
     // Generate ID if not provided
     const docId = fatBurnSummary.id || db.collection('users').doc().id;
