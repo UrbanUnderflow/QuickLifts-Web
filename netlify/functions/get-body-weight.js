@@ -1,11 +1,12 @@
 const { admin } = require('./config/firebase');
 
 const db = admin.firestore();
+const { requireUser } = require('./config/require-user');
 
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
   };
 
@@ -19,6 +20,9 @@ exports.handler = async (event) => {
         body: JSON.stringify({ success: false, error: 'userId parameter is required' })
       };
     }
+
+    const access = await requireUser(event, userId);
+    if (access.error) return { statusCode: access.statusCode, headers, body: JSON.stringify({ success: false, error: access.error }) };
 
     // Get user's body weight subcollection
     const bodyWeightRef = db.collection('users').doc(userId).collection('bodyWeight');
