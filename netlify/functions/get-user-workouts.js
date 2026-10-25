@@ -2,6 +2,7 @@
 const { admin } = require('./config/firebase');
 
 const db = admin.firestore();
+const { requireUser } = require('./config/require-user');
 
 async function fetchUserWorkouts(userId) {
  try {
@@ -34,7 +35,7 @@ async function fetchUserWorkouts(userId) {
 exports.handler = async (event) => {
  const headers = {
    'Access-Control-Allow-Origin': '*',
-   'Access-Control-Allow-Headers': 'Content-Type',
+   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
    'Access-Control-Allow-Methods': 'GET, OPTIONS'
  };
 
@@ -52,6 +53,8 @@ exports.handler = async (event) => {
      };
    }
 
+   const access = await requireUser(event, userId);
+   if (access.error) return { statusCode: access.statusCode, headers, body: JSON.stringify({ success: false, error: access.error }) };
    const workouts = await fetchUserWorkouts(userId);
    
    return {
