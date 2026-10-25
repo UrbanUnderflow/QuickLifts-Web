@@ -1283,7 +1283,7 @@ async function executeCriticalSafetyOperations({
 
   const emergencySupportMode = handoffResult?.emergencySupportMode || (handoffResult?.resourcesOnly ? 'resources_only' : initialEmergencyMode);
   const emergencyHandoffStatus = emergencySupportMode === 'resources_only' ? 'not_applicable'
-    : handoffResult?.success === true ? 'received' : handoffResult?.status === 'already_initiated' ? 'pending' : 'failed';
+    : handoffResult?.emergencyHandoffStatus || (handoffResult?.success === true ? 'received' : ['already_initiated','pending'].includes(handoffResult?.status) ? 'pending' : 'failed');
   handoffResult = { ...handoffResult, emergencySupportMode, emergencyHandoffStatus };
   try {
     await runtimeDb.collection(ATHLETE_SAFETY_STATE_COLLECTION).doc(userId).set({ emergencySupportMode, emergencyHandoffStatus }, { merge: true });
@@ -1720,7 +1720,7 @@ async function handleCreateEscalation(body, runtimeDb = db, runtimeOptions = {})
   });
 
   const handoffStatus = activeTier === EscalationTier.CriticalRisk
-    ? (handoffResult?.resourcesOnly === true ? HandoffStatus.NotInitiated : handoffResult?.status === 'already_initiated' ? HandoffStatus.Initiated : handoffResult?.success === true ? HandoffStatus.Completed : HandoffStatus.Failed)
+    ? (handoffResult?.resourcesOnly === true ? HandoffStatus.NotInitiated : ['already_initiated','pending'].includes(handoffResult?.status) ? HandoffStatus.Initiated : handoffResult?.success === true ? HandoffStatus.Completed : HandoffStatus.Failed)
     : escalationData.handoffStatus;
   const handoffError = handoffStatus === HandoffStatus.Failed
     ? (typeof handoffResult?.error === 'string'

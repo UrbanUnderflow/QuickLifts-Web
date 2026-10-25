@@ -66,5 +66,13 @@ test('critical handoff uses active designated staff with AuntEdna disabled and n
   delete require.cache[escalationPath];const {runtimeHelpers}=require(escalationPath);
   const result=await runtimeHelpers.performClinicalHandoff('athlete','conversation','incident',{tier:3,teamId:'team',organizationId:'org'},f.db,{teamId:'team',pilotContext:{teamMembershipId:'team_athlete',organizationId:'org'}},()=>{providerCalled=true;throw Error('No provider should be used');});
   assert.equal(result.success,true);assert.equal(result.emergencySupportMode,'designated_staff');assert.equal(result.emergencyHandoffStatus,'sent');assert.equal(providerCalled,false);assert.equal(emails,1);
+  for (const status of ['sent','pending','outside_coverage']) {
+   const safety=await runtimeHelpers.executeCriticalSafetyOperations({userId:'athlete',conversationId:'conversation',escalationId:'incident',escalationData:{tier:3,teamId:'team'},supportContext:{teamId:'team'},nowSec:123,runtimeDb:f.db,
+    handoffRunner:async()=>({success:status==='sent',status,emergencySupportMode:'designated_staff',emergencyHandoffStatus:status})});
+   assert.equal(safety.handoffResult.emergencyHandoffStatus,status);
+   assert.equal(f.rows.get('pulsecheck-athlete-safety-state/athlete').emergencyHandoffStatus,status);
+   assert.equal(f.rows.get('pulsecheck-athlete-safety-state/athlete').crisisWallActive,true);
+  }
+
  }finally{Module._load=oldLoad;if(savedConfig)require.cache[configPath]=savedConfig;else delete require.cache[configPath];if(savedMetrics)require.cache[metricsPath]=savedMetrics;else delete require.cache[metricsPath];delete require.cache[escalationPath];}
 });
