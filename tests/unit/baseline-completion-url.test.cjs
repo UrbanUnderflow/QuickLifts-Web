@@ -4,6 +4,7 @@ const {baselineCompletionUrl}=require(path.resolve('src/lib/questionnaires/basel
 test('completion stays on the exact hosted candidate instead of crossing into production',()=>{
  assert.equal(baselineCompletionUrl({DEPLOY_URL:'https://candidate--quickliftsapp.netlify.app',URL:'https://fitwithpulse.ai'}),'https://candidate--quickliftsapp.netlify.app/.netlify/functions/complete-pulsecheck-baseline');
  assert.equal(baselineCompletionUrl({DEPLOY_PRIME_URL:'https://branch--quickliftsapp.netlify.app'}),'https://branch--quickliftsapp.netlify.app/.netlify/functions/complete-pulsecheck-baseline');
+ assert.equal(baselineCompletionUrl({PULSECHECK_BASELINE_DEPLOYMENT_ORIGIN:'https://built--quickliftsapp.netlify.app',URL:'https://fitwithpulse.ai'}),'https://built--quickliftsapp.netlify.app/.netlify/functions/complete-pulsecheck-baseline');
  assert.equal(baselineCompletionUrl({}),'https://fitwithpulse.ai/.netlify/functions/complete-pulsecheck-baseline');
 });
 test('an invalid configured host fails closed without forwarding tokens elsewhere',()=>{
