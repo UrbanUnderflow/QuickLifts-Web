@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import clay from '../../../components/coach/ClayDashboard.module.css';
+import invitation from '../../../components/pulsecheck/TeamInvitation.module.css';
+import { resolveProductConfig } from '../../../lib/pulsecheck/productConfig';
 import { useRouter } from 'next/router';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import {
@@ -303,6 +306,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   }, [router.isReady, router.query.web]);
 
   const appDistribution = getNativeAppDistribution(invite.distributionBrand ?? invite.productBrand);
+  // Web identity follows the provisioned organization, as on the coach dashboard.
+  // The temporary installer override only chooses the store and app scheme.
+  const product = resolveProductConfig({ productBrand: invite.productBrand });
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
@@ -340,11 +346,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const shouldShowDownloadFirst =
     shouldPreferAppDownload && !requiresAthleteCheckout && !showWebOnboarding && !redeemedState;
   const inviteScopeLabel = invite.pilotName || invite.teamName;
-  const inviteHeadline = requiresAthleteCheckout
-    ? `Join ${invite.teamName} on ${appDistribution.name}.`
-    : shouldPreferAppDownload
-      ? `Download the ${appDistribution.name} app to join ${inviteScopeLabel}.`
-      : `Join ${invite.teamName}`;
+  const inviteHeadline = `Join ${invite.teamName}`;
 
   useEffect(() => {
     if (!router.isReady || !authReady) return;
@@ -1176,7 +1178,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
           })}
         </div>
 
-        <div className="rounded-[32px] border border-white/10 bg-[#0B0B1C] p-8 shadow-2xl">
+        <div className={invitation.actionCard}>
           {message ? (
             <div
               className={`mb-6 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
@@ -1305,7 +1307,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
             /* STEP 1 — Account (signed out) */
             <div className="space-y-6">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">PulseCheck Team Invite</p>
+                <p className={invitation.eyebrow}>{invite.organizationName}</p>
                 <h2 className="mt-2 text-3xl font-semibold text-white">
                   You&apos;ve been invited to {invite.teamName} as {staffRoleTitle}
                 </h2>
@@ -1436,7 +1438,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden text-white" style={{ background: '#070711', fontFamily: 'Switzer, sans-serif' }}>
+    <div className={`${clay.root} ${invitation.root} relative min-h-screen overflow-hidden`}>
       <Head>
         <title>{invite.previewTitle}</title>
         <meta name="robots" content="noindex,nofollow" />
@@ -1448,7 +1450,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         <meta property="og:image:height" content="630" />
         <meta property="og:url" content={invite.pageUrl} />
         <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="PulseCheck" />
+        <meta property="og:site_name" content={product.displayName} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={invite.previewTitle} />
         <meta name="twitter:description" content={invite.previewDescription} />
@@ -1462,32 +1464,27 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
       </Head>
 
-      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.20) 0%, transparent 70%)' }} />
-
-      <main className="relative mx-auto w-full max-w-6xl px-4 py-8 md:px-6 md:py-10">
-        <div className="mb-6 flex items-center gap-3">
-          <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
-        </div>
+      <main className={invitation.main}>
+        <header className={invitation.header}>
+          {product.brand === 'athleticmind' ? (
+            <span className={invitation.wordmark}>AthleticMind</span>
+          ) : (
+            <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} className={invitation.pulseWordmark} />
+          )}
+          <span className={invitation.headerLabel}>Your team starts here</span>
+        </header>
         {isStaffInvite ? (
           renderStaffWizard()
         ) : (
-        <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-          <div className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.14),_transparent_42%),#0B0B1C] p-8 shadow-2xl">
+        <section className={invitation.columns}>
+          <div className={invitation.intro}>
               <div className="space-y-5">
-              <div className="overflow-hidden rounded-[24px] border border-white/10 bg-black/20">
-                <img
-                  src={invite.previewImageUrl}
-                  alt={invite.previewTitle}
-                  className="h-44 w-full object-cover"
-                />
+              <div className={invitation.art} aria-hidden="true">
+                <img src="/images/clay-form/rank-clay-ball.png" alt="" />
+                <span className={invitation.artRing} />
               </div>
-
-              <div className="inline-flex rounded-2xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 p-3">
-                <Users className="h-6 w-6 text-[#a78bfa]" />
-              </div>
-
               <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">PulseCheck Team Invite</p>
+                <p className={invitation.eyebrow}>{invite.organizationName}</p>
                 <h1 className="text-3xl font-semibold text-white">{inviteHeadline}</h1>
                 <p className="max-w-2xl text-sm leading-7 text-zinc-300">
                   {requiresAthleteCheckout ? (
@@ -1498,9 +1495,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     </>
                   ) : shouldPreferAppDownload ? (
                     <>
-                      PulseCheck helps athletes build readiness, mindset, and performance habits with guided check-ins and coaching.
-                      Download the app to join <span className="font-medium text-white">{invite.teamName}</span> inside{' '}
-                      <span className="font-medium text-white">{invite.organizationName}</span>.
+                      Build mental skills for your sport and your life. Your team has invited you to get started with {product.displayName}.
                     </>
                   ) : (
                     <>
@@ -1599,7 +1594,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
             </div>
           </div>
 
-          <div className="rounded-[32px] border border-white/10 bg-[#0B0B1C] p-8 shadow-2xl">
+          <div className={invitation.actionCard}>
             {message ? (
               <div
                 className={`mb-5 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
@@ -1658,82 +1653,32 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 </div>
               </div>
             ) : shouldShowDownloadFirst ? (
-              <div className="space-y-6">
-                <div className="inline-flex rounded-2xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 p-3">
-                  <Smartphone className="h-6 w-6 text-[#a78bfa]" />
+              <div className={invitation.download}>
+                <span className={invitation.appIcon}><Smartphone size={24} /></span>
+                <p className={invitation.eyebrow}>Get started</p>
+                <h2>Make yourself part of the team.</h2>
+                <p>Download {appDistribution.name}, then open your invitation in the app.</p>
+                {appDistribution.brand !== product.brand && (
+                  <p className={invitation.note}>Your {product.displayName} team is using the {appDistribution.name} app for now.</p>
+                )}
+                <div className={invitation.storeLinks}>
+                  <a href={appDistribution.iosUrl || undefined} aria-disabled={!appDistribution.iosUrl} target="_blank" rel="noreferrer">
+                    <Download size={19} />{appDistribution.iosUrl ? 'iPhone App Store' : 'iPhone app coming soon'}
+                  </a>
+                  <a href={appDistribution.androidUrl || undefined} aria-disabled={!appDistribution.androidUrl} target="_blank" rel="noreferrer">
+                    <Smartphone size={19} />{appDistribution.androidUrl ? 'Google Play' : 'Android app coming soon'}
+                  </a>
                 </div>
-
-                <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">App-First Onboarding</p>
-                  <h2 className="mt-2 text-3xl font-semibold text-white">Download the app to join this pilot</h2>
-                  <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    Download {appDistribution.name} on your phone, then sign in with{' '}
-                    <span className="font-medium text-white">{invite.targetEmail || 'your invited email'}</span> to continue into{' '}
-                    <span className="font-medium text-white">{inviteScopeLabel}</span>.
-                  </p>
-                </div>
-
-                <div className="rounded-3xl border border-[#7C3AED]/15 bg-[linear-gradient(180deg,rgba(124,58,237,0.18),rgba(11,11,28,0.9))] p-5">
-                  <div className="space-y-3">
-                    <div className="text-sm font-semibold text-white">Recommended path</div>
-                    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-200">
-                      Install the {appDistribution.name} app, create your account with the invited email, then come back to this browser page and tap Join Now to finish entering the pilot in-app.
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <a
-                        href={appDistribution.iosUrl || undefined}
-                        aria-disabled={!appDistribution.iosUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
-                      >
-                        <Download className="h-4 w-4" />
-                        {appDistribution.iosUrl ? 'iPhone App Store' : 'iPhone download coming soon'}
-                      </a>
-                      <a
-                        href={appDistribution.androidUrl || undefined}
-                        aria-disabled={!appDistribution.androidUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
-                      >
-                        <Smartphone className="h-4 w-4" />
-                        {appDistribution.androidUrl ? 'Android Play Store' : 'Android download coming soon'}
-                      </a>
-                    </div>
-                    <a
-                      href={`${appDistribution.scheme}://open?inviteToken=${encodeURIComponent(invite.token)}`}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#7C3AED]/35 bg-[#7C3AED]/[0.12] px-4 py-3 text-sm font-semibold text-[#a78bfa] transition hover:bg-[#7C3AED]/[0.18]"
-                    >
-                      Join Now
-                      <ArrowRight className="h-4 w-4" />
-                    </a>
-                    <p className="text-xs uppercase tracking-[0.16em] text-[#a78bfa]/70">Available on iPhone and Android</p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3">
-                  <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
-                    1. Download the app on your phone.
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
-                    2. Sign in or create your account with the invited email.
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
-                    3. Come back to this browser page and tap Join Now to open the app and complete joining the pilot.
-                  </div>
-                  <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-4 text-sm leading-7 text-zinc-300">
-                    4. If you cannot use the app on your phone, use the web fallback below instead.
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => updateWebOnboardingPreference(true)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
-                >
-                  Continue on the web instead
-                  <ArrowRight className="h-4 w-4" />
+                <a className={invitation.openApp} href={`${appDistribution.scheme}://open?inviteToken=${encodeURIComponent(invite.token)}`}>
+                  Open in {appDistribution.name}<ArrowRight size={20} />
+                </a>
+                <ol className={invitation.steps}>
+                  <li><span>1</span><div>Download the app on your phone.</div></li>
+                  <li><span>2</span><div>Return here and tap <strong>Open in {appDistribution.name}</strong>, or scan your team’s QR code inside the app.</div></li>
+                  <li><span>3</span><div>{invite.targetEmail ? <>Sign in with <strong>{invite.targetEmail}</strong> and follow the setup steps.</> : <>Sign in or create your account, then follow the setup steps.</>}</div></li>
+                </ol>
+                <button type="button" onClick={() => updateWebOnboardingPreference(true)} className={invitation.webLink}>
+                  Continue on the web instead<ArrowRight size={16} />
                 </button>
               </div>
             ) : browserAccountGatePending ? (
@@ -1829,12 +1774,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Account Required</p>
                   <h2 className="mt-2 text-3xl font-semibold text-white">
-                    {requiresAthleteCheckout ? 'Connect your purchase to your account' : 'Create or access your Pulse account'}
+                    {requiresAthleteCheckout ? 'Connect your purchase to your account' : 'Create or sign in to your account'}
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
                     {requiresAthleteCheckout
                       ? `Use the account you will use in the PulseCheck app. After you sign in, Stripe will open for the ${athleteMonthlyPrice} monthly subscription.`
-                      : 'Use the invited email when one is specified, then accept the invite from this page. Existing Pulse athletes will be attached directly to the pilot. New athletes will get a mobile setup walkthrough after redemption.'}
+                      : 'Sign in or create your account to join your team. If this invitation names an email address, use that email.'}
                   </p>
                 </div>
 
@@ -1852,7 +1797,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                       <UserPlus className="h-4 w-4" />
                       <span className="text-sm font-semibold">Create Account</span>
                     </div>
-                    <p className="mt-2 text-xs text-zinc-400">Use this if you do not have a Pulse account yet.</p>
+                    <p className="mt-2 text-xs text-zinc-400">Use this if you do not have an account yet.</p>
                   </button>
 
                   <button
@@ -2135,7 +2080,7 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
       : `You're Invited to Join ${teamName}`;
     const previewDescription = invite.cohortId
       ? `Join ${teamName} inside ${organizationName}. This ${redemptionMode === 'general' ? 'general ' : ''}pilot invite places you into ${String(invite.cohortName || 'the assigned cohort')} automatically.`
-      : `Join ${teamName} inside ${organizationName} on PulseCheck.`;
+      : `Join ${teamName} inside ${organizationName} on ${resolveProductConfig({ productBrand }).displayName}.`;
     const previewImageUrl = resolvePulseCheckInvitePreviewImage(teamImageUrl, organizationImageUrl);
 
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
