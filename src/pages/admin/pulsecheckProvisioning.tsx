@@ -1,3 +1,4 @@
+import InstitutionOnboardingPolicy from '../../components/admin/InstitutionOnboardingPolicy';
 import { useRouter } from 'next/router';
 import CoachSurveyUserTestResults from '../../components/admin/CoachSurveyUserTestResults';
 import TeamClinicalStaff from '../../components/admin/TeamClinicalStaff';
@@ -3904,6 +3905,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {directoryOrganization && <InstitutionOnboardingPolicy key={directoryOrganization.id} organizationId={directoryOrganization.id} organizationName={directoryOrganization.displayName} />}
 
               <div className="pcp-stats-row pcp-slide-up" style={{ animationDelay: '0.06s' }}>
                 <div className="pcp-stat-cell">

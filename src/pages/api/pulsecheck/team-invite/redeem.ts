@@ -1,3 +1,5 @@
+import { readActiveInstitutionPolicy } from '../../../../lib/institutionOnboarding/server';
+import { enforceInstitutionPolicy, InstitutionPolicyError } from '../../../../lib/institutionOnboarding/policy';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
 import { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
@@ -472,6 +474,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const derivedStaffAccess = staffCapabilities.length
         ? deriveMembershipAccessFromCapabilities(staffCapabilities)
         : null;
+
+      const institutionPolicy = await readActiveInstitutionPolicy(firestore, organizationId, transaction);
+      enforceInstitutionPolicy(institutionPolicy, teamMembershipRole, decoded);
 
       const organizationRef = firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
       const teamRef = firestore.collection(TEAMS_COLLECTION).doc(teamId);
@@ -958,6 +963,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } = result;
     return res.status(200).json(clientResult);
   } catch (error) {
+    if (error instanceof InstitutionPolicyError) return res.status(403).json({ error: error.message, code: 'INSTITUTION_ONBOARDING_REQUIRED' });
     console.error('[pulsecheck-team-invite/redeem] Failed to redeem invite:', error);
     const publicError = normalizeTeamInviteRedemptionError(error);
     return res

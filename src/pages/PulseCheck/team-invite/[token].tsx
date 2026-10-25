@@ -1,3 +1,4 @@
+import { policyApplies, type InstitutionOnboardingPolicy } from '../../../lib/institutionOnboarding/policy';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -43,6 +44,7 @@ import {
 import { getNativeAppDistribution, normalizeNativeProductBrand, type NativeProductBrand } from '../../../utils/pulsecheckAppDistribution';
 
 type TeamInvitePageProps = {
+  onboardingPolicy?: InstitutionOnboardingPolicy;
   invite: {
     productBrand: NativeProductBrand;
     distributionBrand: NativeProductBrand;
@@ -249,7 +251,7 @@ const normalizeInviteCommercialSnapshot = (
   return snapshot;
 };
 
-const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
+const TeamInvitePage = ({ invite, onboardingPolicy }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>('create-account');
   const [authReady, setAuthReady] = useState(false);
@@ -329,6 +331,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     !authReady || !browserAccountGateReady || nativeHandoffPending;
   // Athlete is the only non-staff role; everything else (coach, team-admin,
   // performance/support staff, clinician) uses the staff wizard.
+  const institutionalOnboarding = Boolean(onboardingPolicy && policyApplies(onboardingPolicy, invite.teamMembershipRole));
   const isStaffInvite = invite.teamMembershipRole !== 'athlete';
   const staffRoleTitle = invite.invitedTitle?.trim() || roleLabel[invite.teamMembershipRole];
   const teamPlanBypassesPaywall = invite.commercialSnapshot?.teamPlanBypassesPaywall === true;
@@ -955,6 +958,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   };
 
   const handleSocialAuth = async (provider: 'google' | 'apple') => {
+    if (institutionalOnboarding && provider === 'google') { setMessage({type:'error',text:'Use your institutional email and verified phone to join this team.'}); return; }
     if (
       submitting ||
       !requiresAthleteCheckout ||
@@ -1179,6 +1183,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         </div>
 
         <div className={invitation.actionCard}>
+          {institutionalOnboarding && <p role="status">Your institution requires a verified school email and phone on the same account. Approved email domains: {onboardingPolicy?.approvedEmailDomains.join(', ')}. Your invitation still determines your team access.</p>}
           {message ? (
             <div
               className={`mb-6 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
@@ -1595,6 +1600,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
           </div>
 
           <div className={invitation.actionCard}>
+          {institutionalOnboarding && <p role="status">Your institution requires a verified school email and phone on the same account. Approved email domains: {onboardingPolicy?.approvedEmailDomains.join(', ')}. Your invitation still determines your team access.</p>}
             {message ? (
               <div
                 className={`mb-5 flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${
@@ -1819,7 +1825,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
                 {requiresAthleteCheckout ? (
                   <div className="space-y-3">
-                    <button
+                    {!institutionalOnboarding && <button
                       type="button"
                       onClick={() => void handleSocialAuth('google')}
                       disabled={submitting || startingCheckout}
@@ -1836,7 +1842,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                         />
                       )}
                       Continue with Google
-                    </button>
+                    </button>}
                     {appleAuthAvailable ? (
                       <button
                         type="button"
@@ -2096,6 +2102,7 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
 
     return {
       props: {
+        onboardingPolicy: await (await import('../../../lib/institutionOnboarding/server')).readActiveInstitutionPolicy(firestore, String(invite.organizationId || '')),
         invite: {
           productBrand,
           distributionBrand: invite.distributionBrand === 'pulsecheck' || invite.distributionBrand === 'athleticmind' ? invite.distributionBrand : productBrand,
