@@ -1,5 +1,6 @@
 import { baselineHealthContext, saveBaselineHealthDecision } from '../../../../lib/questionnaires/cau-health';
 import { resolveBaselineConnection } from '../../../../lib/questionnaires/auntedna-connection';
+import { baselineCompletionUrl } from '../../../../lib/questionnaires/baseline-completion-url';
 import { resolveStandardBaselineAssignment } from '../../../../lib/questionnaires/standard-assignment';
 import { createHash } from 'crypto';
 import { deriveAdministrativeAnswers, applyAdministrativeAnswers } from '../../../../lib/questionnaires/cau-derived';
@@ -80,7 +81,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         const saved = await saveSkills(db,skillsRef,req.body,user.uid,req.body.action==='completeSkills',sportName);
         if (saved.completed) {
-          const response = await fetch('https://fitwithpulse.ai/.netlify/functions/complete-pulsecheck-baseline', {
+          const response = await fetch(baselineCompletionUrl(), {
             method:'POST',redirect:'error',signal:AbortSignal.timeout(35000),
             headers:{'Content-Type':'application/json',Authorization:bearer,'X-PulseCheck-Firebase-Mode':req.headers['x-pulsecheck-firebase-mode']==='dev'?'dev':'prod'},
             body:JSON.stringify({userId:user.uid,mentalSkillsBaseline:saved.result,assessmentNeeded:false,source:'consolidated-athlete-baseline'})
