@@ -1,8 +1,10 @@
+import CoachSurveyUserTestResults from '../../components/admin/CoachSurveyUserTestResults';
 import TeamClinicalStaff from '../../components/admin/TeamClinicalStaff';
 import TeamAthleteActivation from '../../components/admin/TeamAthleteActivation';
 import AthleteActivationQR from '../../components/admin/AthleteActivationQR';
 import OrganizationLifecycle from '../../components/admin/OrganizationLifecycle';
 import TeamReportDelivery from '../../components/admin/TeamReportDelivery';
+import TeamCoachSurveys from '../../components/admin/TeamCoachSurveys';
 import ui from '../../components/admin/ProvisioningWorkspace.module.css';
 import ProgramProductConfiguration, { ProductConfigurationFields } from '../../components/admin/ProgramProductConfiguration';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -3866,6 +3868,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
             </aside>
 
             <main className="pcp-main">
+              {process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true' && <CoachSurveyUserTestResults />}
               <div
                 id="organizations-directory"
                 className="pcp-page-head pcp-slide-up scroll-mt-24"
@@ -4312,6 +4315,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                             label={`${organization.displayName} · ${team.displayName}`}
                                             active={organization.status === 'active' && team.status === 'active'}
                                             createdByUserId={currentUser?.id || ''} createdByEmail={currentUser?.email || ''} />
+                                        </CollapsibleCard>
+                                        <CollapsibleCard
+                                          title="Coach surveys"
+                                          open={expandedOrgCardKeys.has(`${team.id}:coach-surveys`)}
+                                          onToggle={() => toggleOrgCard(`${team.id}:coach-surveys`)}
+                                          preview="Initial questionnaires, three-week check-ins and private coach feedback."
+                                        >
+                                          {expandedOrgCardKeys.has(`${team.id}:coach-surveys`) ? <TeamCoachSurveys key={team.id} teamId={team.id} pilots={bundledPilots.map(({ pilot }) => ({ id: pilot.id, name: pilot.name }))} /> : null}
                                         </CollapsibleCard>
                                         <CollapsibleCard
                                           title="Coach report delivery"

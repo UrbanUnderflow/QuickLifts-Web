@@ -674,6 +674,7 @@ export async function sendBrevoTransactionalEmail(args: {
   toName?: string;
   subject: string;
   htmlContent: string;
+  textContent?: string;
   tags?: string[];
   headers?: Record<string, string>;
   cc?: Array<{ email: string; name?: string }>;
@@ -786,6 +787,7 @@ export async function sendBrevoTransactionalEmail(args: {
     to: [{ email: args.toEmail, name: args.toName || args.toEmail }],
     subject: args.subject,
     htmlContent: args.htmlContent,
+    ...(args.textContent ? {textContent:args.textContent} : {}),
     replyTo: args.replyTo || { email: senderEmail, name: senderName || 'Pulse Team' },
   };
 

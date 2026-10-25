@@ -15,7 +15,7 @@ export default function MyApp(props: AppProps) {
   // These standalone pages gate their own runtime before loading Firebase.
   // Do not import the general shell here: its auth/store dependencies initialize
   // Firebase at module load, even when an AuthWrapper never mounts.
-  if (isPipeListsRoute(props.router.pathname)) {
+  if (isPipeListsRoute(props.router.pathname) || ['/PulseCheck/coach-survey/[kind]', '/PulseCheck/coach-survey/stop'].includes(props.router.pathname)) {
     const { Component, pageProps } = props;
     return <><Head><meta name="viewport" content="width=device-width, initial-scale=1" /></Head><Component {...pageProps} /></>;
   }
