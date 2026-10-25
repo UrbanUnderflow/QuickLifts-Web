@@ -8,7 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight,
-  Clock, Copy, HeartPulse, Loader2, LogOut, Pencil, Target,
+  CalendarDays, Clock, Copy, HeartPulse, Loader2, LogOut, Pencil, Target,
 } from 'lucide-react';
 import source from '../../../content/questionnaires/athlete-starting-point.json';
 
@@ -23,6 +23,18 @@ function notifyNative(action: 'signIn' | 'completed' | 'signOut') {
 const allQuestions = source.questions;
 const performanceQuestionCount = allQuestions.filter(q => questionCustodian(q.id) === 'PulseCheck').length;
 const performanceItemCount = performanceQuestionCount + 24;
+
+// Friendly labels are presentation only. Persist the existing answer values.
+const trainingGoalLabels: Record<string, string> = {
+  Preparation: 'Getting ready', Resilience: 'Handling setbacks',
+  'Self-talk': 'What I say to myself', 'Emotional regulation': 'Handling strong emotions',
+  Visualization: 'Picturing myself performing', 'Consistent routines': 'Keeping a routine',
+  'I am not sure yet': 'I’m not sure yet',
+};
+const questionTitle = (question: typeof allQuestions[number]) => question.id === 'cau-starting-point-46'
+  ? 'What do you want to get better at?' : question.question;
+const choiceLabel = (question: typeof allQuestions[number], answer: string) =>
+  question.id === 'cau-starting-point-46' ? trainingGoalLabels[answer] || answer : answer;
 
 export function getServerSideProps({ res }: any) {
   res.setHeader('Cache-Control', 'no-store');
@@ -86,7 +98,7 @@ const STYLES = `
 
 .cau-choice-list { display: grid; gap: 10px; }
 .cau-choice-btn, .cau-shell button.cau-choice-btn { justify-content: space-between; text-align: left; font-weight: 500; }
-.cau-choice-btn[data-selected="true"] { border-color: var(--accent, #E0FE10); background: var(--accent-soft, rgba(224,254,16,0.12)); color: #F5F6F2; }
+.cau-choice-btn[data-selected="true"], .cau-choice-btn[data-selected="true"]:hover:not(:disabled) { border-color: var(--accent, #E0FE10); background: var(--accent-soft, rgba(224,254,16,0.12)); color: #F5F6F2; }
 .cau-choice-check { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 999px; background: var(--accent, #E0FE10); color: var(--accent-text, #0A0F02); flex-shrink: 0; }
 
 .cau-date-picks { display: grid; gap: 10px; }
@@ -151,16 +163,63 @@ const STYLES = `
 .cau-crisis-line a { color: rgba(245,246,242,0.65); text-decoration: underline; text-underline-offset: 2px; }
 .cau-crisis-line a:hover { color: #F5F6F2; }
 
+
+.cau-shell { font-size: 18px; }
+.cau-layout { position: relative; z-index: 1; width: 100%; max-width: 680px; margin: 0 auto; padding: 18px 24px 24px; display: grid; gap: 18px; }
+.cau-page-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 0 18px; font-size: 18px; font-weight: 650; }
+.cau-page-header img { width: 100px; height: auto; object-fit: contain; }
+.cau-page-body { min-width: 0; }
+.cau-layout.cau-flow-active { padding-bottom: 160px; }
+.cau-h1 { font-size: clamp(30px, 7.8vw, 38px); line-height: 1.15; letter-spacing: -.025em; }
+.cau-h2 { font-size: 21px; }
+.cau-body, .cau-input, .cau-btn { font-size: 18px; }
+.cau-body { line-height: 1.5; color: #d3d8d6; }
+.cau-body-sm, .cau-muted, .cau-muted-sm { font-size: 16px; line-height: 1.5; color: #bbc4c1; }
+.cau-eyebrow, .cau-step-label, .cau-field-label { font-size: 14px; letter-spacing: .06em; color: #bbc4c1; }
+.cau-stage { gap: 20px; }
+.cau-btn { min-height: 56px; border-radius: 16px; padding: 16px 18px; }
+.cau-btn-primary { background: #d7ef00; box-shadow: none; font-size: 19px; min-height: 58px; }
+.cau-btn-ghost { font-size: 16px; min-height: 44px; }
+.cau-question-title { font-size: clamp(29px, 7.5vw, 34px); line-height: 1.2; letter-spacing: -.02em; }
+.cau-question-stage { padding-bottom: 148px; min-height: calc(100svh - 110px); display: flex; flex-direction: column; }
+.cau-question-content { flex: 1; min-width: 0; }
+.cau-question-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; color: #bdc8c4; }
+.cau-context { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: 14px; background: var(--accent-soft); font-size: 18px; line-height: 1.45; color: #f2f2e7; }
+.cau-context svg { color: var(--accent); flex-shrink: 0; margin-top: 3px; }
+.cau-choice-list { gap: 10px; }
+.cau-choice-btn { min-height: 58px; font-size: 18px; }
+.cau-choice-radio { height: 24px; width: 24px; flex-shrink: 0; border: 1.5px solid #85928c; border-radius: 50%; }
+.cau-choice-btn[data-selected="true"] .cau-choice-radio { border: 6px solid var(--accent); box-shadow: inset 0 0 0 2px #161c1c; background: var(--accent); }
+.cau-goal-grid { gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cau-goal-grid .cau-choice-btn { min-height: 64px; padding: 8px; line-height: 1.3; gap: 6px; overflow-wrap: anywhere; }
+.cau-selection-hint { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 18px; color: #d3d8d6; }
+.cau-selection-count { border: 1px solid #818e15; background: #333b17; color: #e4f76b; border-radius: 999px; padding: 4px 10px; font-size: 14px; white-space: nowrap; }
+.cau-question-actions { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: calc(100% - 48px); max-width: 632px; z-index: 3; margin-top: auto; padding: 12px 0 max(12px, env(safe-area-inset-bottom)); background: linear-gradient(180deg, rgba(22,28,28,.95), #161c1c 25%); display: grid; gap: 4px; }
+.cau-nav-row { align-items: stretch; }
+.cau-skip { justify-self: center; text-decoration: underline; text-underline-offset: 4px; }
+.cau-intro-parts { display: grid; gap: 22px; padding: 8px 0; }
+.cau-intro-part { display: flex; align-items: center; gap: 18px; }
+.cau-intro-part > span { color: #d7ef00; font-size: 22px; }
+.cau-intro-part strong { font-size: 20px; }
+.cau-intro-facts { display: grid; gap: 14px; font-size: 18px; line-height: 1.45; color: #e1e6e2; }
+.cau-intro-facts p { display: flex; gap: 12px; }
+.cau-intro-facts svg { flex-shrink: 0; margin-top: 3px; color: #d7ef00; }
+.cau-track-title { font-size: 20px; }
+.cau-track-status { font-size: 15px; }
+.cau-disclosure-summary { font-size: 16px; min-height: 48px; }
+.cau-error { font-size: 17px; }
+@media (max-width: 360px) { .cau-question-actions { width: calc(100% - 36px); } .cau-layout { padding-inline: 18px; } .cau-goal-grid { gap: 8px; grid-template-columns: 1fr; } }
+
 @keyframes cau-spin { to { transform: rotate(360deg); } }
 .cau-spinner { animation: cau-spin 0.8s linear infinite; }
 
 @media (max-width: 480px) {
-  .cau-h1 { font-size: 22px; }
+  .cau-h1 { font-size: 32px; }
   .cau-input { font-size: 16px; min-width: 0; }
   .cau-icon-btn { width: 44px; height: 44px; }
   .cau-btn { min-height: 44px; touch-action: manipulation; }
   .cau-track-title { flex-wrap: wrap; }
-  .cau-question-title { font-size: 20px; }
+  .cau-question-title { font-size: 30px; }
 }
 `;
 
@@ -251,6 +310,8 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   const [shareHealth, setShareHealth] = useState(true);
   const [submittedOnce, setSubmittedOnce] = useState(false);
   const [sharingLocked, setSharingLocked] = useState(false);
+  const [embedded, setEmbedded] = useState(false);
+  useEffect(() => { setEmbedded(new URLSearchParams(window.location.search).get('embedded') === '1'); }, []);
   const [nativePending, setNativePending] = useState(false);
   const [nativeError, setNativeError] = useState('');
   const nativeUID = useRef<string | null>(null);
@@ -349,7 +410,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     const selected = previous.includes(option);
     const exclusive = q.exclusiveChoices as string[];
     const next = selected ? previous.filter(v => v !== option) : exclusive.includes(option) ? [option] : [...previous.filter(v => !exclusive.includes(v)), option];
-    if (q.type === 'multi_select' && q.maxSelections && next.length > q.maxSelections) { setError(`Choose up to ${q.maxSelections} answers.`); return; }
+    if (q.type === 'multi_select' && q.maxSelections && next.length > q.maxSelections) { setError(`You’ve picked ${q.maxSelections}. Tap a selected answer to remove it, then choose another.`); return; }
     setError('');
     setAnswers(old => { const updated = { ...old, [q.id]: q.type === 'multi_select' ? next : option }; return updated; });
     if (q.type !== 'multi_select' && (!q.requiresConfirmation || option === 'Yes')) timer.current = setTimeout(() => move(index + 1, {...answers,[q.id]:option}), 450);
@@ -416,8 +477,9 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     return (
       <motion.div key="sections" {...fadeMotion} className="cau-stage">
         <h1 className="cau-h1">Your starting point</h1>
-        <p className="cau-body">Choose either section to begin. Finish both, then submit your answers.</p>
-        <Disclosure summary="Before you begin: privacy and questionnaire context">
+        <p className="cau-body">Choose a section to begin. Your progress is saved as you go.</p>
+        <p className="cau-body">Your mental-health answers are not shared with coaches or teammates. Health sharing is your choice.</p>
+        <Disclosure summary="How your answers are used">
           <p className="cau-muted-sm cau-pre-line">{source.purpose}</p>
           <p className="cau-muted-sm">This questionnaire supports onboarding, service delivery, and internal pilot evaluation. It is not a diagnostic assessment or an IRB-approved research study.</p>
           <p className="cau-muted-sm">Your individual mental-health and help-seeking responses will not be provided to coaches, teammates, or performance personnel. Health sharing is optional and follows your current authorization.</p>
@@ -434,7 +496,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
                 <span className="cau-track-icon"><Icon size={18} /></span>
                 <span className="cau-track-copy">
                   <span className="cau-track-title">{completed[section] && <Check size={14} />}{section === 'health' ? 'Well-being and support' : 'Performance baseline'}</span>
-                  <span className="cau-body-sm">{section === 'health' ? 'Your participation, well-being, recovery, and support.' : 'Your sport, how you feel today, and eight mental-skills activities.'}</span>
+                  <span className="cau-body-sm">{section === 'health' ? 'Your participation, well-being, recovery, and support.' : 'How you feel today and a few mental-skills activities.'}</span>
                   <span className="cau-track-status">{section === 'health' && !shareHealth ? 'Health sharing is optional · not shared' : completed[section] ? 'Complete · review answers' : positions[section] > 0 ? 'In progress · continue' : 'Still to do'}</span>
                 </span>
                 <ChevronRight size={16} className="cau-track-chevron" />
@@ -459,8 +521,8 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
               {allQuestions.filter(question => (shareHealth || !isHealth(question)) && questionVisible(question.id, answers)).map(question => (
                 <div key={question.id} className="cau-review-item">
                   <div>
-                    <p className="cau-review-q">{question.question}</p>
-                    <p className="cau-review-a">{Array.isArray(answers[question.id]) ? (answers[question.id] as string[]).join(', ') : (answers[question.id] as string) || 'Skipped'}</p>
+                    <p className="cau-review-q">{questionTitle(question)}</p>
+                    <p className="cau-review-a">{Array.isArray(answers[question.id]) ? (answers[question.id] as string[]).map(answer => choiceLabel(question, answer)).join(', ') : choiceLabel(question, (answers[question.id] as string) || 'Skipped')}</p>
                   </div>
                   <button type="button" className="cau-icon-btn" aria-label={`Edit answer for ${question.question}`} onClick={() => { const section = isHealth(question) ? 'health' : 'performance'; const items = allQuestions.filter(item => isHealth(item) === isHealth(question) && questionVisible(item.id, answers)); setDir(1); setTrack(section); setIndex(items.findIndex(item => item.id === question.id)); }}>
                     <Pencil size={14} />
@@ -484,35 +546,30 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     if (!track || !q) return null;
     const accentClass = track === 'health' ? 'cau-accent-health' : 'cau-accent-performance';
     return (
-      <motion.div key="question-flow" {...fadeMotion} className={`cau-stage ${accentClass}`}>
-        <div className="cau-question-top">
-          <button type="button" onClick={() => { if (!draftSaving) {clearTimeout(timer.current); setTrack(null);} }} className="cau-btn cau-btn-ghost">
-            <ArrowLeft size={15} /> Back to sections
-          </button>
-        </div>
-
+      <motion.div key="question-flow" {...fadeMotion} className={`cau-stage cau-question-stage ${accentClass}`}>
         <div className="cau-progress-track" role="progressbar" aria-label="Questionnaire progress" aria-valuenow={index} aria-valuemin={0} aria-valuemax={track === 'performance' ? performanceItemCount : questions.length}>
           <motion.div className="cau-progress-fill" animate={{ width: `${questions.length ? (index / (track === 'performance' ? performanceItemCount : questions.length)) * 100 : 0}%` }} transition={{ type: 'spring', stiffness: 280, damping: 32 }} />
         </div>
-        <p className="cau-step-label">{index + 1} of {track === 'performance' ? performanceItemCount : questions.length} · {q.sectionTitle.replace(/\s*[—–-]\s*auntEDNA only/gi, '')}</p>
+        <div className="cau-question-meta"><button type="button" aria-label={index === 0 ? "Back to sections" : "Previous question"} onClick={() => { if (draftSaving) return; if (index === 0) setTrack(null); else void move(index - 1); }} className="cau-btn cau-btn-ghost"><ArrowLeft size={18} /> Back</button><span>{q.id === 'cau-starting-point-46' ? 'Your training goals' : q.sectionTitle.replace(/\s*[—–-]\s*auntEDNA only/gi, '')}</span><span className="cau-step-label">{index + 1} of {track === 'performance' ? performanceItemCount : questions.length}</span></div>
 
         <AnimatePresence mode="wait" initial={false} custom={dir}>
-          <motion.div key={q.id} custom={dir} variants={questionVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} style={{ display: 'grid', gap: 16 }}>
+          <motion.div key={q.id} custom={dir} variants={questionVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} className="cau-question-content" style={{ display: 'grid', alignContent: 'start', gap: q.id === 'cau-starting-point-46' ? 14 : 18 }}>
             {q.instructions && (
-              <Disclosure summary="Question context and privacy">
-                <p className="cau-muted-sm cau-pre-line">{q.instructions}</p>
-              </Disclosure>
+              q.type !== 'multi_select' && <div className="cau-context">{q.instructions.includes('past seven days') ? <CalendarDays size={22} /> : <CheckCircle2 size={22} />}<p className="cau-pre-line">{q.instructions}</p></div>
             )}
-            <h1 className="cau-question-title">{q.question}</h1>
-            {q.type === 'multi_select' && <p className="cau-muted-sm">Choose all that fit{q.maxSelections ? `, up to ${q.maxSelections}` : ''}.</p>}
+            <h1 className="cau-question-title">{questionTitle(q)}</h1>
+            {q.type === 'multi_select' && <div className="cau-selection-hint"><span>{q.maxSelections ? `Choose up to ${q.maxSelections}.` : 'Choose all that fit.'}</span><span className="cau-selection-count" aria-live="polite">{Array.isArray(value) ? value.length : 0} selected</span></div>}
+
+            {q.type === 'multi_select' && <p className="cau-muted-sm">Tap a selected answer to remove it.</p>}
 
             {q.choices.length ? (
-              <motion.div className="cau-choice-list" variants={listVariants} initial="hidden" animate="show">
+              <motion.div className={`cau-choice-list ${q.id === 'cau-starting-point-46' ? 'cau-goal-grid' : ''}`} variants={listVariants} initial="hidden" animate="show">
                 {q.choices.map(option => {
                   const selected = Array.isArray(value) ? value.includes(option) : value === option;
                   return (
                     <motion.button key={option} type="button" variants={itemVariants} aria-pressed={selected} data-selected={selected} onClick={() => choose(option)} className="cau-btn cau-choice-btn">
-                      <span>{option}</span>
+                      <span>{choiceLabel(q, option)}</span>
+                      {!selected && q.type !== 'multi_select' && <span className="cau-choice-radio" aria-hidden="true" />}
                       {selected && (
                         <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 420, damping: 22 }} className="cau-choice-check">
                           <Check size={13} />
@@ -549,13 +606,13 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
 
         <AnimatePresence>{error && <ErrorBanner>{error}</ErrorBanner>}</AnimatePresence>
 
+        <div className="cau-question-actions">
+        {!q.requiresConfirmation && <button type="button" className="cau-btn cau-btn-ghost cau-skip" onClick={() => { if (draftSaving) return; const next = {...answers}; delete next[q.id]; setAnswers(next); void move(index + 1, next); }}>Skip this question</button>}
         <div className="cau-nav-row">
-          <button type="button" onClick={() => { if (draftSaving) return; if (index === 0) setTrack(null); else void move(index - 1); }} className="cau-btn cau-btn-ghost">
-            <ArrowLeft size={15} /> Back
-          </button>
           <button type="button" aria-busy={draftSaving} onClick={() => { if (!draftSaving) void move(index + 1); }} className="cau-btn cau-btn-primary">
             {draftSaving ? 'Saving…' : 'Continue'} <ArrowRight size={15} />
           </button>
+        </div>
         </div>
       </motion.div>
     );
@@ -649,10 +706,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     }
 
     if (!started) {
-      return (
-        <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim()) {setError('Enter your name to begin.');return;} setError('');setStarted(true); }} className="cau-stage cau-form">
-          <h1 className="cau-h1">Hey, I’m Nora. Let’s start with you.</h1>
-          <p className="cau-body">Your starting point includes 24 questions and 24 mental-skills ratings and activities. Answer from where you are today. We’ll take it one step at a time.</p>
+      const accountFields = <>
           <label className="cau-field">
             <span className="cau-field-label">Your name</span>
             <input required maxLength={150} autoComplete="name" value={name} onChange={e => setName(e.target.value)} className="cau-input" />
@@ -661,13 +715,24 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
             <span className="cau-field-label">Email address</span>
             <input readOnly={sandboxTest || Boolean(user.email)} required type="email" maxLength={254} autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} className="cau-input" />
           </label>
+      </>;
+      return (
+        <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim()) {setError('Enter your name to begin.');return;} setError('');setStarted(true); }} className="cau-stage cau-form">
+          <p className="cau-eyebrow" style={{color:'#d7ef00'}}>Your baseline</p>
+          <h1 className="cau-h1">Let’s find your starting point.</h1>
+          <p className="cau-body">Tell us how you’ve been feeling and try a few mental skills.</p>
+          <div className="cau-intro-parts"><div className="cau-intro-part"><span>01</span><strong>How you’ve been feeling</strong></div><div className="cau-intro-part"><span>02</span><strong>Your mental skills</strong></div></div>
+          <h2 className="cau-h2">A few things to know</h2>
+          <div className="cau-intro-facts"><p><Check size={21}/>Answer honestly. You can skip questions.</p><p><HeartPulse size={21}/>Your mental-health answers are not shared with coaches or teammates.</p><p><Target size={21}/>Health sharing is your choice.</p></div>
+          <Disclosure summary="How your answers are used"><p className="cau-body-sm">{source.purpose}</p><p className="cau-body-sm">This questionnaire supports onboarding, service delivery, and internal pilot evaluation. It is not a diagnostic assessment or an IRB-approved research study.</p><p className="cau-body-sm">Health sharing follows your current authorization. This questionnaire is not monitored as an emergency service.</p></Disclosure>
+          {user.displayName && user.email ? <Disclosure summary="Your account details">{accountFields}</Disclosure> : accountFields}
           <AnimatePresence>{error && <ErrorBanner>{error}</ErrorBanner>}</AnimatePresence>
-          <button className="cau-btn cau-btn-primary cau-accent-performance">Begin <ArrowRight size={16} /></button>
+          <button className="cau-btn cau-btn-primary cau-accent-performance">Start baseline <ArrowRight size={16} /></button>
         </motion.form>
       );
     }
 
-    if (showSkills) return <ConsolidatedSkillsBaseline precedingItemCount={performanceQuestionCount} sportName={status?.sportName || "Sport"} initialDraft={skillsState?.draft} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={(_result,draft)=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
+    if (showSkills) return <ConsolidatedSkillsBaseline embedded precedingItemCount={performanceQuestionCount} sportName={status?.sportName || "Sport"} initialDraft={skillsState?.draft} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={(_result,draft)=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
     if (track && q) return renderQuestion();
     return renderSections();
   }
@@ -675,30 +740,13 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   const stageAccent = track === 'health' ? 'cau-accent-health' : 'cau-accent-performance';
 
   return (
-    <main className="cau-shell" style={{ position: 'relative', minHeight: '100vh', background: '#050506', color: '#F5F6F2', overflowX: 'hidden', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
+    <main className="cau-shell" style={{ position: 'relative', minHeight: '100vh', background: '#161c1c', color: '#F5F6F2', overflowX: 'clip', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
       <Head><title>Athlete baseline questionnaire</title><meta name="robots" content="noindex,nofollow" /><meta name="referrer" content="no-referrer" /></Head>
 
-      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(135deg, rgba(224,254,16,0.07) 0%, transparent 30%, rgba(124,92,252,0.08) 100%), linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%)' }} />
-
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 620, margin: '0 auto', padding: '48px 20px 40px', display: 'grid', gap: 22 }} className={stageAccent}>
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div>
-            <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, height: 'auto' }} />
-            <p className="cau-muted" style={{ fontSize: 12.5 }}>Athlete baseline questionnaire</p>
-          </div>
-        </motion.div>
-
-        <p className="cau-muted-sm">These questions help us understand how you’re feeling and where you’d like support, so we can set a starting point for your mental training.</p>
-
-        <motion.div initial={{ opacity: 0, y: 16, scale: 0.99 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.5, delay: 0.08 }} style={{ position: 'relative', borderRadius: 24, border: '1px solid rgba(255,255,255,0.08)', background: 'linear-gradient(135deg, rgba(18,18,20,0.96) 0%, rgba(10,10,12,0.98) 100%)', boxShadow: '0 24px 80px rgba(0,0,0,0.45), 0 1px 0 inset rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-          <div aria-hidden="true" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, opacity: 0.6, background: 'linear-gradient(90deg, transparent 5%, rgba(224,254,16,0.4), transparent 95%)' }} />
-          <div style={{ padding: '26px 24px' }}>
-            <AnimatePresence mode="wait" initial={false}>
-              {renderStage()}
-            </AnimatePresence>
-          </div>
-        </motion.div>
+      <div className={`cau-layout ${stageAccent} ${showSkills || (track && q) ? 'cau-flow-active' : ''}`}>
+        {!embedded && <header className="cau-page-header"><span>Your starting point</span><img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" /></header>}
+        <div className="cau-page-body"><AnimatePresence mode="wait" initial={false}>{renderStage()}</AnimatePresence></div>
 
         {(draftSaving || draftSaved) && <p className="cau-muted-sm" role="status">{draftSaving ? 'Saving performance progress…' : 'Performance progress saved. You can return later to continue.'}</p>}
         <AnimatePresence>{signOutError && <ErrorBanner>{signOutError}</ErrorBanner>}</AnimatePresence>

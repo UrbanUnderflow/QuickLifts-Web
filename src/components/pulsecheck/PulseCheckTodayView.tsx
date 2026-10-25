@@ -46,8 +46,8 @@ const READINESS_OPTIONS: ReadinessOption[] = [
   {
     id: 'low',
     score: 2,
-    label: 'Low',
-    emoji: '😕',
+    label: 'Off',
+    emoji: '😔',
     chip: 'Stabilize first',
     accentColor: '#F59E0B',
     accentGlow: 'rgba(245,158,11,0.15)',
