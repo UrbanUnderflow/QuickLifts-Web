@@ -4322,7 +4322,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                           title="Coach surveys"
                                           open={expandedOrgCardKeys.has(`${team.id}:coach-surveys`)}
                                           onToggle={() => toggleOrgCard(`${team.id}:coach-surveys`)}
-                                          preview="Initial questionnaires, three-week check-ins and private coach feedback."
+                                          preview="Initial questionnaires, periodic check-ins and private coach feedback."
                                         >
                                           {expandedOrgCardKeys.has(`${team.id}:coach-surveys`) ? <TeamCoachSurveys key={team.id} teamId={team.id} pilots={bundledPilots.map(({ pilot }) => ({ id: pilot.id, name: pilot.name }))} /> : null}
                                         </CollapsibleCard>
