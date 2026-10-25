@@ -15,7 +15,7 @@ import {
 import { coachService } from '../../api/firebase/coach/service';
 import subscriptionService from '../../api/firebase/subscription/service';
 import { PRICING_INFO } from '../../utils/stripeConstants';
-import { db } from '../../api/firebase/config';
+import { db, auth } from '../../api/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
 // html2pdf is browser-only; import dynamically inside handler
 
@@ -451,7 +451,9 @@ const CoachRevenue: React.FC = () => {
       const API_BASE_URL = process.env.NODE_ENV === 'development' 
         ? 'http://localhost:8888/.netlify/functions'
         : 'https://fitwithpulse.ai/.netlify/functions';
-      const res = await fetch(`${API_BASE_URL}/get-monthly-statement?userId=${currentUser.id}&month=${monthKey}`);
+      const token = await auth.currentUser?.getIdToken();
+      if (!token || auth.currentUser?.uid !== currentUser.id) throw new Error('Authentication required');
+      const res = await fetch(`${API_BASE_URL}/get-monthly-statement?userId=${currentUser.id}&month=${monthKey}`, { headers: { Authorization: `Bearer ${token}` } });
       const json = await res.json();
       if (!json?.success) throw new Error(json?.error || 'Failed');
 
