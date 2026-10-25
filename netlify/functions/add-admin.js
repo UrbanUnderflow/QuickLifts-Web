@@ -24,13 +24,17 @@ exports.handler = async (event) => {
       return response(403, 'Verified administrator email required');
     }
     const existingAdmin = await db.collection('admin').doc(decoded.email.toLowerCase()).get();
-    if (!existingAdmin.exists || !existingAdmin.data()?.permissions?.includes('all')) {
+    const permissions = existingAdmin.exists ? existingAdmin.data()?.permissions : null;
+    if (!Array.isArray(permissions) || !permissions.includes('all')) {
       return response(403, 'Administrator permission required');
     }
 
     let payload;
     try { payload = JSON.parse(event.body || '{}'); }
     catch { return response(400, 'Invalid JSON'); }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return response(400, 'Invalid request body');
+    }
 
     const email = String(payload.email || '').trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
