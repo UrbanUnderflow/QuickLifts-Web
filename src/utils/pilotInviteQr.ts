@@ -1,3 +1,4 @@
+import { athleteActivationCode, athleteActivationQrUrl } from './athleteActivationCode';
 import QRCode from 'qrcode';
 import type { PulseCheckInviteLink } from '../api/firebase/pulsecheckProvisioning/types';
 import { buildPulseCheckTeamInviteWebUrl } from './pulsecheckInviteLinks';
@@ -26,6 +27,8 @@ export const resolvePilotInviteShareUrl = (
   siteOrigin?: string | null
 ) => {
   if (!invite) return '';
+  const code = athleteActivationCode(invite);
+  if (code && invite.inviteType === 'team-access' && invite.teamMembershipRole === 'athlete' && invite.redemptionMode === 'general' && !invite.targetEmail) return athleteActivationQrUrl(code, siteOrigin || undefined);
 
   const activationUrl = normalizeValue(invite.activationUrl);
   if (activationUrl) {

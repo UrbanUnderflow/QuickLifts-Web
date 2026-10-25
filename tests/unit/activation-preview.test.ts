@@ -24,7 +24,7 @@ test('OneLink carries token through UDL and resolver extracts exact invitation',
 });
 test('pre-auth preview binds to exact cohort and omits personal data',async()=>{
  const result = await resolveActivation(database(records()),'abc123');
- assert.deepEqual(result,{inviteToken:'token',organizationId:'org',organizationName:'UMES',teamId:'team',teamName:'Volleyball',cohortId:'cohort',cohortName:'Fall cohort',productBrand:'athleticmind'});
+ assert.deepEqual(result,{activationCode:'ABC123',inviteToken:'token',organizationId:'org',organizationName:'UMES',teamId:'team',teamName:'Volleyball',cohortId:'cohort',cohortName:'Fall cohort',productBrand:'athleticmind'});
 });
 test('does not guess team using organization name or arbitrary ID',async()=>{
  await assert.rejects(resolveActivation(database(records()),'UMES'),{code:'INVITE_NOT_FOUND'});
@@ -72,3 +72,10 @@ test('future reporting start permits QR and code preview with exact pilot contex
  d['pulsecheck-invite-links'].other={...d['pulsecheck-invite-links'].token,activationCode:'UMESGOLF',activationAliases:[]};
  await assert.rejects(resolveActivation(database(d),'UMESGOLF'),{code:'INVITE_NOT_FOUND'});
  });
+
+test('code URL and token return the same canonical display code without changing redemption token', async () => {
+ const d:any=records(); d['pulsecheck-invite-links'].token.activationAliases=['UMESBOWL'];
+ for(const input of ['token','ABC123','https://fitwithpulse.ai/PulseCheck/team-invite/UMESBOWL']) {
+ const result=await resolveActivation(database(d),input); assert.equal(result.activationCode,'UMESBOWL'); assert.equal(result.inviteToken,'token');
+ }
+});

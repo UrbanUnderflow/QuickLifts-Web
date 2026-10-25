@@ -123,3 +123,8 @@ test('renders the exact resolved URL with a scan-safe quiet zone', async () => {
   assert.equal(PILOT_INVITE_QR_RENDER_OPTIONS.margin, 4);
   assert.equal(result, 'data:image/png;base64,qr-test');
 });
+
+test('reusable athlete QR uses public code path rather than internal token or OneLink template', () => {
+ const invite:any={id:'internal-token',token:'internal-token',inviteType:'team-access',teamMembershipRole:'athlete',redemptionMode:'general',activationCode:'OLD1234567890123',activationAliases:['UMESBOWL'],activationUrl:'https://pulsecheckapp.onelink.me/uT14?inviteToken=internal-token'};
+ assert.equal(resolvePilotInviteShareUrl(invite),'https://fitwithpulse.ai/PulseCheck/team-invite/UMESBOWL');
+});

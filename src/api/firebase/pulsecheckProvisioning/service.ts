@@ -1,3 +1,4 @@
+import { athleteActivationCode, athleteActivationQrUrl } from '../../../utils/athleteActivationCode';
 import { saveAthleteConsentAtomically } from './consentSave';
 import { replaceInviteAtomically } from '../../../lib/pulsecheck/replaceInvite';
 import { normalizeProductBrand, validateProductBrand, normalizeAppExperience, resolveAppExperience, normalizeAppBranding } from '../../../lib/pulsecheck/productConfig';
@@ -1055,6 +1056,7 @@ const toPilotEnrollment = (id: string, data: Record<string, any>): PulseCheckPil
 
 const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLink => ({
   activationCode: data.activationCode || undefined,
+  activationAliases: Array.isArray(data.activationAliases) ? data.activationAliases : [],
   id,
   inviteType: (data.inviteType as PulseCheckInviteLinkType) || 'admin-activation',
   status: resolveInviteLinkStatus(data.status, data.redemptionMode),
@@ -1779,18 +1781,18 @@ export const pulseCheckProvisioningService = {
   async prepareAthleteActivation(token: string): Promise<{ code: string; url: string }> {
     const ref = doc(db, INVITE_LINKS_COLLECTION, token);
     const current = await getDoc(ref);
-    const candidateCode = current.data()?.activationCode || token.replace(/-/g, '').slice(0, 16).toUpperCase();
-    const collisions = await getDocs(query(collection(db, INVITE_LINKS_COLLECTION), where('activationCode', '==', candidateCode)));
-    if (collisions.docs.some(candidate => candidate.id !== token)) throw new Error('This activation code is already assigned. Create a new invitation before sharing it.');
+    const candidateCode = athleteActivationCode(current.data() || {}) || token.replace(/-/g, '').slice(0, 10).toUpperCase();
+    const collisions = await Promise.all([getDocs(query(collection(db, INVITE_LINKS_COLLECTION), where('activationCode', '==', candidateCode))), getDocs(query(collection(db, INVITE_LINKS_COLLECTION), where('activationAliases', 'array-contains', candidateCode)))]);
+    if (collisions.some(group => group.docs.some(candidate => candidate.id !== token))) throw new Error('This activation code is already assigned. Create a new invitation before sharing it.');
     return runTransaction(db, async transaction => {
       const snapshot = await transaction.get(ref);
       const data = snapshot.data();
       if (!data || data.inviteType !== 'team-access' || data.teamMembershipRole !== 'athlete' || data.redemptionMode !== 'general' || data.targetEmail || !['active', 'redeemed'].includes(data.status)) throw new Error('Choose an active, reusable athlete invitation for this team or cohort.');
-      const code = data.activationCode || token.replace(/-/g, '').slice(0, 16).toUpperCase();
+      const code = athleteActivationCode(data) || candidateCode;
       const url = new URL(data.activationUrl);
       if (url.hostname.endsWith('.onelink.me')) url.searchParams.set('deep_link_sub2', token);
-      transaction.update(ref, { activationCode: code, activationUrl: url.toString(), updatedAt: serverTimestamp() });
-      return { code, url: url.toString() };
+      transaction.update(ref, { activationCode: data.activationCode || code, activationUrl: url.toString(), updatedAt: serverTimestamp() });
+      return { code, url: athleteActivationQrUrl(code) };
     });
   },
 
@@ -3858,10 +3860,19 @@ export const pulseCheckProvisioningService = {
           distributionBrand: input.distributionBrand,
         });
 
+    const activationCode = normalizedRole === 'athlete' && redemptionMode === 'general' && !normalizedTargetEmail
+      ? String(mostRecentMatchingLink?.data()?.activationCode || token.replace(/-/g, '').slice(0, 10).toUpperCase()) : '';
+    if (activationCode) {
+      const collisions = await Promise.all([
+        getDocs(query(collection(db, INVITE_LINKS_COLLECTION), where('activationCode', '==', activationCode))),
+        getDocs(query(collection(db, INVITE_LINKS_COLLECTION), where('activationAliases', 'array-contains', activationCode))),
+      ]);
+      if (collisions.some(group => group.docs.some(candidate => candidate.id !== token))) throw new Error('This team code is already assigned. Please create the invitation again.');
+    }
     const payload = {
       inviteType: 'team-access',
       ...(input.distributionBrand ? { distributionBrand: input.distributionBrand } : {}),
-      ...(normalizedRole === 'athlete' && redemptionMode === 'general' && !normalizedTargetEmail ? { activationCode: token.replace(/-/g, '').slice(0, 16).toUpperCase() } : {}),
+      ...(activationCode ? { activationCode } : {}),
       status: 'active',
       redemptionMode,
       redemptionCount: 0,

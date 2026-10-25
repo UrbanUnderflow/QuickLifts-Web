@@ -1984,7 +1984,7 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
   res,
   resolvedUrl,
 }) => {
-  const token = typeof params?.token === 'string' ? params.token : '';
+  let token = typeof params?.token === 'string' ? params.token : '';
   const forceDevFirebase = query.devFirebase === '1';
   if (!token) return { notFound: true };
 
@@ -2007,6 +2007,15 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
         token,
         forceDevFirebase
       ).catch(() => null);
+    }
+    // A public team code resolves to the same private redemption token.
+    if (!invite) {
+      try {
+        const { resolveActivation } = await import('../../../lib/server/pulsecheck/activation-preview');
+        const preview = await resolveActivation(firestore, token);
+        token = preview.inviteToken;
+        invite = (await firestore.collection('pulsecheck-invite-links').doc(token).get()).data() || null;
+      } catch { /* Unknown, ambiguous, or inactive codes stay unavailable. */ }
     }
     // Friendly landing instead of a cold 404 when the invite can't be opened.
     const unavailable = (reason: string) => ({

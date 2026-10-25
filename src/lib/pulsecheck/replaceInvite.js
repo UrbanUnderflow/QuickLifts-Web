@@ -24,7 +24,7 @@ async function replaceInviteAtomically({ runTransaction, teamRef, organizationRe
     }
     transaction.set(inviteRefFor(token), { ...payload, token,
       activationUrl: payload.activationUrl.split(payload.token).join(token),
-      ...(payload.activationCode ? { activationCode: reusable?.data().activationCode || token.replace(/-/g, '').slice(0, 16).toUpperCase() } : {}),
+      ...(payload.activationCode ? { activationCode: reusable?.data().activationCode || payload.activationCode } : {}),
       ...(payload.commercialSnapshot ? { commercialSnapshot: { ...payload.commercialSnapshot, inviteToken: token } } : {}),
       ...(reusable ? { createdAt: reusable.data().createdAt || payload.createdAt, redemptionCount: reusable.data().redemptionCount || 0 } : {}) }, { merge: Boolean(reusable) });
     const teamUpdate = { [`inviteReplacementPointers.${pointerKey}`]: token, updatedAt: timestamp };

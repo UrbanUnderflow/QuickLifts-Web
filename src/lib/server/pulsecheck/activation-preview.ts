@@ -1,3 +1,4 @@
+import { athleteActivationCode } from '../../../utils/athleteActivationCode';
 import { resolvePulseCheckPilotEnrollmentAcceptance, toPulseCheckPilotScheduleDate } from '../../../utils/pulseCheckPilotSchedule';
 const text = (v: unknown) => typeof v === 'string' ? v.trim() : '';
 export class ActivationError extends Error {
@@ -49,5 +50,5 @@ export async function resolveActivation(db: any, input: unknown, now = new Date(
   if (pilotId && (!pilot || pilot.organizationId !== orgId || pilot.teamId !== teamId || !resolvePulseCheckPilotEnrollmentAcceptance(pilot, now).acceptsEnrollment)) throw new ActivationError('INVITE_INACTIVE', 410);
   if (cohortId && (!active(cohort) || cohort.status !== 'active' || cohort.organizationId !== orgId || cohort.teamId !== teamId || cohort.pilotId !== pilotId)) throw new ActivationError('INVITE_CONTEXT_INVALID');
   if (!(text(org.displayName) || text(org.name)) || !(text(team.displayName) || text(team.name)) || (cohortId && !text(cohort.name))) throw new ActivationError('INVITE_CONTEXT_INVALID');
-  return {inviteToken: snap.id, organizationId: orgId, organizationName: text(org.displayName) || text(org.name), teamId, teamName: text(team.displayName) || text(team.name), cohortId: cohortId || null, cohortName: cohortId ? text(cohort.name) : null, productBrand: org.productBrand === 'pulsecheck' ? 'pulsecheck' : 'athleticmind'};
+  return {activationCode: athleteActivationCode(invite), inviteToken: snap.id, organizationId: orgId, organizationName: text(org.displayName) || text(org.name), teamId, teamName: text(team.displayName) || text(team.name), cohortId: cohortId || null, cohortName: cohortId ? text(cohort.name) : null, productBrand: org.productBrand === 'pulsecheck' ? 'pulsecheck' : 'athleticmind'};
 }
