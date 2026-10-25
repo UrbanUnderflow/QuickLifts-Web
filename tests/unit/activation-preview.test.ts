@@ -13,7 +13,7 @@ function database(data: any) {
  const snapshot = (id: string, value: any) => ({id, exists:!!value, data:()=>value});
  return { collection: (name: string) => ({
    doc: (id: string) => ({get: async () => snapshot(id, data[name]?.[id])}),
-   where: (field: string, _: string, value: string) => ({limit: () => ({get: async () => ({docs: Object.entries(data[name] || {}).filter(([,v]: any) => v[field] === value).map(([id,v]) => snapshot(id,v))})})})
+   where: (field: string, operator: string, value: string) => ({limit: () => ({get: async () => ({docs: Object.entries(data[name] || {}).filter(([,v]: any) => operator === 'array-contains' ? v[field]?.includes(value) : v[field] === value).map(([id,v]) => snapshot(id,v))})})})
  })};
 }
 test('OneLink carries token through UDL and resolver extracts exact invitation',()=>{
@@ -65,3 +65,10 @@ test('future reporting start permits QR and code preview with exact pilot contex
  }
  assert.equal((d['pulsecheck-pilots'].pilot as any).startAt.toISOString(), '2026-10-28T04:00:00.000Z');
 });
+
+ test('manual alias preserves original code and rejects cross-invite collisions', async () => {
+ const d:any=records(); d['pulsecheck-invite-links'].token.activationAliases=['UMESGOLF'];
+ for (const code of ['umesgolf','ABC123','token']) assert.equal((await resolveActivation(database(d),code)).inviteToken,'token');
+ d['pulsecheck-invite-links'].other={...d['pulsecheck-invite-links'].token,activationCode:'UMESGOLF',activationAliases:[]};
+ await assert.rejects(resolveActivation(database(d),'UMESGOLF'),{code:'INVITE_NOT_FOUND'});
+ });

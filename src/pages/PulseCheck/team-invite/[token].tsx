@@ -42,6 +42,7 @@ import { getNativeAppDistribution, normalizeNativeProductBrand, type NativeProdu
 type TeamInvitePageProps = {
   invite: {
     productBrand: NativeProductBrand;
+    distributionBrand: NativeProductBrand;
     token: string;
     activationUrl: string;
     organizationId: string;
@@ -301,7 +302,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     setShowWebOnboarding(router.query.web === '1');
   }, [router.isReady, router.query.web]);
 
-  const appDistribution = getNativeAppDistribution(invite.productBrand);
+  const appDistribution = getNativeAppDistribution(invite.distributionBrand ?? invite.productBrand);
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
@@ -1701,7 +1702,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                       </a>
                     </div>
                     <a
-                      href={invite.productBrand === 'athleticmind' ? `athleticmind://open?inviteToken=${encodeURIComponent(invite.token)}` : invite.activationUrl}
+                      href={`${appDistribution.scheme}://open?inviteToken=${encodeURIComponent(invite.token)}`}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[#7C3AED]/35 bg-[#7C3AED]/[0.12] px-4 py-3 text-sm font-semibold text-[#a78bfa] transition hover:bg-[#7C3AED]/[0.18]"
                     >
                       Join Now
@@ -2143,6 +2144,7 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
       props: {
         invite: {
           productBrand,
+          distributionBrand: invite.distributionBrand === 'pulsecheck' || invite.distributionBrand === 'athleticmind' ? invite.distributionBrand : productBrand,
           token,
           activationUrl: String(invite.activationUrl || pageUrl),
           organizationId: String(invite.organizationId || ''),

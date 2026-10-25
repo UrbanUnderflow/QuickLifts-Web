@@ -28,9 +28,13 @@ export async function resolveActivation(db: any, input: unknown, now = new Date(
   const invites = db.collection('pulsecheck-invite-links');
   let snap = await invites.doc(code).get();
   if (!snap.exists) {
-    const matches = await invites.where('activationCode', '==', code.toUpperCase()).limit(2).get();
-    if (matches.docs.length !== 1) throw new ActivationError('INVITE_NOT_FOUND');
-    snap = matches.docs[0];
+    const [codes, aliases] = await Promise.all([
+      invites.where('activationCode', '==', code.toUpperCase()).limit(2).get(),
+      invites.where('activationAliases', 'array-contains', code.toUpperCase()).limit(2).get(),
+    ]);
+    const matches = [...new Map([...codes.docs, ...aliases.docs].map((doc: any) => [doc.id, doc])).values()] as any[];
+    if (matches.length !== 1) throw new ActivationError('INVITE_NOT_FOUND');
+    snap = matches[0];
   }
   const invite = snap.data();
   if (invite.inviteType !== 'team-access' || invite.teamMembershipRole !== 'athlete') throw new ActivationError('INVITE_ROLE_UNSUPPORTED', 403);
