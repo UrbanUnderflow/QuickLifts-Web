@@ -16,7 +16,7 @@ import { parseActivityType } from '../../utils/activityParser';
 import { UserActivity } from '../../types/Activity';
 import FullScreenExerciseView from '../FullscreenExerciseView';
 import UserProfileMeta from '../../components/UserProfileMeta';
-import { db } from '../../api/firebase/config';
+import { db, auth } from '../../api/firebase/config';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import FollowButton from '../../components/FollowButton';
 import SideNav from '../../components/Navigation/SideNav';
@@ -194,7 +194,9 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
       if (!user?.id) return;
 
       try {
-        const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}`);
+        const token = await auth.currentUser?.getIdToken();
+        if (!token || auth.currentUser?.uid !== user.id) return;
+        const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}`, { headers: { Authorization: `Bearer ${token}` } });
         if (!response.ok) throw new Error('Failed to fetch body weight data');
 
         const data = await response.json();
@@ -294,7 +296,9 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
 
       setCheckinsLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}&limit=50`);
+        const token = await auth.currentUser?.getIdToken();
+        if (!token || auth.currentUser?.uid !== user.id) return;
+        const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}&limit=50`, { headers: { Authorization: `Bearer ${token}` } });
         if (!response.ok) throw new Error('Failed to fetch check-ins');
 
         const data = await response.json();
