@@ -607,15 +607,23 @@ export const ConsolidatedSkillsBaseline: React.FC<ConsolidatedSkillsBaselineProp
         </main>
 
         {saveError ? <p role="alert" className="mb-4 font-semibold text-amber-300">{saveError}</p> : null}
-        <fieldset disabled={isSaving} className="contents">
+        <fieldset aria-busy={isSaving} className="contents">
         {action ? (
-          <button type="button" disabled={action.disabled || isSaving} onClick={action.run} className="flex h-16 w-full items-center justify-center gap-3 bg-[#d7ff00] text-lg font-black text-slate-950 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
+          <button type="button" aria-busy={isSaving} onClick={() => {
+            if (isSaving) return;
+            if (action.disabled) {
+              setSaveError(step === 'breath' ? 'Take one slow breath, then choose how it went.' : step === 'visualization' || step === 'coherence' ? 'Tap all four steps in the order you choose, then continue.' : 'Choose an answer above, then continue.');
+              contentRef.current?.scrollIntoView({block:'start',behavior:'smooth'});
+              return;
+            }
+            setSaveError(null); action.run();
+          }} className="flex h-16 w-full items-center justify-center gap-3 bg-[#d7ff00] text-lg font-black text-slate-950 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500">
             {step === 'intro' ? <Play className="h-5 w-5 fill-current" /> : null}{isSaving ? 'Saving…' : action.label}<ChevronRight className="h-5 w-5" />
           </button>
         ) : step === 'result' ? (
           <button
             type="button"
-            disabled={isSaving}
+            aria-busy={isSaving}
             onClick={() => void complete()}
             className="h-16 w-full bg-[#d7ff00] text-lg font-black text-slate-950 disabled:opacity-50"
           >

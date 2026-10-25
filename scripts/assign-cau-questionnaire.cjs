@@ -1,4 +1,4 @@
-// Usage: node scripts/assign-cau-questionnaire.cjs --project PROJECT --uid UID --team TEAM --environment test|live --apply
+// Usage: node scripts/assign-cau-questionnaire.cjs --project PROJECT --uid UID --team TEAM --environment test|live --university-code CODE --apply
 // Defaults to a read-only plan. Requires application-default admin credentials.
 const admin = require('firebase-admin');
 const {randomUUID} = require('node:crypto');
@@ -8,6 +8,7 @@ const option = key => args[args.indexOf(key)+1];
  for(const flag of ['--project','--uid','--team','--environment']) if(!args.includes(flag)||!option(flag)||option(flag).startsWith('--'))throw Error(`Missing ${flag}`);
  const projectId=option('--project'), uid=option('--uid'), teamId=option('--team'),environment=option('--environment');
  if(!['test','live'].includes(environment))throw Error('Environment must be test or live');
+ if(environment==='live'&&(!args.includes('--university-code')||!option('--university-code')||option('--university-code').startsWith('--')))throw Error('Live delivery requires the institution code configured with the clinical partner');
  admin.initializeApp({credential:admin.credential.applicationDefault(),projectId});
  const db=admin.firestore();
  const member=await db.collection('pulsecheck-team-memberships').doc(`${teamId}_${uid}`).get();
@@ -15,7 +16,7 @@ const option = key => args[args.indexOf(key)+1];
  const ref=db.collection('pulsecheck-restricted-questionnaire-submissions').doc(`assignment_${uid}`);
  const existing=await ref.get();
  if(existing.exists)throw Error('Assignment already exists. Review it instead of overwriting submission identity.');
- const assignment={kind:'assignment',enabled:true,version:'cau-operational-web-v1',questionnaireVersion:'cau-starting-point-v2',submissionId:randomUUID(),teamId,environment,universityCode:environment==='test'?'SANDBOX':'CAU'};
+ const assignment={kind:'assignment',enabled:true,version:'cau-operational-web-v1',questionnaireVersion:'athlete-starting-point-v1',submissionId:randomUUID(),teamId,environment,universityCode:environment==='test'?'SANDBOX':option('--university-code')};
  if(args.includes('--apply'))await ref.create({...assignment,createdAt:admin.firestore.FieldValue.serverTimestamp()});
  console.log(JSON.stringify({applied:args.includes('--apply'),projectId,uid,assignment},null,2));
 })().catch(e=>{console.error(e.message);process.exitCode=1});

@@ -9,11 +9,11 @@ import {
 } from '../../../utils/appVersioning';
 
 export const adminMethods: AdminService = {
-  async addVersion(product, version, buildNumber, changeNotes, isCriticalUpdate, media: AppVersionMediaItem[] = []) {
+  async addVersion(product, version, buildNumber, changeNotes, isCriticalUpdate, media: AppVersionMediaItem[] = [], whatsNew) {
     try {
       const productConfig = APP_VERSION_PRODUCT_CONFIGS[product];
       const payload = {
-        ...buildAppVersionWritePayload(changeNotes, isCriticalUpdate, media, buildNumber),
+        ...buildAppVersionWritePayload(changeNotes, isCriticalUpdate, media, buildNumber, whatsNew),
         product,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

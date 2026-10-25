@@ -12,13 +12,13 @@ require.extensions['.ts'] = previousLoader;
 test('24 operational items plus 24 skills interactions form the approved 48-item baseline', () => {
  const {questions,QUESTIONNAIRE_VERSION,VERSION}=require(path.resolve('src/lib/questionnaires/cau.ts'));
  assert.equal(questions.length,24); assert.equal(questions.length+8+8+8,48);
- assert.equal(VERSION,'cau-operational-web-v1');assert.equal(QUESTIONNAIRE_VERSION,'cau-starting-point-v2');
+ assert.equal(VERSION,'cau-operational-web-v1');assert.equal(QUESTIONNAIRE_VERSION,'athlete-starting-point-v1');
  assert.deepEqual(questions.map(q=>Number(q.id.slice(-2))),[1,2,3,4,5,6,7,8,9,10,35,36,37,38,39,40,41,42,43,44,45,46,47,48]);
 });
 test('stores supplied values, self-reported identity and explicit skipped fields', () => {
  const record=validateSubmission({name:' Test Athlete ',email:'Athlete@example.com',answers:{'cau-starting-point-05':'Mostly'}});
  assert.equal(record.identity.email,'athlete@example.com');assert.equal(record.fields['cau-starting-point-05'].value,'Mostly');
- assert.equal(record.fields['cau-starting-point-06'].state,'skipped');assert.equal(record.version,'cau-starting-point-v2');
+ assert.equal(record.fields['cau-starting-point-06'].state,'skipped');assert.equal(record.version,'athlete-starting-point-v1');
 });
 test('rejects legacy IDs, unknown options, duplicate, excessive and exclusive mixed selections',()=>{
  for(const answers of [{fake:'x'},{'cau-operational-14':'Often'},{'cau-starting-point-01':'bogus'},{'cau-starting-point-46':['Focus','Focus']},{'cau-starting-point-46':['Focus','Confidence','Preparation']},{'cau-starting-point-46':['Focus','I am not sure yet']}]) assert.throws(()=>validateSubmission({name:'Test',email:'a@example.com',answers}));
@@ -28,7 +28,7 @@ test('19 protected fields never enter the 5-field performance mirror',()=>{
  assert.equal(Object.keys(split.auntEdna.fields).length,19);assert.equal(Object.keys(split.pulseCheck.fields).length,5);
  assert.equal(JSON.stringify(split.pulseCheck).includes('Less than 5 hours'),false);
  const mirror=attachAuntEdnaReceipt(split.pulseCheck,{submissionId:'test',recordId:'ae-test',receiptId:'receipt-test'});
- assert.equal(mirror.auntEdnaReferences['cau-starting-point-39'].questionnaireVersion,'cau-starting-point-v2');
+ assert.equal(mirror.auntEdnaReferences['cau-starting-point-39'].questionnaireVersion,'athlete-starting-point-v1');
  assert.equal(mirror.auntEdnaReferences['cau-starting-point-39'].value,undefined);
  assert.throws(()=>attachAuntEdnaReceipt(split.pulseCheck,{submissionId:'wrong',recordId:'ae-test',receiptId:'receipt-test'}));
 });
@@ -37,8 +37,15 @@ test('restricted collection stays excluded from signed-in fallback',()=>{
  assert.match(rules,/match \/pulsecheck-restricted-questionnaire-submissions\/\{document=\*\*\} \{\s*allow read, write: if false;/);
 });
 test('each current item has exactly one routing decision and old IDs cannot be reinterpreted',()=>{
- const source=require('../../src/content/questionnaires/cau-operational.json'),routing=require('../../src/content/questionnaires/cau-routing.json');
+ const source=require('../../src/content/questionnaires/athlete-starting-point.json'),routing=require('../../src/content/questionnaires/cau-routing.json');
  assert.deepEqual(routing.questions.map(q=>q.questionId).sort(),source.questions.map(q=>q.id).sort());
  assert.throws(()=>questionCustodian('cau-operational-35'));
  for(const n of [2,3,4,6,7,8,35,36,37,38,39,40,41,42,43,44,45,47,48])assert.equal(questionCustodian('cau-starting-point-'+String(n).padStart(2,'0')),'auntEDNA');
+});
+
+test('the standard questionnaire contains no institution or fixed sport wording', () => {
+ const source=require('../../src/content/questionnaires/athlete-starting-point.json');
+ const visible=JSON.stringify(source.questions.map(({question,choices,sectionTitle,instructions})=>({question,choices,sectionTitle,instructions})));
+ assert.doesNotMatch(visible,/CAU|Clark Atlanta|UMES|volleyball/i);
+ assert.equal(source.version,'athlete-starting-point-v1');
 });

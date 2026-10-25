@@ -1,6 +1,6 @@
 import ConsolidatedSkillsBaseline, { ConsolidatedSkillsDraft } from '../../../components/mentaltraining/ConsolidatedSkillsBaseline';
 import { QUESTIONNAIRE_VERSION } from '../../../lib/questionnaires/cau';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, signInWithCustomToken, signOut, User } from 'firebase/auth';
 import { auth, isUsingDevFirebase } from '../../../api/firebase/config';
 import { questionCustodian, questionVisible } from '../../../lib/questionnaires/cau-routing';
 import Head from 'next/head';
@@ -10,7 +10,15 @@ import {
   AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight,
   Clock, Copy, HeartPulse, Loader2, LogOut, Pencil, Target,
 } from 'lucide-react';
-import source from '../../../content/questionnaires/cau-operational.json';
+import source from '../../../content/questionnaires/athlete-starting-point.json';
+
+function notifyNative(action: 'signIn' | 'completed' | 'signOut') {
+  if (typeof window === 'undefined') return false;
+  const bridge = (window as unknown as { webkit?: { messageHandlers?: { baselineSession?: { postMessage: (value: {action:string}) => void } } } }).webkit?.messageHandlers?.baselineSession;
+  if (!bridge) return false;
+  bridge.postMessage({action});
+  return true;
+}
 
 const allQuestions = source.questions;
 const performanceQuestionCount = allQuestions.filter(q => questionCustodian(q.id) === 'PulseCheck').length;
@@ -18,7 +26,7 @@ const performanceItemCount = performanceQuestionCount + 24;
 
 export function getServerSideProps({ res }: any) {
   res.setHeader('Cache-Control', 'no-store');
-  return { props: { collectionEnabled: process.env.CAU_QUESTIONNAIRE_COLLECTION_ENABLED === 'true' } };
+  return { props: { collectionEnabled: process.env.ATHLETE_BASELINE_ENABLED !== 'false' } };
 }
 
 type TestReceipt = { baselineId?: string; athleteId?: string; externalId?: string; submissionId?: string; receivedAt?: string; requestId?: string };
@@ -239,28 +247,55 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   const [saved, setSaved] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [status, setStatus] = useState<{available: boolean; completed: boolean; healthSharingAllowed: boolean} | null>(null);
+  const [status, setStatus] = useState<{available: boolean; completed: boolean; required?: boolean; healthSharingAllowed: boolean; healthCollectionAvailable?: boolean; submissionSharing?: boolean | null; sportName?: string} | null>(null);
   const [shareHealth, setShareHealth] = useState(true);
   const [submittedOnce, setSubmittedOnce] = useState(false);
+  const [sharingLocked, setSharingLocked] = useState(false);
+  const [nativePending, setNativePending] = useState(false);
+  const [nativeError, setNativeError] = useState('');
+  const nativeUID = useRef<string | null>(null);
+  useEffect(() => {
+    const receive = async (event: Event) => {
+      const session = (event as CustomEvent<{customToken?: string; userID?: string}>).detail;
+      if (!session?.customToken || !session.userID) return;
+      if (nativeUID.current && nativeUID.current !== session.userID) {
+        setNativePending(true);setNativeError('Please reopen the baseline from your app account.');return;
+      }
+      setNativeError(''); nativeUID.current = session.userID;
+      try {
+        const credential = await signInWithCustomToken(auth, session.customToken);
+        if (credential.user.uid !== session.userID) { await signOut(auth); throw Error('Account mismatch'); }
+        setNativePending(false);
+      } catch { setNativeError('Your app session could not be opened. Try again or use Open on web in the app menu.'); }
+    };
+    window.addEventListener('pulse-baseline-session', receive);
+    if (notifyNative('signIn')) setNativePending(true);
+    return () => window.removeEventListener('pulse-baseline-session', receive);
+  }, []);
+  useEffect(() => { if (saved) notifyNative('completed'); }, [saved]);
   const sessionUid = useRef<string | null>(null);
   useEffect(() => onAuthStateChanged(auth, next => {
+    if (next && nativeUID.current && next.uid !== nativeUID.current) { setNativeError('Please reopen the baseline from your app account.'); return; }
     sessionUid.current = next?.uid || null;
     setPriorSubmission(false);skillsRevision.current=0;setSkillsState(null);setShowSkills(false);setPerformanceQuestionsComplete(false);
     draftRevision.current = 0; draftBusy.current = false; setDraftSaving(false); setDraftSaved(false);
     setSignOutError(''); setUser(next); setAuthReady(true); setStatus(null); setAnswers({}); setStarted(false);
     setCompleted({performance:false,health:false}); setPositions({performance:0,health:0}); setIndex(0); setTrack(null);
-    clearTimeout(timer.current); setReceipt(null); setSaved(false); setSaving(false); setSubmittedOnce(false); setShareHealth(true); setError('');
+    clearTimeout(timer.current); setReceipt(null); setSaved(false); setSaving(false); setSubmittedOnce(false); setSharingLocked(false); setShareHealth(true); setError('');
     setName(sandboxTest ? '' : next?.displayName || ''); setEmail(next?.email || '');
     if (next) next.getIdToken().then(token => fetch(endpoint, {
       headers: {...testHeaders(), Authorization: `Bearer ${token}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod'},
     })).then(async response => { const result = await response.json(); if (!response.ok) throw Error(result.error || 'Could not check your questionnaire. Refresh to try again.'); if (!result.completed && result.questionnaireVersion !== QUESTIONNAIRE_VERSION) throw Error('The questionnaire has been updated. Refresh this page to continue.'); return result; })
-      .then(result => { if (sessionUid.current === next.uid) {setStatus(result);setSaved(result.completed);setShareHealth(result.healthSharingAllowed);setReceipt(result.receipt || null);
+      .then(result => { if (sessionUid.current === next.uid) {setStatus(result);setSaved(result.completed);
+        const sharing = typeof result.submissionSharing === 'boolean' ? result.submissionSharing : result.healthSharingAllowed && result.healthCollectionAvailable !== false;
+        setShareHealth(sharing); setSharingLocked(typeof result.submissionSharing === 'boolean');
+        setCompleted(old=>({...old,health:!sharing}));setReceipt(result.receipt || null);
         setPriorSubmission(result.questionnaireSubmitted === true);setSkillsState(result.skills || null);skillsRevision.current=result.skills?.revision || 0;
         if (result.draft?.version === QUESTIONNAIRE_VERSION && !result.completed) {
           const draft = result.draft; draftRevision.current = draft.revision;
           setAnswers(draft.answers); setName(draft.name); setStarted(true); setDraftSaved(true);
           setPerformanceQuestionsComplete(draft.completed);
-          setCompleted({performance:draft.completed && result.skills?.completed===true,health:result.questionnaireSubmitted === true});
+          setCompleted({performance:draft.completed && result.skills?.completed===true,health:result.questionnaireSubmitted === true || !sharing});
           const resume = Math.min(draft.position, performanceQuestionCount - 1);
           setPositions({performance:resume,health:0});
           if (!draft.completed) {setTrack('performance');setIndex(resume);}
@@ -331,16 +366,39 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     if(complete){setCompleted(old=>({...old,performance:performanceQuestionsComplete && result.skills.completed}));setShowSkills(false);setTrack(null);}
   }
   async function submit() {
-    if (saving || saved || !user || !completed.health || !completed.performance) return;
+    if (saving || saved || !user) return;
+    if (!collectionEnabled) { setError('Saving is temporarily unavailable. Please try again shortly.'); return; }
+    if (!completed.performance) { openTrack('performance'); return; }
+    if (!completed.health) { openTrack('health'); return; }
     setSaving(true); setSubmittedOnce(true); setError('');
     try {
-      const response = await fetch(endpoint, { method: 'POST', headers: { ...testHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' }, body: JSON.stringify({ questionnaireVersion: QUESTIONNAIRE_VERSION, name, email, answers, shareHealth, completedSections: completed }) });
+      const response = await fetch(endpoint, { method: 'POST', signal: AbortSignal.timeout(45000), headers: { ...testHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' }, body: JSON.stringify({ questionnaireVersion: QUESTIONNAIRE_VERSION, name, email, answers, shareHealth, completedSections: completed }) });
       const result = await response.json();
       if (sessionUid.current !== user.uid) return;
       if (!response.ok || !result.saved) throw Error(result.error || 'Unable to save answers.');
       setReceipt(result.receipt || null);
  setSaved(true); setAnswers({}); setName(''); setEmail('');
-    } catch (e) { if (sessionUid.current === user.uid) setError((e as Error).message); } finally { if (sessionUid.current === user.uid) setSaving(false); }
+     } catch (e) {
+      if (sessionUid.current === user.uid) {
+        setError((e as Error).message || 'Saving failed. Press Submit answers to retry.');
+        setSubmittedOnce(false); setSharingLocked(true);
+        try {
+          const checked = await fetch(endpoint, {signal:AbortSignal.timeout(20000),headers:{...testHeaders(),Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase()?'dev':'prod'}});
+          const latest = await checked.json();
+          if (checked.ok && sessionUid.current === user.uid) {
+            setStatus(latest);
+            if (latest.completed) { setSaved(true); return; }
+            const reserved = typeof latest.submissionSharing === 'boolean';
+            setSharingLocked(reserved);
+            if (reserved) setShareHealth(latest.submissionSharing);
+            else if (!latest.healthSharingAllowed || latest.healthCollectionAvailable === false) {
+              setShareHealth(false);setCompleted(old=>({...old,health:true}));
+              setAnswers(old=>Object.fromEntries(Object.entries(old).filter(([id])=>questionCustodian(id)==='PulseCheck')));
+            }
+          }
+        } catch { /* Retain the unknown attempt until a connected retry confirms its state. */ }
+      }
+    } finally { if (sessionUid.current === user.uid) setSaving(false); }
   }
   async function login(event: React.FormEvent) {
     event.preventDefault(); setSigningIn(true); setError('');
@@ -363,16 +421,16 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           <p className="cau-muted-sm cau-pre-line">{source.purpose}</p>
           <p className="cau-muted-sm">This questionnaire supports onboarding, service delivery, and internal pilot evaluation. It is not a diagnostic assessment or an IRB-approved research study.</p>
           <p className="cau-muted-sm">Your individual mental-health and help-seeking responses will not be provided to coaches, teammates, or performance personnel. Health sharing is optional and follows your current authorization.</p>
-          <p className="cau-muted-sm">This questionnaire is not monitored as an emergency service. For immediate help, contact CAU’s designated resource, call or text 988, or call 911 in an emergency.</p>
+          <p className="cau-muted-sm">This questionnaire is not monitored as an emergency service. For immediate help, contact your local urgent support service, call or text 988, or call 911 in an emergency.</p>
         </Disclosure>
 
         <div className="cau-track-list">
           {(['performance', 'health'] as const).map(section => {
             const accentClass = section === 'health' ? 'cau-accent-health' : 'cau-accent-performance';
             const Icon = section === 'health' ? HeartPulse : Target;
-            const disabled = submittedOnce || (section === 'health' && (priorSubmission || !status.healthSharingAllowed || !shareHealth));
+            const healthUnavailable = section === 'health' && (priorSubmission || !status.healthSharingAllowed || status.healthCollectionAvailable === false || !shareHealth);
             return (
-              <button key={section} type="button" disabled={disabled} data-selected={completed[section]} onClick={() => openTrack(section)} className={`cau-btn cau-track-card ${accentClass}`}>
+              <button key={section} type="button" data-selected={completed[section]} onClick={() => { if (saving) return; if (sharingLocked) {setError('Saving has started. Press Submit answers to finish or retry this submission.');return;} if (healthUnavailable) { setError(!status.healthSharingAllowed ? 'Health sharing follows your consent choices. You can complete performance only.' : 'Health sharing is unavailable for your account right now. You can complete performance only.'); return; } openTrack(section); }} className={`cau-btn cau-track-card ${accentClass}`}>
                 <span className="cau-track-icon"><Icon size={18} /></span>
                 <span className="cau-track-copy">
                   <span className="cau-track-title">{completed[section] && <Check size={14} />}{section === 'health' ? 'Well-being and support' : 'Performance baseline'}</span>
@@ -385,15 +443,17 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           })}
         </div>
 
-        {!sandboxTest && !submittedOnce && (
+        {!sandboxTest && !sharingLocked && !submittedOnce && (
           <button type="button" className="cau-btn cau-btn-ghost" style={{ justifyContent: 'center', width: '100%' }} onClick={() => { setShareHealth(false); setAnswers(old => Object.fromEntries(Object.entries(old).filter(([id]) => questionCustodian(id) === 'PulseCheck'))); setCompleted(old => ({ ...old, health: true })); }}>
             Complete performance only
           </button>
         )}
 
+        {!shareHealth && <p className="cau-muted-sm">Your health responses will remain unshared. Complete the performance section, then submit to finish your baseline.</p>}
+        {sharingLocked && !saved && <p className="cau-muted-sm">Your sharing choice is saved for this submission. If saving was interrupted, press Submit answers to retry.</p>}
         <p className="cau-muted-sm">{Number(completed.performance) + Number(completed.health)} of 2 sections complete. Performance progress saves as you go. Well-being answers save when you submit; keep this page open until then.</p>
 
-        {!priorSubmission && !submittedOnce && completed.health && completed.performance && (
+        {!priorSubmission && !submittedOnce && !sharingLocked && completed.health && completed.performance && (
           <Disclosure summary="Review all answers">
             <div className="cau-review-list">
               {allQuestions.filter(question => (shareHealth || !isHealth(question)) && questionVisible(question.id, answers)).map(question => (
@@ -413,8 +473,8 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
 
         <AnimatePresence>{error && <ErrorBanner>{error}</ErrorBanner>}</AnimatePresence>
 
-        <button type="button" disabled={!collectionEnabled || saving || !completed.health || !completed.performance} onClick={submit} className="cau-btn cau-btn-primary">
-          {saving ? <><Loader2 size={16} className="cau-spinner" /> Saving…</> : collectionEnabled ? <>Submit answers <ArrowRight size={16} /></> : 'Preview: saving is unavailable'}
+        <button type="button" aria-busy={saving} onClick={submit} className="cau-btn cau-btn-primary">
+          {saving ? <><Loader2 size={16} className="cau-spinner" /> Saving…</> : collectionEnabled ? <>Submit answers <ArrowRight size={16} /></> : 'Try saving answers'}
         </button>
       </motion.div>
     );
@@ -426,7 +486,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     return (
       <motion.div key="question-flow" {...fadeMotion} className={`cau-stage ${accentClass}`}>
         <div className="cau-question-top">
-          <button type="button" disabled={draftSaving} onClick={() => { clearTimeout(timer.current); setTrack(null); }} className="cau-btn cau-btn-ghost">
+          <button type="button" onClick={() => { if (!draftSaving) {clearTimeout(timer.current); setTrack(null);} }} className="cau-btn cau-btn-ghost">
             <ArrowLeft size={15} /> Back to sections
           </button>
         </div>
@@ -490,10 +550,10 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         <AnimatePresence>{error && <ErrorBanner>{error}</ErrorBanner>}</AnimatePresence>
 
         <div className="cau-nav-row">
-          <button type="button" disabled={draftSaving || index === 0} onClick={() => move(index - 1)} className="cau-btn cau-btn-ghost">
+          <button type="button" onClick={() => { if (draftSaving) return; if (index === 0) setTrack(null); else void move(index - 1); }} className="cau-btn cau-btn-ghost">
             <ArrowLeft size={15} /> Back
           </button>
-          <button type="button" disabled={draftSaving} onClick={() => move(index + 1)} className="cau-btn cau-btn-primary">
+          <button type="button" aria-busy={draftSaving} onClick={() => { if (!draftSaving) void move(index + 1); }} className="cau-btn cau-btn-primary">
             {draftSaving ? 'Saving…' : 'Continue'} <ArrowRight size={15} />
           </button>
         </div>
@@ -502,6 +562,9 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   }
 
   function renderStage() {
+    if (nativePending) {
+      return <div className="cau-stage cau-stage-center"><Spinner /><p role="status">{nativeError || 'Opening your app account…'}</p><button className="cau-btn cau-btn-primary" onClick={()=>{setNativeError('');notifyNative('signIn');}}>Try again</button></div>;
+    }
     if (!authReady) {
       return (
         <motion.div key="auth-loading" {...fadeMotion} className="cau-stage cau-stage-center">
@@ -532,7 +595,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
               </button>
             </form>
           ) : (
-            <a href="/PulseCheck/login?returnTo=%2FPulseCheck%2Fquestionnaire%2Fcau" className="cau-btn cau-btn-primary cau-accent-performance">
+            <a href="/PulseCheck/login?returnTo=%2FPulseCheck%2Fbaseline" className="cau-btn cau-btn-primary cau-accent-performance">
               Sign in to PulseCheck <ArrowRight size={16} />
             </a>
           )}
@@ -545,6 +608,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         <motion.div key="status-loading" {...fadeMotion} className="cau-stage cau-stage-center">
           <Spinner />
           <p className="cau-muted" role="status">{error || 'Checking your questionnaire…'}</p>
+          {error && <button className="cau-btn cau-btn-primary" onClick={()=>window.location.reload()}>Try again</button>}
         </motion.div>
       );
     }
@@ -577,15 +641,16 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       return (
         <motion.div key="unavailable" {...fadeMotion} className="cau-stage cau-stage-center">
           <div className="cau-empty-icon"><Clock size={24} /></div>
-          <h1 className="cau-h1">No questionnaire is assigned</h1>
-          <p className="cau-body">Your program team will let you know when it is ready.</p>
+          <h1 className="cau-h1">{status.required ? 'Your baseline is temporarily unavailable' : 'No baseline is required for this account'}</h1>
+          <p className="cau-body">{status.required ? 'Please try again. Your saved progress stays connected to your account.' : 'You can return to the app.'}</p>
+          <button className="cau-btn cau-btn-primary" onClick={()=>window.location.reload()}>Check again</button>
         </motion.div>
       );
     }
 
     if (!started) {
       return (
-        <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim()) return; setStarted(true); }} className="cau-stage cau-form">
+        <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim()) {setError('Enter your name to begin.');return;} setError('');setStarted(true); }} className="cau-stage cau-form">
           <h1 className="cau-h1">Hey, I’m Nora. Let’s start with you.</h1>
           <p className="cau-body">Your starting point includes 24 questions and 24 mental-skills ratings and activities. Answer from where you are today. We’ll take it one step at a time.</p>
           <label className="cau-field">
@@ -594,14 +659,15 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           </label>
           <label className="cau-field">
             <span className="cau-field-label">Email address</span>
-            <input readOnly={sandboxTest} required type="email" maxLength={254} autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} className="cau-input" />
+            <input readOnly={sandboxTest || Boolean(user.email)} required type="email" maxLength={254} autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} className="cau-input" />
           </label>
+          <AnimatePresence>{error && <ErrorBanner>{error}</ErrorBanner>}</AnimatePresence>
           <button className="cau-btn cau-btn-primary cau-accent-performance">Begin <ArrowRight size={16} /></button>
         </motion.form>
       );
     }
 
-    if (showSkills) return <ConsolidatedSkillsBaseline precedingItemCount={performanceQuestionCount} sportName="Volleyball" initialDraft={skillsState?.draft} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={(_result,draft)=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
+    if (showSkills) return <ConsolidatedSkillsBaseline precedingItemCount={performanceQuestionCount} sportName={status?.sportName || "Sport"} initialDraft={skillsState?.draft} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={(_result,draft)=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
     if (track && q) return renderQuestion();
     return renderSections();
   }
@@ -611,7 +677,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   return (
     <main className="cau-shell" style={{ position: 'relative', minHeight: '100vh', background: '#050506', color: '#F5F6F2', overflowX: 'hidden', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif' }}>
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
-      <Head><title>CAU baseline questionnaire</title><meta name="robots" content="noindex,nofollow" /><meta name="referrer" content="no-referrer" /></Head>
+      <Head><title>Athlete baseline questionnaire</title><meta name="robots" content="noindex,nofollow" /><meta name="referrer" content="no-referrer" /></Head>
 
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(135deg, rgba(224,254,16,0.07) 0%, transparent 30%, rgba(124,92,252,0.08) 100%), linear-gradient(180deg, rgba(255,255,255,0.03), transparent 40%)' }} />
 
@@ -619,7 +685,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div>
             <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, height: 'auto' }} />
-            <p className="cau-muted" style={{ fontSize: 12.5 }}>CAU baseline questionnaire</p>
+            <p className="cau-muted" style={{ fontSize: 12.5 }}>Athlete baseline questionnaire</p>
           </div>
         </motion.div>
 
@@ -638,7 +704,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         <AnimatePresence>{signOutError && <ErrorBanner>{signOutError}</ErrorBanner>}</AnimatePresence>
 
         {user && (
-          <button type="button" className="cau-btn cau-btn-ghost" style={{ justifySelf: 'center' }} onClick={() => { setSignOutError(''); signOut(auth).catch(() => setSignOutError('Could not sign out. Please try again.')); }}>
+          <button type="button" className="cau-btn cau-btn-ghost" style={{ justifySelf: 'center' }} onClick={() => { setSignOutError(''); if (notifyNative('signOut')) return; signOut(auth).catch(() => setSignOutError('Could not sign out. Please try again.')); }}>
             <LogOut size={14} /> Sign out
           </button>
         )}
