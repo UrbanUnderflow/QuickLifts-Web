@@ -1,6 +1,7 @@
 import defaults from '../../../content/consents/defaults.json';
 import pulseCheckOnly from '../../../content/consents/pulsecheck-only.json';
 import type { PulseCheckRequiredConsentDocument } from './types';
+import { isHealthBaselineEnabled, type HealthBaselineConfiguration } from './healthBaselinePolicy';
 
 export type ConsentCategory = 'participation' | 'health_authorization' | 'research' | 'staff';
 export type ConsentDecision = { decision: 'accepted' | 'declined' | 'revoked'; version: string; signedName: string; decidedAt: string; document: PulseCheckRequiredConsentDocument };
@@ -24,6 +25,21 @@ export const STAFF_CONSENT = defaults.staff as PulseCheckRequiredConsentDocument
 export const HEALTH_CONSENT = defaults.health as PulseCheckRequiredConsentDocument;
 export const PARTICIPATION_CONSENT = defaults.participation as PulseCheckRequiredConsentDocument;
 export const RESEARCH_CONSENT = defaults.research as PulseCheckRequiredConsentDocument;
+
+/** Collection being on requires an explicit health decision, never an inferred acceptance. */
+export function healthBaselineConsentDocuments(
+  documents: PulseCheckRequiredConsentDocument[] = [],
+  team?: HealthBaselineConfiguration,
+  organization?: HealthBaselineConfiguration,
+  configuredProductBrand?: string,
+): PulseCheckRequiredConsentDocument[] {
+  const scoped = selectConsentDocumentsForProduct(documents, configuredProductBrand);
+  if (!isHealthBaselineEnabled(team, organization)) {
+    return scoped.filter(document => consentCategory(document) !== 'health_authorization');
+  }
+  if (scoped.some(document => consentCategory(document) === 'health_authorization')) return scoped;
+  return [...scoped, ...selectConsentDocumentsForProduct([{ ...HEALTH_CONSENT }], configuredProductBrand)];
+}
 
 export function staffConsentDocuments(docs: PulseCheckRequiredConsentDocument[] = []): PulseCheckRequiredConsentDocument[] {
   const staff = docs.filter(doc => consentCategory(doc) === 'staff');

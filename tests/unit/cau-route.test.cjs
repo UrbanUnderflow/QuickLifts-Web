@@ -58,19 +58,39 @@ test('activity context follows the provisioned sport with a neutral fallback',as
 test('an unfinished school-specific client must reload the standard content before saving',async()=>{
  setup();const result=await call('POST',{...body,questionnaireVersion:'cau-starting-point-v2'});assert.equal(result.status,409);assert.equal(writes.length,0);
 });
-test('skills completion scores and saves the provisioned sport rather than a browser-supplied sport',async()=>{
+test('starting profile completes without challenges and uses provisioned sport, not browser claims',async()=>{
  const lib=require(path.resolve('src/api/firebase/mentaltraining/mentalSkillsBaseline.ts'));
  for(const [sport,archetype] of [['Golf','precision'],['Basketball','invasion'],['Sport','general']]) {
   setup();records.delete('athlete-mental-progress/athlete');records.set('pulsecheck-teams/team',{sportOrProgram:sport});
   const draft={version:'athlete-starting-point-v1',flowVersion:4,name:'Athlete',answers:{},position:0,completed:true,revision:0};
   assert.equal((await call('POST',{action:'savePerformanceDraft',draft})).status,200);
-  const pack=lib.baselineSportPack(archetype);
-  const skillsDraft={version:1,step:'result',sportName:'Volleyball',currentState:{mood:'okay',rest:3,energy:3,confidence:3,motivation:3,sportConnection:3,selfBelief:3,improvementBelief:3},familiarity:Object.fromEntries(lib.MENTAL_SKILL_FAMILIES.map(f=>[f,'new_to_me'])),selected:null,breathComplete:true,breathPracticeSelected:lib.BASELINE_BREATH_PRACTICE_RESPONSE_PROFILES[0].id,visualizationOrder:[0,1,2,3],coherenceOrder:['signal','breath','thought','action'],evidence:[['setback',lib.BASELINE_SETBACK_RESPONSE_PROFILES[0]],['reflection',lib.BASELINE_REFLECTION_RESPONSE_PROFILES[0]],['body_signal',lib.BASELINE_BODY_AWARENESS_RESPONSE_PROFILES[0]],['guided_breath',lib.BASELINE_BREATH_PRACTICE_RESPONSE_PROFILES[0]],['attention',lib.baselineAttentionResponseProfiles(pack)[0]],['emotion',lib.baselineSelfTalkResponseProfiles(pack)[0]]].map(([challengeId,profile])=>({challengeId,selectedOptionId:profile.id,score:9999}))};
+  assert.equal((await call('POST',{...body,shareHealth:false})).status,400);
+  const skillsDraft={version:2,assessmentKind:'self_report_starting_profile',step:'tools',sportName:'Volleyball',currentState:{mood:'okay',rest:3,energy:3,confidence:3,motivation:3,sportConnection:3,selfBelief:3,improvementBelief:3},familiarity:Object.fromEntries(lib.MENTAL_SKILL_FAMILIES.map(f=>[f,'new_to_me'])),answeredFamiliarity:['attention_cues'],overallCompetencyScore:9999,evidence:[{score:9999}]};
   let canonicalPayload;global.fetch=async(_url,options)=>{canonicalPayload=JSON.parse(options.body);return Response.json({success:true});};
   const result=await call('POST',{action:'completeSkills',draft:skillsDraft,revision:0});
-  assert.equal(result.status,200);assert.equal(result.body.skills.result.sportName,sport);assert.equal(result.body.skills.result.sportArchetype,archetype);
-  assert.equal(canonicalPayload.mentalSkillsBaseline.sportName,sport);assert.equal(canonicalPayload.mentalSkillsBaseline.evidence.some(e=>e.score===9999),false);
+  assert.equal(result.status,200);assert.equal(result.body.skills.completed,true);
+  const profile=canonicalPayload.mentalSkillsBaseline;
+  assert.equal(profile.version,6);assert.equal(profile.assessmentKind,'self_report_starting_profile');
+  assert.equal(profile.sportName,sport);assert.equal(profile.sportArchetype,archetype);
+  assert.equal(profile.evidence,undefined);assert.equal(profile.familyScores,undefined);assert.equal(profile.overallCompetencyScore,undefined);
+  assert.deepEqual(profile.answeredFamiliarity,['attention_cues']);
+  assert.equal((await call('GET')).body.completed,false,'a private skills draft cannot unlock the baseline');
+  records.set('athlete-mental-progress/athlete',{mentalSkillsBaseline:profile});
+  const status=(await call('GET')).body;assert.equal(status.skills.completed,true);assert.equal(status.completed,false);
+  assert.equal((await call('POST',{...body,shareHealth:false})).body.completed,true);
  }
+});
+test('canonical write failure is retryable without repeating or fabricating challenges',async()=>{
+ setup();records.delete('athlete-mental-progress/athlete');
+ await call('POST',{action:'savePerformanceDraft',draft:{version:'athlete-starting-point-v1',flowVersion:4,name:'Athlete',answers:{},position:0,completed:true,revision:0}});
+ const lib=require(path.resolve('src/api/firebase/mentaltraining/mentalSkillsBaseline.ts'));
+ const draft={version:2,assessmentKind:'self_report_starting_profile',step:'tools',currentState:{mood:'solid',rest:3,energy:4,confidence:3,motivation:3,sportConnection:3,selfBelief:3,improvementBelief:3},familiarity:Object.fromEntries(lib.MENTAL_SKILL_FAMILIES.map(f=>[f,'new_to_me'])),answeredFamiliarity:[]};
+ global.fetch=async()=>{throw Error('interrupted');};
+ assert.equal((await call('POST',{action:'completeSkills',draft,revision:0})).status,503);
+ const status=(await call('GET')).body;assert.equal(status.completed,false);assert.equal(status.skills.completed,false);
+ let saved;global.fetch=async(_u,opts)=>{saved=JSON.parse(opts.body).mentalSkillsBaseline;return Response.json({success:true});};
+ assert.equal((await call('POST',{action:'completeSkills',draft,revision:0})).body.skills.completed,true);
+ assert.equal(saved.currentState.mood,'solid');assert.equal(saved.overallCompetencyScore,undefined);
 });
 test('active team athletes get a standard requirement without manual assignment, and skills alone cannot release it',async()=>{
  setup();records.delete(root+'assignment_athlete');
@@ -103,4 +123,38 @@ test('older clients polling before team consent are allowed to finish onboarding
  setup();records.set('pulsecheck-team-memberships/team_athlete',{status:'active',athleteOnboarding:{entryOnboardingStep:'consent',productConsentAccepted:false}});
  const result=await call('GET');assert.equal(result.body.required,false);assert.equal(result.body.available,false);
  assert.equal((await call('POST',{...body,shareHealth:false})).status,503);
+});
+
+test('health baseline defaults on while provider readiness and authorization stay independent',async()=>{
+ setup();records.set('pulsecheck-teams/team',{organizationId:'org'});
+ assert.equal((await call('GET')).body.healthBaselineEnabled,true);
+ const assignment=records.get(root+'assignment_athlete');records.set(root+'assignment_athlete',{...assignment,environment:'unconfigured',universityCode:''});
+ const status=(await call('GET')).body;assert.equal(status.healthBaselineEnabled,true);assert.equal(status.healthCollectionAvailable,false);assert.equal(status.healthSharingAllowed,false);
+ assert.equal((await call('POST',body)).status,403);assert.equal(providerCalls,0);
+});
+test('team or inherited organization policy can disable health without authorizing transmission',async()=>{
+ setup();records.set('pulsecheck-teams/team',{organizationId:'org'});records.set('pulsecheck-organizations/org',{healthBaselineEnabled:false});
+ assert.equal((await call('GET')).body.healthBaselineEnabled,false);
+ records.set('pulsecheck-teams/team',{organizationId:'org',healthBaselineEnabled:true});assert.equal((await call('GET')).body.healthBaselineEnabled,true);
+ records.set('pulsecheck-teams/team',{organizationId:'org',healthBaselineEnabled:false});
+ const doc={id:'health',version:'v1',body:'Terms',category:'health_authorization'};
+ const decisions={health:{decision:'accepted',version:'v1',document:doc,signedName:'Fictional Athlete'}};
+ records.set('pulsecheck-teams/team',{organizationId:'org',healthBaselineEnabled:false,requiredConsents:[doc]});
+ records.set('pulsecheck-team-memberships/team_athlete',{status:'active',athleteOnboarding:{consentDecisions:decisions}});
+ records.set('pulsecheck-team-memberships/team_athlete/consent-events',{actorUserId:'athlete',decisions});
+ assert.equal((await call('GET')).body.healthSharingAllowed,false);assert.equal((await call('POST',body)).status,403);assert.equal(providerCalls,0);
+ assert.equal((await call('POST',{...body,shareHealth:false})).body.completed,true);
+});
+
+test('default health authorization is explicit and missing authorization cannot erase an existing baseline requirement',async()=>{
+ setup();records.set('pulsecheck-teams/team',{organizationId:'org'});records.set('pulsecheck-organizations/org',{productBrand:'athleticmind'});
+ const status=(await call('GET')).body;assert.equal(status.required,true);assert.equal(status.healthBaselineEnabled,true);assert.equal(status.healthSharingAllowed,false);assert.equal(status.healthAuthorizationRequired,true);assert.equal(status.healthAuthorizationDecision,'pending');assert.equal(status.healthAuthorizationUrl,'/PulseCheck/athlete-onboarding?organizationId=org&teamId=team');
+});
+test('an explicit current health decline remains honored and is not treated as missing consent',async()=>{
+ setup();const doc={id:'health',version:'v1',body:'Terms',category:'health_authorization'};
+ const decisions={health:{decision:'declined',version:'v1',document:doc,signedName:'Fictional Athlete'}};
+ records.set('pulsecheck-teams/team',{requiredConsents:[doc]});
+ records.set('pulsecheck-team-memberships/team_athlete',{status:'active',athleteOnboarding:{consentDecisions:decisions}});records.set('pulsecheck-team-memberships/team_athlete/consent-events',{actorUserId:'athlete',decisions});
+ const status=(await call('GET')).body;assert.equal(status.required,true);assert.equal(status.healthSharingAllowed,false);assert.equal(status.healthAuthorizationRequired,false);assert.equal(status.healthAuthorizationDecision,'declined');
+ assert.equal((await call('POST',{...body,shareHealth:false})).body.completed,true);assert.equal(providerCalls,0);
 });

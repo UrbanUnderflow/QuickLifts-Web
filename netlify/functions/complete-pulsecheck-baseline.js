@@ -1,3 +1,4 @@
+const { normalizeSelfReportStartingProfile } = require('./utils/self-report-starting-profile');
 const { initializeFirebaseAdmin, getFirebaseAdminApp, admin, headers } = require('./config/firebase');
 const profileSnapshotRuntime = require('../../src/api/firebase/mentaltraining/profileSnapshotRuntime.js');
 const {
@@ -107,6 +108,10 @@ function stageForScore(score) {
 
 function normalizeMentalSkillsBaseline(value) {
   if (!value || typeof value !== 'object') return null;
+
+  if (Number(value.version) >= 6 || value.assessmentKind != null) {
+    return normalizeSelfReportStartingProfile(value);
+  }
 
   const familiarity = Object.fromEntries(
     MENTAL_SKILL_FAMILIES.map((family) => {
@@ -447,7 +452,7 @@ exports.handler = async (event) => {
           metricPayload: {
             source,
             recommendedPathway,
-            baselineType: mentalSkillsBaseline ? 'mental_skills_starting_point' : 'legacy_probe',
+            baselineType: mentalSkillsBaseline?.assessmentKind === 'self_report_starting_profile' ? 'self_report_starting_profile' : mentalSkillsBaseline ? 'mental_skills_starting_point' : 'legacy_probe',
             mentalSkillsCompetencyScore: mentalSkillsBaseline?.overallCompetencyScore ?? null,
             trustDispositionBaselineScore: trustDispositionBaseline?.score ?? null,
           },

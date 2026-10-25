@@ -42,7 +42,7 @@ export async function resolveStandardBaselineAssignment(
     .filter((membership: any) => text(membership.data.role) === 'athlete' && text(membership.data.teamId)
       && hasCompletedEntryOnboarding(membership.data.athleteOnboarding)
       && membership.data.athleteOnboarding?.productConsentAccepted === true
-      && hasCompletedRequiredConsents(membership.data.athleteOnboarding))
+      && hasCompletedRequiredConsents({...membership.data.athleteOnboarding, requiredConsents: (membership.data.athleteOnboarding?.requiredConsents || []).filter((document: any) => document.category !== 'health_authorization')}))
     .sort((left: any, right: any) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)[0];
 
   let context: Record<string, any>;

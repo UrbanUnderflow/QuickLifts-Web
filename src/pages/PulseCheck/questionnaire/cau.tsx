@@ -22,7 +22,7 @@ function notifyNative(action: 'signIn' | 'completed' | 'signOut') {
 
 const allQuestions = source.questions;
 const performanceQuestionCount = allQuestions.filter(q => questionCustodian(q.id) === 'PulseCheck').length;
-const performanceItemCount = performanceQuestionCount + 24;
+const performanceItemCount = performanceQuestionCount + 8;
 
 // Friendly labels are presentation only. Persist the existing answer values.
 const trainingGoalLabels: Record<string, string> = {
@@ -496,7 +496,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
                 <span className="cau-track-icon"><Icon size={18} /></span>
                 <span className="cau-track-copy">
                   <span className="cau-track-title">{completed[section] && <Check size={14} />}{section === 'health' ? 'Well-being and support' : 'Performance baseline'}</span>
-                  <span className="cau-body-sm">{section === 'health' ? 'Your participation, well-being, recovery, and support.' : 'How you feel today and a few mental-skills activities.'}</span>
+                  <span className="cau-body-sm">{section === 'health' ? 'Your participation, well-being, recovery, and support.' : 'Your training goal and experience with mental skills.'}</span>
                   <span className="cau-track-status">{section === 'health' && !shareHealth ? 'Health sharing is optional · not shared' : completed[section] ? 'Complete · review answers' : positions[section] > 0 ? 'In progress · continue' : 'Still to do'}</span>
                 </span>
                 <ChevronRight size={16} className="cau-track-chevron" />
@@ -720,7 +720,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim()) {setError('Enter your name to begin.');return;} setError('');setStarted(true); }} className="cau-stage cau-form">
           <p className="cau-eyebrow" style={{color:'#d7ef00'}}>Your baseline</p>
           <h1 className="cau-h1">Let’s find your starting point.</h1>
-          <p className="cau-body">Tell us how you’ve been feeling and try a few mental skills.</p>
+          <p className="cau-body">Tell us how you’ve been feeling and which mental skills you’ve used.</p>
           <div className="cau-intro-parts"><div className="cau-intro-part"><span>01</span><strong>How you’ve been feeling</strong></div><div className="cau-intro-part"><span>02</span><strong>Your mental skills</strong></div></div>
           <h2 className="cau-h2">A few things to know</h2>
           <div className="cau-intro-facts"><p><Check size={21}/>Answer honestly. You can skip questions.</p><p><HeartPulse size={21}/>Your mental-health answers are not shared with coaches or teammates.</p><p><Target size={21}/>Health sharing is your choice.</p></div>
@@ -732,7 +732,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       );
     }
 
-    if (showSkills) return <ConsolidatedSkillsBaseline embedded precedingItemCount={performanceQuestionCount} sportName={status?.sportName || "Sport"} initialDraft={skillsState?.draft} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={(_result,draft)=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
+    if (showSkills) return <ConsolidatedSkillsBaseline embedded precedingItemCount={performanceQuestionCount} sportName={status?.sportName || "Sport"} initialDraft={skillsState?.draft} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={draft=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
     if (track && q) return renderQuestion();
     return renderSections();
   }

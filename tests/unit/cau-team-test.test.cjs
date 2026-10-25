@@ -52,7 +52,7 @@ test('retention is server gated with all 19 protected items external only',()=>{
  assert.equal(liveRetentionEnabled({retentionPolicyVersion:RETENTION_VERSION},undefined),false);
  assert.equal(liveRetentionEnabled({retentionPolicyVersion:RETENTION_VERSION},'true'),true);
 });
-test('skills drafts resume and complete only after all activities, sandbox never unlocks real progress',async()=>{
+test('starting profile drafts finish without activities and sandbox never unlocks real progress',async()=>{
  setup(); const key='pulsecheck-restricted-questionnaire-submissions/sandbox_skills_test-campaign_'+require('crypto').createHash('sha256').update('test-campaign:athlete').digest('hex').slice(0,32)+'_athlete-starting-point-v1';records.delete(key);
  assert.equal((await call('POST',body)).status,400);
  const qdraft={version:'athlete-starting-point-v1',name:'Tester',answers:{},position:0,completed:true,revision:0};
@@ -61,11 +61,7 @@ test('skills drafts resume and complete only after all activities, sandbox never
  const draft={version:1,step:'state',currentState:{mood:'okay',rest:3,energy:3,confidence:3,motivation:3,sportConnection:3,selfBelief:3,improvementBelief:3},familiarity:Object.fromEntries(lib.MENTAL_SKILL_FAMILIES.map(f=>[f,'new_to_me'])),evidence:[],selected:null,breathComplete:false,breathPracticeSelected:null,visualizationOrder:[],coherenceOrder:[]};
  assert.equal((await call('POST',{action:'saveSkillsDraft',draft,revision:0})).body.skills.revision,1);
  assert.equal((await call('GET')).body.skills.draft.step,'state');
- assert.equal((await call('POST',{action:'completeSkills',draft,revision:1})).status,409);
- const pack=lib.baselineSportPack('net_racket');
- draft.evidence=[['setback',lib.BASELINE_SETBACK_RESPONSE_PROFILES[0]],['reflection',lib.BASELINE_REFLECTION_RESPONSE_PROFILES[0]],['body_signal',lib.BASELINE_BODY_AWARENESS_RESPONSE_PROFILES[0]],['guided_breath',lib.BASELINE_BREATH_PRACTICE_RESPONSE_PROFILES[0]],['attention',lib.baselineAttentionResponseProfiles(pack)[0]],['emotion',lib.baselineSelfTalkResponseProfiles(pack)[0]]].map(([challengeId,p])=>({challengeId,selectedOptionId:p.id,score:9999}));
- draft.step='result';draft.breathComplete=true;draft.breathPracticeSelected=lib.BASELINE_BREATH_PRACTICE_RESPONSE_PROFILES[0].id;draft.visualizationOrder=[0,1,2,3];draft.coherenceOrder=['signal','breath','thought','action'];
- const done=await call('POST',{action:'completeSkills',draft,revision:1});assert.equal(done.body.skills.completed,true);assert.equal(done.body.skills.result.version,5);assert.equal(done.body.skills.result.evidence.some(e=>e.score===9999),false);
+ const done=await call('POST',{action:'completeSkills',draft,revision:1});assert.equal(done.body.skills.completed,true);assert.equal(done.body.skills.result.version,6);assert.equal(done.body.skills.result.assessmentKind,'self_report_starting_profile');assert.equal(done.body.skills.result.evidence,undefined);
  const retry=await call('POST',{action:'completeSkills',draft,revision:1});assert.deepEqual(retry.body.skills.result,done.body.skills.result);
  assert.equal((await call('POST',body)).body.saved,true);assert.equal(providerCalls,1);assert.equal([...records.keys()].some(k=>k.startsWith('athlete-mental-progress')),false);
  const originalReceipt=(await call('GET')).body.receipt;

@@ -4,8 +4,9 @@ import source from '../../content/questionnaires/athlete-starting-point.json';
 export const COLLECTION = 'pulsecheck-restricted-questionnaire-submissions';
 export const VERSION = 'cau-operational-web-v1';
 // VERSION is the native gate transport contract; content and persisted answers evolve independently.
-export const QUESTIONNAIRE_VERSION = 'athlete-starting-point-v1';
-export const PREVIOUS_QUESTIONNAIRE_VERSION = 'cau-starting-point-v2';
+export const QUESTIONNAIRE_VERSION = 'athlete-starting-point-v2';
+export const PREVIOUS_QUESTIONNAIRE_VERSION = 'athlete-starting-point-v1';
+export const PREVIOUS_QUESTIONNAIRE_VERSIONS = [PREVIOUS_QUESTIONNAIRE_VERSION, 'cau-starting-point-v2'] as const;
 export const questions = source.questions;
 export function isCurrentQuestionnaire(input: any) { return input?.questionnaireVersion === QUESTIONNAIRE_VERSION; }
 export function baselineRecordId(uid: string) { return `baseline_${uid}_${QUESTIONNAIRE_VERSION}`; }

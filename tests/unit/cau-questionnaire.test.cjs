@@ -9,9 +9,9 @@ require.extensions['.ts'] = (mod, filename) => mod._compile(ts.transpileModule(f
 const { validateSubmission, splitSubmission, attachAuntEdnaReceipt } = require(path.resolve('src/lib/questionnaires/cau.ts'));
 const {questionCustodian} = require(path.resolve('src/lib/questionnaires/cau-routing.ts'));
 require.extensions['.ts'] = previousLoader;
-test('24 operational items plus 24 skills interactions form the approved 48-item baseline', () => {
+test('24 questionnaire items plus 16 self-report ratings form the 40-item baseline', () => {
  const {questions,QUESTIONNAIRE_VERSION,VERSION}=require(path.resolve('src/lib/questionnaires/cau.ts'));
- assert.equal(questions.length,24); assert.equal(questions.length+8+8+8,48);
+ assert.equal(questions.length,24); assert.equal(questions.length+8+8,40);
  assert.equal(VERSION,'cau-operational-web-v1');assert.equal(QUESTIONNAIRE_VERSION,'athlete-starting-point-v1');
  assert.deepEqual(questions.map(q=>Number(q.id.slice(-2))),[1,2,3,4,5,6,7,8,9,10,35,36,37,38,39,40,41,42,43,44,45,46,47,48]);
 });

@@ -1791,7 +1791,7 @@ export interface AthleteMentalProgress {
   // Active assignment tracking
   activeAssignmentId?: string;
   activeAssignmentExerciseName?: string;
-  taxonomyProfile?: TaxonomyProfile;
+  taxonomyProfile?: TaxonomyProfile | null;
   activeProgram?: ProgramPrescription;
   lastProfileSyncAt?: number;
   profileVersion?: string;
