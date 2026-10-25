@@ -36,15 +36,17 @@ exports.handler = async (event) => {
  const headers = {
    'Access-Control-Allow-Origin': '*',
    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-   'Access-Control-Allow-Methods': 'GET, OPTIONS'
+   'Access-Control-Allow-Methods': 'GET, OPTIONS',
+   'Cache-Control': 'no-store'
  };
 
  if (event.httpMethod === 'OPTIONS') {
    return { statusCode: 200, headers, body: '' };
  }
 
+ if (event.httpMethod !== 'GET') return { statusCode: 405, headers, body: JSON.stringify({ success: false, error: 'Method not allowed' }) };
  try {
-   const userId = event.queryStringParameters.userId;
+   const userId = event.queryStringParameters?.userId;
    if (!userId) {
      return {
        statusCode: 400,

@@ -1,7 +1,7 @@
 const { admin } = require('./config/firebase');
 
 const db = admin.firestore();
-const { requireUser } = require('./config/require-user');
+const { requireCheckinReader } = require('./config/require-user');
 
 exports.handler = async (event) => {
   const headers = {
@@ -10,8 +10,12 @@ exports.handler = async (event) => {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
   };
 
+  headers['Cache-Control'] = 'no-store';
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
+  if (event.httpMethod !== 'GET') return { statusCode: 405, headers, body: JSON.stringify({ success: false, error: 'Method not allowed' }) };
+
   try {
-    const userId = event.queryStringParameters.userId;
+    const userId = event.queryStringParameters?.userId;
     
     if (!userId) {
       return {
@@ -21,12 +25,14 @@ exports.handler = async (event) => {
       };
     }
 
-    const access = await requireUser(event, userId);
+    const access = await requireCheckinReader(event, userId);
     if (access.error) return { statusCode: access.statusCode, headers, body: JSON.stringify({ success: false, error: access.error }) };
 
     // Get user's body weight subcollection
     const bodyWeightRef = db.collection('users').doc(userId).collection('bodyWeight');
-    const limit = event.queryStringParameters.limit ? parseInt(event.queryStringParameters.limit) : 1;
+    const requestedLimit = event.queryStringParameters.limit || '1';
+    const limit = Number(requestedLimit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'limit must be an integer from 1 to 100' }) };
     const snapshot = await bodyWeightRef
       .orderBy('createdAt', 'desc')
       .limit(limit)  // Support fetching multiple entries for profile view
