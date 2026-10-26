@@ -14,7 +14,7 @@ The shared form labels available answers as prefilled, allows edits, and offers 
 
 iOS observes membership changes and rechecks the baseline, preserving server-only completion verification and remounting the embedded form when the required review changes. Android refreshes on membership changes and onboarding completion; a previous account completion cannot override a new requirement, and failed checks offer retry. Android currently presents the existing required-baseline dialog and opens the shared assessment in the browser; iOS embeds the shared assessment.
 
-Candidate checks: 45 API/content/profile regressions, 23 baseline/health/profile policy tests, 11 offline real-form scenarios and three actual-workspace route scenarios, TypeScript and scoped ESLint passed. The provisioning service's four pre-existing unused-symbol lint findings remain unchanged. Native build/test and hosted-build receipts are recorded separately when complete. The protected-answer custody, actual UMES recipient and physical-device release gates below remain unresolved; no production release is authorized by this candidate validation.
+Candidate checks: 45 API/content/profile regressions, 23 baseline/health/profile policy tests, 12 offline real-form scenarios and three actual-workspace route scenarios, TypeScript and scoped ESLint passed. The provisioning service's four pre-existing unused-symbol lint findings remain unchanged. Native build/test and hosted-build receipts are recorded separately when complete. The protected-answer custody, actual UMES recipient and physical-device release gates below remain unresolved; no production release is authorized by this candidate validation.
 
 ## October 26 continuation
 
