@@ -309,7 +309,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   const [saved, setSaved] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [status, setStatus] = useState<{available: boolean; completed: boolean; required?: boolean; healthSharingAllowed: boolean; healthBaselineEnabled?: boolean; healthAuthorizationRequired?: boolean; healthAuthorizationDecision?: string; healthDocuments?: PulseCheckRequiredConsentDocument[]; healthConsentDecisions?: ConsentDecisions; healthCollectionAvailable?: boolean; submissionSharing?: boolean | null; sportName?: string} | null>(null);
+  const [status, setStatus] = useState<{available: boolean; completed: boolean; required?: boolean; healthSharingAllowed: boolean; healthBaselineEnabled?: boolean; healthAuthorizationRequired?: boolean; healthAuthorizationDecision?: string; healthDocuments?: PulseCheckRequiredConsentDocument[]; healthConsentDecisions?: ConsentDecisions; healthCollectionAvailable?: boolean; submissionSharing?: boolean | null; sportName?: string; reviewId?: string; teamName?: string; prefill?: {answers: Record<string,string|string[]>; name: string; email?: string; prefilledQuestionCount: number; performanceQuestionsComplete?: boolean; unavailableHealthAnswers: boolean; hasPreviousBaseline: boolean; skillsDraft?: ConsolidatedSkillsDraft}} | null>(null);
   const [healthChoices, setHealthChoices] = useState<ConsentDecisions>({});
   const [reviewHealthChoice, setReviewHealthChoice] = useState(false);
   const [consentSaving, setConsentSaving] = useState(false);
@@ -359,6 +359,16 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         setHealthChoices(result.healthConsentDecisions || {});setShareHealth(sharing); setSharingLocked(typeof result.submissionSharing === 'boolean');
         setCompleted(old=>({...old,health:!sharing}));setReceipt(result.receipt || null);
         setPriorSubmission(result.questionnaireSubmitted === true);setSkillsState(result.skills || null);skillsRevision.current=result.skills?.revision || 0;
+        if (result.reviewId && result.prefill) {
+          const prefill = result.prefill;
+          setAnswers(prefill.answers || {});
+          if (prefill.name) setName(prefill.name);
+          if (!next.email && prefill.email) setEmail(prefill.email);
+          if (prefill.prefilledQuestionCount > 0 || prefill.hasPreviousBaseline) setStarted(true);
+          const performanceReady = prefill.performanceQuestionsComplete === true || Object.keys(prefill.answers || {}).length > 0;
+          setPerformanceQuestionsComplete(performanceReady);
+          setCompleted({performance:performanceReady && result.skills?.completed === true,health:!sharing});
+        }
         if (result.draft?.version === QUESTIONNAIRE_VERSION && !result.completed) {
           const draft = result.draft; draftRevision.current = draft.revision;
           setAnswers(draft.answers); setName(draft.name); setStarted(true); setDraftSaved(true);
@@ -396,7 +406,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       draftBusy.current = true; setDraftSaving(true); setDraftSaved(false);
       try {
         const performanceAnswers = Object.fromEntries(Object.entries(currentAnswers).filter(([id]) => questionCustodian(id) === 'PulseCheck'));
-        const response = await fetch(endpoint, {method:'POST',signal:AbortSignal.timeout(20000),headers:{...testHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase() ? 'dev' : 'prod'},body:JSON.stringify({questionnaireVersion:QUESTIONNAIRE_VERSION,action:'savePerformanceDraft',draft:{flowVersion:4,version:QUESTIONNAIRE_VERSION,name,answers:performanceAnswers,position:next >= questions.length ? 0 : next,completed:next >= questions.length,revision:draftRevision.current}})});
+        const response = await fetch(endpoint, {method:'POST',signal:AbortSignal.timeout(20000),headers:{...testHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase() ? 'dev' : 'prod'},body:JSON.stringify({questionnaireVersion:QUESTIONNAIRE_VERSION,reviewId:status?.reviewId,action:'savePerformanceDraft',draft:{flowVersion:4,version:QUESTIONNAIRE_VERSION,name,answers:performanceAnswers,position:next >= questions.length ? 0 : next,completed:next >= questions.length,revision:draftRevision.current}})});
         const result = await response.json();
         if (!response.ok || !result.draft) throw Error(result.error || 'Could not save progress. Press Continue to retry.');
         if (sessionUid.current !== uid) return;
@@ -425,7 +435,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   async function saveSkillsProgress(draft: ConsolidatedSkillsDraft, complete = false) {
     if(!user) throw Error('Sign in to continue.');
     const uid=user.uid;
-    const response=await fetch(endpoint,{method:'POST',signal:AbortSignal.timeout(45000),headers:{...testHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase()?'dev':'prod'},body:JSON.stringify({questionnaireVersion:QUESTIONNAIRE_VERSION,action:complete?'completeSkills':'saveSkillsDraft',draft,revision:skillsRevision.current})});
+    const response=await fetch(endpoint,{method:'POST',signal:AbortSignal.timeout(45000),headers:{...testHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase()?'dev':'prod'},body:JSON.stringify({questionnaireVersion:QUESTIONNAIRE_VERSION,reviewId:status?.reviewId,action:complete?'completeSkills':'saveSkillsDraft',draft,revision:skillsRevision.current})});
     const result=await response.json();
     if(!response.ok || !result.skills)throw Error(result.error || 'Could not save your skills. Try again.');
     if(sessionUid.current!==uid)throw Error('Your account changed. Reopen the baseline.');
@@ -439,7 +449,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     setConsentSaving(true);setError('');
     try {
       const headers = {...testHeaders(), 'Content-Type':'application/json', Authorization:`Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode':isUsingDevFirebase()?'dev':'prod'};
-      const response = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify({questionnaireVersion:QUESTIONNAIRE_VERSION,action:'saveHealthDecision',decisions:Object.fromEntries(Object.entries(healthChoices).filter(([id])=>status?.healthDocuments?.some(document=>document.id===id)))})});
+      const response = await fetch(endpoint, {method:'POST',headers,body:JSON.stringify({questionnaireVersion:QUESTIONNAIRE_VERSION,reviewId:status?.reviewId,action:'saveHealthDecision',decisions:Object.fromEntries(Object.entries(healthChoices).filter(([id])=>status?.healthDocuments?.some(document=>document.id===id)))})});
       const result = await response.json();
       if (!response.ok || !result.saved) throw Error(result.error || 'Your choice could not be saved. Try again.');
       const checked = await fetch(endpoint, {headers});
@@ -465,7 +475,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     if (!completed.health) { openTrack('health'); return; }
     setSaving(true); setSubmittedOnce(true); setError('');
     try {
-      const response = await fetch(endpoint, { method: 'POST', signal: AbortSignal.timeout(45000), headers: { ...testHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' }, body: JSON.stringify({ questionnaireVersion: QUESTIONNAIRE_VERSION, name, email, answers, shareHealth, completedSections: completed }) });
+      const response = await fetch(endpoint, { method: 'POST', signal: AbortSignal.timeout(45000), headers: { ...testHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' }, body: JSON.stringify({ questionnaireVersion: QUESTIONNAIRE_VERSION, reviewId:status?.reviewId, acceptPrefilled:Boolean(status?.reviewId), name, email, answers, shareHealth, completedSections: completed }) });
       const result = await response.json();
       if (sessionUid.current !== user.uid) return;
       if (!response.ok || !result.saved) throw Error(result.error || 'Unable to save answers.');
@@ -481,6 +491,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           if (checked.ok && sessionUid.current === user.uid) {
             setStatus(latest);
             if (latest.completed) { setSaved(true); return; }
+            if (latest.reviewId !== status?.reviewId) {window.location.reload();return;}
             const reserved = typeof latest.submissionSharing === 'boolean';
             setSharingLocked(reserved);
             if (reserved) setShareHealth(latest.submissionSharing);
@@ -509,7 +520,8 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     return (
       <motion.div key="sections" {...fadeMotion} className="cau-stage">
         <h1 className="cau-h1">Your starting point</h1>
-        <p className="cau-body">Choose a section to begin. Your progress is saved as you go.</p>
+        {status.reviewId && <div role="status" className="cau-context"><CheckCircle2 size={22}/><div><strong>{status.prefill?.prefilledQuestionCount ? 'Prefilled answers' : 'Baseline for your new team'}</strong><p className="cau-body-sm">Review your baseline for {status.teamName || 'your team'}. {status.prefill?.prefilledQuestionCount ? `${status.prefill.prefilledQuestionCount} answers from your previous baseline are prefilled. You can accept them or make changes.` : 'Complete this baseline even if you have done one before.'}</p>{status.prefill?.unavailableHealthAnswers && status.healthBaselineEnabled !== false && <p className="cau-body-sm">Previous health answers are not available here. Answer those questions again if you choose to share them.</p>}</div></div>}
+        <p className="cau-body">{status.reviewId ? 'Review your saved answers or accept them below.' : 'Choose a section to begin. Your progress is saved as you go.'}</p>
         <p className="cau-body">Your mental-health answers are not shared with coaches or teammates. Health sharing is your choice.</p>
         <Disclosure summary="How your answers are used">
           <p className="cau-muted-sm cau-pre-line">{source.purpose}</p>
@@ -545,7 +557,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
 
         {status.healthBaselineEnabled !== false && !sandboxTest && !sharingLocked && <button type="button" className="cau-btn cau-btn-ghost" onClick={()=>setReviewHealthChoice(true)}>Review health authorization</button>}
         {shareHealth && status.healthCollectionAvailable === false && <p role="status" className="cau-muted-sm">Your program’s health connection is not ready. Your health answers stay on this page until delivery can be confirmed. You can return later or choose Complete performance only.</p>}
-        {!shareHealth && <p className="cau-muted-sm">Your health responses will remain unshared. Complete the performance section, then submit to finish your baseline.</p>}
+        {!shareHealth && <p className="cau-muted-sm">Your health responses will remain unshared. {status.reviewId && completed.performance ? 'Review your answers, then accept them for this team.' : 'Complete the performance section, then submit to finish your baseline.'}</p>}
         {sharingLocked && !saved && <p className="cau-muted-sm">Your sharing choice is saved for this submission. If saving was interrupted, press Submit answers to retry.</p>}
         <p className="cau-muted-sm">{status.healthBaselineEnabled === false ? `${Number(completed.performance)} of 1 sections complete.` : `${Number(completed.performance) + Number(completed.health)} of 2 sections complete.`} Performance progress saves as you go. Well-being answers save when you submit; keep this page open until then.</p>
 
@@ -567,10 +579,11 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           </Disclosure>
         )}
 
+        {status.reviewId && skillsState?.draft && <button type="button" className="cau-btn cau-btn-ghost" onClick={()=>{setSkillsState({...skillsState,draft:{...skillsState.draft,step:'tools'}});setCompleted(old=>({...old,performance:false}));setShowSkills(true);}}>Review mental skill answers</button>}
         <AnimatePresence>{error && <ErrorBanner>{error}</ErrorBanner>}</AnimatePresence>
 
         <button type="button" aria-busy={saving} onClick={submit} className="cau-btn cau-btn-primary">
-          {saving ? <><Loader2 size={16} className="cau-spinner" /> Saving…</> : collectionEnabled ? <>Submit answers <ArrowRight size={16} /></> : 'Try saving answers'}
+          {saving ? <><Loader2 size={16} className="cau-spinner" /> Saving…</> : collectionEnabled ? <>{status.reviewId ? 'Accept answers for this team' : 'Submit answers'} <ArrowRight size={16} /></> : 'Try saving answers'}
         </button>
       </motion.div>
     );
@@ -592,6 +605,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
               q.type !== 'multi_select' && <div className="cau-context">{q.instructions.includes('past seven days') ? <CalendarDays size={22} /> : <CheckCircle2 size={22} />}<p className="cau-pre-line">{q.instructions}</p></div>
             )}
             <h1 className="cau-question-title">{questionTitle(q)}</h1>
+            {status?.reviewId && status.prefill?.answers[q.id] !== undefined && JSON.stringify(status.prefill.answers[q.id]) === JSON.stringify(value) && <p className="cau-eyebrow">Prefilled from your previous baseline</p>}
             {q.type === 'multi_select' && <div className="cau-selection-hint"><span>{q.maxSelections ? `Choose up to ${q.maxSelections}.` : 'Choose all that fit.'}</span><span className="cau-selection-count" aria-live="polite">{Array.isArray(value) ? value.length : 0} selected</span></div>}
 
             {q.type === 'multi_select' && <p className="cau-muted-sm">Tap a selected answer to remove it.</p>}
@@ -712,6 +726,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           </motion.div>
           <h1 className="cau-h1">Your answers are saved.</h1>
           <p className="cau-body">{sandboxTest ? 'Your test is complete. Share the receipt below so the team can check both systems.' : 'Thank you for sharing your starting point. You can return to the app.'}</p>
+          {status.reviewId && <button type="button" className="cau-btn cau-btn-primary" onClick={()=>window.location.reload()}>Continue</button>}
           {sandboxTest && receipt && (
             <div className="cau-receipt">
               <div className="cau-receipt-head">
@@ -763,6 +778,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim()) {setError('Enter your name to begin.');return;} setError('');setStarted(true); }} className="cau-stage cau-form">
           <p className="cau-eyebrow" style={{color:'#d7ef00'}}>Your baseline</p>
           <h1 className="cau-h1">Let’s find your starting point.</h1>
+          {status.reviewId && <p role="status" className="cau-body">Complete your baseline for {status.teamName || 'your new team'}.</p>}
           <p className="cau-body">{shareHealth ? 'Tell us how you’ve been feeling and which mental skills you’ve used.' : 'Tell us your training goal and which mental skills you’ve used.'}</p>
           <div className="cau-intro-parts">{shareHealth && <div className="cau-intro-part"><span>01</span><strong>How you’ve been feeling</strong></div>}<div className="cau-intro-part"><span>{shareHealth ? '02' : '01'}</span><strong>Your mental skills</strong></div></div>
           <h2 className="cau-h2">A few things to know</h2>
@@ -775,7 +791,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       );
     }
 
-    if (showSkills) return <ConsolidatedSkillsBaseline embedded precedingItemCount={performanceQuestionCount} sportName={status?.sportName || "Sport"} initialDraft={skillsState?.draft} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={draft=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
+    if (showSkills) return <ConsolidatedSkillsBaseline embedded precedingItemCount={performanceQuestionCount} sportName={status?.sportName || "Sport"} initialDraft={skillsState?.draft} prefilledFamilies={status?.prefill?.skillsDraft?.answeredFamiliarity} onSaveDraft={draft=>saveSkillsProgress(draft)} onComplete={draft=>saveSkillsProgress(draft,true)} onBack={()=>{setShowSkills(false);setTrack(null);}} />;
     if (track && q) return renderQuestion();
     return renderSections();
   }

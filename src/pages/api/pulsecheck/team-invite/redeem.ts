@@ -758,6 +758,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           userId,
           email: userEmail,
           role: teamMembershipRole,
+          ...(!hasActiveMatchingTeamMembership && teamMembershipRole === 'athlete' ? {baselineJoinedAt: now} : {}),
           status: 'active',
           revokedAt: null,
           revoked: false,

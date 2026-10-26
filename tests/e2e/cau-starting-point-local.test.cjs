@@ -17,10 +17,12 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
    const decision=scenario==='pending'&&!consentSaved?'pending':scenario==='declined'?'declined':scenario==='health-off'?'disabled':'accepted';
    let data={questionnaireVersion:version,available:true,completed:completed||scenario==='completed',required:true,healthBaselineEnabled:scenario!=='health-off',healthAuthorizationRequired:decision==='pending',healthAuthorizationDecision:decision,healthSharingAllowed:decision==='accepted',healthCollectionAvailable:scenario!=='unready',healthDocuments:[healthTerms],healthConsentDecisions:{},sportName:'Volleyball'};
    if(scenario==='resumed'||scenario==='health-off'||scenario==='declined'||scenario==='unready')Object.assign(data,{draft:goalDraft,skills});
+   if(scenario==='team-review'||scenario==='team-review-health')Object.assign(data,{reviewId:'join-second',teamName:'Second Team',healthBaselineEnabled:scenario==='team-review-health',healthAuthorizationDecision:scenario==='team-review-health'?'accepted':'disabled',healthSharingAllowed:scenario==='team-review-health',skills:{...skills,completed:true},prefill:{answers:{'cau-starting-point-46':['Focus']},name:'Previous Athlete',email:'local@example.test',prefilledQuestionCount:3,unavailableHealthAnswers:true,hasPreviousBaseline:true,skillsDraft:skills.draft}});
+   if(scenario==='team-first')Object.assign(data,{reviewId:'join-first',teamName:'First Team',healthBaselineEnabled:false,healthAuthorizationDecision:'disabled',healthSharingAllowed:false,prefill:{answers:{},name:'',prefilledQuestionCount:0,unavailableHealthAnswers:false,hasPreviousBaseline:false}});
    if(scenario==='completed')data.questionnaireVersion='athlete-starting-point-v1';
    if(interrupted&&scenario==='combined')data.submissionSharing=true;
    if(request.method()==='POST'){
-    const input=request.postDataJSON();posts.push(input);assert.equal(input.questionnaireVersion,version);
+    const input=request.postDataJSON();posts.push(input);assert.equal(input.questionnaireVersion,version);if(scenario.startsWith('team-'))assert.equal(input.reviewId,scenario==='team-first'?'join-first':'join-second');
     if(input.action==='saveHealthDecision'){consentSaved=true;data={saved:true};}
     else if(input.action==='savePerformanceDraft'){goalDraft={...input.draft,revision:++revision};data={draft:goalDraft};}
     else if(input.action?.includes('Skills')){skills={draft:input.draft,completed:input.action==='completeSkills',revision:++revision};data={skills};}
@@ -84,10 +86,34 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   await page.getByRole('button',{name:'Decline authorization',exact:true}).click();
   await click('Save health choice and continue');await page.getByRole('button',{name:'Start baseline',exact:true}).waitFor();
   assert.equal(posts.at(-1).action,'saveHealthDecision');assert.equal(posts.at(-1).decisions[healthTerms.id].decision,'declined');
+  skills=originalSkills;await open('team-review');
+  await page.getByText('Prefilled answers',{exact:true}).waitFor();
+  assert.match(await page.getByRole('status').innerText(),/Second Team.*3 answers/s);await layout();
+  await page.getByRole('button',{name:/Performance baseline/}).click();
+  assert.equal(await page.getByRole('button',{name:'Focus',exact:true}).getAttribute('aria-pressed'),'true');
+  await page.getByText('Prefilled from your previous baseline',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Back to sections',exact:true}).click();
+  await page.getByRole('heading',{name:'Your starting point',exact:true}).waitFor();
+  await page.waitForFunction(()=>document.querySelector('.cau-stage') && getComputedStyle(document.querySelector('.cau-stage')).opacity==='1');
+  await page.screenshot({path:'/tmp/team-baseline-prefilled.png',fullPage:true});
+  await click('Accept answers for this team');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
+  assert.equal(posts.at(-1).acceptPrefilled,true);assert.deepEqual(posts.at(-1).answers,{'cau-starting-point-46':['Focus']});
+  skills=originalSkills;await open('team-review-health');
+  await page.getByText('Previous health answers are not available here.',{exact:false}).waitFor();
+  const postsBefore=posts.length;await click('Accept answers for this team');
+  await page.locator('.cau-question-title').waitFor();assert.equal(posts.length,postsBefore,'missing health answers are not silently accepted');
+  skills=originalSkills;await open('team-review');await click('Review mental skill answers');
+  assert.equal(await page.getByLabel('Focus cues experience').inputValue(),'use_it');
+  assert.equal(await page.getByLabel('Picturing yourself performing experience').inputValue(),'','unknown experience remains blank');
+  await page.getByLabel('Focus cues experience').selectOption('practiced_it');await click('Continue');await click('Complete Performance');
+  await click('Accept answers for this team');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
+  assert.equal(skills.draft.familiarity.attention_cues,'practiced_it');
+  await open('team-first');await page.getByRole('button',{name:'Start baseline',exact:true}).waitFor();
+  assert.equal(await page.getByText('Prefilled answers',{exact:true}).count(),0);
   await open('completed');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();assert.equal(await page.getByRole('button',{name:'Start baseline',exact:true}).count(),0);
   await page.addInitScript(()=>{window.__baselineNativeEvents=[];window.webkit={messageHandlers:{baselineSession:{postMessage(message){window.__baselineNativeEvents.push(message.action);if(message.action==='signIn')setTimeout(()=>window.dispatchEvent(new CustomEvent('pulse-baseline-session',{detail:{customToken:'synthetic',userID:'local-test'}})),0);}}}};});
   await page.reload();await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();await page.waitForFunction(()=>window.__baselineNativeEvents.includes('completed'));
   assert.deepEqual(await page.evaluate(()=>window.__baselineNativeEvents),['signIn','completed']);assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({success:true,questionnaireItems:20,familiarityItems:8,total:28,scenarios:7,version}));
+  console.log(JSON.stringify({success:true,questionnaireItems:20,familiarityItems:8,total:28,scenarios:11,version}));
  }catch(error){console.error(await page.locator('body').innerText());throw error;}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

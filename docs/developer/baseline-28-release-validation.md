@@ -2,6 +2,18 @@
 
 October 25, 2026. Continue from the original handoff; this is not a production release approval.
 
+## Team-join baseline review (October 26)
+
+The latest user instruction supersedes the old account-wide skip rule for **new athlete team joins**. Each new active athlete membership gets a separate baseline requirement after entry onboarding/consent. A completed historical baseline for the original team stays complete. Invite retries preserve the same join marker; a reactivated membership receives a new marker. Team-code, invitation and administrative-transfer paths record that marker.
+
+The server selects pending joins from authenticated membership records and binds all writes to the displayed review ID. Drafts, retry reservations, submission IDs and final review records are scoped to that join. Old baseline records remain intact; the prior starting profile is retained in the server-owned review assignment before edits. Multiple pending teams are confirmed separately. Consent and health sharing are evaluated for the current team and are never preaccepted from another team.
+
+The shared form labels available answers as prefilled, allows edits, and offers **Accept answers for this team**. Only retained performance answers and explicitly reported experience are available for prefill. External health references cannot reconstruct the 19 protected answers, and no new protected-answer storage or invented values were added. Missing health answers are identified explicitly. Unanswered experience stays unknown.
+
+iOS observes membership changes and rechecks the baseline, preserving server-only completion verification and remounting the embedded form when the required review changes. Android refreshes on membership changes and onboarding completion; a previous account completion cannot override a new requirement, and failed checks offer retry. Android currently presents the existing required-baseline dialog and opens the shared assessment in the browser; iOS embeds the shared assessment.
+
+Candidate checks: 45 API/content/profile regressions, 23 baseline/health/profile policy tests, 11 offline real-form scenarios, TypeScript and scoped ESLint passed. The provisioning service's four pre-existing unused-symbol lint findings remain unchanged. Native build/test and hosted-build receipts are recorded separately when complete. The protected-answer custody, actual UMES recipient and physical-device release gates below remain unresolved; no production release is authorized by this candidate validation.
+
 ## October 26 continuation
 
 Both requested branches and both `origin/main` refs were fetched. The web production ancestor remains `46ace5a748e1fa85e73b51e21e7bda4c5d2b6c74`; native remains at candidate `2516269619947b66f72dbd94327d92b012315dc5`. Earlier baseline and native validation below applies to those preserved implementations. No new native source change or physical-device proof is claimed.

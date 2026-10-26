@@ -3,6 +3,7 @@ import { resolveBaselineConnection } from '../../../../lib/questionnaires/aunted
 import { baselineCompletionUrl } from '../../../../lib/questionnaires/baseline-completion-url';
 import { assertMemberSignIn } from '../../../../lib/server/auth/program-sign-in';
 import { resolveStandardBaselineAssignment } from '../../../../lib/questionnaires/standard-assignment';
+import { resolveTeamBaselineReview, teamBaselinePrefill, teamBaselineRecordId, teamBaselineReviewId } from '../../../../lib/questionnaires/team-baseline-review';
 import { createHash } from 'crypto';
 import { deriveAdministrativeAnswers, applyAdministrativeAnswers } from '../../../../lib/questionnaires/cau-derived';
 import { completedStartingProfile, saveSkills, validateSkillsDraft } from '../../../../lib/questionnaires/cau-skills';
@@ -29,22 +30,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try { await assertMemberSignIn(db, user); } catch (error) { return res.status(403).json({ error: error instanceof Error ? error.message : 'Use your program sign-in method.' }); }
     // Assignments are provisioned by trusted administrators, never by the client.
     const existingAssignment = (await collection.doc(`assignment_${user.uid}`).get()).data();
-    const assignment = await resolveStandardBaselineAssignment(db, user.uid, existingAssignment);
+    let assignment = await resolveStandardBaselineAssignment(db, user.uid, existingAssignment);
     let active = assignment?.kind === 'assignment' && assignment.enabled === true && assignment.version === VERSION && (typeof assignment.teamId === 'string' && assignment.teamId.length > 0 || assignment.scope === 'individual');
     const enabled = process.env.ATHLETE_BASELINE_ENABLED !== 'false';
-    const recordRef = collection.doc(baselineRecordId(user.uid));
-    const existing = await recordRef.get();
+    const originalRecordRef = collection.doc(baselineRecordId(user.uid));
+    const existing = await originalRecordRef.get();
     const legacy = await collection.doc(`baseline_${user.uid}_${VERSION}`).get();
     // Completed historical baselines remain completed; unfinished drafts start in a separate namespace.
     const previous = await Promise.all(PREVIOUS_QUESTIONNAIRE_VERSIONS.map(version => collection.doc(`baseline_${user.uid}_${version}`).get()));
-    const completed = [existing, legacy, ...previous].some(snapshot => baselineComplete(snapshot.data(), user.uid));
+    const historicalSnapshots = [existing, legacy, ...previous];
+    const previouslyCompleted = historicalSnapshots.some(snapshot => baselineComplete(snapshot.data(), user.uid));
+    const canonical = enabled ? (await db.collection('athlete-mental-progress').doc(user.uid).get()).data()?.mentalSkillsBaseline : null;
+    const teamReview = await resolveTeamBaselineReview(db, user.uid, existingAssignment, previouslyCompleted, canonical);
+    if (teamReview) { assignment = teamReview; active = true; }
+    const reviewId = teamReview?.reviewId || '';
+    const recordRef = reviewId ? collection.doc(teamBaselineRecordId(reviewId)) : originalRecordRef;
+    const completed = !reviewId && previouslyCompleted;
+    if (req.method === 'POST' && String(req.body?.reviewId || '') !== reviewId) return res.status(409).json({ error: 'Your team baseline has changed. Reopen the baseline to review the current team.' });
+    const namespace = `${user.uid}_${QUESTIONNAIRE_VERSION}${reviewId ? `_${reviewId}` : ''}`;
     const health = await baselineHealthContext(db, user.uid, assignment);
     active = active && health.eligible;
     const { healthSharingAllowed, healthBaselineEnabled, healthAuthorizationRequired, healthAuthorizationUrl,
       healthAuthorizationDecision, sportName } = health;
-    const draftRef = collection.doc(`performance_draft_${user.uid}_${QUESTIONNAIRE_VERSION}`);
+    const draftRef = collection.doc(`performance_draft_${namespace}`);
     let draft = active && enabled && !completed ? (await draftRef.get()).data() : null;
-    if (!draft && active && enabled && !completed) {
+    if (!reviewId && !draft && active && enabled && !completed) {
       const old = (await collection.doc(`performance_draft_${user.uid}_${PREVIOUS_QUESTIONNAIRE_VERSION}`).get()).data();
       if (old?.version === PREVIOUS_QUESTIONNAIRE_VERSION && typeof old.name === 'string') {
         draft = {flowVersion:4,version:QUESTIONNAIRE_VERSION,name:old.name,ownerUid:user.uid,
@@ -52,21 +62,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           position:0,completed:old.completed === true,revision:0,migratedFrom:PREVIOUS_QUESTIONNAIRE_VERSION};
       }
     }
-    const skillsRef = collection.doc(`skills_draft_${user.uid}_${QUESTIONNAIRE_VERSION}`);
+    const skillsRef = collection.doc(`skills_draft_${namespace}`);
     let savedSkills = active && enabled ? (await skillsRef.get()).data() : null;
-    if (!savedSkills && active && enabled && !completed) {
+    if (!reviewId && !savedSkills && active && enabled && !completed) {
       const old = (await collection.doc(`skills_draft_${user.uid}_${PREVIOUS_QUESTIONNAIRE_VERSION}`).get()).data();
       if (old?.draft) {
         try { savedSkills = {version:2,revision:0,completed:false,draft:validateSkillsDraft(old.draft),migratedFrom:PREVIOUS_QUESTIONNAIRE_VERSION}; }
         catch { /* Malformed old progress is not silently reinterpreted. */ }
       }
     }
-    const canonical = active && enabled ? (await db.collection('athlete-mental-progress').doc(user.uid).get()).data()?.mentalSkillsBaseline : null;
-    const skills = completedStartingProfile(canonical) ? {completed:true,result:canonical,reused:true} : savedSkills ? {...savedSkills,completed:false} : null;
-    const pendingAttempt = active && !completed ? (await collection.doc(`attempt_${user.uid}_${QUESTIONNAIRE_VERSION}`).get()).data() : null;
+    const priorTeamRecords = reviewId && active ? (await collection.where('externalId', '==', user.uid).get()).docs
+      .map(snapshot => snapshot.data()).filter(record => baselineComplete(record, user.uid)) : [];
+    const prefill = reviewId ? teamBaselinePrefill([...priorTeamRecords, ...historicalSnapshots.map(snapshot => snapshot.data()).filter(record => baselineComplete(record, user.uid))], teamReview.previousStartingProfile || canonical) : null;
+    const skills = reviewId ? savedSkills || (prefill?.skillsDraft ? {completed:true,draft:prefill.skillsDraft,result:canonical,reused:true,revision:0} : null)
+      : completedStartingProfile(canonical) ? {completed:true,result:canonical,reused:true} : savedSkills ? {...savedSkills,completed:false} : null;
+    const pendingAttempt = active && !completed ? (await collection.doc(`attempt_${namespace}`).get()).data() : null;
     const connection = active ? resolveBaselineConnection(health.organizationId, assignment?.teamId, health.organization, assignment) : null;
     const clinicalDeliveryAvailable = Boolean(connection);
     if (req.method === 'GET') return res.json({ required: Boolean(active && !completed), completed, version: VERSION, questionnaireVersion: QUESTIONNAIRE_VERSION,
+      reviewId: reviewId || null, teamName: teamReview?.teamName || null, prefill,
       available: Boolean(active && enabled), draft: draft || null, skills, healthSharingAllowed, healthBaselineEnabled, healthAuthorizationRequired, healthAuthorizationUrl, healthAuthorizationDecision, healthDocuments: active ? health.healthDocuments : [], healthConsentDecisions: active ? Object.fromEntries(health.healthDocuments.filter(document => health.decisions[document.id]).map(document => [document.id, health.decisions[document.id]])) : {}, submissionSharing: typeof pendingAttempt?.shareHealth === 'boolean' ? pendingAttempt.shareHealth : null, healthCollectionAvailable: clinicalDeliveryAvailable, sportName, questionnaireUrl: 'https://fitwithpulse.ai/PulseCheck/baseline' });
     if (!isCurrentQuestionnaire(req.body)) return res.status(409).json({error:'This questionnaire has changed. Reload the page to continue with the current version.'});
     if (!assignment || !active || !enabled) return res.status(503).json({ error: 'Your questionnaire is not available yet. Please contact your program team.' });
@@ -78,10 +92,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     if (completed) return res.json({ saved: true, completed: true });
     if (['saveSkillsDraft','completeSkills'].includes(req.body?.action)) {
-      if (completedStartingProfile(canonical)) return res.json({skills});
-      if (!draft?.completed) return res.status(400).json({error:'Complete your performance questions first.'});
+      if (!reviewId && completedStartingProfile(canonical)) return res.json({skills});
+      if (!draft?.completed && !(reviewId && prefill?.performanceQuestionsComplete)) return res.status(400).json({error:'Complete your performance questions first.'});
       try {
-        const saved = await saveSkills(db,skillsRef,req.body,user.uid,req.body.action==='completeSkills',sportName);
+        const saved = await saveSkills(db,skillsRef,req.body,user.uid,req.body.action==='completeSkills',sportName,Boolean(reviewId));
         if (saved.completed) {
           const response = await fetch(baselineCompletionUrl(), {
             method:'POST',redirect:'error',signal:AbortSignal.timeout(35000),
@@ -98,7 +112,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       catch { return res.status(409).json({error:'Progress could not be saved. Retry, or reopen this questionnaire if another tab changed it.'}); }
     }
     if (healthAuthorizationRequired) return res.status(409).json({ error: 'Review your health authorization and record your choice before submitting.' });
-    if (!completedStartingProfile(canonical)) return res.status(400).json({error:'Finish your starting profile before submitting.'});
+    if (!completedStartingProfile(canonical) && !(reviewId && savedSkills?.completed)) return res.status(400).json({error:'Finish your starting profile before submitting.'});
+    if (reviewId && req.body.acceptPrefilled !== true) return res.status(400).json({ error: 'Review and confirm your answers for this team before submitting.' });
     if (req.body?.completedSections?.performance !== true || req.body?.completedSections?.health !== true || typeof req.body.shareHealth !== 'boolean') return res.status(400).json({ error: 'Finish both sections before submitting.' });
     // Stable assignment ID and authenticated UID bind retries across web and apps.
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(assignment.submissionId || '')) return res.status(503).json({ error: 'Your questionnaire setup needs review.' });
@@ -106,7 +121,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let split;
     try { split = splitSubmission(input); } catch { return res.status(400).json({ error: 'Please check your answers before submitting.' }); }
     if (req.body.shareHealth !== false && (!healthSharingAllowed || !clinicalDeliveryAvailable)) return res.status(403).json({ error: 'Review your health-sharing authorization, or complete performance only.' });
-    const attemptRef = collection.doc(`attempt_${user.uid}_${QUESTIONNAIRE_VERSION}`);
+    const attemptRef = collection.doc(`attempt_${namespace}`);
     const shareHealth = req.body.shareHealth !== false;
     const attempt = await db.runTransaction(async tx => {
       const current = await tx.get(attemptRef);
@@ -122,7 +137,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const create = async (_id: string, mirror: any) => db.runTransaction(async tx => {
       const current = await tx.get(recordRef);
       if (current.exists) return current.data() as any;
-      tx.create(recordRef, { ...mirror, ...retainedPrivateCopy(input, liveRetentionEnabled(assignment, process.env.CAU_PRIVATE_RETENTION_ENABLED)), administrativeMetadata:{...input.administrativeMetadata,firstPerformanceSaveAt:draft?.startedAt || null}, fields: attempt.pulseCheck.fields, identity: attempt.pulseCheck.identity, recordedAt: admin.firestore.FieldValue.serverTimestamp() });
+      if (reviewId) {
+        const membership = (await tx.get(db.collection('pulsecheck-team-memberships').doc(assignment.teamMembershipId))).data();
+        if (membership?.userId !== user.uid || membership.status !== 'active' || membership.revokedAt || membership.archivedAt || membership.deletedAt
+          || teamBaselineReviewId(user.uid, assignment.teamMembershipId, membership) !== reviewId) throw Error('Team join changed.');
+      }
+      const original = reviewId ? await tx.get(originalRecordRef) : null;
+      const value = { ...mirror, ...retainedPrivateCopy(input, liveRetentionEnabled(assignment, process.env.CAU_PRIVATE_RETENTION_ENABLED)), administrativeMetadata:{...input.administrativeMetadata,firstPerformanceSaveAt:draft?.startedAt || null}, fields: attempt.pulseCheck.fields, identity: attempt.pulseCheck.identity, recordedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...(reviewId ? {reviewId, teamId:assignment.teamId, teamMembershipId:assignment.teamMembershipId, reviewedAt:new Date().toISOString(), reviewedBy:user.uid, acceptedPrefilled:true, startingProfile:savedSkills?.result || canonical, prefillSourceSubmissionId:prefill?.sourceSubmissionId || null} : {}) };
+      tx.create(recordRef, value);
+      if (reviewId && !original?.exists) tx.create(originalRecordRef, value);
       return mirror;
     });
     if (req.body.shareHealth === false) {

@@ -2577,6 +2577,9 @@ export const pulseCheckProvisioningService = {
         legacyConnectionId: normalizeString(sourceMembershipData.legacyConnectionId || destinationMembershipData.legacyConnectionId),
         legacyLinkedAt: sourceMembershipData.legacyLinkedAt || destinationMembershipData.legacyLinkedAt || null,
         role: 'athlete' as const,
+        ...(destinationMembershipData.status !== 'active' || destinationMembershipData.revokedAt
+          || destinationMembershipData.archivedAt || destinationMembershipData.deletedAt
+          ? {baselineJoinedAt: serverTimestamp()} : {}),
         title: normalizeString(sourceMembershipData.title || destinationMembershipData.title),
         permissionSetId: permissionSetByRole.athlete,
         operatingRole: sourceMembershipData.operatingRole || destinationMembershipData.operatingRole || undefined,
@@ -4652,6 +4655,7 @@ export const pulseCheckProvisioningService = {
               userId,
               email: userEmail,
               role: teamMembershipRole,
+              ...(!hasActiveMatchingTeamMembership && teamMembershipRole === 'athlete' ? {baselineJoinedAt: serverTimestamp()} : {}),
               status: 'active',
               revokedAt: null,
               revoked: false,

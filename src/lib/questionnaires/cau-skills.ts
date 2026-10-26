@@ -44,12 +44,12 @@ export function completedStartingProfile(value: any): boolean {
   return value?.version === 5 || isSelfReportStartingProfile(value);
 }
 
-export async function saveSkills(db: any, ref: any, input: any, uid: string, complete: boolean, sportName = 'Sport') {
+export async function saveSkills(db: any, ref: any, input: any, uid: string, complete: boolean, sportName = 'Sport', allowReviewEdits = false) {
   const draft = validateSkillsDraft(input.draft, complete, sportName);
   if (!Number.isInteger(input.revision) || input.revision < 0) throw Error('Invalid revision.');
   return db.runTransaction(async (tx: any) => {
     const previous = (await tx.get(ref)).data();
-    if (previous?.completed && isSelfReportStartingProfile(previous.result)) return previous;
+    if (!allowReviewEdits && previous?.completed && isSelfReportStartingProfile(previous.result)) return previous;
     // A v1 draft may have saved its old result before the canonical write failed.
     // Retry from its stored self-report values, preserving answers while dropping old score claims.
     const migratingCompletedDraft = previous?.completed === true && previous?.draft?.version === 1;

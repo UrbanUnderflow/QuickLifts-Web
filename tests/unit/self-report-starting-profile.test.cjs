@@ -61,3 +61,13 @@ test('canonical completion persists the unscored profile with a null taxonomy an
  const result=await handler({httpMethod:'POST',headers:{authorization:'Bearer synthetic'},body:JSON.stringify({userId:'athlete',mentalSkillsBaseline:{...profile,overallCompetencyScore:100,evidence:[{score:100}]}})});
  assert.equal(result.statusCode,200);assert.equal(profilePassed,null);assert.equal(persisted.taxonomyProfile,null);assert.deepEqual(persisted.activeProgram,{isProvisional:true});assert.equal(persisted.mentalSkillsBaseline.version,6);assert.equal(persisted.mentalSkillsBaseline.overallCompetencyScore,undefined);assert.equal(persisted.mentalSkillsBaseline.evidence,undefined);assert.deepEqual(persisted.taskEvidence,observations);assert.deepEqual(persisted.simSessionHistory,['genuine-session']);
 });
+
+test('team review allows further edits without changing the completed original baseline',async()=>{
+ let previous;
+ const db={runTransaction:async fn=>fn({get:async()=>({data:()=>previous}),set:(_r,value)=>{previous=value;}})};
+ const original=await saveSkills(db,{}, {draft:draft(),revision:0},'athlete',true,'Golf',true);
+ const changed=draft();changed.familiarity.attention_cues='use_it';changed.answeredFamiliarity=['attention_cues'];
+ const updated=await saveSkills(db,{}, {draft:changed,revision:original.revision},'athlete',true,'Golf',true);
+ assert.equal(updated.result.familiarity.attention_cues,'use_it');assert.deepEqual(updated.result.answeredFamiliarity,['attention_cues']);
+ assert.deepEqual(original.result.answeredFamiliarity,[]);assert.equal(original.result.familiarity.attention_cues,'new_to_me');
+});

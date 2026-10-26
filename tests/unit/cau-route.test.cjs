@@ -105,13 +105,16 @@ test('canonical write failure is retryable without repeating or fabricating chal
 });
 test('active team athletes get a standard requirement without manual assignment, and skills alone cannot release it',async()=>{
  setup();records.delete(root+'assignment_athlete');
- records.set('pulsecheck-team-memberships/real-membership-id',{userId:'athlete',role:'athlete',teamId:'umes',status:'active',athleteOnboarding:{entryOnboardingStep:'complete',productConsentAccepted:true}});
+ records.set('pulsecheck-team-memberships/real-membership-id',{userId:'athlete',role:'athlete',teamId:'umes',status:'active',baselineJoinedAt:'2026-10-26',athleteOnboarding:{entryOnboardingStep:'complete',productConsentAccepted:true}});
+ const families=require('../../src/api/firebase/mentaltraining/mentalSkillsBaseline.ts').MENTAL_SKILL_FAMILIES;
+ records.set('athlete-mental-progress/athlete',{mentalSkillsBaseline:{version:6,assessmentKind:'self_report_starting_profile',familiarity:Object.fromEntries(families.map(f=>[f,'new_to_me'])),answeredFamiliarity:[]}});
  records.set('pulsecheck-teams/umes',{sportOrProgram:'Golf'});
  const initial=await call('GET');assert.equal(initial.status,200);assert.equal(initial.body.required,true);assert.equal(initial.body.healthCollectionAvailable,false);
  assert.equal(records.get(root+'assignment_athlete').teamMembershipId,'real-membership-id');
  assert.equal(initial.body.skills.completed,true);assert.equal(initial.body.completed,false);
  records.set(root+'baseline_athlete_athlete-starting-point-v2',{status:'complete',externalId:'athlete'});
- const finished=await call('GET');assert.equal(finished.body.completed,true);assert.equal(finished.body.required,false);
+ const finished=await call('GET');assert.equal(finished.body.completed,false);assert.equal(finished.body.required,true);
+ assert.equal(finished.body.reviewId,initial.body.reviewId,'account completion does not satisfy a new join');
 });
 test('a temporarily unavailable baseline never clears an unfinished requirement',async()=>{
  setup();process.env.ATHLETE_BASELINE_ENABLED='false';
@@ -198,4 +201,53 @@ test('pending health choice cannot be silently converted to performance-only com
  setup();records.set('pulsecheck-team-memberships/team_athlete',{status:'active'});records.delete('pulsecheck-team-memberships/team_athlete/consent-events');
  const status=(await call('GET')).body;assert.equal(status.required,true);assert.equal(status.healthAuthorizationRequired,true);
  assert.equal((await call('POST',{...body,shareHealth:false})).status,409);assert.equal(writes.length,0);assert.equal(providerCalls,0);
+});
+
+function addNewTeam(team='second', joinedAt='2026-10-26T17:00:00Z') {
+ const decisions={health:{decision:'declined',version:'v1',document:healthDoc,signedName:''}};
+ records.set(`pulsecheck-teams/${team}`,{displayName:team,healthBaselineEnabled:false});
+ records.set(`pulsecheck-team-memberships/${team}_athlete`,{userId:'athlete',role:'athlete',teamId:team,organizationId:'org',status:'active',baselineJoinedAt:joinedAt,athleteOnboarding:{entryOnboardingStep:'complete',productConsentAccepted:true,consentDecisions:decisions}});
+ records.set(`pulsecheck-team-memberships/${team}_athlete/consent-events`,{actorUserId:'athlete',decisions});
+}
+function previousBaseline() {
+ const families=require('../../src/api/firebase/mentaltraining/mentalSkillsBaseline.ts').MENTAL_SKILL_FAMILIES;
+ records.set('athlete-mental-progress/athlete',{mentalSkillsBaseline:{version:6,assessmentKind:'self_report_starting_profile',completedAt:10,familiarity:Object.fromEntries(families.map(f=>[f,'use_it'])),answeredFamiliarity:families}});
+ records.set(root+'baseline_athlete_athlete-starting-point-v2',{status:'complete',externalId:'athlete',submissionId:'original-completion',identity:{name:'Previous Athlete',email:'previous@example.test'},fields:{'cau-starting-point-46':{state:'local',value:['Focus']}},auntEdnaReferences:{'cau-starting-point-39':{state:'external',recordId:'not-an-answer'}}});
+}
+test('a new team requires explicit review even after a completed baseline; prior answers remain unchanged',async()=>{
+ setup();previousBaseline();addNewTeam();
+ const old=structuredClone(records.get(root+'baseline_athlete_athlete-starting-point-v2'));
+ const initial=await call('GET');assert.equal(initial.status,200);assert.equal(initial.body.required,true);assert.equal(initial.body.completed,false);
+ assert.equal(initial.body.teamName,'second');assert.equal(initial.body.prefill.prefilledQuestionCount,9);
+ assert.deepEqual(initial.body.prefill.answers,{'cau-starting-point-46':['Focus']});assert.equal(initial.body.prefill.unavailableHealthAnswers,true);
+ assert.equal(JSON.stringify(initial.body.prefill).includes('not-an-answer'),false);
+ const input={...body,answers:initial.body.prefill.answers,shareHealth:false,reviewId:initial.body.reviewId};
+ assert.equal((await call('POST',input)).status,400);
+ assert.equal((await call('POST',{...input,reviewId:'another-join',acceptPrefilled:true})).status,409);
+ assert.equal((await call('POST',{...input,acceptPrefilled:true})).body.saved,true);
+ assert.deepEqual(records.get(root+'baseline_athlete_athlete-starting-point-v2'),old);
+ const review=records.get(root+require('../../src/lib/questionnaires/team-baseline-review.ts').teamBaselineRecordId(initial.body.reviewId));
+ assert.equal(review.teamId,'second');assert.equal(review.reviewedBy,'athlete');assert.equal(review.acceptedPrefilled,true);
+ assert.equal((await call('GET')).body.required,false);
+});
+test('multiple new teams are reviewed separately and rejoining creates another requirement',async()=>{
+ setup();previousBaseline();addNewTeam('a-new');addNewTeam('z-new');
+ const first=(await call('GET')).body;
+ await call('POST',{...body,answers:first.prefill.answers,shareHealth:false,reviewId:first.reviewId,acceptPrefilled:true});
+ const second=(await call('GET')).body;assert.equal(second.required,true);assert.equal(second.teamName,'z-new');assert.notEqual(first.reviewId,second.reviewId);
+ assert.equal((await call('POST',{...body,shareHealth:false,reviewId:first.reviewId,acceptPrefilled:true})).status,409);
+ await call('POST',{...body,answers:second.prefill.answers,shareHealth:false,reviewId:second.reviewId,acceptPrefilled:true});
+ assert.equal((await call('GET')).body.required,false);
+ addNewTeam('a-new','2026-10-27T17:00:00Z');
+ const rejoin=(await call('GET')).body;assert.equal(rejoin.required,true);assert.notEqual(rejoin.reviewId,first.reviewId);
+ assert.equal((await call('GET')).body.reviewId,rejoin.reviewId,'repeated checks do not create another join');
+});
+test('new-team drafts are isolated and revoked memberships cannot reuse their pending review',async()=>{
+ setup();previousBaseline();addNewTeam();const initial=(await call('GET')).body;
+ const draft={version:'athlete-starting-point-v2',name:'Current Athlete',answers:{'cau-starting-point-46':['Confidence']},position:0,completed:true,revision:0};
+ assert.equal((await call('POST',{action:'savePerformanceDraft',reviewId:initial.reviewId,draft})).status,200);
+ assert.equal(records.has(root+'performance_draft_athlete_athlete-starting-point-v2'),false);
+ assert.deepEqual((await call('GET')).body.draft.answers,draft.answers);
+ const member=records.get('pulsecheck-team-memberships/second_athlete');member.status='inactive';
+ assert.equal((await call('POST',{...body,shareHealth:false,reviewId:initial.reviewId,acceptPrefilled:true})).status,409);
 });

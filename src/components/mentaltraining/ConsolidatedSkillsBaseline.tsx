@@ -15,6 +15,7 @@ export interface ConsolidatedSkillsBaselineProps {
   sportName?: string;
   precedingItemCount?: number;
   initialDraft?: ConsolidatedSkillsDraft | null;
+  prefilledFamilies?: MentalSkillFamily[];
   onSaveDraft: (draft: ConsolidatedSkillsDraft) => Promise<void>;
   onComplete: (draft: ConsolidatedSkillsDraft) => Promise<void> | void;
   onBack: () => void;
@@ -56,7 +57,7 @@ const STYLES = `
 .consolidated-skills .skills-review{margin-top:24px;font-size:16px}.consolidated-skills .skills-review summary{cursor:pointer;min-height:44px}.consolidated-skills .skills-review p{padding:10px 0;border-bottom:1px solid #ffffff15;color:#d5dcd8}
 @media(max-width:360px){.consolidated-skills.skills-embedded .skills-action-area{width:calc(100% - 36px)}}
 `;
-export default function ConsolidatedSkillsBaseline({ embedded = false, precedingItemCount = 0, initialDraft, onSaveDraft, onComplete, onBack }: ConsolidatedSkillsBaselineProps) {
+export default function ConsolidatedSkillsBaseline({ embedded = false, precedingItemCount = 0, initialDraft, prefilledFamilies = [], onSaveDraft, onComplete, onBack }: ConsolidatedSkillsBaselineProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState<Step>(() => initialDraft?.version === 2 && initialDraft.step === 'result' ? 'result' : 'tools');
   const [isSaving, setIsSaving] = useState(false);
@@ -91,7 +92,7 @@ export default function ConsolidatedSkillsBaseline({ embedded = false, preceding
     <style>{STYLES}</style>
     <header><button type="button" aria-label="Previous question" onClick={()=>void back()}><ArrowLeft size={22}/></button><div className="skills-progress"><div className="skills-progress-label"><span>Your mental skills</span><span>{step === 'result' ? `${total} of ${total}` : `${answered+1} of ${total}`}</span></div><div className="skills-progress-track" role="progressbar" aria-label="Mental skills progress" aria-valuenow={answered} aria-valuemin={0} aria-valuemax={total}><div className="skills-progress-fill" style={{width:`${answered/total*100}%`}}/></div></div></header>
     <fieldset disabled={isSaving}>
-      {step === 'tools' && <section><p className="skills-eyebrow">Your experience</p><h2>Which skills have you tried?</h2><p className="skills-description">Choose what fits your experience with each skill. You can leave any unanswered.</p><div className="skills-experience-list">{MENTAL_SKILL_FAMILIES.map(f=>{const {label,description,Icon}=familyInfo[f];return <label key={f} className="skills-experience-card"><span className="skills-family-heading"><Icon/>{label}</span><p>{description}</p><select aria-label={`${label} experience`} value={answeredFamiliarity.includes(f)?familiarity[f]:''} onChange={e=>{const v=e.target.value as MentalSkillFamiliarity;if(v){setFamiliarity(s=>({...s,[f]:v}));setAnsweredFamiliarity(s=>s.includes(f)?s:[...s,f]);}else setAnsweredFamiliarity(s=>s.filter(x=>x!==f));}}><option value="">Not answered</option>{Object.entries(familiarityLabels).map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></label>;})}</div></section>}
+      {step === 'tools' && <section><p className="skills-eyebrow">Your experience</p><h2>Which skills have you tried?</h2><p className="skills-description">Choose what fits your experience with each skill. You can leave any unanswered.</p><div className="skills-experience-list">{MENTAL_SKILL_FAMILIES.map(f=>{const {label,description,Icon}=familyInfo[f];return <label key={f} className="skills-experience-card"><span className="skills-family-heading"><Icon/>{label}</span><p>{description}</p>{prefilledFamilies.includes(f) && initialDraft?.familiarity[f] === familiarity[f] && answeredFamiliarity.includes(f) && <p>Prefilled from your previous baseline</p>}<select aria-label={`${label} experience`} value={answeredFamiliarity.includes(f)?familiarity[f]:''} onChange={e=>{const v=e.target.value as MentalSkillFamiliarity;if(v){setFamiliarity(s=>({...s,[f]:v}));setAnsweredFamiliarity(s=>s.includes(f)?s:[...s,f]);}else setAnsweredFamiliarity(s=>s.filter(x=>x!==f));}}><option value="">Not answered</option>{Object.entries(familiarityLabels).map(([v,label])=><option key={v} value={v}>{label}</option>)}</select></label>;})}</div></section>}
       {step === 'result' && <section><p className="skills-eyebrow">Your starting profile</p><h2>Your experience is saved.</h2><p className="skills-description">We’ll use your goals and experience to choose a first practice. Your plan can change as you train.</p><details className="skills-review"><summary>Review your experience</summary>{MENTAL_SKILL_FAMILIES.map(f=><p key={f}><strong>{familyInfo[f].label}</strong><br/>{answeredFamiliarity.includes(f)?familiarityLabels[familiarity[f]]:'Not answered'}</p>)}</details></section>}
     </fieldset>
     <div className="skills-action-area">{error&&<p className="skills-error" role="alert">{error}</p>}<button type="button" aria-busy={isSaving} onClick={()=>void saveAndMove()}>{isSaving?'Saving…':step==='result'?'Complete Performance':'Continue'}</button></div>
