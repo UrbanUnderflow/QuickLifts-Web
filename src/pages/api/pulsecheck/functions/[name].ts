@@ -4,6 +4,7 @@ const SUPPORTED_FUNCTIONS = new Set([
   'get-pulsecheck-app-branding',
   'pulsecheck-consent-save',
   'delete-account',
+  'complete-phone-auth',
   'record-clinical-escalation',
   'clinical-responder',
   'submit-pulsecheck-checkin',

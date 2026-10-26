@@ -9,7 +9,6 @@ import {
   OAuthProvider,
   isSignInWithEmailLink,
   sendSignInLinkToEmail,
-  signInWithEmailLink,
   sendPasswordResetEmail,
   setPersistence,
 } from 'firebase/auth';
@@ -24,6 +23,7 @@ import {
   buildAppVersionWritePayload,
 } from '../../../utils/appVersioning';
 import { resolveGoogleProviderConflict } from './accountLinking';
+import { completeExistingEmailLink } from './phone';
 import { clearStalePulseAuthKeys, signOutAndClearPulseAuthState } from '../../../utils/authSessionCleanup';
 
 const preparePrimaryAuthSignIn = async () => {
@@ -114,7 +114,7 @@ export const authMethods: AuthService = {
     }
 
     await preparePrimaryAuthSignIn();
-    return signInWithEmailLink(auth, normalizedEmail, url);
+    return completeExistingEmailLink(normalizedEmail, url);
   },
 
   async signInWithGoogle() {
