@@ -2,6 +2,22 @@
 
 October 25, 2026. Continue from the original handoff; this is not a production release approval.
 
+## October 26 continuation
+
+Both requested branches and both `origin/main` refs were fetched. The web production ancestor remains `46ace5a748e1fa85e73b51e21e7bda4c5d2b6c74`; native remains at candidate `2516269619947b66f72dbd94327d92b012315dc5`. Earlier baseline and native validation below applies to those preserved implementations. No new native source change or physical-device proof is claimed.
+
+The prior conversation was read to verify the user's direct instruction to defer AuntEdna and use named clinical staff for escalations. No later answer settling protected-answer custody or supplying a UMES contact was found. Those decisions were requested again; neither has been assumed.
+
+Web commit `33ad1fdaaf13eef5bd1ee02e0b87dd570ac3edc7` fixes two clinical-contact integration issues: deactivation now uses the saved contact rather than requiring valid unsaved form edits, and the form shows the saved route returned by the server after activation/deactivation. Revision checks and audit writes remain enforced. Deactivation ignores submitted contact edits and preserves the saved recipient.
+
+Validation for that change: six admin API tests passed, the real mobile-width contact component passed draft/activation/deactivation/stale-revision checks, 78 delivery/escalation tests passed, TypeScript passed, scoped ESLint passed, and whitespace checks passed. The browser regression includes an invalid unsaved email followed by successful deactivation without transmitting contact edits. No real recipient was activated and no email or SMS was sent.
+
+Hosted Git build `6adf497cb656b586c4e2a871` completed with ready deploy `6adf497cb656b586c4e2a873` for that exact branch commit. Candidate: https://6adf497cb656b586c4e2a873--quickliftsapp.netlify.app/PulseCheck/baseline. No local Netlify production upload was used. These documentation updates were committed after the hosted code build.
+
+The candidate baseline entry initialized and rendered its sign-in screen. Anonymous baseline API access returned 401. An authenticated read of the candidate's UMES Golf clinical-staff API returned 200, with the new `currentRoute: hotline` response, no saved contact, email configured and SMS unconfigured. The existing operator has no assignment; no assignment or protected submission was created to test the live database. Actual protected-answer delivery and live alert delivery remain unverified.
+
+Production was rechecked through Netlify: deploy `6ade484ca99d20b6b4b435d9` remained ready at `46ace5a748e1fa85e73b51e21e7bda4c5d2b6c74`. The signed-in production provisioning dashboard rendered UMES and its existing coach-surveys controls. The development iPhone is still listed as unpaired by Xcode. Production publication, actual protected-answer delivery and physical iPhone sign-in/consent/return-to-training remain release gates.
+
 ## User steering after the checkpoint
 
 The user clarified that no provider is connected and AuntEdna is deferred. The requested current clinical route is the program's designated clinical staff member, entered by name, work email and phone in provisioning.

@@ -2,6 +2,8 @@
 
 Checkpoint date: October 25, 2026. The user explicitly asked to STOP, check in the work, and provide this handoff. **This branch is a work-in-progress checkpoint, not a release. Do not merge or deploy it until the remaining integration and validation work is complete.**
 
+**Continuation:** Read [the current release validation and remaining decisions](baseline-28-release-validation.md) before implementing the historical unfinished items below. Later work on this branch completed the 28-item integration, consent flow and simulator/build checks. The user subsequently deferred AuntEdna and chose designated clinical staff for escalation alerts. Protected baseline-answer custody and the approved UMES recipient remain unresolved; a staff alert does not deliver the 19 protected answers. The original stop-point record below is preserved for history.
+
 ## Fetch these exact repositories and branch
 
 - Web/API/admin: `https://github.com/UrbanUnderflow/QuickLifts-Web.git`
