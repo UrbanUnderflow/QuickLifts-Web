@@ -54,3 +54,12 @@ test('policy endpoint distinguishes malformed input and invalid identity without
   const publicPolicy = await api.handler({ httpMethod: 'POST', headers: {}, body: JSON.stringify({ email: 'a@school.edu', uid: 'forged-user', pulse_phone_auth: true }) });
   assert.equal(publicPolicy.statusCode, 200); assert.deepEqual(JSON.parse(publicPolicy.body), organization.signInPolicy);
 });
+
+test('verified platform administrators retain provisioning access; reference email cannot bypass policy', async () => {
+  const base = database({ program: organization });
+  const db = { collection: name => name === 'admin' ? { doc: email => ({ get: async () => ({ exists: email === 'admin@example.test' }) }) } : base.collection(name) };
+  const identity = { ...phone, firebase: { sign_in_provider: 'google.com' }, email: 'admin@example.test', email_verified: true };
+  assert.equal((await assertMemberSignIn(db, identity)).completedBaseline, true);
+  await assert.rejects(assertMemberSignIn(db, { ...identity, email_verified: false }), error => error.status === 403);
+  await assert.rejects(assertMemberSignIn(db, { ...identity, email: 'coach@school.edu' }), error => error.status === 403);
+});
