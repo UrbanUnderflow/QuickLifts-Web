@@ -4,7 +4,7 @@ const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@fir
 const { doc, setDoc, getDoc } = require('firebase/firestore');
 let env;
 before(async () => {
-  env = await initializeTestEnvironment({ projectId: 'demo-phone-policy', firestore: { rules: fs.readFileSync('firestore.rules', 'utf8') } });
+  env = await initializeTestEnvironment({ projectId: 'demo-phone-policy', firestore: { rules: fs.readFileSync(process.env.PHONE_POLICY_RULES_FILE || 'firestore.rules', 'utf8') } });
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async context => {
     const db = context.firestore();
