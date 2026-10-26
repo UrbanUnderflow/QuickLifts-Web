@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     const result = await completePhoneProfile({ auth: app.auth(), db: app.firestore(), bearer, body });
     // iOS User objects retain their originating Auth instance. Establish a fresh
     // primary session rather than moving an object tied to temporary keychain state.
-    if (body.platform === 'ios') result.customToken = await createCustomTokenForApp(app, result.uid, isDevMode(event) ? 'dev' : 'prod');
+    if (body.platform === 'ios') result.customToken = await createCustomTokenForApp(app, result.uid, isDevMode(event) ? 'dev' : 'prod', { pulse_phone_auth: true });
     return reply(200, result);
   } catch (error) {
     // Never log phone numbers, institutional email addresses, codes, or tokens.

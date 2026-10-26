@@ -338,4 +338,16 @@ export const resolveCanonicalAccountAlias = async (user: User): Promise<User> =>
   return canonicalCredential.user;
 };
 
-export const assertAccountIsCanonical = resolveCanonicalAccountAlias;
+export const assertAccountIsCanonical = async (user: User): Promise<User> => {
+  const resolved = await resolveCanonicalAccountAlias(user);
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('phoneSetup') === '1') return resolved;
+  const response = await fetch('/.netlify/functions/program-sign-in-policy', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...getFirebaseModeRequestHeaders(), Authorization: `Bearer ${await resolved.getIdToken()}` }, body: '{}',
+  });
+  if (!response.ok) {
+    const result = await response.json();
+    await signOut(auth);
+    throw new AccountLinkingError(result.error || 'Unable to check program sign-in. Try again.', result.code);
+  }
+  return resolved;
+};

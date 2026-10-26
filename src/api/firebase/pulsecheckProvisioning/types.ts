@@ -536,6 +536,7 @@ export interface PulseCheckOrganization {
   productBrand?: PulseCheckProductBrand;
   appBranding?: PulseCheckAppBranding;
   appExperience?: PulseCheckAppExperience;
+  signInPolicy?: import('../../../lib/pulsecheck/signInPolicy').ProgramSignInPolicy;
   id: string;
   displayName: string;
   legalName: string;
@@ -565,6 +566,7 @@ export interface CreatePulseCheckOrganizationInput {
   productBrand?: PulseCheckProductBrand;
   appBranding?: PulseCheckAppBranding;
   appExperience?: PulseCheckAppExperience;
+  signInPolicy?: import('../../../lib/pulsecheck/signInPolicy').ProgramSignInPolicy;
   displayName: string;
   legalName: string;
   organizationType: string;

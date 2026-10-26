@@ -1,3 +1,5 @@
+const { assertMemberSignIn } = require('./program-sign-in');
+const { assertOrganizationSignIn } = require('../../pulsecheck/signInPolicy');
 const TERMS_VERSION = '2026-04-08';
 const PRIVACY_VERSION = '2026-04-08';
 const fail = (status, reason, message) => { throw Object.assign(new Error(message), { status, reason }); };
@@ -20,7 +22,12 @@ async function completePhoneProfile({ auth, db, bearer, body, now = Date.now() }
   const ref = db.collection('users').doc(identity.uid);
   const existing = await ref.get();
   // Signing in must never replace an existing email, baseline, role, or consent.
-  if (existing.exists) return { uid: identity.uid, created: false };
+  if (existing.exists) { await assertMemberSignIn(db, identity); return { uid: identity.uid, created: false }; }
+  if (typeof body.organizationId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(body.organizationId)) {
+    const organization = (await db.collection('pulsecheck-organizations').doc(body.organizationId).get()).data();
+    if (!organization || organization.deletedAt || organization.lifecycleState) fail(403, 'program/unavailable', 'This program is unavailable.');
+    assertOrganizationSignIn(organization, identity, email);
+  }
   if (body.acceptTerms !== true || body.termsVersion !== TERMS_VERSION || body.privacyVersion !== PRIVACY_VERSION) {
     fail(400, 'phone-auth/legal-required', 'Agree to the Terms and Privacy Policy before creating an account.');
   }

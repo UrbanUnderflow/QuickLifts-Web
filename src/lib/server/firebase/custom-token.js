@@ -2,10 +2,10 @@ const { admin, findAppByName } = require('./app-registry');
 const { resolveFirebaseAdminCredential } = require('./credential-source');
 
 function createTokenSigner({ firebaseAdmin = admin, findApp = findAppByName, resolveCredential = resolveFirebaseAdminCredential } = {}) {
-  return async (app, uid, mode) => {
+  return async (app, uid, mode, claims) => {
     const credential = resolveCredential({ mode });
     if (credential.source !== 'dev:service-account-impersonation') {
-      return app.auth().createCustomToken(uid);
+      return app.auth().createCustomToken(uid, claims);
     }
     if (!credential.projectId || app.options.projectId !== credential.projectId || !credential.clientEmail) {
       throw new Error('Custom-token signing project does not match the verified phone project.');
@@ -25,7 +25,7 @@ function createTokenSigner({ firebaseAdmin = admin, findApp = findAppByName, res
         credential: { getAccessToken: () => oauth.getAccessToken() },
       }, name);
     }
-    return signer.auth().createCustomToken(uid);
+    return signer.auth().createCustomToken(uid, claims);
   };
 }
 

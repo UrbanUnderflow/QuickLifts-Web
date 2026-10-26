@@ -1,6 +1,7 @@
 import { baselineHealthContext, saveBaselineHealthDecision } from '../../../../lib/questionnaires/cau-health';
 import { resolveBaselineConnection } from '../../../../lib/questionnaires/auntedna-connection';
 import { baselineCompletionUrl } from '../../../../lib/questionnaires/baseline-completion-url';
+import { assertMemberSignIn } from '../../../../lib/server/auth/program-sign-in';
 import { resolveStandardBaselineAssignment } from '../../../../lib/questionnaires/standard-assignment';
 import { createHash } from 'crypto';
 import { deriveAdministrativeAnswers, applyAdministrativeAnswers } from '../../../../lib/questionnaires/cau-derived';
@@ -25,6 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try { user = await admin.auth(app).verifyIdToken(bearer.slice(7), true); }
     catch { return res.status(401).json({ error: 'Sign in to PulseCheck again to continue.' }); }
     const db = admin.firestore(app), collection = db.collection(COLLECTION);
+    try { await assertMemberSignIn(db, user); } catch (error) { return res.status(403).json({ error: error instanceof Error ? error.message : 'Use your program sign-in method.' }); }
     // Assignments are provisioned by trusted administrators, never by the client.
     const existingAssignment = (await collection.doc(`assignment_${user.uid}`).get()).data();
     const assignment = await resolveStandardBaselineAssignment(db, user.uid, existingAssignment);

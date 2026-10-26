@@ -1,3 +1,4 @@
+import { assertOrganizationSignIn, phoneSession } from '../../../../lib/pulsecheck/signInPolicy';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
 import {
@@ -172,7 +173,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const decoded = await admin.auth().verifyIdToken(idToken, true);
     const userId = decoded.uid;
-    const userEmail = normalizeEmail(decoded.email);
+    const phoneProfile = phoneSession(decoded) ? await admin.firestore().collection('users').doc(userId).get() : null;
+    const userEmail = normalizeEmail(phoneProfile?.data()?.institutionalEmail || phoneProfile?.data()?.email || decoded.email);
     if (!userEmail) {
       return res.status(400).json({ error: 'Authenticated user must have an email address.' });
     }
@@ -264,6 +266,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         throw new Error('Team not found.');
       }
 
+      assertOrganizationSignIn(organizationSnap.data(), decoded, userEmail);
       const organizationName = normalizeString(organizationSnap.data()?.displayName) || 'PulseCheck Organization';
       const teamName = normalizeString(teamSnap.data()?.displayName) || 'Initial Team';
       const teamCommercialConfig = normalizeTeamCommercialConfig(teamSnap.data()?.commercialConfig);
@@ -420,6 +423,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json(result);
   } catch (error) {
+    if ((error as { status?: number })?.status === 403) return res.status(403).json({ error: (error as Error).message, code: (error as { code?: string }).code });
     const message = error instanceof Error ? error.message : 'Failed to redeem invite.';
     const statusCode =
       message === 'Invite not found.'

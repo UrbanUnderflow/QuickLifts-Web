@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { User } from 'firebase/auth';
+import { getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 import { createPhoneAuthAttempt, normalizeAuthPhone, phoneAuthError } from '../../api/firebase/auth/phone';
 
 type Props = {
@@ -7,9 +8,10 @@ type Props = {
   disabled?: boolean;
   onSuccess: (user: User) => void | Promise<void>;
   onBusyChange?: (busy: boolean) => void;
+  onPolicyChange?: (standard: boolean) => void;
 };
 
-export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBusyChange }: Props) {
+export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBusyChange, onPolicyChange }: Props) {
   const [open, setOpen] = useState(mode === 'signin');
   const [institutionalEmail, setInstitutionalEmail] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
@@ -21,6 +23,26 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
   const [existingAccount, setExistingAccount] = useState(false);
   const [retryAt, setRetryAt] = useState(0);
   const [now, setNow] = useState(Date.now());
+  const policyChange = useRef(onPolicyChange);
+  policyChange.current = onPolicyChange;
+  useEffect(() => {
+    policyChange.current?.(false);
+    if (!policyChange.current || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(institutionalEmail.trim())) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      const organizationId = new URLSearchParams(window.location.search).get('organizationId');
+      void fetch('/.netlify/functions/program-sign-in-policy', {
+        method: 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', ...getFirebaseModeRequestHeaders() },
+        body: JSON.stringify({ email: institutionalEmail, organizationId }),
+      }).then(async response => {
+        if (!response.ok) throw new Error('Policy unavailable');
+        const policy = await response.json();
+        if (!controller.signal.aborted) policyChange.current?.(policy.mode === 'standard');
+      }).catch(() => { /* Keep the phone entrance when policy cannot be loaded. */ });
+    }, 350);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [institutionalEmail]);
   const container = useRef<HTMLDivElement>(null);
   const attempt = useRef<Awaited<ReturnType<typeof createPhoneAuthAttempt>>>();
   const active = useRef(true);
@@ -48,7 +70,7 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
     attempt.current = await createPhoneAuthAttempt(container.current!, mode);
     if (!active.current) { await attempt.current.dispose(); return; }
     await attempt.current.send(normalized);
-    if (active.current) { setPhone(normalized); setSent(true); setCode(''); setRetryAt(Date.now() + 60000); setNow(Date.now()); }
+    if (active.current) { setPhone(normalized.slice(2)); setSent(true); setCode(''); setRetryAt(Date.now() + 60000); setNow(Date.now()); }
   });
   const confirm = () => void run(async () => {
     if (!attempt.current) throw new Error('Request a new code to continue.');
@@ -59,49 +81,49 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
     if (active.current) { setOpen(false); setSent(false); setCode(''); }
   });
   return (
-    <div className="my-3 rounded-xl border border-white/10 bg-zinc-950 p-3 text-sm text-white">
+    <div className="text-sm text-white" data-phone-sign-in="integrated" onKeyDown={event => {
+      if (event.key === 'Enter' && event.target instanceof HTMLInputElement && event.target.type !== 'checkbox') { event.preventDefault(); if (!busy && !disabled && (!sent || code.length === 6)) { if (sent) confirm(); else send(); } }
+    }}>
       {!open ? (
         <button type="button" disabled={disabled} onClick={() => setOpen(true)} className="w-full py-2 font-medium disabled:opacity-50">
           {mode === 'link' ? 'Connect phone number' : 'Continue with email and phone'}
         </button>
       ) : (
-        <div className="space-y-3">
-          <p className="text-xs leading-5 text-zinc-400">{mode === 'link'
-            ? 'Verify your phone to use it for this same account.'
-            : 'Enter your institutional email and phone number. Your phone verifies your identity; your email is saved for reference. No password needed.'}</p>
-          {mode === 'signin' && <label className="block">Institutional email
+        <div className="space-y-5">
+          {mode === 'signin' && <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Institutional email
             <input type="email" autoComplete="email" value={institutionalEmail} onChange={(e) => setInstitutionalEmail(e.target.value)} disabled={sent || busy}
-              placeholder="you@institution.edu" className="mt-1 w-full rounded-lg border border-white/20 bg-zinc-900 p-3 text-white" />
+              placeholder="you@institution.edu" className="mt-2 min-h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-base font-normal normal-case tracking-normal text-white outline-none focus:border-[#E0FE10]/60" />
           </label>}
+          <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Phone number
+            <div className="relative"><span aria-hidden="true" className="absolute left-4 top-1/2 mt-1 -translate-y-1/2 text-base font-normal tracking-normal text-zinc-400">+1</span>
+            <input type="tel" aria-label="Phone number" autoComplete="tel-national" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={sent || busy}
+              placeholder="(202) 555-0123" className="pl-12 mt-2 min-h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-base font-normal normal-case tracking-normal text-white outline-none focus:border-[#E0FE10]/60" /></div>
+          </label>
           {mode === 'signin' && <label className="flex items-start gap-2 text-xs text-zinc-300">
             <input type="checkbox" checked={acceptTerms} disabled={busy || sent} onChange={(e) => setAcceptTerms(e.target.checked)} />
             <span>I agree to the <a href="/terms" target="_blank" rel="noreferrer" className="underline">Terms</a> and <a href="/privacy" target="_blank" rel="noreferrer" className="underline">Privacy Policy</a>.</span>
           </label>}
-          <label className="block">Phone number
-            <input type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={sent || busy}
-              placeholder="+1 202 555 0123" className="mt-1 w-full rounded-lg border border-white/20 bg-zinc-900 p-3 text-white" />
-          </label>
           <div ref={container} />
           {sent && <>
-            <p role="status" className="text-xs text-zinc-300">Code sent to {phone}.</p>
+            <p role="status" className="text-xs text-zinc-300">Code sent to +1 {phone}.</p>
             <label className="block">Verification code
               <input inputMode="numeric" autoComplete="one-time-code" value={code} maxLength={6} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                className="mt-1 w-full rounded-lg border border-white/20 bg-zinc-900 p-3 text-white" />
+                className="mt-2 min-h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-base font-normal normal-case tracking-normal text-white outline-none focus:border-[#E0FE10]/60" />
             </label>
           </>}
           {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
           {existingAccount && <a className="block text-xs underline" href={`/PulseCheck/login?phoneSetup=1&email=${encodeURIComponent(institutionalEmail)}`}>Connect your existing account without a password</a>}
           <button type="button" onClick={sent ? confirm : send} disabled={busy || disabled || (sent && code.length !== 6)}
-            className="w-full rounded-lg bg-white py-3 font-semibold text-zinc-900 disabled:opacity-50">
+            className="min-h-[52px] w-full rounded-2xl bg-gradient-to-br from-[#E0FE10] to-[#A6C900] px-4 py-3 text-base font-semibold text-black shadow-[0_8px_28px_rgba(224,254,16,0.14)] transition hover:brightness-110 disabled:opacity-50">
             {busy ? 'Please wait…' : sent ? (mode === 'link' ? 'Verify and connect' : 'Verify and sign in') : 'Send text message'}
           </button>
           {sent && <button type="button" disabled={busy || remaining > 0} onClick={send} className="mr-4 text-xs disabled:opacity-50">
             {remaining ? `Resend in ${remaining}s` : 'Resend code'}
           </button>}
-          <button type="button" disabled={busy} className="text-xs text-zinc-400" onClick={() => {
-            void attempt.current?.dispose(); attempt.current = undefined; setSent(false); setCode(''); setError(''); setOpen(false);
-          }}>Cancel</button>
-          <p className="text-[11px] leading-4 text-zinc-500">By requesting a code, you agree to receive a verification text. Message and data rates may apply. Google processes your phone number to prevent abuse.</p>
+          {(mode === 'link' || sent) && <button type="button" disabled={busy} className="text-xs text-zinc-400" onClick={() => {
+            void attempt.current?.dispose(); attempt.current = undefined; setSent(false); setCode(''); setError(''); if (mode === 'link') setOpen(false);
+          }}>{mode === 'link' ? 'Cancel' : 'Change number'}</button>}
+          <p className="text-[11px] leading-4 text-zinc-500">We’ll text you a verification code. Message and data rates may apply. Google processes your number to prevent abuse.</p>
         </div>
       )}
     </div>
