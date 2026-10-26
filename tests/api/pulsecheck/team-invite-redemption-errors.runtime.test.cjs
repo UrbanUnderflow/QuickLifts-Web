@@ -14,6 +14,7 @@ const {
 const compiledRuntime = compileTypeScriptRuntime({
   cacheKey: 'team-invite-redemption-errors',
   entryPaths: [
+    path.join(repoRoot, 'src/lib/pulsecheck/signInPolicy.js'),
     path.join(
       repoRoot,
       'src/lib/server/pulsecheck/teamInviteRedemptionErrors.ts'
@@ -335,15 +336,10 @@ test('organization, team, and pilot scope failures identify the broken level', a
   );
 });
 
-test('pilot schedule errors tell the client whether enrollment is early, ended, or invalid', async () => {
+test('pilot reporting start dates do not gate enrollment; ended or malformed end dates do', async () => {
   const nowSeconds = Math.floor(Date.now() / 1000);
-  expectError(
-    await redeem({
-      pilot: basePilot({ startAt: { seconds: nowSeconds + 86_400 } }),
-    }),
-    'PILOT_ENROLLMENT_NOT_STARTED',
-    409
-  );
+  const beforeReportingStart = await redeem({pilot: basePilot({startAt: {seconds: nowSeconds + 86_400}})});
+  assert.equal(beforeReportingStart.statusCode, 200);
   expectError(
     await redeem({
       pilot: basePilot({ endAt: { seconds: nowSeconds - 86_400 } }),
@@ -354,8 +350,7 @@ test('pilot schedule errors tell the client whether enrollment is early, ended, 
   expectError(
     await redeem({
       pilot: basePilot({
-        startAt: { seconds: nowSeconds + 86_400 },
-        endAt: { seconds: nowSeconds - 86_400 },
+        endAt: { invalid: true },
       }),
     }),
     'PILOT_SCHEDULE_INVALID',
@@ -430,21 +425,25 @@ test('notification intent commits with enrollment, forged Origin is unused and r
   const handler = loadRuntime({ invite: baseInvite({ notifyCoachOnAccept: true, createdByUserId: 'coach-1', createdByEmail: 'coach@example.test' }) });
   const originalFetch = global.fetch;
   let networkCalls = 0;
+  const originalNow=Date.now;let joinedAt;
   global.fetch = async () => { networkCalls++; throw new Error('Unexpected external delivery'); };
   try {
     for (let i = 0; i < 2; i++) {
+      if(i===1)Date.now=()=>originalNow()+60000;
       const req = request(); req.headers.origin = 'https://attacker.example.test';
       const response = createNextApiResponseRecorder();
       await handler(req, response);
       assert.equal(response.statusCode, 200);
+      if(i===0)joinedAt=structuredClone(handler.firebaseFixture.getDocument('pulsecheck-team-memberships/team-1_athlete-1').baselineJoinedAt);
     }
     const jobs = handler.firebaseFixture.writes.sets.filter(row => row.path.startsWith('pulsecheck-invite-accepted-outbox/'));
     assert.equal(jobs.length, 1);
     assert.equal(jobs[0].data.status, 'pending');
     assert.equal(jobs[0].data.athleteUserId, 'athlete-1');
     assert.equal(jobs[0].data.coachEmail, undefined);
+    assert.deepEqual(handler.firebaseFixture.getDocument('pulsecheck-team-memberships/team-1_athlete-1').baselineJoinedAt,joinedAt,'an active-member invite retry preserves the original join marker');
     assert.equal(networkCalls, 0);
-  } finally { global.fetch = originalFetch; }
+  } finally { global.fetch = originalFetch; Date.now=originalNow; }
 });
 
 test('account closure tombstone prevents redemption before any write', async () => {
