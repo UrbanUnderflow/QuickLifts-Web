@@ -8,11 +8,13 @@ The latest user instruction supersedes the old account-wide skip rule for **new 
 
 The server selects pending joins from authenticated membership records and binds all writes to the displayed review ID. Drafts, retry reservations, submission IDs and final review records are scoped to that join. Old baseline records remain intact; the prior starting profile is retained in the server-owned review assignment before edits. Multiple pending teams are confirmed separately. Consent and health sharing are evaluated for the current team and are never preaccepted from another team.
 
+Web team onboarding opens the shared baseline automatically, and the athlete workspace checks the server requirement before trusting cached progress. After confirmation the web flow checks for another pending team and otherwise returns to the team workspace. Both baseline URLs use the isolated intake shell.
+
 The shared form labels available answers as prefilled, allows edits, and offers **Accept answers for this team**. Only retained performance answers and explicitly reported experience are available for prefill. External health references cannot reconstruct the 19 protected answers, and no new protected-answer storage or invented values were added. Missing health answers are identified explicitly. Unanswered experience stays unknown.
 
 iOS observes membership changes and rechecks the baseline, preserving server-only completion verification and remounting the embedded form when the required review changes. Android refreshes on membership changes and onboarding completion; a previous account completion cannot override a new requirement, and failed checks offer retry. Android currently presents the existing required-baseline dialog and opens the shared assessment in the browser; iOS embeds the shared assessment.
 
-Candidate checks: 45 API/content/profile regressions, 23 baseline/health/profile policy tests, 11 offline real-form scenarios, TypeScript and scoped ESLint passed. The provisioning service's four pre-existing unused-symbol lint findings remain unchanged. Native build/test and hosted-build receipts are recorded separately when complete. The protected-answer custody, actual UMES recipient and physical-device release gates below remain unresolved; no production release is authorized by this candidate validation.
+Candidate checks: 45 API/content/profile regressions, 23 baseline/health/profile policy tests, 11 offline real-form scenarios and three actual-workspace route scenarios, TypeScript and scoped ESLint passed. The provisioning service's four pre-existing unused-symbol lint findings remain unchanged. Native build/test and hosted-build receipts are recorded separately when complete. The protected-answer custody, actual UMES recipient and physical-device release gates below remain unresolved; no production release is authorized by this candidate validation.
 
 ## October 26 continuation
 

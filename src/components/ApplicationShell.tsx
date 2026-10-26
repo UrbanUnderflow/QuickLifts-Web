@@ -242,7 +242,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
   }
 
   // Isolated intake surface: no global tracking, authentication wrapper, or Redux persistence.
-  if (router.pathname === '/PulseCheck/questionnaire/cau') return <Component {...pageProps} />;
+  if (router.pathname === '/PulseCheck/questionnaire/cau' || router.pathname === '/PulseCheck/baseline') return <Component {...pageProps} />;
   // Guest booking links contain private management capabilities. Keep them outside analytics/auth.
   if (router.pathname === '/group-meet/book/[slug]' || router.pathname === '/group-meet/booking/[token]') {
     return <><Head><meta name="viewport" content="width=device-width, initial-scale=1" /></Head><Component {...pageProps} /></>;

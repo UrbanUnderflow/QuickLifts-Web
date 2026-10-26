@@ -309,7 +309,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   const [saved, setSaved] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [status, setStatus] = useState<{available: boolean; completed: boolean; required?: boolean; healthSharingAllowed: boolean; healthBaselineEnabled?: boolean; healthAuthorizationRequired?: boolean; healthAuthorizationDecision?: string; healthDocuments?: PulseCheckRequiredConsentDocument[]; healthConsentDecisions?: ConsentDecisions; healthCollectionAvailable?: boolean; submissionSharing?: boolean | null; sportName?: string; reviewId?: string; teamName?: string; prefill?: {answers: Record<string,string|string[]>; name: string; email?: string; prefilledQuestionCount: number; performanceQuestionsComplete?: boolean; unavailableHealthAnswers: boolean; hasPreviousBaseline: boolean; skillsDraft?: ConsolidatedSkillsDraft}} | null>(null);
+  const [status, setStatus] = useState<{available: boolean; completed: boolean; required?: boolean; healthSharingAllowed: boolean; healthBaselineEnabled?: boolean; healthAuthorizationRequired?: boolean; healthAuthorizationDecision?: string; healthDocuments?: PulseCheckRequiredConsentDocument[]; healthConsentDecisions?: ConsentDecisions; healthCollectionAvailable?: boolean; submissionSharing?: boolean | null; sportName?: string; reviewId?: string; teamName?: string; teamWorkspaceUrl?: string; prefill?: {answers: Record<string,string|string[]>; name: string; email?: string; prefilledQuestionCount: number; performanceQuestionsComplete?: boolean; unavailableHealthAnswers: boolean; hasPreviousBaseline: boolean; skillsDraft?: ConsolidatedSkillsDraft}} | null>(null);
   const [healthChoices, setHealthChoices] = useState<ConsentDecisions>({});
   const [reviewHealthChoice, setReviewHealthChoice] = useState(false);
   const [consentSaving, setConsentSaving] = useState(false);
@@ -509,6 +509,18 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     try { await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword); setLoginPassword(''); }
     catch { setError('Unable to sign in. Check your PulseCheck email and password and try again.'); }
     finally { setSigningIn(false); }
+  }
+  async function continueAfterBaseline() {
+    if (!user) return;
+    setError('');
+    try {
+      const response = await fetch(endpoint, {headers:{...testHeaders(),Authorization:`Bearer ${await user.getIdToken()}`,'X-PulseCheck-Firebase-Mode':isUsingDevFirebase()?'dev':'prod'}});
+      const latest = await response.json();
+      if (!response.ok || sessionUid.current !== user.uid) throw Error('Please check your connection and try again.');
+      if (latest.required || embedded) {window.location.reload();return;}
+      const target = status?.teamWorkspaceUrl;
+      window.location.assign(target?.startsWith('/PulseCheck/team-workspace?') ? target : '/PulseCheck?web=1');
+    } catch {setError('We could not check your next step. Please try again.');}
   }
   async function copyReceipt() {
     if (!receipt) return;
@@ -726,7 +738,8 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           </motion.div>
           <h1 className="cau-h1">Your answers are saved.</h1>
           <p className="cau-body">{sandboxTest ? 'Your test is complete. Share the receipt below so the team can check both systems.' : 'Thank you for sharing your starting point. You can return to the app.'}</p>
-          {status.reviewId && <button type="button" className="cau-btn cau-btn-primary" onClick={()=>window.location.reload()}>Continue</button>}
+          {(status.reviewId || status.teamWorkspaceUrl) && <button type="button" className="cau-btn cau-btn-primary" onClick={continueAfterBaseline}>Continue</button>}
+          {error && <ErrorBanner>{error}</ErrorBanner>}
           {sandboxTest && receipt && (
             <div className="cau-receipt">
               <div className="cau-receipt-head">

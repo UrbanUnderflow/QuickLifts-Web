@@ -589,7 +589,7 @@ export default function PulseCheckAthleteOnboardingPage() {
       }
 
       setMessage({ type: 'success', text: 'You are set. Your team access is ready.' });
-      router.push(returnTo || `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`);
+      router.push('/PulseCheck/baseline');
     } catch (error) {
       console.error('[PulseCheck athlete onboarding] Failed to save onboarding:', error);
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'We could not finish setup right now.' });
