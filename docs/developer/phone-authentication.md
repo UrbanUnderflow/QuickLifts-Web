@@ -32,7 +32,7 @@ The Firebase billing API is not accessible to the current service credential. En
 - `node tests/e2e/pulsecheck-baseline-login-local.cjs` covers existing and newly completed sign-in return paths.
 - Native policy tests cover US/Canada national entry, optional +1, and rejection of unsupported international numbers, extensions and malformed values. iOS/Android UI checks inspect the institutional email/phone form without sending SMS.
 
-Phone changes must be released independently of the held baseline/clinical checkpoint. A hosted build and live validation are required before production promotion. No protected answers, clinical contacts or routing settings are changed by this feature.
+The user requested consolidating phone authentication and the baseline checkpoint into main on October 26. The existing production Netlify deploy is locked to preserve the publication hold while the combined code is integrated and built. A hosted build, live validation and resolution of the outstanding health-delivery and device checks are required before production promotion. Phone authentication itself does not change protected answers, clinical contacts or routing settings.
 
 ## Provisioned sign-in policy
 

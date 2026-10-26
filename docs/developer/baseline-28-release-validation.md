@@ -2,6 +2,12 @@
 
 October 25, 2026. Continue from the original handoff; this is not a production release approval.
 
+## Main consolidation (October 26)
+
+The user requested merging the outstanding baseline, phone-login, consent and native work into `main`. The phone-auth release history is included in the checkpoint integration without changing its already validated source tree. Coach-surveys work is already in the web main ancestor. This code consolidation supersedes the earlier plan to keep phone authentication on a separate release branch; it does not resolve the production release gates below.
+
+Before merging, the existing published Netlify deploy `6ade484ca99d20b6b4b435d9` at `46ace5a748e1fa85e73b51e21e7bda4c5d2b6c74` was locked and the lock read back. Hosted main builds can be inspected without automatically replacing the live app. Keep that publication hold until protected-answer custody/delivery, the designated UMES clinical contact and the remaining sign-in/device checks are resolved. The user explicitly confirmed that real verification texts arrive on the hosted web preview; completed account connection and physical native SMS verification remain separate checks. Store distribution is not part of the merge.
+
 ## Team-join baseline review (October 26)
 
 The latest user instruction supersedes the old account-wide skip rule for **new athlete team joins**. Each new active athlete membership gets a separate baseline requirement after entry onboarding/consent. A completed historical baseline for the original team stays complete. Invite retries preserve the same join marker; a reactivated membership receives a new marker. Team-code, invitation and administrative-transfer paths record that marker.
