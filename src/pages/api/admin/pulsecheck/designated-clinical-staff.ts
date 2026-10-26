@@ -24,12 +24,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!team.exists) return res.status(404).json({ error: 'Team not found.' });
     const delivery = { email: Boolean(process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY),
       sms: Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER) };
-    if (req.method === 'GET') return res.status(200).json({ config: (await ref.get()).data() || null, delivery });
+    if (req.method === 'GET') return res.status(200).json({ config: (await ref.get()).data() || null, delivery, currentRoute: team.data()?.defaultEscalationRoute || 'hotline' });
     if (Object.keys(req.body || {}).some(k => !['teamId', 'configuration', 'expectedRevision', 'action'].includes(k))) return res.status(400).json({ error: 'Unsupported setting.' });
     const action = req.body.action || 'save';
     if (!['save', 'activate', 'deactivate'].includes(action)) return res.status(400).json({ error: 'Choose a valid contact action.' });
     if (action === 'activate' && !delivery.email) return res.status(400).json({ error: 'Configure email delivery before activating clinical staff alerts.' });
-    const config = validateClinicalStaff(req.body.configuration);
+    // Stopping alerts must not depend on unsaved or incomplete contact edits.
+    const config = action === 'deactivate' ? null : validateClinicalStaff(req.body.configuration);
     const expected = req.body.expectedRevision;
     if (!Number.isInteger(expected) || expected < 0) return res.status(400).json({ error: 'Reload these settings before saving.' });
     const saved = await db.runTransaction(async tx => {
@@ -38,16 +39,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const prior = await tx.get(ref);
       if (!currentTeam.exists || !org.exists || [currentTeam.data(), org.data()].some(d => d?.lifecycleState || d?.deletedAt || ['archived', 'decommissioned'].includes(d?.status))) throw new Error('Restore this program before changing its clinical staff settings.');
       if ((prior.data()?.revision || 0) !== expected) throw Object.assign(new Error('These settings changed in another session. Reload before saving.'), { statusCode: 409 });
+      if (action === 'deactivate' && !prior.exists) throw new Error('No saved clinical staff settings were found.');
       if (action === 'activate' && [currentTeam.data(), org.data()].some(d => d?.status !== 'active')) throw new Error('Activate this program before enabling clinical staff alerts.');
       if (action === 'save' && prior.data()?.status === 'active') throw new Error('Deactivate alerts before saving a draft, or explicitly activate the updated contacts.');
-      const next = { ...config, status: action === 'activate' ? 'active' : 'draft', revision: expected + 1, organizationId: org.id, teamId, updatedBy: actor.uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+      const next = { ...(action === 'deactivate' ? prior.data() : config), status: action === 'activate' ? 'active' : 'draft', revision: expected + 1, organizationId: org.id, teamId, updatedBy: actor.uid, updatedAt: admin.firestore.FieldValue.serverTimestamp() };
       tx.set(ref, next);
       if (action === 'activate') tx.set(teamRef, { defaultEscalationRoute: 'clinician', clinicalDeliveryMode: 'designated_staff' }, { merge: true });
       if (action === 'deactivate' && currentTeam.data()?.clinicalDeliveryMode === 'designated_staff') tx.set(teamRef, { defaultEscalationRoute: 'hotline', clinicalDeliveryMode: 'resources_only' }, { merge: true });
       tx.set(ref.collection('audit').doc(), { action, revision: next.revision, actorUserId: actor.uid, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-      return next;
+      const currentRoute = action === 'activate' ? 'clinician'
+        : action === 'deactivate' && currentTeam.data()?.clinicalDeliveryMode === 'designated_staff' ? 'hotline'
+          : currentTeam.data()?.defaultEscalationRoute || 'hotline';
+      return { config: next, currentRoute };
     });
-    return res.status(200).json({ config: saved });
+    return res.status(200).json(saved);
   } catch (error) {
     return res.status((error as { statusCode?: number }).statusCode === 409 ? 409 : 400).json({ error: error instanceof Error ? error.message : 'Unable to save clinical staff settings.' });
   }

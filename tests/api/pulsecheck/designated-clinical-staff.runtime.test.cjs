@@ -15,7 +15,7 @@ const valid = () => ({ primary: { name: 'Synthetic Primary', email: 'primary@exa
 function fixture() {
   const rows = new Map([
     ['admin/admin@example.test', {}],
-    ['pulsecheck-teams/team', { organizationId: 'org', status: 'active', escalationRoute: 'hotline' }],
+    ['pulsecheck-teams/team', { organizationId: 'org', status: 'active', defaultEscalationRoute: 'hotline' }],
     ['pulsecheck-organizations/org', { status: 'active', productBrand: 'athleticmind' }],
   ]);
   const writes = [], verified = [], modes = []; let sequence = 0, rejectToken = false;
@@ -40,6 +40,7 @@ test('contact settings reject unauthenticated, revoked, nonadmin and closed-acco
 test('draft contact persistence is private, audited, versioned and never changes live team routing or memberships', async () => {
   const f=fixture(); const original=structuredClone(f.rows.get('pulsecheck-teams/team'));
   assert.equal((await f.call()).body.config,null);
+  assert.equal((await f.call()).body.currentRoute,'hotline');
   const r=await f.call('PUT',{teamId:'team',configuration:valid(),expectedRevision:0});
   assert.equal(r.code,200); assert.equal(r.body.config.status,'draft'); assert.equal(r.body.config.revision,1); assert.equal(r.body.config.updatedBy,'admin-user');
   assert.deepEqual(f.rows.get('pulsecheck-teams/team'),original);
@@ -73,10 +74,31 @@ test('activation requires configured delivery and pins scoped primary contacts w
  process.env.BREVO_API_KEY='synthetic-email-key';
  try {
   const active=await f.call('PUT',input);assert.equal(active.code,200);assert.equal(active.body.config.status,'active');
+  assert.equal(active.body.currentRoute,'clinician');assert.equal((await f.call()).body.currentRoute,'clinician');
   const team=f.rows.get('pulsecheck-teams/team');assert.equal(team.clinicalDeliveryMode,'designated_staff');assert.equal(team.organizationId,'org');
   assert.ok(f.writes.every(key=>key.startsWith('pulsecheck-team-escalation-settings/')||key==='pulsecheck-teams/team'));
   assert.equal((await f.call('PUT',{...input,expectedRevision:1,action:'save'})).code,400);
-  assert.equal((await f.call('PUT',{...input,expectedRevision:1,action:'deactivate'})).body.config.status,'draft');
+  const stopped=await f.call('PUT',{...input,expectedRevision:1,action:'deactivate'});
+  assert.equal(stopped.body.config.status,'draft');assert.equal(stopped.body.currentRoute,'hotline');
   assert.equal(f.rows.get('pulsecheck-teams/team').clinicalDeliveryMode,'resources_only');
  } finally {delete process.env.BREVO_API_KEY;}
+});
+
+test('deactivation uses the saved contact even when unsaved edits are incomplete or absent', async()=>{
+ const previous=process.env.BREVO_API_KEY;process.env.BREVO_API_KEY='synthetic-email-key';
+ try {
+  for(const configuration of [undefined,{primary:{email:'unfinished'}}]) {
+   const f=fixture();
+   await f.call('PUT',{teamId:'team',configuration:valid(),expectedRevision:0,action:'activate'});
+   const contact=structuredClone(f.rows.get('pulsecheck-team-escalation-settings/team').primary);
+   const response=await f.call('PUT',{teamId:'team',configuration,expectedRevision:1,action:'deactivate'});
+   assert.equal(response.code,200);assert.deepEqual(response.body.config.primary,contact);
+   assert.equal(response.body.config.revision,2);assert.equal(response.body.currentRoute,'hotline');
+   assert.equal(f.rows.get('pulsecheck-teams/team').clinicalDeliveryMode,'resources_only');
+   assert.equal((await f.call()).body.currentRoute,'hotline');
+   const writes=f.writes.length;
+   assert.equal((await f.call('PUT',{teamId:'team',expectedRevision:1,action:'deactivate'})).code,409);
+   assert.equal(f.writes.length,writes);
+  }
+ } finally {if(previous===undefined)delete process.env.BREVO_API_KEY;else process.env.BREVO_API_KEY=previous;}
 });
