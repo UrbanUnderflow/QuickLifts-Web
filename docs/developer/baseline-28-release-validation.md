@@ -18,6 +18,18 @@ The candidate baseline entry initialized and rendered its sign-in screen. Anonym
 
 Production was rechecked through Netlify: deploy `6ade484ca99d20b6b4b435d9` remained ready at `46ace5a748e1fa85e73b51e21e7bda4c5d2b6c74`. The signed-in production provisioning dashboard rendered UMES and its existing coach-surveys controls. The development iPhone is still listed as unpaired by Xcode. Production publication, actual protected-answer delivery and physical iPhone sign-in/consent/return-to-training remain release gates.
 
+### Web fallback and sign-in audit
+
+The athlete web entry is `/PulseCheck/baseline`; saved records use the authenticated Firebase UID shared with the apps. Eligibility still requires the actual team/onboarding context. The approved 28-item release remains the candidate above, pending the protected-answer destination. Fixed the login page's return handling so both already-signed-in users and completed sign-ins preserve `/PulseCheck/baseline`, alongside the historical questionnaire path. Arbitrary external return destinations remain rejected. This later login fix is not part of the hosted `33ad1fdaa` build and has not been published to production.
+
+The coach entry is an individually issued `/PulseCheck/coach-survey/baseline#token=…` link. Provisioning verifies the coach UID and team and puts that identity into the private invitation; the submitted response gets identity from that invitation. The general coach URL without its private token is insufficient. The link is a bearer capability, not authenticated proof of the respondent; forwarding it permits another person to submit for the linked account.
+
+Live read-only checks found coach collection enabled in production and a tokenless baseline API response of 401. Admin writes and manual email switches are unset, as is the configured coach-survey origin. UMES Golf has zero coach enrollments and zero invitations. No invitations, enrollments, messages, accounts or grants were created by this audit. Coach link provisioning is not ready for rollout solely because the form is deployed.
+
+The production Identity Platform configuration reports email authentication enabled and `signIn.email.passwordRequired: true`. Email/password is enabled; passwordless email-link authentication is disabled ([configuration semantics](https://docs.cloud.google.com/identity-platform/docs/reference/rest/v2/Config)). The live login page nevertheless defaults to Magic link; its presence does not establish that it works. No email was sent and no actual institutional-mailbox sign-in round trip was performed. A saved institutional contact address is not automatically an authentication alias for a Google/Apple account. No phone-number sign-in implementation was found in the current web/native entry points; SMS alert delivery is a separate feature.
+
+The actual login component passed five offline browser scenarios: existing session, password sign-in, simulated email-link completion, historical baseline return and external-return rejection. Firebase methods were mocked and all external requests blocked. These tests establish return-path behavior, not live email/SMS authentication. TypeScript, scoped login-page ESLint and whitespace checks passed.
+
 ## User steering after the checkpoint
 
 The user clarified that no provider is connected and AuntEdna is deferred. The requested current clinical route is the program's designated clinical staff member, entered by name, work email and phone in provisioning.
