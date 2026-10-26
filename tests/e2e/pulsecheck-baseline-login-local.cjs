@@ -3,6 +3,8 @@ const assert = require('node:assert/strict'), http = require('node:http'), path 
 const esbuild = require('esbuild'), { chromium } = require('playwright');
 const root = path.resolve(__dirname, '../..');
 const mocks = {
+  '../../api/firebase/auth/phone': `export const completeExistingEmailLink=async()=>({uid:'same-athlete'});`,
+  '../../components/auth/PhoneSignIn': `export default function PhoneSignIn(){return null}`,
   'next/router': `export const useRouter=()=>window.__router;`,
   'firebase/auth': `export const getRedirectResult=async()=>null;export const signInWithPopup=async()=>({user:{uid:'same-athlete'}});export class OAuthProvider{addScope(){}}`,
   '../../api/firebase/config': `export const auth={};export const initializeFirebase=()=>{};export const isUsingDevFirebase=()=>false;`,

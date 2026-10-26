@@ -11,6 +11,7 @@ import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
 import { Gender, WorkoutGoal, } from "../api/firebase/user";
 import { SubscriptionType } from "../api/firebase/user";
 import authService from "../api/firebase/auth";
+import PhoneSignIn from './auth/PhoneSignIn';
 import { userService, User, UserLevel, BodyWeight } from "../api/firebase/user";
 import { auth, db } from "../api/firebase/config";
 import { useRouter } from 'next/router';
@@ -2888,6 +2889,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   
   const renderInitialStep = () => (
     <>
+      {!isSignUp && <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />}
       <div className="text-center mb-8 pt-4 sm:pt-0">
         <img src="/pulse-logo-white.svg" alt="Pulse Logo" className="h-8 mx-auto mb-8" />
         <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
@@ -3372,6 +3374,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const renderAthleticMindInitialStep = () => (
     <div className="amh-login-panel">
+      {!isSignUp && <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />}
       <div>
         <p className="amh-kicker">Council workspace access</p>
         <h2>{isSignUp ? 'Create your hub account' : 'Welcome to Athletic Mind Hub'}</h2>

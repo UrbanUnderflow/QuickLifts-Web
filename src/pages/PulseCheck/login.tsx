@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { auth, initializeFirebase, isUsingDevFirebase } from '../../api/firebase/config';
 import authService from '../../api/firebase/auth';
+import PhoneSignIn from '../../components/auth/PhoneSignIn';
 import { userService, User, SubscriptionType } from '../../api/firebase/user';
 import { useUser } from '../../hooks/useUser';
 import PageHead from '../../components/PageHead';
@@ -132,6 +133,9 @@ const PulseCheckLoginPage: NextPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [emailAuthMode, setEmailAuthMode] = useState<'magic' | 'password'>('magic');
+  useEffect(() => {
+    if (router.query.phoneSetup === '1' && typeof router.query.email === 'string') setEmail(router.query.email);
+  }, [router.query.phoneSetup, router.query.email]);
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
@@ -174,6 +178,7 @@ const PulseCheckLoginPage: NextPage = () => {
   // ── redirect on already-signed-in ──
   useEffect(() => {
     if (currentUser) {
+      if (router.query.phoneSetup === '1') { void router.replace('/settings'); return; }
       // Already signed in — go straight to the app
       localStorage.setItem(STORAGE_KEY_PC, 'true');
       router.replace(router.query.returnTo === '/PulseCheck/baseline' ? '/PulseCheck/baseline' : router.query.returnTo === '/PulseCheck/questionnaire/cau' ? '/PulseCheck/questionnaire/cau' : '/PulseCheck?web=1');
@@ -211,6 +216,7 @@ const PulseCheckLoginPage: NextPage = () => {
   }, []);
 
   const enterApp = useCallback(() => {
+    if (router.query.phoneSetup === '1') { void router.replace('/settings'); return; }
     localStorage.setItem(STORAGE_KEY_PC, 'true');
     router.replace(router.query.returnTo === '/PulseCheck/baseline' ? '/PulseCheck/baseline' : router.query.returnTo === '/PulseCheck/questionnaire/cau' ? '/PulseCheck/questionnaire/cau' : '/PulseCheck?web=1');
   }, [router]);
@@ -660,6 +666,11 @@ const PulseCheckLoginPage: NextPage = () => {
                     <h2 className="text-xl font-bold text-white mb-1">Welcome back</h2>
                     <p className="text-sm text-zinc-400 mb-6">Sign in to your PulseCheck account</p>
 
+                    {router.query.phoneSetup === '1' && <p className="mb-4 text-sm text-zinc-300">Use an email sign-in link below to open your existing account, then connect your phone in Settings. No password needed.</p>}
+                    {router.query.phoneSetup !== '1' && <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={async (user) => {
+                      await ensureFirestoreUser(user);
+                      enterApp();
+                    }} />}
                     {/* Social buttons */}
                     <div className="grid grid-cols-1 gap-3 mb-5 sm:grid-cols-2">
                       <button

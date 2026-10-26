@@ -44,6 +44,7 @@ const providerLabel = (providerId: string) => {
   if (providerId === 'apple.com') return 'Apple';
   if (providerId === 'google.com') return 'Google';
   if (providerId === 'password') return 'Email and password';
+  if (providerId === 'phone') return 'Phone';
   return providerId;
 };
 

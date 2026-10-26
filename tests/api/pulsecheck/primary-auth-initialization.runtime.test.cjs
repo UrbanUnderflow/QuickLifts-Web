@@ -161,6 +161,7 @@ const loadAuthMethods = ({ persistencePromise, signIn, scheduledTimers, clearedT
     '../user': {},
     '../../../utils/appVersioning': {},
     './accountLinking': {},
+    './phone': {},
     '../../../utils/authSessionCleanup': { clearStalePulseAuthKeys() {} },
   }, {
     setTimeout(callback, delay) {

@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, Link2, Loader2, ShieldCheck } from 'lucide-react';
 import { auth } from '../../api/firebase/config';
+import PhoneSignIn from './PhoneSignIn';
+import { unlink } from 'firebase/auth';
 import {
   getProviderLabel,
   linkProviderToCurrentAccount,
@@ -71,7 +73,7 @@ const AccountSignInMethods: React.FC<{ compact?: boolean }> = ({ compact = false
         <div>
           <h2 className="text-sm font-semibold text-white">Sign-in methods</h2>
           <p className="mt-1 text-xs leading-5 text-zinc-400">
-            Connect Apple and Google here so every sign-in opens this account, including its teams,
+            Connect Apple, Google, or your phone so every sign-in opens this account, including its teams,
             subscription, and history.
           </p>
         </div>
@@ -126,6 +128,23 @@ const AccountSignInMethods: React.FC<{ compact?: boolean }> = ({ compact = false
           </button>
         ))}
       </div>
+
+      {user?.phoneNumber ? (
+        <div className="mt-3 text-sm text-zinc-300">
+          Phone connected: {user.phoneNumber}
+          {user.providerData.length > 1 && <button type="button" className="ml-3 text-xs text-zinc-400" onClick={async () => {
+            if (!window.confirm('Remove phone sign-in from this account?')) return;
+            try {
+              if (auth.currentUser?.uid !== user.uid || user.providerData.length < 2) throw new Error('Sign in again to change your sign-in methods.');
+              await unlink(user, 'phone'); await user.reload(); await user.getIdToken(true);
+              setRefreshKey((value) => value + 1);
+            } catch (error) { setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Phone could not be removed.' }); }
+          }}>Remove phone</button>}
+        </div>
+      ) : <PhoneSignIn mode="link" disabled={connecting !== null} onSuccess={() => {
+        setRefreshKey((value) => value + 1);
+        setMessage({ type: 'success', text: 'Your phone now opens this same account.' });
+      }} />}
 
       {message && (
         <div
