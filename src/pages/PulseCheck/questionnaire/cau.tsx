@@ -364,7 +364,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           setAnswers(prefill.answers || {});
           if (prefill.name) setName(prefill.name);
           if (!next.email && prefill.email) setEmail(prefill.email);
-          if (prefill.prefilledQuestionCount > 0 || prefill.hasPreviousBaseline) setStarted(true);
+          if ((prefill.prefilledQuestionCount > 0 || prefill.hasPreviousBaseline) && (prefill.name || next.displayName) && (next.email || prefill.email)) setStarted(true);
           const performanceReady = prefill.performanceQuestionsComplete === true || Object.keys(prefill.answers || {}).length > 0;
           setPerformanceQuestionsComplete(performanceReady);
           setCompleted({performance:performanceReady && result.skills?.completed === true,health:!sharing});
