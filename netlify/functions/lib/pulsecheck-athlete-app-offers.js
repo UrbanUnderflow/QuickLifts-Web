@@ -1,3 +1,4 @@
+const { assertOrganizationSignIn } = require('../../../src/lib/pulsecheck/signInPolicy');
 const { normalizeString: normalizeCoachServiceString } = require('./pulsecheck-coach-services');
 
 const OFFERS_COLLECTION = 'pulsecheck-athlete-app-offers';
@@ -184,6 +185,7 @@ const loadCoachPricedInviteCheckout = async ({
   userId,
   authenticatedEmail,
   authenticatedEmailVerified,
+  authenticatedIdentity,
   inviteToken,
   requestedTeamId,
   stripeMode,
@@ -216,7 +218,7 @@ const loadCoachPricedInviteCheckout = async ({
   const targetEmail = normalizeEmail(invite.targetEmail);
   const userData = userSnapshot.data() || {};
   const verifiedAuthEmail = normalizeEmail(authenticatedEmail);
-  const resolvedEmail = verifiedAuthEmail || normalizeEmail(userData.email);
+  let resolvedEmail = verifiedAuthEmail || normalizeEmail(userData.email);
   if (
     normalizeString(invite.inviteType) !== 'team-access'
     || normalizeStatus(invite.teamMembershipRole) !== 'athlete'
@@ -225,13 +227,7 @@ const loadCoachPricedInviteCheckout = async ({
     || !isSafeDocumentId(teamId)
     || !isSafeDocumentId(organizationId)
     || (normalizedRequestedTeamId && normalizedRequestedTeamId !== teamId)
-    || (
-      targetEmail
-      && (
-        targetEmail !== verifiedAuthEmail
-        || authenticatedEmailVerified !== true
-      )
-    )
+
   ) {
     throw requestError('This athlete invite could not be verified.', 403);
   }
@@ -258,6 +254,17 @@ const loadCoachPricedInviteCheckout = async ({
     || !isActiveContainer(organization)
   ) {
     throw requestError('This athlete invite team is inactive.', 403);
+  }
+  const institutionPhone = organization.signInPolicy?.mode === 'institution-phone';
+  if (institutionPhone) {
+    const email = normalizeEmail(userData.institutionalEmail || userData.email);
+    if (authenticatedIdentity?.uid !== normalizedUserId) throw requestError('This athlete invite could not be verified.', 403);
+    try { assertOrganizationSignIn(organization, authenticatedIdentity, email); }
+    catch (error) { throw requestError(error.message, 403); }
+    resolvedEmail = email;
+  }
+  if (targetEmail && (targetEmail !== resolvedEmail || (!institutionPhone && (targetEmail !== verifiedAuthEmail || authenticatedEmailVerified !== true)))) {
+    throw requestError('This athlete invite could not be verified.', 403);
   }
   if (
     normalizeStatus(commercialConfig.commercialModel) === 'team-plan'

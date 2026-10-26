@@ -1,7 +1,8 @@
+import { getFirebaseModeRequestHeaders } from '../api/firebase/config';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useDispatch, useSelector } from 'react-redux';
-import { onAuthStateChanged, getAuth } from 'firebase/auth';
+import { onAuthStateChanged, getAuth, signOut } from 'firebase/auth';
 import { setUser, setLoading } from '../redux/userSlice';
 import { userService, SubscriptionType } from '../api/firebase/user';
 import { subscriptionService } from '../api/firebase/subscription/service';
@@ -448,6 +449,17 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
         try {
           if (firebaseUser) {
+            const connectionStep = router.pathname === '/settings' || (router.pathname === '/PulseCheck/login' && router.query.phoneSetup === '1');
+            if (!connectionStep) {
+              const response = await fetch('/.netlify/functions/program-sign-in-policy', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', ...getFirebaseModeRequestHeaders(), Authorization: `Bearer ${await firebaseUser.getIdToken()}` }, body: '{}',
+              });
+              if (!response.ok) {
+                if (response.status === 403 || response.status === 401) await signOut(auth);
+                throw new Error('Use your program sign-in method to continue.');
+              }
+            }
+            if (auth.currentUser?.uid !== firebaseUser.uid) return;
             const firestoreUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
             console.log('Initial Firestore user:', {
               userId: firestoreUser?.id,
@@ -472,6 +484,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               console.warn('[AuthWrapper] Beta/100Trainers check failed (non-blocking):', betaErr);
             }
 
+            if (auth.currentUser?.uid !== firebaseUser.uid) return;
             const newUserDict = activeUser ? activeUser.toDictionary() : null;
             if (!shallowEqual(prevUserRef.current, newUserDict)) {
               console.warn('[AuthWrapper] shallowEqual failed. Dispatching setUser. Differences:', {

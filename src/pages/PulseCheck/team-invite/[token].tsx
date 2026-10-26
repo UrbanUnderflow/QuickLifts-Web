@@ -1,3 +1,4 @@
+import PhoneSignIn from '../../../components/auth/PhoneSignIn';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -19,7 +20,7 @@ import {
   signOut,
   type User as FirebaseAuthUser,
 } from 'firebase/auth';
-import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Download, Loader2, LogIn, LogOut, MailPlus, ShieldCheck, Smartphone, UserPlus, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Download, Loader2, LogIn, LogOut, MailPlus, ShieldCheck, Smartphone, UserPlus } from 'lucide-react';
 import { getFirestoreDocFallback } from '../../../lib/server-firestore-fallback';
 import { auth, getFirebaseModeRequestHeaders } from '../../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
@@ -251,6 +252,8 @@ const normalizeInviteCommercialSnapshot = (
 
 const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
   const router = useRouter();
+  const [standardSignIn, setStandardSignIn] = useState(false);
+  const [referenceEmail, setReferenceEmail] = useState('');
   const [mode, setMode] = useState<AuthMode>('create-account');
   const [authReady, setAuthReady] = useState(false);
   const [authUser, setAuthUser] = useState<FirebaseAuthUser | null>(null);
@@ -289,6 +292,10 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setAuthUser(nextUser);
+      setReferenceEmail('');
+      if (nextUser) void userService.fetchUserFromFirestore(nextUser.uid).then(profile => {
+        if (auth.currentUser?.uid === nextUser.uid) setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
+      }).catch(() => undefined);
       setAuthReady(true);
     });
 
@@ -310,7 +317,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   // The temporary installer override only chooses the store and app scheme.
   const product = resolveProductConfig({ productBrand: invite.productBrand });
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
-  const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
+  const normalizedAuthEmail = useMemo(() => (referenceEmail || authUser?.email || '').trim().toLowerCase(), [authUser, referenceEmail]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
   const isGeneralInvite = invite.redemptionMode === 'general';
   const isAthleteInvite = invite.teamMembershipRole === 'athlete';
@@ -337,7 +344,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     !teamPlanBypassesPaywall &&
     isPulseCheckCoachPricedAthleteOfferActive(invite.commercialSnapshot);
   const requiresTargetEmailVerification =
-    requiresAthleteCheckout && Boolean(normalizedTargetEmail);
+    requiresAthleteCheckout && Boolean(normalizedTargetEmail) && !authUser?.phoneNumber;
   const athleteMonthlyPrice = formatPulseCheckMonthlyPrice(
     invite.commercialSnapshot?.athleteAppSubscriptionMonthlyPriceCents,
     invite.commercialSnapshot?.athleteAppSubscriptionCurrency
@@ -345,7 +352,6 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const shouldPreferAppDownload = invite.teamMembershipRole === 'athlete' && Boolean(invite.pilotId || invite.cohortId);
   const shouldShowDownloadFirst =
     shouldPreferAppDownload && !requiresAthleteCheckout && !showWebOnboarding && !redeemedState;
-  const inviteScopeLabel = invite.pilotName || invite.teamName;
   const inviteHeadline = `Join ${invite.teamName}`;
 
   useEffect(() => {
@@ -785,7 +791,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
     await user.reload();
     await user.getIdToken(true);
-    if (user.emailVerified) {
+    if (user.emailVerified || (!standardSignIn && user.phoneNumber)) {
       setVerificationEmailSent(false);
       return true;
     }
@@ -1266,7 +1272,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 <div className="space-y-4">
                   <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-4 text-sm leading-7 text-amber-100">
                     This invite was sent to <span className="font-medium">{invite.targetEmail}</span>, but you&apos;re
-                    signed in as <span className="font-medium">{authUser.email}</span>. Sign out and sign back in with{' '}
+                    signed in as <span className="font-medium">{normalizedAuthEmail}</span>. Sign out and sign back in with{' '}
                     <span className="font-medium">{invite.targetEmail}</span> to join your team.
                   </div>
                   <button
@@ -1290,7 +1296,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     {submitting ? 'Joining...' : 'Accept invite'}
                   </button>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-zinc-500">Signed in as {authUser.email}</span>
+                    <span className="text-xs text-zinc-500">Signed in as {normalizedAuthEmail}</span>
                     <button
                       type="button"
                       onClick={handleSignOut}
@@ -1317,6 +1323,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 </p>
               </div>
 
+              <PhoneSignIn organizationId={invite.organizationId} initialEmail={invite.targetEmail} disabled={submitting} onBusyChange={setSubmitting} onPolicyChange={setStandardSignIn} onSuccess={async user => {
+                  const profile = await userService.fetchUserFromFirestore(user.uid);
+                  setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
+                  setAuthUser(user);
+                }} />
+              {standardSignIn && <>
               {/* Tabs */}
               <div className="flex gap-6 border-b border-zinc-800">
                 <button
@@ -1430,6 +1442,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   </button>
                 </form>
               )}
+              </>}
             </div>
           )}
         </div>
@@ -1700,7 +1713,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     {requiresAthleteCheckout ? 'Start your PulseCheck subscription' : 'Finish access setup'}
                   </h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    You are currently signed in as <span className="font-medium text-white">{authUser.email}</span>.
+                    You are currently signed in as <span className="font-medium text-white">{normalizedAuthEmail}</span>.
                   </p>
                   {requiresAthleteCheckout ? (
                     <p className="mt-3 text-sm leading-7 text-zinc-400">
@@ -1709,7 +1722,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   ) : null}
                   {requiresTargetEmailVerification && verificationEmailSent ? (
                     <div className="mt-4 rounded-2xl border border-violet-300/20 bg-violet-300/[0.06] p-4 text-sm leading-7 text-violet-100">
-                      Open the verification email sent to <span className="font-medium">{authUser.email}</span>.
+                      Open the verification email sent to <span className="font-medium">{normalizedAuthEmail}</span>.
                       Come back here after you verify it, then use the button below.
                     </div>
                   ) : null}
@@ -1719,7 +1732,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <div className="space-y-4">
                     <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-4 text-sm leading-7 text-amber-100">
                       This invite was sent to <span className="font-medium">{invite.targetEmail}</span>, but you're signed in as{' '}
-                      <span className="font-medium">{authUser.email}</span>. Sign out and sign back in with{' '}
+                      <span className="font-medium">{normalizedAuthEmail}</span>. Sign out and sign back in with{' '}
                       <span className="font-medium">{invite.targetEmail}</span> to join your team.
                     </div>
                     <button
@@ -1783,6 +1796,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   </p>
                 </div>
 
+                <PhoneSignIn organizationId={invite.organizationId} initialEmail={invite.targetEmail} disabled={submitting} onBusyChange={setSubmitting} onPolicyChange={setStandardSignIn} onSuccess={async user => {
+                  const profile = await userService.fetchUserFromFirestore(user.uid);
+                  setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
+                  setAuthUser(user);
+                }} />
+                {standardSignIn && <>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
@@ -1968,6 +1987,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     </button>
                   </form>
                 )}
+                </>}
               </div>
             )}
           </div>

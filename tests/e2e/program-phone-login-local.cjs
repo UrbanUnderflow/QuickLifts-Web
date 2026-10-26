@@ -23,7 +23,7 @@ const mocks = {
   let externalRequests=0;const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/*',route=>{if(new URL(route.request().url()).hostname==='127.0.0.1')return route.continue();externalRequests++;return route.abort();});
-  await page.addInitScript(()=>{window.__numbers=[];window.__destinations=[];window.__router={query:{},replace:path=>window.__destinations.push(path)};});
+  await page.addInitScript(()=>{window.__numbers=[];window.__destinations=[];window.__router={query:{phoneSetup:new URLSearchParams(location.search).get('phoneSetup')},replace:path=>window.__destinations.push(path)};});
   try {
     const url=`http://127.0.0.1:${server.address().port}/`;
     await page.goto(url);
@@ -45,7 +45,12 @@ const mocks = {
     await page.getByRole('button',{name:'Google',exact:true}).waitFor();
     await page.getByLabel('Institutional email').fill('coach@school.example');
     await page.getByRole('button',{name:'Google',exact:true}).waitFor({state:'hidden'});
+    await page.goto(url+'?phoneSetup=1');
+    await page.getByRole('button',{name:'Send magic link',exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Google',exact:true}).count(),0);
+    assert.equal(await page.getByRole('button',{name:'Apple',exact:true}).count(),0);
+    assert.equal(await page.getByRole('button',{name:'Password',exact:true}).count(),0);
     assert.deepEqual(errors,[]);assert.equal(externalRequests,0);
-    console.log(JSON.stringify({success:true,scenarios:5,externalRequests}));
+    console.log(JSON.stringify({success:true,scenarios:6,externalRequests}));
   } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

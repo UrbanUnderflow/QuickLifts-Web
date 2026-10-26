@@ -8,6 +8,7 @@ type AthleteInviteIdentity = {
   uid: string;
   email?: unknown;
   emailVerified?: unknown;
+  phoneVerified?: unknown;
 };
 
 export class NativeAthleteInviteHandoffError extends Error {
@@ -135,7 +136,7 @@ export const validateNativeAthleteInviteBinding = (
       403
     );
   }
-  if (targetEmail && identity.emailVerified !== true) {
+  if (targetEmail && identity.emailVerified !== true && identity.phoneVerified !== true) {
     throw new NativeAthleteInviteHandoffError(
       'Verify the invited email address before continuing.',
       403
@@ -146,6 +147,7 @@ export const validateNativeAthleteInviteBinding = (
     uid,
     email,
     emailVerified: identity.emailVerified === true,
+    phoneVerified: identity.phoneVerified === true,
     organizationId,
     teamId,
   };

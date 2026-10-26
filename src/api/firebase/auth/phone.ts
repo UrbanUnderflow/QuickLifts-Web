@@ -49,7 +49,7 @@ export const createPhoneAuthAttempt = async (container: HTMLElement, mode: 'sign
       verificationId = await new PhoneAuthProvider(verificationAuth)
         .verifyPhoneNumber(normalizeAuthPhone(phone), verifier);
     },
-    async confirm(code: string, institutionalEmail = '', acceptTerms = false): Promise<User> {
+    async confirm(code: string, institutionalEmail = '', acceptTerms = false, organizationId?: string): Promise<User> {
       if (cancelled || !verificationId) throw new Error('Request a new code to continue.');
       if (!/^\d{6}$/.test(code.trim())) throw new Error('Enter the six-digit code from your text message.');
       const credential = PhoneAuthProvider.credential(verificationId, code.trim());
@@ -65,7 +65,7 @@ export const createPhoneAuthAttempt = async (container: HTMLElement, mode: 'sign
         const response = await fetch('/.netlify/functions/complete-phone-auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await result.user.getIdToken()}`, ...getFirebaseModeRequestHeaders() },
-          body: JSON.stringify({ institutionalEmail, acceptTerms, termsVersion: CURRENT_TERMS_VERSION, privacyVersion: CURRENT_PRIVACY_VERSION, platform: 'web' }),
+          body: JSON.stringify({ institutionalEmail, acceptTerms, organizationId, termsVersion: CURRENT_TERMS_VERSION, privacyVersion: CURRENT_PRIVACY_VERSION, platform: 'web' }),
         });
         const payload = await response.json();
         if (!response.ok) throw Object.assign(new Error(payload.error || 'Account setup could not finish. Try again.'), { code: payload.code });

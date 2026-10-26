@@ -340,7 +340,7 @@ export const resolveCanonicalAccountAlias = async (user: User): Promise<User> =>
 
 export const assertAccountIsCanonical = async (user: User): Promise<User> => {
   const resolved = await resolveCanonicalAccountAlias(user);
-  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('phoneSetup') === '1') return resolved;
+  if (typeof window !== 'undefined' && window.location.pathname === '/PulseCheck/login' && new URLSearchParams(window.location.search).get('phoneSetup') === '1') return resolved;
   const response = await fetch('/.netlify/functions/program-sign-in-policy', {
     method: 'POST', headers: { 'Content-Type': 'application/json', ...getFirebaseModeRequestHeaders(), Authorization: `Bearer ${await resolved.getIdToken()}` }, body: '{}',
   });

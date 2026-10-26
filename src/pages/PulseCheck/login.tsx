@@ -135,7 +135,7 @@ const PulseCheckLoginPage: NextPage = () => {
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [emailAuthMode, setEmailAuthMode] = useState<'magic' | 'password'>('magic');
   useEffect(() => {
-    if (router.query.phoneSetup === '1' && typeof router.query.email === 'string') setEmail(router.query.email);
+    if (router.query.phoneSetup === '1') { setEmailAuthMode('magic'); if (typeof router.query.email === 'string') setEmail(router.query.email); }
   }, [router.query.phoneSetup, router.query.email]);
   const [error, setError] = useState<string | null>(null);
   const [resetSent, setResetSent] = useState(false);
@@ -673,6 +673,7 @@ const PulseCheckLoginPage: NextPage = () => {
                       enterApp();
                     }} />}
                     {(standardSignIn || router.query.phoneSetup === '1') && <>
+                    {router.query.phoneSetup !== '1' && <>
                     {/* Legacy program methods */}
                     <div className="grid grid-cols-1 gap-3 mb-5 sm:grid-cols-2">
                       <button
@@ -720,9 +721,10 @@ const PulseCheckLoginPage: NextPage = () => {
                       <div className="flex-1 h-px bg-white/[0.08]" />
                     </div>
 
+                    </>}
                     {/* Email form */}
                     <form onSubmit={handleEmailSignIn} className="space-y-4">
-                      <div className="grid grid-cols-2 rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      {router.query.phoneSetup !== '1' &&                       <div className="grid grid-cols-2 rounded-xl p-1" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                         {[
                           { mode: 'magic' as const, label: 'Magic link' },
                           { mode: 'password' as const, label: 'Password' },
@@ -745,7 +747,8 @@ const PulseCheckLoginPage: NextPage = () => {
                             {item.label}
                           </button>
                         ))}
-                      </div>
+                      </div>}
+
 
                       <div>
                         <label className="block text-[11px] uppercase tracking-[0.2em] text-zinc-500 font-medium mb-2">
