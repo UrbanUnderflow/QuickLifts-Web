@@ -6,6 +6,7 @@ const {
   compileTypeScriptRuntime,
   loadCompiledModule,
   repoRoot,
+  withPatchedEnv,
 } = require('../firebase-admin/_runtimeHarness.cjs');
 
 const compiledProxyRuntime = compileTypeScriptRuntime({
@@ -44,6 +45,57 @@ function loadProxyModule() {
     fileName: '[name].js',
   });
 }
+
+test('same-deployment phone proxies do not forward a candidate session to the published release or caller host', async () => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url: String(url), options });
+    return { status: 401, headers: new Headers({ 'content-type': 'application/json' }),
+      async arrayBuffer() { return Buffer.from('{"error":"Sign in required."}'); } };
+  };
+  try {
+    await withPatchedEnv({
+      NODE_ENV: 'production',
+      NEXT_PUBLIC_SITE_URL: 'https://fitwithpulse.ai',
+      PULSECHECK_BASELINE_DEPLOYMENT_ORIGIN: 'https://candidate--quickliftsapp.netlify.app/',
+      PULSECHECK_LOCAL_FUNCTIONS_ORIGIN: 'https://ignored-local.invalid',
+    }, async () => {
+      const { default: handler } = loadProxyModule();
+      for (const name of ['complete-phone-auth', 'program-sign-in-policy']) {
+        const response = createResponseRecorder();
+        await handler({ method: 'POST', query: { name }, body: {}, headers: {
+          host: 'caller.invalid', 'x-forwarded-host': 'caller.invalid',
+          origin: 'https://caller.invalid', authorization: 'Bearer candidate-session',
+        } }, response);
+        assert.equal(response.statusCode, 401);
+        assert.equal(calls.at(-1).url, `https://candidate--quickliftsapp.netlify.app/.netlify/functions/${name}`);
+        assert.equal(calls.at(-1).options.headers.get('authorization'), 'Bearer candidate-session');
+        assert.equal(calls.at(-1).options.headers.get('origin'), 'https://candidate--quickliftsapp.netlify.app');
+        assert.equal(calls.at(-1).options.headers.get('referer'), 'https://candidate--quickliftsapp.netlify.app/');
+      }
+      await handler({ method: 'GET', query: { name: 'oura-status' }, headers: {} }, createResponseRecorder());
+      assert.equal(calls.at(-1).url, 'https://fitwithpulse.ai/.netlify/functions/oura-status');
+    });
+  } finally { global.fetch = originalFetch; }
+});
+
+test('phone proxies retain the configured origin when no hosted build origin is available', async () => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async url => {
+    calls.push(String(url));
+    return { status: 401, headers: new Headers(), async arrayBuffer() { return Buffer.from('{}'); } };
+  };
+  try {
+    await withPatchedEnv({ NODE_ENV: 'production', NEXT_PUBLIC_SITE_URL: 'https://fitwithpulse.ai/',
+      PULSECHECK_BASELINE_DEPLOYMENT_ORIGIN: undefined }, async () => {
+      const { default: handler } = loadProxyModule();
+      await handler({ method: 'POST', query: { name: 'complete-phone-auth' }, headers: {}, body: {} }, createResponseRecorder());
+      assert.deepEqual(calls, ['https://fitwithpulse.ai/.netlify/functions/complete-phone-auth']);
+    });
+  } finally { global.fetch = originalFetch; }
+});
 
 test('PulseCheck function proxy forwards supported functions to direct Netlify endpoints', async () => {
   const originalFetch = global.fetch;

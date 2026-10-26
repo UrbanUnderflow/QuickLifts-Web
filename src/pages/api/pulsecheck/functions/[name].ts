@@ -70,13 +70,18 @@ function normalizeQueryValue(value: string | string[] | undefined) {
   return value;
 }
 
-function resolveSiteOrigin(_req: NextApiRequest) {
+function resolveSiteOrigin(name: string) {
   // Forward credentials only to the configured deployment, never a caller-supplied host.
-  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
+  // The existing build-only deployment origin also keeps native phone handoffs
+  // on an unpublished candidate instead of the previously published release.
+  const phoneDeploymentOrigin = name === 'complete-phone-auth' || name === 'program-sign-in-policy'
+    ? process.env.PULSECHECK_BASELINE_DEPLOYMENT_ORIGIN
+    : undefined;
+  return (phoneDeploymentOrigin || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
 }
 
 async function proxyNetlifyFunction(name: string, req: NextApiRequest, res: NextApiResponse) {
-  const upstreamOrigin = resolveSiteOrigin(req);
+  const upstreamOrigin = resolveSiteOrigin(name);
   const localFunctionsOrigin = process.env.NODE_ENV !== 'production'
     ? process.env.PULSECHECK_LOCAL_FUNCTIONS_ORIGIN?.trim().replace(/\/+$/, '')
     : '';
