@@ -59,12 +59,13 @@ const request = ({ body = {}, authorization = '', firebaseMode = '' } = {}) => (
   body,
 });
 
-const loadHandoffRuntime = ({ invite = baseInvite(), decoded = {} } = {}) => {
+const loadHandoffRuntime = ({ invite = baseInvite(), decoded = {}, organization = { status: 'active' }, profile = {} } = {}) => {
   clearCompiledRuntime();
   const firebase = createFirestoreAdminMock({
     collections: {
       'pulsecheck-teams': [{ id: 'team-1', data: { status: 'active', organizationId: 'org-1' } }],
-      'pulsecheck-organizations': [{ id: 'org-1', data: { status: 'active' } }],
+      'pulsecheck-organizations': [{ id: 'org-1', data: organization }],
+      users: [{ id: 'athlete-1', data: profile }],
       'pulsecheck-invite-links': [
         { id: 'invite-1', data: invite },
       ],
@@ -101,6 +102,7 @@ const loadHandoffRuntime = ({ invite = baseInvite(), decoded = {} } = {}) => {
   };
   const mocks = {
     '/lib/firebase-admin': firebaseAdminModule,
+    '/lib/pulsecheck/signInPolicy': require('../../../src/lib/pulsecheck/signInPolicy'),
   };
   const createModule = loadCompiledModule({
     compiled: compiledRuntime,
@@ -279,4 +281,22 @@ test('decommissioned parent rejects handoff creation and consumption', async () 
   await runtime.consume(request({ firebaseMode: 'dev', body: { inviteToken: 'invite-1', handoffCode: created.body.handoffCode, forceDevFirebase: true } }), response);
   assert.equal(response.statusCode, 403);
   assert.equal(runtime.authCalls.filter(call => call.method === 'createCustomToken').length, 0);
+});
+
+test('phone-only native handoff retains SMS proof and unverified institutional reference email', async () => {
+  const runtime = loadHandoffRuntime({
+    decoded: { email: undefined, email_verified: false, firebase: { sign_in_provider: 'phone' } },
+    organization: { status: 'active', signInPolicy: { mode: 'institution-phone', emailDomains: ['example.com'] } },
+    profile: { institutionalEmail: 'athlete@example.com' },
+  });
+  const created = await createHandoff(runtime);
+  assert.equal(created.statusCode, 201);
+  const consumed = createNextApiResponseRecorder();
+  await runtime.consume(request({ firebaseMode: 'dev', body: { inviteToken: 'invite-1', handoffCode: created.body.handoffCode } }), consumed);
+  assert.equal(consumed.statusCode, 200);
+  assert.deepEqual(runtime.authCalls.at(-1).claims, { pulse_phone_auth: true });
+});
+for (const provider of ['google.com', 'password', 'custom']) test(`phone-only invite rejects ${provider} before producing a handoff`, async () => {
+  const runtime = loadHandoffRuntime({ decoded: { firebase: { sign_in_provider: provider } }, organization: { status: 'active', signInPolicy: { mode: 'institution-phone', emailDomains: ['example.com'] } } });
+  const result = await createHandoff(runtime); assert.equal(result.statusCode, 403); assert.equal(result.body.handoffCode, undefined);
 });

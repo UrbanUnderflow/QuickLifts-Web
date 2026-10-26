@@ -56,7 +56,7 @@ test('AuntEdna guide and artifacts use the existing protected access boundary',a
  const cookie=helper.developerDocsCookie(slug).split(';')[0].split('=')[1];
  const unlocked=await page.getServerSideProps({req:{cookies:{[helper.developerDocsCookieName(slug)]:cookie}},res:h.response()});
  assert.equal(unlocked.props.locked,false);assert.equal(unlocked.props.artifacts.length,6);
- assert.ok(unlocked.props.artifacts.find(a=>a.name==='README.md').content.includes('cau-starting-point-v2'));
+ assert.ok(unlocked.props.artifacts.find(a=>a.name==='README.md').content.includes('athlete-starting-point-v2'));
  assert.equal(helper.developerArtifactAllowed(slug,'../../secrets'),false);
  const download=h.load('src/pages/developer/api/[slug]/artifacts/[...filename].tsx').getServerSideProps;
  const res=h.response();await download({params:{slug,filename:['examples','baseline.synthetic.json']},req:{cookies:{}},res});
@@ -66,9 +66,9 @@ test('AuntEdna guide and artifacts use the existing protected access boundary',a
 test('published baseline artifacts match canonical questions, routing and protected wire fields',()=>{
  const read=p=>JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));
  const base='docs/developer/auntedna/';
- const questions=read('src/content/questionnaires/cau-operational.json'),routing=read('src/content/questionnaires/cau-routing.json');
+ const questions=read('src/content/questionnaires/athlete-starting-point.json'),routing=read('src/content/questionnaires/cau-routing.json');
  assert.deepEqual(read(base+'questionnaire.json'),questions);assert.deepEqual(read(base+'routing.json'),routing);
- assert.equal(questions.questions.length+24,48);
+ assert.equal(questions.questions.length+8,28);
  const payload=read(base+'examples/baseline.synthetic.json'),schema=read(base+'baseline.schema.json');
  const protectedIds=routing.questions.filter(q=>q.custodian==='auntEDNA').map(q=>q.questionId).sort();
  assert.equal(protectedIds.length,19);assert.deepEqual(Object.keys(payload.fields).sort(),protectedIds);

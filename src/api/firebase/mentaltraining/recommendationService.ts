@@ -262,6 +262,12 @@ export const recommendationService = {
       }
     }
 
+    if (progress.mentalSkillsBaseline?.version === 6
+      && 'assessmentKind' in progress.mentalSkillsBaseline
+      && progress.mentalSkillsBaseline.assessmentKind === 'self_report_starting_profile') {
+      confidence = RecommendationConfidence.Low;
+    }
+
     // Generate reason
     const reason = getRecommendationReason(
       pathway,

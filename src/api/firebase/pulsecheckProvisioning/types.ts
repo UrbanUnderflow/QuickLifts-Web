@@ -529,11 +529,14 @@ export type PulseCheckProductBrand = 'athleticmind' | 'pulsecheck';
 export type PulseCheckAppBranding = Partial<Record<PulseCheckProductBrand, PulseCheckProductBrand>>;
 
 export interface PulseCheckOrganization {
+  /** Health baseline is on unless an administrator explicitly turns it off. Teams may override the organization. */
+  healthBaselineEnabled?: boolean;
   /** Read-only provenance of the persisted setting, before legacy display defaults. */
   configuredProductBrand?: PulseCheckProductBrand;
   productBrand?: PulseCheckProductBrand;
   appBranding?: PulseCheckAppBranding;
   appExperience?: PulseCheckAppExperience;
+  signInPolicy?: import('../../../lib/pulsecheck/signInPolicy').ProgramSignInPolicy;
   id: string;
   displayName: string;
   legalName: string;
@@ -558,9 +561,12 @@ export interface PulseCheckOrganization {
 }
 
 export interface CreatePulseCheckOrganizationInput {
+  /** Health baseline is on unless an administrator explicitly turns it off. Teams may override the organization. */
+  healthBaselineEnabled?: boolean;
   productBrand?: PulseCheckProductBrand;
   appBranding?: PulseCheckAppBranding;
   appExperience?: PulseCheckAppExperience;
+  signInPolicy?: import('../../../lib/pulsecheck/signInPolicy').ProgramSignInPolicy;
   displayName: string;
   legalName: string;
   organizationType: string;
@@ -595,6 +601,8 @@ export interface PulseCheckTeamImplementationMetadata {
 }
 
 export interface PulseCheckTeam {
+  /** Health baseline is on unless an administrator explicitly turns it off. Teams may override the organization. */
+  healthBaselineEnabled?: boolean;
   id: string;
   organizationId: string;
   displayName: string;
@@ -643,6 +651,8 @@ export interface PulseCheckTeam {
 }
 
 export interface CreatePulseCheckTeamInput {
+  /** Health baseline is on unless an administrator explicitly turns it off. Teams may override the organization. */
+  healthBaselineEnabled?: boolean;
   organizationId: string;
   displayName: string;
   teamType: string;

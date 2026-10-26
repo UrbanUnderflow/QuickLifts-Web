@@ -22,6 +22,7 @@ function resolveIncidentSupportRoute(record, product, legacyRoute = 'clinician')
   if (record?.supportRoute === 'hotline' || record?.supportRoute === 'clinician') return record.supportRoute;
   if (record?.clinicalReferenceId || record?.handoffInitiatedAt) return 'clinician';
   if (record?.createdAt && !record?.productBrand) return legacyRoute === 'hotline' ? 'hotline' : 'clinician';
+  if (product.designatedStaffEnabled === true) return 'clinician';
   return product.escalationModel === '988' ? 'hotline' : 'clinician';
 }
 module.exports = { resolveProgramProductConfig, resolveIncidentSupportRoute };

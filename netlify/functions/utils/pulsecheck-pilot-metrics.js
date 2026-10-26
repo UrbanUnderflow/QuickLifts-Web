@@ -671,6 +671,7 @@ function deriveBaselineProbeProfile(progress = {}) {
 
 function deriveMentalSkillsBaselineProfile(progress = {}) {
   const baseline = progress.mentalSkillsBaseline || {};
+  if (profileSnapshotRuntime.isSelfReportStartingProfile(baseline)) return null;
   const familyScores = baseline.familyScores || {};
   const familyScore = (key, fallback = 50) => clampScore(
     normalizeNumber(familyScores?.[key]?.score) ?? fallback
@@ -742,6 +743,7 @@ function deriveMentalSkillsBaselineProfile(progress = {}) {
 }
 
 function resolveProfileForSnapshot(progress = {}, snapshotType) {
+  if (profileSnapshotRuntime.isSelfReportStartingProfile(progress.mentalSkillsBaseline)) return null;
   if (snapshotType === 'baseline') {
     if (progress.mentalSkillsBaseline) {
       return deriveMentalSkillsBaselineProfile(progress);
@@ -935,7 +937,9 @@ async function upsertPilotMentalPerformanceSnapshot({
 
   if (!profile || !capturedAt) {
     status = 'missing';
-    exclusionReason = snapshotType === 'current_latest_valid' ? 'missing_current' : 'missing_baseline';
+    exclusionReason = profileSnapshotRuntime.isSelfReportStartingProfile(progress.mentalSkillsBaseline)
+      ? 'unmeasured_starting_profile'
+      : snapshotType === 'current_latest_valid' ? 'missing_current' : 'missing_baseline';
   } else if (snapshotType === 'current_latest_valid' && !hasRecentProfile) {
     status = 'stale';
     exclusionReason = 'stale_current';
@@ -944,7 +948,7 @@ async function upsertPilotMentalPerformanceSnapshot({
   const taxonomyProfile = clonePlainProfile(profile);
   const pillarCompositeScore = computePillarCompositeScore(taxonomyProfile);
   const targetDeltaFromBaseline =
-    snapshotType === 'baseline'
+    snapshotType === 'baseline' && taxonomyProfile
       ? {
           focus: 0,
           composure: 0,

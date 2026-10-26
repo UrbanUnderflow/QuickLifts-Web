@@ -5,7 +5,7 @@ import type { GetServerSidePropsContext } from 'next';
 import { verifyPasscodeHash } from './systemOverviewShareAccess';
 
 export const DEVELOPER_DOCS = {
-  'auntedna': { title: 'AuntEdna athlete baseline', description: 'The 48-item Starting Point, question ownership, versioning, baseline payloads and receipts.', files: ['README.md', 'questionnaire.json', 'routing.json', 'baseline.schema.json', 'examples/baseline.synthetic.json', 'examples/receipt.synthetic.json'] },
+  'auntedna': { title: 'AuntEdna athlete baseline', description: 'The 28-item starting profile, question ownership, versioning, baseline payloads and receipts.', files: ['README.md', 'questionnaire.json', 'routing.json', 'baseline.schema.json', 'examples/baseline.synthetic.json', 'examples/receipt.synthetic.json'] },
   'athleticmind-snapshots': { title: 'Athletic Mind snapshots', description: 'Authenticated snapshot exchange, payload schemas and synthetic examples.', files: ['README.md', 'snapshot.schema.json', 'examples/snapshot.synthetic.json', 'examples/pull-request.synthetic.json', 'examples/pull-response.synthetic.json', 'examples/push-ack.synthetic.json'] },
   'clinical-bridge': { title: 'Clinical bridge', description: 'Emergency handoff, receipt and callback integration.', files: ['README.md', 'athlete-registration.schema.json', 'examples/athlete-registration.synthetic.json', 'emergency-handoff.schema.json', 'webhook.schema.json', 'examples/emergency-handoff.synthetic.json', 'examples/case-receipt.synthetic.json', 'examples/webhook.synthetic.json'] },
 } as const;

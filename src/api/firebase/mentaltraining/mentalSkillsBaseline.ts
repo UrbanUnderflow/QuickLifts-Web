@@ -50,7 +50,7 @@ export interface MentalSkillFamilyScore {
   stage: MentalSkillStage;
 }
 
-export interface MentalSkillsBaselineRecord {
+export interface LegacyMentalSkillsBaselineRecord {
   version: number;
   completedAt: number;
   source: string;
@@ -70,6 +70,50 @@ export interface MentalSkillsBaselineRecord {
     emotionalRegulation: MentalSkillFamily;
   };
   evidence: MentalSkillEvidence[];
+}
+
+/** Reported starting context, not a competency or cognitive assessment. */
+export interface SelfReportStartingProfileRecord {
+  version: 6;
+  assessmentKind: 'self_report_starting_profile';
+  completedAt: number;
+  source: string;
+  sportName?: string;
+  sportArchetype: SportScenarioArchetype;
+  currentState?: MentalSkillsCurrentState;
+  familiarity: Record<MentalSkillFamily, MentalSkillFamiliarity>;
+  answeredFamiliarity: MentalSkillFamily[];
+}
+
+export type MentalSkillsBaselineRecord = LegacyMentalSkillsBaselineRecord | SelfReportStartingProfileRecord;
+
+export function isSelfReportStartingProfile(value: unknown): value is SelfReportStartingProfileRecord {
+  return Boolean(value && typeof value === 'object'
+    && (value as SelfReportStartingProfileRecord).version === 6
+    && (value as SelfReportStartingProfileRecord).assessmentKind === 'self_report_starting_profile');
+}
+
+export function createSelfReportStartingProfile(input: {
+  completedAt?: number;
+  source: string;
+  sportName?: string;
+  sportArchetype: SportScenarioArchetype;
+  currentState?: MentalSkillsCurrentState;
+  familiarity: Record<MentalSkillFamily, MentalSkillFamiliarity>;
+  answeredFamiliarity?: MentalSkillFamily[];
+}): SelfReportStartingProfileRecord {
+  return {
+    version: 6,
+    assessmentKind: 'self_report_starting_profile',
+    completedAt: input.completedAt ?? Date.now(),
+    source: input.source,
+    ...(input.sportName?.trim() ? {sportName: input.sportName.trim()} : {}),
+    sportArchetype: input.sportArchetype,
+    ...(input.currentState ? {currentState: {...input.currentState}} : {}),
+    familiarity: {...input.familiarity},
+    // Unanswered default values remain unknown, not reported lack of experience.
+    answeredFamiliarity: [...new Set(input.answeredFamiliarity || [])].filter(family => MENTAL_SKILL_FAMILIES.includes(family)),
+  };
 }
 
 export const MENTAL_SKILL_FAMILIES: MentalSkillFamily[] = [
@@ -472,7 +516,7 @@ export function scoreMentalSkillsBaseline(input: {
   currentState: MentalSkillsCurrentState;
   familiarity: Record<MentalSkillFamily, MentalSkillFamiliarity>;
   evidence: MentalSkillEvidence[];
-}): MentalSkillsBaselineRecord {
+}): LegacyMentalSkillsBaselineRecord {
   const familyScores = {} as Record<MentalSkillFamily, MentalSkillFamilyScore>;
 
   for (const family of MENTAL_SKILL_FAMILIES) {

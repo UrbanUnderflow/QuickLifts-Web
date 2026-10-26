@@ -1,3 +1,4 @@
+import AccountSignInMethods from '../auth/AccountSignInMethods';
 import React, { useEffect, useMemo, useState } from 'react';
 import { FirebaseError } from 'firebase/app';
 import { updateEmail } from 'firebase/auth';
@@ -829,6 +830,7 @@ const PulseCheckProfileView: React.FC = () => {
 
               <section>
                 <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">Account</p>
+                <AccountSignInMethods compact />
                 <div className="mt-3 space-y-3">
                   <div className="rounded-[26px] border border-white/[0.07] bg-white/[0.03] p-4">
                     <p className="text-lg font-semibold text-white">Email</p>

@@ -28,7 +28,7 @@ export function bootstrapTaxonomyProfile(
 
 export function bootstrapMentalSkillsBaselineProfile(
   baseline: MentalSkillsBaselineRecord
-): TaxonomyProfile {
+): TaxonomyProfile | null {
   return profileSnapshotRuntime.bootstrapMentalSkillsBaselineProfile(baseline);
 }
 
@@ -37,12 +37,12 @@ export function deriveTaxonomyProfile(input: {
   mentalSkillsBaseline?: MentalSkillsBaselineRecord | null;
   checkIns?: MentalCheckIn[];
   simSessions?: SimSessionRecord[];
-}): TaxonomyProfile {
+}): TaxonomyProfile | null {
   return profileSnapshotRuntime.deriveTaxonomyProfile(input);
 }
 
 export function prescribeNextSession(input: {
-  profile: TaxonomyProfile;
+  profile: TaxonomyProfile | null;
   checkInState?: TaxonomyCheckInState | null;
 }): ProgramPrescription {
   return profileSnapshotRuntime.prescribeNextSession(input);

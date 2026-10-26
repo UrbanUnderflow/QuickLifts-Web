@@ -14,7 +14,9 @@ export class PartnerError extends Error {
 }
 function validateConfig(config: PartnerConfig) {
   if (!config.apiKey.startsWith(`ae_pk_${config.environment}_`) ||
-      (config.environment === 'test' ? config.universityCode !== 'SANDBOX' : config.universityCode !== 'CAU')) {
+      !['test', 'live'].includes(config.environment) ||
+      !/^[A-Z0-9][A-Z0-9_-]{0,19}$/.test(config.universityCode) ||
+      (config.environment === 'test' ? config.universityCode !== 'SANDBOX' : config.universityCode === 'SANDBOX')) {
     throw new Error('Invalid auntEDNA environment configuration.');
   }
 }

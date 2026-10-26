@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import type { Firestore } from 'firebase-admin/firestore';
-import { consentCategory, consentDecisionComplete, researchEligible, selectConsentDocumentsForProduct, type ConsentDecisions } from '../../../api/firebase/pulsecheckProvisioning/consentPolicy';
+import { healthBaselineConsentDocuments, consentCategory, consentDecisionComplete, researchEligible, selectConsentDocumentsForProduct, type ConsentDecisions } from '../../../api/firebase/pulsecheckProvisioning/consentPolicy';
 import { mergePulseCheckRequiredConsents, type PulseCheckRequiredConsentDocument } from '../../../api/firebase/pulsecheckProvisioning/types';
 import { resolvePilotEnrollmentStatus, resolveTeamMembershipOnboardingStatus } from '../../../api/firebase/pulsecheckProvisioning/accessState';
 import { getCompletedBaselineEvidence } from '../../../api/firebase/pulsecheckProvisioning/athleteTaskState';
@@ -24,14 +24,14 @@ const stable = (value: any): string => JSON.stringify(value, (_key, entry) => en
 const validDocuments = (value: unknown): PulseCheckRequiredConsentDocument[] => Array.isArray(value)
   ? value.filter(doc => doc && text(doc.id) && text(doc.title) && text(doc.body) && text(doc.version)) : [];
 
-export function resolveAtomicConsentDocuments(team: Record<string, any>, pilot: Record<string, any>, brand: string) {
+export function resolveAtomicConsentDocuments(team: Record<string, any>, pilot: Record<string, any>, brand: string, organization: Record<string, any> = {}) {
   const teamDocs = validDocuments(team.requiredConsents);
   const pilotDocs = mergePulseCheckRequiredConsents(pilot.studyMode === 'research' ? 'research' : 'operational', validDocuments(pilot.requiredConsents));
   const docs = teamDocs.length ? [...teamDocs] : pilotDocs;
   if (teamDocs.length && pilot.studyMode === 'research') {
     for (const doc of pilotDocs.filter(doc => consentCategory(doc) === 'research')) if (!docs.some(existing => existing.id === doc.id)) docs.push(doc);
   }
-  return selectConsentDocumentsForProduct(docs.filter(doc => consentCategory(doc) !== 'staff'), brand);
+  return healthBaselineConsentDocuments(selectConsentDocumentsForProduct(docs.filter(doc => consentCategory(doc) !== 'staff'), brand), team, organization, brand);
 }
 
 /** The transaction owns configuration validation and every completion write. No delivery occurs here. */
@@ -74,7 +74,7 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
     const enrollmentSnap = enrollmentRef ? await tx.get(enrollmentRef) : null;
     const enrollment = enrollmentSnap?.data() || {};
     if (['withdrawn', 'ended', 'completed'].includes(enrollment.status) || enrollment.revokedAt) reject('ENROLLMENT_ENDED', 'This enrollment has ended.', 403);
-    const documents = resolveAtomicConsentDocuments(team, pilot, organization.productBrand);
+    const documents = resolveAtomicConsentDocuments(team, pilot, organization.productBrand, organization);
     if (!documents.some(doc => consentCategory(doc) === 'participation')) reject('PROGRAM_UNAVAILABLE', 'Your participation requirements could not be verified.', 403);
     const currentScope = { organizationId, teamId, pilotId, cohortId, productBrand: organization.productBrand, documents: canonicalConsentDocuments(documents) };
     const expectedScope = { organizationId: text(expected.organizationId), teamId: text(expected.teamId), pilotId: text(expected.pilotId), cohortId: text(expected.cohortId), productBrand: text(expected.productBrand), documents: canonicalConsentDocuments(Array.isArray(expected.documents) ? expected.documents : []) };

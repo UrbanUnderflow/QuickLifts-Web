@@ -1,11 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import type { PulseCheckAppExperience, PulseCheckAppBranding, PulseCheckProductBrand } from '../../api/firebase/pulsecheckProvisioning/types';
 
-type Configuration = { productBrand?: PulseCheckProductBrand; appBranding?: PulseCheckAppBranding; appExperience?: PulseCheckAppExperience };
+type Configuration = { productBrand?: PulseCheckProductBrand; appBranding?: PulseCheckAppBranding; appExperience?: PulseCheckAppExperience; signInPolicy?: import('../../lib/pulsecheck/signInPolicy').ProgramSignInPolicy };
 export function ProductConfigurationFields({ value, onChange, disabled = false }: {
   value: Configuration; onChange: (value: Configuration) => void; disabled?: boolean;
 }) {
   return <fieldset disabled={disabled} style={{ border: 0, padding: 0, margin: 0 }}>
+    <div className="pcp-fg">
+      <label className="pcp-fld"><span className="pcp-flbl">Program sign-in</span>
+        <select className="pcp-finp pcp-select" value={value.signInPolicy?.mode || 'standard'} onChange={event => onChange({ ...value, signInPolicy: { mode: event.target.value as 'standard' | 'institution-phone', emailDomains: value.signInPolicy?.emailDomains || [] } })}>
+          <option value="standard">Standard sign-in options</option><option value="institution-phone">Institutional email and phone only</option>
+        </select>
+      </label>
+      <label className="pcp-fld"><span className="pcp-flbl">Institution email domains</span>
+        <input className="pcp-finp" placeholder="umes.edu" value={(value.signInPolicy?.emailDomains || []).join(', ')} onChange={event => onChange({ ...value, signInPolicy: { mode: value.signInPolicy?.mode || 'standard', emailDomains: event.target.value.split(',').map(domain => domain.trim().replace(/^@/, '').toLowerCase()) } })} />
+      </label>
+    </div>
+    <p style={{ fontSize: 13 }}>Phone-only programs use an SMS code for athletes and coaches. Other sign-in methods cannot open program access. Separate multiple email domains with commas.</p>
     <div className="pcp-fg">
       <label className="pcp-fld"><span className="pcp-flbl">Program product</span>
         <select className="pcp-finp pcp-select" value={value.productBrand || ''} onChange={event => onChange({ ...value, productBrand: event.target.value as PulseCheckProductBrand })}>
@@ -45,7 +56,7 @@ export default function ProgramProductConfiguration({ configuration, onSave }: {
   const [value, setValue] = useState(configuration);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
-  useEffect(() => { setValue(configuration); }, [configuration.productBrand, configuration.appBranding?.pulsecheck, configuration.appBranding?.athleticmind, configuration.appExperience?.ios, configuration.appExperience?.android]);
+  useEffect(() => { setValue(configuration); }, [configuration.productBrand, configuration.appBranding?.pulsecheck, configuration.appBranding?.athleticmind, configuration.appExperience?.ios, configuration.appExperience?.android, configuration.signInPolicy]);
   return <section style={{ padding: 20, marginBottom: 20, border: '1px solid rgba(128,128,128,.3)', borderRadius: 16 }}>
     <h3>Product and app branding</h3>
     <ProductConfigurationFields value={value} onChange={next => { setValue(next); setStatus(''); }} disabled={saving} />

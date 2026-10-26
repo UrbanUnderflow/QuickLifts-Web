@@ -1,8 +1,10 @@
+import { isHealthBaselineEnabled, type HealthBaselineConfiguration } from './healthBaselinePolicy';
+import { normalizeSignInPolicy } from '../../../lib/pulsecheck/signInPolicy';
 import { athleteActivationCode, athleteActivationQrUrl } from '../../../utils/athleteActivationCode';
 import { saveAthleteConsentAtomically } from './consentSave';
 import { replaceInviteAtomically } from '../../../lib/pulsecheck/replaceInvite';
 import { normalizeProductBrand, validateProductBrand, normalizeAppExperience, resolveAppExperience, normalizeAppBranding } from '../../../lib/pulsecheck/productConfig';
-import { assertCurrentConsentDecisions, selectConsentDocumentsForProduct, consentCategory, consentDecisionComplete, researchEligible, staffConsentDocuments, type ConsentDecisions } from './consentPolicy';
+import { healthBaselineConsentDocuments, assertCurrentConsentDecisions, selectConsentDocumentsForProduct, consentCategory, consentDecisionComplete, researchEligible, staffConsentDocuments, type ConsentDecisions } from './consentPolicy';
 import { addDoc, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocFromServer, getDocs, getDocsFromServer, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders, isUsingDevFirebase } from '../config';
 import {
@@ -456,20 +458,24 @@ const normalizeConsentDocList = (value: unknown): PulseCheckRequiredConsentDocum
 //     package), so teams that have not configured team consents are unaffected.
 // Read the configured product from its persisted organization, never the UI
 // display brand or the legacy product fallback.
-const readConfiguredOrganizationProduct = async (organizationId: string) => {
+const readConfiguredOrganizationConsentConfiguration = async (organizationId: string) => {
   if (!organizationId) throw new Error("Program configuration is unavailable. Please retry.");
   const snapshot = await getDocFromServer(doc(db, ORGANIZATIONS_COLLECTION, organizationId));
   const product = snapshot.exists() ? snapshot.data()?.productBrand : undefined;
   if (product !== 'pulsecheck' && product !== 'athleticmind') throw new Error('Program configuration is unavailable. Please retry.');
-  return product;
+  return { configuredProductBrand: product as 'pulsecheck' | 'athleticmind', healthBaselineEnabled: snapshot.data()?.healthBaselineEnabled };
 };
+const readConfiguredOrganizationProduct = async (organizationId: string) =>
+  (await readConfiguredOrganizationConsentConfiguration(organizationId)).configuredProductBrand;
 
 const resolveEffectiveRequiredConsents = (
   teamConsents: unknown,
   pilot: PulseCheckPilot | null,
-  configuredProductBrand?: 'pulsecheck' | 'athleticmind'
+  configuredProductBrand?: 'pulsecheck' | 'athleticmind',
+  team?: HealthBaselineConfiguration,
+  organization?: HealthBaselineConfiguration,
 ): PulseCheckRequiredConsentDocument[] => {
-  const scoped = (docs: PulseCheckRequiredConsentDocument[]) => selectConsentDocumentsForProduct(docs, configuredProductBrand);
+  const scoped = (docs: PulseCheckRequiredConsentDocument[]) => healthBaselineConsentDocuments(docs, team, organization, configuredProductBrand);
   const teamList = normalizeConsentDocList(teamConsents);
   if (teamList.length > 0) {
     if (pilot?.studyMode === 'research') {
@@ -923,11 +929,13 @@ const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrgani
   configuredProductBrand: data.productBrand === 'athleticmind' || data.productBrand === 'pulsecheck' ? data.productBrand : undefined,
   appBranding: data.appBranding || {},
   appExperience: resolveAppExperience(data.appExperience),
+  signInPolicy: normalizeSignInPolicy(data.signInPolicy),
   displayName: data.displayName || '',
   legalName: data.legalName || '',
   organizationType: data.organizationType || '',
   invitePreviewImageUrl: data.invitePreviewImageUrl || '',
   journalSafetyScreeningDisabled: data.journalSafetyScreeningDisabled === true,
+  ...(typeof data.healthBaselineEnabled === 'boolean' ? { healthBaselineEnabled: data.healthBaselineEnabled } : {}),
   status: (data.status as PulseCheckOrganizationStatus) || 'provisioning',
   legacySource: data.legacySource || undefined,
   legacyCoachId: data.legacyCoachId || '',
@@ -946,6 +954,7 @@ const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrgani
 
 const toTeam = (id: string, data: Record<string, any>): PulseCheckTeam => ({
   id,
+  ...(typeof data.healthBaselineEnabled === 'boolean' ? { healthBaselineEnabled: data.healthBaselineEnabled } : {}),
   organizationId: data.organizationId || '',
   displayName: data.displayName || '',
   teamType: data.teamType || '',
@@ -1336,19 +1345,13 @@ const applyLatestConsentStateToMembership = (
   membership: PulseCheckTeamMembership,
   team: PulseCheckTeam | null,
   pilot: PulseCheckPilot | null,
-  configuredProductBrand?: 'pulsecheck' | 'athleticmind'
+  configuredProductBrand?: 'pulsecheck' | 'athleticmind',
+  organization?: HealthBaselineConfiguration,
 ): PulseCheckTeamMembership => {
   if (membership.role !== 'athlete' || !membership.athleteOnboarding) {
     return membership;
   }
-  // Preserve the legacy no-op for memberships with neither team consents nor a
-  // pilot (nothing to hydrate from).
-  const hasTeamConsents = normalizeConsentDocList(team?.requiredConsents).length > 0;
-  if (!hasTeamConsents && !pilot) {
-    return membership;
-  }
-
-  const requiredConsents = resolveEffectiveRequiredConsents(team?.requiredConsents, pilot, configuredProductBrand);
+  const requiredConsents = resolveEffectiveRequiredConsents(team?.requiredConsents, pilot, configuredProductBrand, team, organization);
   const completedConsentVersions = buildCompletedConsentVersions({
     completedConsentIds: membership.athleteOnboarding.completedConsentIds,
     completedConsentVersions: membership.athleteOnboarding.completedConsentVersions,
@@ -1376,13 +1379,15 @@ const applyLatestConsentStateToMembership = (
 const applyLatestConsentStateToEnrollment = (
   enrollment: PulseCheckPilotEnrollment,
   pilot: PulseCheckPilot | null,
-  configuredProductBrand?: 'pulsecheck' | 'athleticmind'
+  configuredProductBrand?: 'pulsecheck' | 'athleticmind',
+  team?: PulseCheckTeam | null,
+  organization?: HealthBaselineConfiguration,
 ): PulseCheckPilotEnrollment => {
   if (!pilot) {
     return enrollment;
   }
 
-  const requiredConsents = selectConsentDocumentsForProduct(normalizeRequiredConsentDocuments(pilot.requiredConsents || [], pilot.studyMode || 'operational'), configuredProductBrand);
+  const requiredConsents = resolveEffectiveRequiredConsents(team?.requiredConsents, pilot, configuredProductBrand, team, organization);
   const completedConsentVersions = buildCompletedConsentVersions({
     completedConsentIds: enrollment.completedConsentIds,
     completedConsentVersions: enrollment.completedConsentVersions,
@@ -1454,7 +1459,7 @@ const hydrateMembershipConsentStates = async (
   const pilotsById = new Map(pilots.filter(Boolean).map((pilot) => [pilot!.id, pilot!]));
 
   const organizationIds = [...new Set(teams.filter(Boolean).map(team => team!.organizationId).filter(Boolean))];
-  const brandsByOrganization = new Map(await Promise.all(organizationIds.map(async id => [id, await readConfiguredOrganizationProduct(id)] as const)));
+  const configurationsByOrganization = new Map(await Promise.all(organizationIds.map(async id => [id, await readConfiguredOrganizationConsentConfiguration(id)] as const)));
 
   for (const membership of activeMemberships.filter(member => member.role === 'athlete')) {
     const team = teamsById.get(membership.teamId);
@@ -1473,7 +1478,8 @@ const hydrateMembershipConsentStates = async (
       pilotsById.get(normalizeString(membership.athleteOnboarding?.targetPilotId)) || null,
       !membership.organizationId || membership.organizationId !== teamsById.get(normalizeString(membership.teamId))?.organizationId
         ? undefined
-        : brandsByOrganization.get(teamsById.get(normalizeString(membership.teamId))?.organizationId || '')
+        : configurationsByOrganization.get(teamsById.get(normalizeString(membership.teamId))?.organizationId || '')?.configuredProductBrand,
+      configurationsByOrganization.get(membership.organizationId)
     )
   );
 };
@@ -1490,18 +1496,19 @@ const hydrateEnrollmentConsentStates = async (
   const teamIds = [...new Set(pilots.filter(Boolean).map(pilot => pilot!.teamId).filter(Boolean))];
   const teamContexts = new Map(await Promise.all(teamIds.map(async id => {
     const team = await getTeamById(id);
-    return [id, { organizationId: team?.organizationId || '', brand: await readConfiguredOrganizationProduct(team?.organizationId || '') }] as const;
+    const organization = await readConfiguredOrganizationConsentConfiguration(team?.organizationId || '');
+    return [id, { organizationId: team?.organizationId || '', brand: organization.configuredProductBrand, team, organization }] as const;
   })));
 
   return enrollments.map((enrollment) => {
     const pilot = pilotsById.get(normalizeString(enrollment.pilotId)) || null;
     const team = teamContexts.get(pilot?.teamId || '');
-    const brand = enrollment.organizationId
+    const verified = enrollment.organizationId
       && enrollment.teamId === pilot?.teamId
       && enrollment.organizationId === pilot?.organizationId
-      && enrollment.organizationId === team?.organizationId
-      ? team.brand : undefined;
-    return applyLatestConsentStateToEnrollment(enrollment, pilot, brand);
+      && enrollment.organizationId === team?.organizationId;
+    if (!verified) throw new Error('Your team requirements could not be verified. Please retry.');
+    return applyLatestConsentStateToEnrollment(enrollment, pilot, team.brand, team.team, team.organization);
   });
 };
 
@@ -1833,9 +1840,8 @@ export const pulseCheckProvisioningService = {
     const snapshot = await getDocs(
       query(collection(db, PILOT_ENROLLMENTS_COLLECTION), where('pilotId', '==', normalizeString(pilotId)))
     );
-    const pilot = await getPilotById(pilotId);
-    return snapshot.docs
-      .map((docSnap) => applyLatestConsentStateToEnrollment(toPilotEnrollment(docSnap.id, docSnap.data() as Record<string, any>), pilot))
+    const hydrated = await hydrateEnrollmentConsentStates(snapshot.docs.map((docSnap) => toPilotEnrollment(docSnap.id, docSnap.data() as Record<string, any>)));
+    return hydrated
       .sort((left, right) => {
         const leftTime = toJsDate(left.createdAt)?.getTime() || 0;
         const rightTime = toJsDate(right.createdAt)?.getTime() || 0;
@@ -2090,7 +2096,7 @@ export const pulseCheckProvisioningService = {
   async getPilotEnrollment(pilotId: string, userId: string): Promise<PulseCheckPilotEnrollment | null> {
     const snapshot = await getDoc(doc(db, PILOT_ENROLLMENTS_COLLECTION, buildPilotEnrollmentId(pilotId, userId)));
     if (!snapshot.exists()) return null;
-    return applyLatestConsentStateToEnrollment(toPilotEnrollment(snapshot.id, snapshot.data() as Record<string, any>), await getPilotById(pilotId));
+    return (await hydrateEnrollmentConsentStates([toPilotEnrollment(snapshot.id, snapshot.data() as Record<string, any>)]))[0];
   },
 
   async backfillPilotAthleteOutcomeHistory(input: {
@@ -2571,6 +2577,9 @@ export const pulseCheckProvisioningService = {
         legacyConnectionId: normalizeString(sourceMembershipData.legacyConnectionId || destinationMembershipData.legacyConnectionId),
         legacyLinkedAt: sourceMembershipData.legacyLinkedAt || destinationMembershipData.legacyLinkedAt || null,
         role: 'athlete' as const,
+        ...(destinationMembershipData.status !== 'active' || destinationMembershipData.revokedAt
+          || destinationMembershipData.archivedAt || destinationMembershipData.deletedAt
+          ? {baselineJoinedAt: serverTimestamp()} : {}),
         title: normalizeString(sourceMembershipData.title || destinationMembershipData.title),
         permissionSetId: permissionSetByRole.athlete,
         operatingRole: sourceMembershipData.operatingRole || destinationMembershipData.operatingRole || undefined,
@@ -3220,9 +3229,11 @@ export const pulseCheckProvisioningService = {
 
   async createOrganization(input: CreatePulseCheckOrganizationInput, operationId = crypto.randomUUID()): Promise<string> {
     const payload = {
+      ...(typeof input.healthBaselineEnabled === 'boolean' ? { healthBaselineEnabled: input.healthBaselineEnabled } : {}),
       productBrand: validateProductBrand(input.productBrand),
       appBranding: normalizeAppBranding(input.appBranding),
       appExperience: normalizeAppExperience(input.appExperience),
+      signInPolicy: normalizeSignInPolicy(input.signInPolicy),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
       organizationType: normalizeString(input.organizationType),
@@ -3259,6 +3270,8 @@ export const pulseCheckProvisioningService = {
       throw new Error('Organization id is required.');
     }
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedId), {
+      ...(typeof input.healthBaselineEnabled === 'boolean' ? { healthBaselineEnabled: input.healthBaselineEnabled } : {}),
+      ...(input.signInPolicy !== undefined ? { signInPolicy: normalizeSignInPolicy(input.signInPolicy) } : {}),
       ...(input.productBrand !== undefined ? { productBrand: validateProductBrand(input.productBrand) } : {}),
       ...(input.appExperience !== undefined ? Object.fromEntries(
         Object.entries(normalizeAppExperience(input.appExperience))
@@ -3322,6 +3335,7 @@ export const pulseCheckProvisioningService = {
       ? normalizeTeamImplementationMetadata(input.implementationMetadata, input.defaultInvitePolicy)
       : undefined;
     const payload = {
+      ...(typeof input.healthBaselineEnabled === 'boolean' ? { healthBaselineEnabled: input.healthBaselineEnabled } : {}),
       organizationId: normalizeString(input.organizationId),
       displayName: normalizeString(input.displayName),
       teamType: normalizeString(input.teamType),
@@ -3913,7 +3927,7 @@ export const pulseCheckProvisioningService = {
     });
   },
 
-  async updateOrganizationProductConfiguration(organizationId: string, input: Pick<CreatePulseCheckOrganizationInput, 'productBrand' | 'appBranding' | 'appExperience'>): Promise<void> {
+  async updateOrganizationProductConfiguration(organizationId: string, input: Pick<CreatePulseCheckOrganizationInput, 'productBrand' | 'appBranding' | 'appExperience' | 'signInPolicy'>): Promise<void> {
     if (!normalizeString(organizationId)) throw new Error('Organization id is required.');
     const user = auth.currentUser;
     if (!user) throw new Error('Sign in to update organization configuration.');
@@ -3923,6 +3937,34 @@ export const pulseCheckProvisioningService = {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Unable to save organization configuration.');
+  },
+
+  async setOrganizationHealthBaseline(organizationId: string, enabled: boolean): Promise<void> {
+    if (!normalizeString(organizationId) || typeof enabled !== 'boolean') throw new Error('Choose a valid health baseline setting.');
+    await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizeString(organizationId)), {
+      healthBaselineEnabled: enabled, updatedAt: serverTimestamp(),
+    });
+  },
+
+  async setTeamHealthBaseline(teamId: string, enabled: boolean | null): Promise<void> {
+    if (!normalizeString(teamId) || (enabled !== null && typeof enabled !== 'boolean')) throw new Error('Choose a valid health baseline setting.');
+    const teamRef = doc(db, TEAMS_COLLECTION, normalizeString(teamId));
+    await runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(teamRef);
+      if (!snapshot.exists()) throw new Error('Team not found.');
+      const team = snapshot.data();
+      const organization = await transaction.get(doc(db, ORGANIZATIONS_COLLECTION, normalizeString(team.organizationId)));
+      if (!organization.exists()) throw new Error('Organization not found.');
+      const configuration = { healthBaselineEnabled: enabled === null ? undefined : enabled };
+      const documents = normalizeConsentDocList(team.requiredConsents);
+      const needsHealthDocument = isHealthBaselineEnabled(configuration, organization.data())
+        && !documents.some(document => consentCategory(document) === 'health_authorization');
+      transaction.update(teamRef, {
+        healthBaselineEnabled: enabled === null ? deleteField() : enabled,
+        ...(needsHealthDocument ? { requiredConsents: healthBaselineConsentDocuments(documents, configuration, organization.data(), organization.data().productBrand) } : {}),
+        updatedAt: serverTimestamp(),
+      });
+    });
   },
 
   async setOrganizationJournalSafetyScreening(organizationId: string, enabled: boolean): Promise<void> {
@@ -4613,6 +4655,7 @@ export const pulseCheckProvisioningService = {
               userId,
               email: userEmail,
               role: teamMembershipRole,
+              ...(!hasActiveMatchingTeamMembership && teamMembershipRole === 'athlete' ? {baselineJoinedAt: serverTimestamp()} : {}),
               status: 'active',
               revokedAt: null,
               revoked: false,

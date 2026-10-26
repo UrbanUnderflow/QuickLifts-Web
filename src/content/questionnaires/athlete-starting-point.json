@@ -1,24 +1,9 @@
 {
-  "version": "athlete-starting-point-v1",
+  "version": "athlete-starting-point-v2",
   "sourceFile": "Standard Student-Athlete Starting Point",
   "title": "Student-Athlete Starting Point",
   "purpose": "Establish your starting point for performance, well-being, recovery, and support. You may skip any question.",
   "questions": [
-    {
-      "id": "cau-starting-point-01",
-      "type": "multiple_choice",
-      "question": "I understand the purpose of this onboarding questionnaire and how my responses will be used.",
-      "required": false,
-      "choices": [
-        "Yes",
-        "I have a question before continuing"
-      ],
-      "sectionTitle": "Know the Game Plan",
-      "instructions": "",
-      "maxSelections": null,
-      "exclusiveChoices": [],
-      "requiresConfirmation": true
-    },
     {
       "id": "cau-starting-point-02",
       "type": "multiple_choice",
@@ -84,24 +69,6 @@
       "requiresConfirmation": false
     },
     {
-      "id": "cau-starting-point-05",
-      "type": "multiple_choice",
-      "question": "I felt mentally ready to meet the demands of my sport.",
-      "required": false,
-      "choices": [
-        "Not at all",
-        "A little",
-        "Somewhat",
-        "Mostly",
-        "Completely"
-      ],
-      "sectionTitle": "Your Starting Point",
-      "instructions": "Think about the past seven days.",
-      "maxSelections": null,
-      "exclusiveChoices": [],
-      "requiresConfirmation": false
-    },
-    {
       "id": "cau-starting-point-06",
       "type": "multiple_choice",
       "question": "I felt physically ready to meet the demands of my sport.",
@@ -141,42 +108,6 @@
       "id": "cau-starting-point-08",
       "type": "multiple_choice",
       "question": "I felt rested and recovered enough for my responsibilities.",
-      "required": false,
-      "choices": [
-        "Not at all",
-        "A little",
-        "Somewhat",
-        "Mostly",
-        "Completely"
-      ],
-      "sectionTitle": "Your Starting Point",
-      "instructions": "Think about the past seven days.",
-      "maxSelections": null,
-      "exclusiveChoices": [],
-      "requiresConfirmation": false
-    },
-    {
-      "id": "cau-starting-point-09",
-      "type": "multiple_choice",
-      "question": "I felt motivated to participate in my sport.",
-      "required": false,
-      "choices": [
-        "Not at all",
-        "A little",
-        "Somewhat",
-        "Mostly",
-        "Completely"
-      ],
-      "sectionTitle": "Your Starting Point",
-      "instructions": "Think about the past seven days.",
-      "maxSelections": null,
-      "exclusiveChoices": [],
-      "requiresConfirmation": false
-    },
-    {
-      "id": "cau-starting-point-10",
-      "type": "multiple_choice",
-      "question": "I felt connected to my sport.",
       "required": false,
       "choices": [
         "Not at all",

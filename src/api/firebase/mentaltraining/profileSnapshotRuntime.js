@@ -359,7 +359,13 @@ function bootstrapTaxonomyProfile(assessment) {
   return profile;
 }
 
+function isSelfReportStartingProfile(baseline) {
+  return baseline?.version === 6 && baseline?.assessmentKind === 'self_report_starting_profile';
+}
+
 function bootstrapMentalSkillsBaselineProfile(baseline) {
+  // Knowledge, familiarity, and mood do not establish broad cognitive ability.
+  if (isSelfReportStartingProfile(baseline)) return null;
   if (!baseline?.familyScores) {
     return bootstrapTaxonomyProfile();
   }
@@ -454,6 +460,9 @@ function buildTaxonomyCheckInState(input) {
 }
 
 function deriveTaxonomyProfile({ baselineAssessment, mentalSkillsBaseline, checkIns = [], simSessions = [] }) {
+  // Practice telemetry remains task-specific; self-report cannot seed a measured
+  // taxonomy profile, even when check-ins or simulation sessions also exist.
+  if (isSelfReportStartingProfile(mentalSkillsBaseline)) return null;
   const profile = mentalSkillsBaseline
     ? bootstrapMentalSkillsBaselineProfile(mentalSkillsBaseline)
     : bootstrapTaxonomyProfile(baselineAssessment);
@@ -490,6 +499,22 @@ function deriveTaxonomyProfile({ baselineAssessment, mentalSkillsBaseline, check
 }
 
 function prescribeNextSession({ profile, checkInState }) {
+  if (!profile) {
+    const sim = getSimSpec('reset');
+    return {
+      recommendedSimId: 'reset',
+      recommendedLegacyExerciseId: sim?.legacyExerciseId,
+      sessionType: typeof checkInState?.readinessScore === 'number' && checkInState.readinessScore < 45 ? 'recovery_rep' : 'training_rep',
+      durationMode: 'quick_probe',
+      durationSeconds: sim?.recommendedDurations?.quick_probe ?? 60,
+      rationale: 'This first session starts with a short reset. Nora will adjust the plan as you practice.',
+      targetSkills: sim?.targetSkills ?? [],
+      targetPressureTypes: [],
+      generatedAt: Date.now(),
+      evidenceStatus: 'provisional',
+      recommendationBasis: 'foundation_default',
+    };
+  }
   const weakestSkill = profile.weakestSkills[0] || 'error_recovery_speed';
   const readiness = checkInState?.readinessScore ?? profile.modifierScores.readiness;
   const weakestModifier = Object.entries(profile.modifierScores)
@@ -751,6 +776,33 @@ function buildProfileSnapshotWriteInput({
   profileVersion = progress?.profileVersion || PROFILE_VERSION,
   writerVersion = SNAPSHOT_WRITER_VERSION,
 }) {
+  if (isSelfReportStartingProfile(progress?.mentalSkillsBaseline)) {
+    const resolvedCapturedAt = capturedAt ?? progress.mentalSkillsBaseline.completedAt ?? Date.now();
+    const slots = {
+      currentEmphasis: 'foundation practice', growthArea: 'getting started',
+      pressurePattern: 'not yet observed', growthGoal: 'begin a first practice',
+      nextMilestone: resolveNextMilestone(progress),
+    };
+    return {
+      athleteId, milestoneType, capturedAt: resolvedCapturedAt, profileVersion,
+      writerVersion, writeReason,
+      profilePayload: {
+        pillarScores: {}, skillSummaries: [], modifierScores: {},
+        trendSummary: 'Starting profile records self-reported experience. Skill levels have not been measured.',
+        currentEmphasis: 'foundation practice', nextMilestone: slots.nextMilestone,
+        pressurePattern: 'not yet observed', consistencyState: 'not yet observed',
+        assessmentKind: 'self_report_starting_profile', measurementStatus: 'unmeasured',
+      },
+      noraExplanation: {
+        templateId: 'emphasis_milestone_v1', templateVersion: '1.0', slots,
+        renderedText: renderProfileExplanation('emphasis_milestone_v1', slots),
+      },
+      sourceRefs: {
+        progressUpdatedAt: progress?.updatedAt ?? null, trialCompletedAt: null,
+        sourceEventId: sourceEventId ?? `${milestoneType}_snapshot:${athleteId}:${resolvedCapturedAt}`,
+      },
+    };
+  }
   const profile = progress?.taxonomyProfile
     || (progress?.mentalSkillsBaseline
       ? bootstrapMentalSkillsBaselineProfile(progress.mentalSkillsBaseline)
@@ -817,6 +869,7 @@ module.exports = {
   buildTaxonomyCheckInState,
   bootstrapTaxonomyProfile,
   bootstrapMentalSkillsBaselineProfile,
+  isSelfReportStartingProfile,
   summarizeTaskEvidence,
   deriveTaxonomyProfile,
   prescribeNextSession,

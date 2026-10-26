@@ -1,3 +1,4 @@
+import { normalizeSignInPolicy } from '../../../../lib/pulsecheck/signInPolicy';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAdminRequest } from '../_auth';
 import admin, { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
@@ -15,6 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (typeof organizationId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(organizationId)) throw new Error('Organization id is required.');
     const patch = {
       productBrand: validateProductBrand(configuration?.productBrand),
+      ...(configuration.signInPolicy !== undefined ? { signInPolicy: normalizeSignInPolicy(configuration.signInPolicy) } : {}),
       ...(configuration.appBranding !== undefined ? { appBranding: normalizeAppBranding(configuration.appBranding) } : {}),
       ...(configuration.appExperience !== undefined ? { appExperience: normalizeAppExperience(configuration.appExperience) } : {}),
       productConfigurationUpdatedBy: actor.uid, updatedAt: admin.firestore.FieldValue.serverTimestamp(),

@@ -17,7 +17,7 @@ import type {
   PulseCheckTeamMembership,
   PulseCheckTeamMembershipRole,
 } from '../../api/firebase/pulsecheckProvisioning/types';
-import { db } from '../../api/firebase/config';
+import { auth, db, isUsingDevFirebase } from '../../api/firebase/config';
 import {
   assignmentOrchestratorService,
   assignmentService,
@@ -25,7 +25,6 @@ import {
   PulseCheckDailyAssignmentStatus,
 } from '../../api/firebase/mentaltraining';
 import type { AthleteMentalProgress, PulseCheckDailyAssignment } from '../../api/firebase/mentaltraining/types';
-import { BaselineAssessmentModal } from '../../components/mentaltraining';
 import { userService } from '../../api/firebase/user';
 import type { User } from '../../api/firebase/user';
 import { useUser, useUserLoading } from '../../hooks/useUser';
@@ -353,7 +352,6 @@ export default function PulseCheckTeamWorkspacePage() {
   const [launchDeviceStatusByAthlete, setLaunchDeviceStatusByAthlete] = useState<Record<string, Record<LaunchDeviceFamily, LaunchDeviceStatus>>>({});
   const [launchDayTourOpen, setLaunchDayTourOpen] = useState(false);
   const [athleteTaskLoading, setAthleteTaskLoading] = useState(false);
-  const [baselineModalOpen, setBaselineModalOpen] = useState(false);
   const [pendingAssignmentCount, setPendingAssignmentCount] = useState(0);
   const [visionProTaskState, setVisionProTaskState] = useState<VisionProTaskState>('not-queued');
   const [athleteInviteForm, setAthleteInviteForm] = useState({
@@ -428,6 +426,20 @@ export default function PulseCheckTeamWorkspacePage() {
     if (myMembership?.role === 'athlete' && currentUser.id) {
       setAthleteTaskLoading(true);
       try {
+        // The shared server requirement includes each new team join; a cached
+        // mental-skills profile cannot mark this team's baseline complete.
+        const signedIn = auth.currentUser;
+        if (!signedIn || signedIn.uid !== currentUser.id) throw Error('Sign in again to check your baseline.');
+        const response = await fetch('/api/pulsecheck/baseline', {headers:{
+          Authorization:`Bearer ${await signedIn.getIdToken()}`,
+          'X-PulseCheck-Firebase-Mode':isUsingDevFirebase() ? 'dev' : 'prod',
+        }});
+        const baseline = await response.json();
+        if (auth.currentUser?.uid !== currentUser.id) return;
+        if (!response.ok || baseline.required) {
+          await router.replace('/PulseCheck/baseline');
+          return;
+        }
         const [nextProgress, pendingAssignments, visionProSessions, nextDailyAssignment] = await Promise.all([
           athleteProgressService.get(currentUser.id),
           assignmentService.getPendingForAthlete(currentUser.id),
@@ -616,20 +628,8 @@ export default function PulseCheckTeamWorkspacePage() {
 
   const handleLaunchBaseline = useCallback(async () => {
     if (!membership || !currentUser?.id) return;
-
-    setMessage(null);
-    try {
-      await pulseCheckProvisioningService.updateAthleteBaselineStatus({
-        teamMembershipId: membership.id,
-        baselinePathStatus: baselineComplete ? 'complete' : 'started',
-      });
-      await refreshWorkspace();
-      setBaselineModalOpen(true);
-    } catch (error) {
-      console.error('[PulseCheck team workspace] Failed to prepare baseline task:', error);
-      setMessage({ type: 'error', text: 'The Mental Skills Starting Point could not open. Please try again.' });
-    }
-  }, [baselineComplete, currentUser?.id, membership]);
+    await router.push('/PulseCheck/baseline');
+  }, [currentUser?.id, membership, router]);
 
   const athleteHeroSummary = !consentComplete
     ? `You are in the right place. We have added you to ${team?.displayName || 'your team'}. First, finish setup so we can get you ready to begin.`
@@ -639,25 +639,6 @@ export default function PulseCheckTeamWorkspacePage() {
     ? `You are all set in ${team?.displayName || 'your team'}. Your consent and Mental Skills Starting Point are complete, and today\'s Nora task is now your source of truth.`
     : `You are all set in ${team?.displayName || 'your team'}. Your consent and Mental Skills Starting Point are complete, and you are ready for what comes next.`;
 
-  const handleBaselineComplete = useCallback(async (progress: AthleteMentalProgress) => {
-    if (!membership) return;
-
-    setBaselineModalOpen(false);
-    setAthleteProgress(progress);
-
-    try {
-      await pulseCheckProvisioningService.updateAthleteBaselineStatus({
-        teamMembershipId: membership.id,
-        baselinePathStatus: 'complete',
-        baselinePathwayId: progress.currentPathway,
-      });
-      await refreshWorkspace();
-      setMessage({ type: 'success', text: 'Mental Skills Starting Point complete. Your training is now unlocked.' });
-    } catch (error) {
-      console.error('[PulseCheck team workspace] Failed to mark baseline complete:', error);
-      setMessage({ type: 'error', text: 'Your Starting Point was saved, but the task status did not refresh. Reload and verify the unlock state.' });
-    }
-  }, [membership]);
 
   const handleCopy = async (value: string, successText: string) => {
     try {
@@ -1630,14 +1611,6 @@ export default function PulseCheckTeamWorkspacePage() {
           onClose={() => setLaunchDayTourOpen(false)}
         />
 
-        <BaselineAssessmentModal
-          isOpen={baselineModalOpen}
-          onClose={() => setBaselineModalOpen(false)}
-          athleteId={currentUser.id}
-          athleteName={currentUser.displayName || currentUser.username || currentUser.email || 'Athlete'}
-          sportName={currentUser.sport}
-          onComplete={handleBaselineComplete}
-        />
 
         {scopeModalOpen && scopeTarget ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">

@@ -1,3 +1,4 @@
+import { phoneSession, assertOrganizationSignIn } from '../../../../../lib/pulsecheck/signInPolicy';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin, { getFirebaseAdminApp } from '../../../../../lib/firebase-admin';
 import {
@@ -40,7 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const adminApp = getFirebaseAdminApp(forceDevFirebase);
     const auth = admin.auth(adminApp);
     const decoded = await auth.verifyIdToken(
-      authHeader.slice('Bearer '.length).trim()
+      authHeader.slice('Bearer '.length).trim(), true
     );
     const firestore = admin.firestore(adminApp);
     const handoffCode = generateNativeAthleteInviteHandoffCode();
@@ -55,12 +56,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await firestore.runTransaction(async (transaction) => {
       const inviteSnapshot = await transaction.get(inviteRef);
+      const inviteData = inviteSnapshot.exists ? inviteSnapshot.data() || {} : {};
+      const [organizationSnapshot, profileSnapshot] = await Promise.all([
+        transaction.get(firestore.collection('pulsecheck-organizations').doc(String(inviteData.organizationId || ''))),
+        transaction.get(firestore.collection('users').doc(decoded.uid)),
+      ]);
+      const organization = organizationSnapshot.data() || {};
+      const phoneAuthenticated = phoneSession(decoded);
+      const referenceEmail = profileSnapshot.data()?.institutionalEmail || profileSnapshot.data()?.email;
+      const email = phoneAuthenticated ? referenceEmail || decoded.email : decoded.email;
+      assertOrganizationSignIn(organization, decoded, email);
       const binding = validateNativeAthleteInviteBinding(
         inviteSnapshot.exists ? inviteSnapshot.data() || {} : null,
         {
           uid: decoded.uid,
-          email: decoded.email,
+          email,
           emailVerified: decoded.email_verified,
+          phoneVerified: phoneAuthenticated && organization.signInPolicy?.mode === 'institution-phone',
         },
         Math.floor(nowMs / 1000)
       );
@@ -74,6 +86,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         userId: binding.uid,
         userEmail: binding.email,
         userEmailVerified: binding.emailVerified,
+        phoneAuthenticated,
+        phoneReferenceAccepted: binding.phoneVerified,
         organizationId: binding.organizationId,
         teamId: binding.teamId,
         firebaseMode: forceDevFirebase ? 'dev' : 'prod',
@@ -89,6 +103,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       expiresInSeconds: NATIVE_ATHLETE_INVITE_HANDOFF_TTL_SECONDS,
     });
   } catch (error) {
+    if ((error as { status?: number })?.status === 403) return res.status(403).json({ error: (error as Error).message });
     const response = nativeAthleteInviteHandoffErrorResponse(error);
     if (response.statusCode >= 500) {
       console.error('[pulsecheck-native-athlete-handoff/create] Failed:', error);

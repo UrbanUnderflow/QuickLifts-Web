@@ -1,3 +1,4 @@
+const { normalizeSignInPolicy } = require('../../pulsecheck/signInPolicy');
 const { validateProductBrand, normalizeAppExperience, resolveAppExperience, normalizeAppBranding } = require('../../pulsecheck/productConfig');
 const admin = require('firebase-admin');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -194,6 +195,7 @@ function buildProvisioningPayload(input) {
     productBrand: validateProductBrand(input.organization.productBrand),
     appBranding: normalizeAppBranding(input.organization.appBranding),
     appExperience: normalizeAppExperience(input.organization.appExperience),
+    signInPolicy: normalizeSignInPolicy(input.organization.signInPolicy),
     displayName: normalizeString(input.organization.displayName),
     legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
     organizationType: normalizeString(input.organization.organizationType) || 'other',
@@ -404,6 +406,7 @@ async function upsertPulseCheckOrganization({ adminApp, input }) {
     productBrand: validateProductBrand(input.organization.productBrand),
     appBranding: normalizeAppBranding(input.organization.appBranding),
     appExperience: normalizeAppExperience(input.organization.appExperience),
+    signInPolicy: normalizeSignInPolicy(input.organization.signInPolicy),
     displayName: normalizeString(input.organization.displayName),
     legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
     organizationType: normalizeString(input.organization.organizationType) || 'other',
@@ -442,6 +445,7 @@ async function upsertPulseCheckOrganization({ adminApp, input }) {
         ? (organizationData?.productBrand || organizationPayload.productBrand)
         : organizationPayload.productBrand,
       appExperience: normalizeAppExperience(input.organization.appExperience, organizationData?.appExperience),
+      signInPolicy: normalizeSignInPolicy(input.organization.signInPolicy ?? organizationData?.signInPolicy),
       appBranding: input.organization.appBranding === undefined
         ? (organizationData?.appBranding || organizationPayload.appBranding)
         : organizationPayload.appBranding,
@@ -515,6 +519,7 @@ async function provisionPulseCheckOrganizationAndTeam({ adminApp, input }) {
         ? (organizationData?.productBrand || organizationPayload.productBrand)
         : organizationPayload.productBrand,
       appExperience: normalizeAppExperience(input.organization.appExperience, organizationData?.appExperience),
+      signInPolicy: normalizeSignInPolicy(input.organization.signInPolicy ?? organizationData?.signInPolicy),
       appBranding: input.organization.appBranding === undefined
         ? (organizationData?.appBranding || organizationPayload.appBranding)
         : organizationPayload.appBranding,

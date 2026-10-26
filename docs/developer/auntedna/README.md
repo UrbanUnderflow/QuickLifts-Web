@@ -1,134 +1,56 @@
-# AuntEdna athlete baseline
+# Optional AuntEdna athlete baseline integration
 
-## Starting Point contract
+AuntEdna delivery is deferred for the current rollout. Programs may configure their own designated clinical staff in provisioning. Staff alerts are a separate workflow and do not contain baseline answers. Do not activate a provider or infer a clinic from an institution name, product brand or key prefix.
 
-Content revision: `cau-starting-point-v2`. Ownership revision: `cau-routing-v3`.
+## Current starting profile
 
-The full athlete experience contains **48 items**: 24 questionnaire prompts and 24 mental-skills ratings or activities. The skills module contains 8 current-state ratings, 8 skill-familiarity ratings, and 8 activities. The breath activity and its response count as one item. There are no additional conditional questionnaire prompts in this revision. Questionnaire responses may be skipped. Annual clinical screening is a separate workflow.
+Content version: `athlete-starting-point-v2`. Native gate transport version: `cau-operational-web-v1`. Ownership revision: `cau-routing-v3`.
 
-The downloadable `questionnaire.json` contains the exact 24 prompts, response choices, recall periods, and selection limits. IDs retain their approved printed numbers: `cau-starting-point-01` through `cau-starting-point-10`, then `cau-starting-point-35` through `cau-starting-point-48`. Items 11–34 belong to the separate skills module and are not missing questionnaire fields.
+The approved baseline contains 28 items: the 19 unchanged protected well-being/support questions, training goal `cau-starting-point-46`, and eight prior-experience/familiarity ratings. There are no mandatory challenges, purpose-acknowledgment questions, past-week performance ratings, or current-state ratings in this baseline. The daily check-in remains separate.
 
-The web experience groups items by privacy ownership: 5 questionnaire prompts plus 24 skills interactions in Performance, and 19 questionnaire prompts in Well-being and support. iOS and Android open this shared required-baseline web flow. Existing completed skills may be reused, and athletes may complete performance only.
+This is a self-reported starting profile for choosing an initial practice. It does not measure competency or cognitive ability. Unanswered experience is unknown. The protected questions are well-being/support intake; they are not a named validated clinical screening instrument.
 
-## Delivery boundary
+`questionnaire.json` contains the exact 20 questionnaire prompts. The eight experience ratings are implemented in the shared skills component. Original question IDs are preserved. `routing.json` also retains historical routing decisions for removed questions; those IDs are not accepted as current answers.
 
-Pulse sends **19 protected questionnaire fields** to AuntEdna. The five Pulse questionnaire fields and the 24 skills interactions are not included in this endpoint's request. The `routing.json` download identifies each questionnaire field's custodian.
+Performance contains one questionnaire prompt and eight experience ratings. Well-being and support contains 19 prompts. Health is on by default, with explicit team override, organization default, then on when unset. Personal authorization and delivery readiness are separate. A pending health decision requires an actual choice with exact terms; acceptance requires a typed signature. Decline or revocation never becomes acceptance.
 
-Health delivery requires the athlete's current, signer-owned health-sharing authorization and an explicit sharing choice. A support preference is not authorization. When the athlete completes performance only, Pulse makes no baseline request to AuntEdna and records protected field references as `not_shared`.
+Completed historical combined baselines and v5 skills remain complete. Old unfinished drafts project goal/name and prior experience into a new namespace without rewriting old documents. New profiles use v6 `assessmentKind: self_report_starting_profile`; no competency, family ability, task evidence or overall ability scores are fabricated. Genuine prior task observations remain separately retained.
 
-Pulse's completion mirror retains its five questionnaire fields and provider receipt references. Protected answers are not copied into performance drafts or the mirror. The new protected IDs are external-only under the current private-retention policy. Administrative observations remain metadata; they do not add questionnaire answers to the partner request.
+## Provider delivery, when explicitly configured later
 
-## Submit a baseline
+Direction: Pulse server → `POST https://partner-api.auntedna.ai/partner/athletes/{externalId}/baseline`.
 
-Direction: Pulse server → AuntEdna partner API.
+Headers: server-only Bearer partner key, `X-Pulse-Integration: true`, `Content-Type: application/json`.
 
-`POST https://partner-api.auntedna.ai/partner/athletes/{externalId}/baseline`
+`externalId` comes from the verified athlete account. The request contains only 19 protected field entries plus identity, submission ID, content/ownership versions and the provider-assigned university code. The training goal and eight experience ratings are excluded.
 
-Headers:
+Test keys must start `ae_pk_test_` and use `SANDBOX`. Live keys must start `ae_pk_live_` and use a provider-approved code of 1–20 uppercase letters, digits, underscores or hyphens. SANDBOX cannot be used live. A prefix establishes environment only.
 
-```http
-Authorization: Bearer <AUNTEDNA_PARTNER_KEY>
-X-Pulse-Integration: true
-Content-Type: application/json
-```
+Live routing requires a server-owned `auntEdnaBaselineConnection` on the verified organization:
 
-`externalId` is the authenticated PulseCheck user ID for the live assignment. The browser cannot select another athlete's ID. In the isolated team-test flow, synthetic athlete identifiers and synthetic identity values are used instead.
+- `organizationId`: the owning organization ID.
+- `teamIds`: explicitly authorized teams in that organization.
+- `environment`: `live`.
+- `universityCode`: the provider-approved code, also matching the organization's `universityCode`.
+- `credentialEnv`: the approved `AUNTEDNA_PARTNER_LIVE_KEY` environment variable, optionally with an uppercase suffix.
+- `approvalReference`: the operator's reference to provider approval of routing and credential scope.
 
-The adapter requires an `ae_pk_test_` key with `universityCode: "SANDBOX"`, or an `ae_pk_live_` key with `universityCode: "CAU"`. Credentials are server-side. The snapshot-signing secret displayed in the partner portal is a different credential and must not be used as this Bearer key.
+No such connection is created by baseline assignment, an athlete request, or this release. There is no key-default clinic fallback. Never reuse CAU for UMES.
 
-The body contains:
+The request schema is in `baseline.schema.json`; the fictional example uses SANDBOX. Values use exact question choices. Skipped questions carry `state: skipped` and no value. `state: local` in an outbound answer is a wire label and does not authorize local persistence.
 
-| Property | Meaning |
-| --- | --- |
-| `submissionId` | Stable, content-isolated identifier for retries. |
-| `version` | `cau-starting-point-v2`. |
-| `ownershipVersion` | `cau-routing-v3`. |
-| `identity` | Name, email, and `verification: "self_reported"`. Identity details do not authorize account linkage. |
-| `fields` | All 19 AuntEdna field entries, each keyed by its question ID. |
-| `universityCode` | `SANDBOX` or `CAU`, matching the configured environment. |
+The performance mirror contains only the training goal and authenticated provider receipt references. Protected answers, free text, scores and answer hashes never enter performance drafts or the provider mirror. Changing protected-answer custody requires an explicit decision independent of staff notification routing.
 
-Each supplied answer is `{ "questionId": "…", "state": "local", "value": … }`. `local` is the request's field-state label, not a claim that Pulse persists the protected answer. Single-choice answers use the exact choice string. Multi-select answers use an array of exact choice strings, within the questionnaire's selection limit. An unanswered field is `{ "questionId": "…", "state": "skipped" }`, without a value. No active question has a conditional `not_applicable` state in this revision.
+## Receipts, retries and completion
 
-Use `baseline.schema.json` with `examples/baseline.synthetic.json` to inspect the outbound wire shape. The example contains fictional identity and answers only.
+Only an authenticated server response can confirm provider delivery. The adapter requires `success: true`, matching `externalId` and `submissionId`, nonempty `baselineId`, `athleteId`, `requestId`, a valid `receivedAt`, and boolean `created`. A replay with `created: false` is accepted. Browser-supplied receipts cannot complete the requirement.
 
-## Receipt and retries
+Current live-flow submission IDs hash both the trusted assignment submission ID and content version. Sandbox IDs also include content version. Drafts, attempts and mirrors use separate version namespaces, so unfinished older content cannot overwrite the new attempt.
 
-A successful provider response uses this envelope:
+The provider call precedes mirror persistence. A persistence failure retries using the same idempotent submission identity. An interrupted combined submission retains its sharing choice. Canonical skills alone do not release the combined baseline gate.
 
-```json
-{
-  "success": true,
-  "data": {
-    "baselineId": "baseline_synthetic_001",
-    "athleteId": "athlete_synthetic_001",
-    "externalId": "synthetic-athlete-001",
-    "submissionId": "synthetic-starting-point-v2-001",
-    "receivedAt": "2026-10-14T16:00:00.000Z",
-    "created": true
-  },
-  "requestId": "request_synthetic_001"
-}
-```
+Requests reject redirects and time out after 15 seconds. Provider bodies may contain answers and are never surfaced or logged. No clinical delivery is claimed without a matching receipt.
 
-The adapter checks that `externalId` and `submissionId` match the request. It requires nonempty baseline/athlete/request identifiers, a parseable receipt timestamp, and a boolean `created`. `requestId` is diagnostic metadata, not a replacement for a baseline receipt. Browser-supplied receipts do not authorize completion.
+## Validation boundary
 
-Retries use the same athlete, content version, submission ID, and answers. Provider idempotency must return the original baseline receipt for the same submission. A retry may return `created: false`. Pulse contacts the provider before persisting the local completion mirror; a local persistence failure can therefore require retrying an already accepted provider request. Protected answers are not queued locally for that retry, so the browser must retain them until completion is confirmed.
-
-The adapter rejects redirects and uses a 15-second timeout. Network failures, invalid receipts, HTTP 429 and server errors are retryable adapter failures. Provider error bodies can contain answers and are neither logged nor returned to the browser. Pulse reports failure rather than claiming completion without a matching receipt.
-
-## Versioning and client compatibility
-
-The authenticated Pulse status endpoint is `/api/pulsecheck/questionnaire/cau`. It remains an internal athlete-client endpoint, not an AuntEdna partner ingestion endpoint.
-
-- Status `version` remains `cau-operational-web-v1` for existing iOS/Android gate compatibility.
-- Status also returns `questionnaireVersion: "cau-starting-point-v2"`.
-- All questionnaire POST actions, including draft and skill saves, must include that `questionnaireVersion`. Stale or missing versions receive HTTP 409 before mutation.
-- Performance drafts use `version: "cau-starting-point-v2"` and `flowVersion: 4`.
-- Partner payload `version` is the content version, `cau-starting-point-v2`, not the native transport version.
-- New drafts, attempts, baseline records and external submission IDs are isolated from the old content revision. In the live flow, the new submission ID is `sp2-` plus the SHA-256 hex digest of the assignment's stable submission ID.
-- Historical completed baselines still satisfy the requirement. Old incomplete drafts are preserved in their original namespace and are not reinterpreted as new answers.
-
-Do not map an old numbered ID to a new ID by number alone. Wording, options, timeframes and ownership can differ. Existing source records retain their original version.
-
-## Availability and verification
-
-This guide describes the implemented source contract. Local tests cover content counts, answer validation, ownership separation, version isolation, stale-client rejection, receipts, retries, and completion. A local browser walkthrough completed the full 48-item flow with mocked authentication and API responses.
-
-Production deployment and AuntEdna acceptance of this new content version and its IDs have not yet been verified. The collection flag, cohort assignment and current consent requirements still control real-athlete availability. Documentation access does not activate collection or authorize data transfer.
-
-## Related guides
-
-- [Athletic Mind snapshots](/developer/api/athleticmind-snapshots)
-- [Clinical bridge](/developer/api/clinical-bridge)
-- [Partner credential portal](/developer/api/partner/auntedna)
-
-## Questionnaire ownership
-
-The following mapping is generated from the current questionnaire and routing definitions.
-
-| ID | Prompt | Custodian |
-| --- | --- | --- |
-| `cau-starting-point-01` | I understand the purpose of this onboarding questionnaire and how my responses will be used. | PulseCheck |
-| `cau-starting-point-02` | Which statement best describes why you are participating today? | auntEDNA |
-| `cau-starting-point-03` | What do you personally want to gain from this experience? | auntEDNA |
-| `cau-starting-point-04` | I feel that I have a real choice in how I participate in this experience. | auntEDNA |
-| `cau-starting-point-05` | I felt mentally ready to meet my volleyball demands. | PulseCheck |
-| `cau-starting-point-06` | I felt physically ready to meet my volleyball demands. | auntEDNA |
-| `cau-starting-point-07` | I had enough energy for my daily responsibilities. | auntEDNA |
-| `cau-starting-point-08` | I felt rested and recovered enough for my responsibilities. | auntEDNA |
-| `cau-starting-point-09` | I felt motivated to participate in volleyball. | PulseCheck |
-| `cau-starting-point-10` | I felt connected to my sport. | PulseCheck |
-| `cau-starting-point-35` | I felt emotionally balanced. | auntEDNA |
-| `cau-starting-point-36` | I was able to manage the demands placed on me. | auntEDNA |
-| `cau-starting-point-37` | I felt hopeful about the week ahead. | auntEDNA |
-| `cau-starting-point-38` | Stress interfered with my ability to function the way I wanted. | auntEDNA |
-| `cau-starting-point-39` | On most nights during the past seven days, approximately how much sleep did you get? | auntEDNA |
-| `cau-starting-point-40` | Which areas affected you most during the past seven days? | auntEDNA |
-| `cau-starting-point-41` | I feel that I belong on this team. | auntEDNA |
-| `cau-starting-point-42` | I feel respected within my athletic environment. | auntEDNA |
-| `cau-starting-point-43` | I can ask for help without being viewed as weak. | auntEDNA |
-| `cau-starting-point-44` | I know where to go for confidential mental-health support at CAU. | auntEDNA |
-| `cau-starting-point-45` | I trust that my individual mental-health information will remain private from coaches and performance personnel. | auntEDNA |
-| `cau-starting-point-46` | What would you most like to strengthen through mental-performance training? | PulseCheck |
-| `cau-starting-point-47` | What would you most like support with? | auntEDNA |
-| `cau-starting-point-48` | If additional support may be helpful, how would you prefer the platform to respond? | auntEDNA |
+Offline integration tests exercise the actual 28-item UI with mocked identity/API responses, default-on/off/decline choices, interrupted submission, completed historical accounts, and the native session bridge. Unit and Firestore emulator tests cover ownership, exact consent evidence, scope, migration and retries. These checks do not establish live provider delivery.

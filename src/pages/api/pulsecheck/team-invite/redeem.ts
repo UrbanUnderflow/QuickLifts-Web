@@ -1,3 +1,4 @@
+import { assertOrganizationSignIn, phoneSession } from '../../../../lib/pulsecheck/signInPolicy';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
 import { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
@@ -390,7 +391,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const adminApp = getFirebaseAdminApp(forceDevFirebase);
     const decoded = await admin.auth(adminApp).verifyIdToken(idToken, true);
     const userId = decoded.uid;
-    const userEmail = normalizeEmail(decoded.email);
+    const phoneProfile = phoneSession(decoded) ? await admin.firestore(adminApp).collection('users').doc(userId).get() : null;
+    const userEmail = normalizeEmail(phoneProfile?.data()?.institutionalEmail || phoneProfile?.data()?.email || decoded.email);
     if (!userEmail) {
       return sendRedemptionError(res, 'AUTH_EMAIL_REQUIRED');
     }
@@ -538,6 +540,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         throw teamInviteRedemptionError('TEAM_NOT_FOUND');
       }
       const organizationData = organizationSnap.data() || {};
+      assertOrganizationSignIn(organizationData, decoded, userEmail);
       const teamData = teamSnap.data() || {};
       const organizationStatus = normalizeString(organizationData.status).toLowerCase();
       const teamStatus = normalizeString(teamData.status).toLowerCase();
@@ -755,6 +758,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           userId,
           email: userEmail,
           role: teamMembershipRole,
+          ...(!hasActiveMatchingTeamMembership && teamMembershipRole === 'athlete' ? {baselineJoinedAt: now} : {}),
           status: 'active',
           revokedAt: null,
           revoked: false,
@@ -958,6 +962,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } = result;
     return res.status(200).json(clientResult);
   } catch (error) {
+    if ((error as { status?: number })?.status === 403) return res.status(403).json({ error: (error as Error).message, code: (error as { code?: string }).code });
     console.error('[pulsecheck-team-invite/redeem] Failed to redeem invite:', error);
     const publicError = normalizeTeamInviteRedemptionError(error);
     return res

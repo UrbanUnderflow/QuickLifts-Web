@@ -1,5 +1,5 @@
 import ConsentChoices from '../../components/pulsecheck/consent/ConsentChoices';
-import { consentCategory, consentDecisionComplete, usesAthleticMindConsent, selectConsentDocumentsForProduct, type ConsentDecisions } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
+import { healthBaselineConsentDocuments, consentCategory, consentDecisionComplete, usesAthleticMindConsent, type ConsentDecisions } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
 import React, { useEffect, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardCheck,
-  FileText,
   Loader2,
   ShieldCheck,
   Sparkles,
@@ -45,7 +44,7 @@ const normalizeParagraphs = (value: string) =>
     .map((paragraph) => paragraph.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 
-const previewAgreementBody = (value: string) => {
+const _previewAgreementBody = (value: string) => {
   const firstParagraph = normalizeParagraphs(value)[0] || '';
   if (firstParagraph.length <= 140) {
     return firstParagraph;
@@ -399,7 +398,7 @@ export default function PulseCheckAthleteOnboardingPage() {
   const verifiedProductBrand = organization?.id === team?.organizationId
     && (previewMode || (membership?.teamId === team?.id && membership?.organizationId === organization?.id))
     ? organization?.configuredProductBrand : undefined;
-  const requiredConsents = selectConsentDocumentsForProduct(sourceRequiredConsents, verifiedProductBrand);
+  const requiredConsents = healthBaselineConsentDocuments(sourceRequiredConsents, team, organization, verifiedProductBrand);
   const athleteConsents = requiredConsents.filter(doc => consentCategory(doc) !== 'staff');
   const requiredConsentsComplete = athleteConsents.every(doc => consentDecisionComplete(doc, consentDecisions, completedConsentIds, completedConsentVersions));
   const recordChoices = (next: ConsentDecisions) => {
@@ -476,7 +475,7 @@ export default function PulseCheckAthleteOnboardingPage() {
     saving,
   ]);
 
-  const toggleCompletedConsent = (consent: PulseCheckRequiredConsentDocument) => {
+  const _toggleCompletedConsent = (consent: PulseCheckRequiredConsentDocument) => {
     const consentId = consent.id;
     setCompletedConsentIds((currentIds) =>
       currentIds.includes(consentId)
@@ -590,7 +589,7 @@ export default function PulseCheckAthleteOnboardingPage() {
       }
 
       setMessage({ type: 'success', text: 'You are set. Your team access is ready.' });
-      router.push(returnTo || `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`);
+      router.push('/PulseCheck/baseline');
     } catch (error) {
       console.error('[PulseCheck athlete onboarding] Failed to save onboarding:', error);
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'We could not finish setup right now.' });

@@ -54,6 +54,9 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   env: {
+    // Netlify's DEPLOY_URL is build-only. Bake the non-secret origin into the
+    // Next API bundle so previews never call a different release's functions.
+    PULSECHECK_BASELINE_DEPLOYMENT_ORIGIN: process.env.DEPLOY_URL || process.env.DEPLOY_PRIME_URL || process.env.URL || 'https://fitwithpulse.ai',
     // Derived here so a copied public env flag cannot enable preview/local PipeLists.
     NEXT_PUBLIC_PIPELISTS_PRODUCTION_BUILD: String(pipeListsDeployment.production),
     // Production Firebase Config

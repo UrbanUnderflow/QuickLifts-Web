@@ -29,7 +29,7 @@ function humanizeTaxonomyLabel(value: string): string {
 interface MentalProgressCardProps {
   streak: MentalTrainingStreak;
   averageReadiness?: { average: number; trend: 'up' | 'down' | 'stable' };
-  taxonomyProfile?: TaxonomyProfile;
+  taxonomyProfile?: TaxonomyProfile | null;
   activeProgram?: ProgramPrescription;
   compact?: boolean;
 }

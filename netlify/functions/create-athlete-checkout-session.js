@@ -875,6 +875,7 @@ const handler = async (event) => {
   let checkoutAuthVerified = false;
   let checkoutAuthEmail = '';
   let checkoutAuthEmailVerified = false;
+  let checkoutIdentity = null;
   let coachOfferDatabase = null;
   let coachOfferDevFirebase = false;
 
@@ -900,6 +901,7 @@ const handler = async (event) => {
       checkoutAuthVerified = true;
       checkoutAuthEmail = normalizeString(authenticated.decoded?.email).toLowerCase();
       checkoutAuthEmailVerified = authenticated.decoded?.email_verified === true;
+      checkoutIdentity = authenticated.decoded;
       coachOfferDatabase = authenticated.app.firestore();
       coachOfferDevFirebase = isDevFirebaseApp(authenticated.app);
     } else {
@@ -946,6 +948,7 @@ const handler = async (event) => {
         userId,
         authenticatedEmail: checkoutAuthEmail,
         authenticatedEmailVerified: checkoutAuthEmailVerified,
+        authenticatedIdentity: checkoutIdentity,
         inviteToken,
         requestedTeamId: teamId,
         stripeMode: serverStripe.mode,

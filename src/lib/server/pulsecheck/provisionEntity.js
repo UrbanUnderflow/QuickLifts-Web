@@ -1,3 +1,4 @@
+const { normalizeSignInPolicy } = require('../../pulsecheck/signInPolicy');
 const { createHash } = require('crypto');
 const { validateProductBrand, normalizeAppExperience, resolveAppExperience, normalizeAppBranding } = require('../../pulsecheck/productConfig');
 
@@ -11,6 +12,7 @@ async function provisionEntity(db, { kind, operationId, actor, actorUid, payload
     data.productBrand = validateProductBrand(data.productBrand);
     data.appBranding = normalizeAppBranding(data.appBranding);
     data.appExperience = normalizeAppExperience(data.appExperience);
+    data.signInPolicy = normalizeSignInPolicy(data.signInPolicy);
   }
   const id = createHash('sha256').update(`${actorUid || actor.toLowerCase()}:${kind}:${operationId}`).digest('hex');
   const ref = db.collection(kind === 'organization' ? 'pulsecheck-organizations' : 'pulsecheck-teams').doc(id);

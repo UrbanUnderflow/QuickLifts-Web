@@ -17,7 +17,7 @@
       "pattern": "^[A-Za-z0-9_-]{1,128}$"
     },
     "version": {
-      "const": "cau-starting-point-v2"
+      "const": "athlete-starting-point-v2"
     },
     "ownershipVersion": {
       "const": "cau-routing-v3"
@@ -579,9 +579,9 @@
                 "value": {
                   "enum": [
                     "Less than 5 hours",
-                    "5–5.9 hours",
-                    "6–6.9 hours",
-                    "7–7.9 hours",
+                    "5\u20135.9 hours",
+                    "6\u20136.9 hours",
+                    "7\u20137.9 hours",
                     "8 hours or more",
                     "Not sure",
                     "Prefer not to answer"
@@ -629,7 +629,7 @@
                   "items": {
                     "enum": [
                       "Academics",
-                      "Volleyball performance",
+                      "Sport performance",
                       "Playing time or team role",
                       "Injury or physical health",
                       "Sleep or recovery",
@@ -1034,10 +1034,11 @@
       }
     },
     "universityCode": {
-      "enum": [
-        "SANDBOX",
-        "CAU"
-      ]
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20,
+      "pattern": "^[A-Z0-9][A-Z0-9_-]{0,19}$",
+      "description": "Provider-assigned clinic routing code. Must match the trusted organization connection. SANDBOX is test-only."
     }
   }
 }

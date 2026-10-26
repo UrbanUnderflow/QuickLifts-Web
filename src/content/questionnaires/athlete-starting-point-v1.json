@@ -1,0 +1,476 @@
+{
+  "version": "athlete-starting-point-v1",
+  "sourceFile": "Standard Student-Athlete Starting Point",
+  "title": "Student-Athlete Starting Point",
+  "purpose": "Establish your starting point for performance, well-being, recovery, and support. You may skip any question.",
+  "questions": [
+    {
+      "id": "cau-starting-point-01",
+      "type": "multiple_choice",
+      "question": "I understand the purpose of this onboarding questionnaire and how my responses will be used.",
+      "required": false,
+      "choices": [
+        "Yes",
+        "I have a question before continuing"
+      ],
+      "sectionTitle": "Know the Game Plan",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": true
+    },
+    {
+      "id": "cau-starting-point-02",
+      "type": "multiple_choice",
+      "question": "Which statement best describes why you are participating today?",
+      "required": false,
+      "choices": [
+        "Strengthen my mental performance",
+        "Better understand and manage my emotions",
+        "Manage stress, recovery, or life demands",
+        "Curious about the experience",
+        "Not convinced, but willing to try",
+        "Participation is expected",
+        "I feel pressured or forced",
+        "I am not sure yet",
+        "Prefer not to answer"
+      ],
+      "sectionTitle": "Know the Game Plan",
+      "instructions": "Select the one that feels closest to you.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-03",
+      "type": "multi_select",
+      "question": "What do you personally want to gain from this experience?",
+      "required": false,
+      "choices": [
+        "Perform more consistently",
+        "Improve focus and confidence",
+        "Handle pressure and recover after mistakes",
+        "Better understand and manage emotions",
+        "Improve rest, recovery, or stress management",
+        "Learn more about myself as an athlete",
+        "Know where to find confidential support",
+        "I am not sure yet"
+      ],
+      "sectionTitle": "Know the Game Plan",
+      "instructions": "Select up to two.",
+      "maxSelections": 2,
+      "exclusiveChoices": [
+        "I am not sure yet"
+      ],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-04",
+      "type": "multiple_choice",
+      "question": "I feel that I have a real choice in how I participate in this experience.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Unsure",
+        "Agree",
+        "Strongly agree",
+        "Prefer not to answer"
+      ],
+      "sectionTitle": "Know the Game Plan",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-05",
+      "type": "multiple_choice",
+      "question": "I felt mentally ready to meet the demands of my sport.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Mostly",
+        "Completely"
+      ],
+      "sectionTitle": "Your Starting Point",
+      "instructions": "Think about the past seven days.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-06",
+      "type": "multiple_choice",
+      "question": "I felt physically ready to meet the demands of my sport.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Mostly",
+        "Completely"
+      ],
+      "sectionTitle": "Your Starting Point",
+      "instructions": "Think about the past seven days.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-07",
+      "type": "multiple_choice",
+      "question": "I had enough energy for my daily responsibilities.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Mostly",
+        "Completely"
+      ],
+      "sectionTitle": "Your Starting Point",
+      "instructions": "Think about the past seven days.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-08",
+      "type": "multiple_choice",
+      "question": "I felt rested and recovered enough for my responsibilities.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Mostly",
+        "Completely"
+      ],
+      "sectionTitle": "Your Starting Point",
+      "instructions": "Think about the past seven days.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-09",
+      "type": "multiple_choice",
+      "question": "I felt motivated to participate in my sport.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Mostly",
+        "Completely"
+      ],
+      "sectionTitle": "Your Starting Point",
+      "instructions": "Think about the past seven days.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-10",
+      "type": "multiple_choice",
+      "question": "I felt connected to my sport.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Mostly",
+        "Completely"
+      ],
+      "sectionTitle": "Your Starting Point",
+      "instructions": "Think about the past seven days.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-35",
+      "type": "multiple_choice",
+      "question": "I felt emotionally balanced.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Mostly",
+        "Completely"
+      ],
+      "sectionTitle": "Life, Stress, and Recovery",
+      "instructions": "Think about the past seven days.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-36",
+      "type": "multiple_choice",
+      "question": "I was able to manage the demands placed on me.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Mostly",
+        "Completely"
+      ],
+      "sectionTitle": "Life, Stress, and Recovery",
+      "instructions": "Think about the past seven days.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-37",
+      "type": "multiple_choice",
+      "question": "I felt hopeful about the week ahead.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Mostly",
+        "Completely"
+      ],
+      "sectionTitle": "Life, Stress, and Recovery",
+      "instructions": "Think about the past seven days.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-38",
+      "type": "multiple_choice",
+      "question": "Stress interfered with my ability to function the way I wanted.",
+      "required": false,
+      "choices": [
+        "Not at all",
+        "A little",
+        "Somewhat",
+        "Mostly",
+        "Completely"
+      ],
+      "sectionTitle": "Life, Stress, and Recovery",
+      "instructions": "Think about the past seven days.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-39",
+      "type": "multiple_choice",
+      "question": "On most nights during the past seven days, approximately how much sleep did you get?",
+      "required": false,
+      "choices": [
+        "Less than 5 hours",
+        "5–5.9 hours",
+        "6–6.9 hours",
+        "7–7.9 hours",
+        "8 hours or more",
+        "Not sure",
+        "Prefer not to answer"
+      ],
+      "sectionTitle": "Life, Stress, and Recovery",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-40",
+      "type": "multi_select",
+      "question": "Which areas affected you most during the past seven days?",
+      "required": false,
+      "choices": [
+        "Academics",
+        "Sport performance",
+        "Playing time or team role",
+        "Injury or physical health",
+        "Sleep or recovery",
+        "Team dynamics",
+        "Family",
+        "Relationships",
+        "Finances",
+        "Housing, food, or transportation",
+        "Identity or belonging",
+        "Future or career",
+        "Something positive",
+        "Nothing significant",
+        "Other",
+        "Prefer not to answer"
+      ],
+      "sectionTitle": "Life, Stress, and Recovery",
+      "instructions": "Select up to three.",
+      "maxSelections": 3,
+      "exclusiveChoices": [
+        "Nothing significant",
+        "Prefer not to answer"
+      ],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-41",
+      "type": "multiple_choice",
+      "question": "I feel that I belong on this team.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Unsure",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "Your Support Circle",
+      "instructions": "Indicate how much you agree with each statement.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-42",
+      "type": "multiple_choice",
+      "question": "I feel respected within my athletic environment.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Unsure",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "Your Support Circle",
+      "instructions": "Indicate how much you agree with each statement.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-43",
+      "type": "multiple_choice",
+      "question": "I can ask for help without being viewed as weak.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Unsure",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "Your Support Circle",
+      "instructions": "Indicate how much you agree with each statement.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-44",
+      "type": "multiple_choice",
+      "question": "I know where to go for confidential mental-health support when I need it.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Unsure",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "Your Support Circle",
+      "instructions": "Indicate how much you agree with each statement.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-45",
+      "type": "multiple_choice",
+      "question": "I trust that my individual mental-health information will remain private from coaches and performance personnel.",
+      "required": false,
+      "choices": [
+        "Strongly disagree",
+        "Disagree",
+        "Unsure",
+        "Agree",
+        "Strongly agree"
+      ],
+      "sectionTitle": "Your Support Circle",
+      "instructions": "Indicate how much you agree with each statement.",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-46",
+      "type": "multi_select",
+      "question": "What would you most like to strengthen through mental-performance training?",
+      "required": false,
+      "choices": [
+        "Focus",
+        "Confidence",
+        "Preparation",
+        "Resilience",
+        "Self-talk",
+        "Emotional regulation",
+        "Recovering after mistakes",
+        "Visualization",
+        "Consistent routines",
+        "I am not sure yet"
+      ],
+      "sectionTitle": "Build Your Playbook",
+      "instructions": "Select up to two.",
+      "maxSelections": 2,
+      "exclusiveChoices": [
+        "I am not sure yet"
+      ],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-47",
+      "type": "multi_select",
+      "question": "What would you most like support with?",
+      "required": false,
+      "choices": [
+        "Understanding changes in my well-being",
+        "Managing stress",
+        "Improving sleep or recovery habits",
+        "Finding confidential resources",
+        "Knowing when I may need additional support",
+        "Connecting with someone",
+        "Managing life outside sport",
+        "Injury or recovery support",
+        "I am not sure yet"
+      ],
+      "sectionTitle": "Build Your Playbook",
+      "instructions": "Select up to two.",
+      "maxSelections": 2,
+      "exclusiveChoices": [
+        "I am not sure yet"
+      ],
+      "requiresConfirmation": false
+    },
+    {
+      "id": "cau-starting-point-48",
+      "type": "multiple_choice",
+      "question": "If additional support may be helpful, how would you prefer the platform to respond?",
+      "required": false,
+      "choices": [
+        "Show resources I can review",
+        "Ask whether I want to connect with someone",
+        "Offer a private follow-up",
+        "Let me decide later",
+        "I am not sure"
+      ],
+      "sectionTitle": "Build Your Playbook",
+      "instructions": "",
+      "maxSelections": null,
+      "exclusiveChoices": [],
+      "requiresConfirmation": false
+    }
+  ]
+}

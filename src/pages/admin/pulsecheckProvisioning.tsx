@@ -1,3 +1,5 @@
+import { healthBaselineConsentDocuments } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
+import { isHealthBaselineEnabled } from '../../api/firebase/pulsecheckProvisioning/healthBaselinePolicy';
 import { useRouter } from 'next/router';
 import CoachSurveyUserTestResults from '../../components/admin/CoachSurveyUserTestResults';
 import TeamClinicalStaff from '../../components/admin/TeamClinicalStaff';
@@ -1370,6 +1372,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [consentModalTeamId, setConsentModalTeamId] = useState<string | null>(null);
   // Active consent tab within the "Manage consents" modal (one tab per consent form).
   const [consentModalIndex, setConsentModalIndex] = useState(0);
+  const [healthBaselineSaving, setHealthBaselineSaving] = useState<string | null>(null);
   useEffect(() => {
     if (loading || intakeFocusHandled || typeof window === 'undefined' || teams.length === 0) return;
     const params = new URLSearchParams(window.location.search);
@@ -4095,6 +4098,21 @@ const PulseCheckProvisioningPage: React.FC = () => {
                               await loadData();
                             }} />
                             <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14, fontSize: 13, color: '#22302e' }}>
+                              <input type="checkbox" checked={isHealthBaselineEnabled(undefined, organization)}
+                                disabled={healthBaselineSaving !== null}
+                                onChange={async event => {
+                                  const enabled = event.target.checked;
+                                  setHealthBaselineSaving(`organization:${organization.id}`);
+                                  try {
+                                    await pulseCheckProvisioningService.setOrganizationHealthBaseline(organization.id, enabled);
+                                    await loadData();
+                                    setMessage({ type: 'success', text: 'Health baseline default updated.' });
+                                  } catch { setMessage({ type: 'error', text: 'Health baseline setting could not be updated. Please try again.' }); }
+                                  finally { setHealthBaselineSaving(null); }
+                                }} />
+                              <span><strong>Health baseline on by default.</strong> Teams use this setting unless they have an explicit override. The health-authorization decision is collected when athletes join. Participation and research remain separate choices.</span>
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14, fontSize: 13, color: '#22302e' }}>
                               <input
                                 type="checkbox"
                                 checked={organization.journalSafetyScreeningDisabled !== true}
@@ -5045,6 +5063,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                       </div>
                                       {(() => {
                                         const consentDraft = getTeamConsentDraft(team);
+                                        const effectiveConsentCount = healthBaselineConsentDocuments(consentDraft, team, organization, organization.configuredProductBrand).filter(doc => doc.category !== 'staff').length;
                                         const consentDirty = isTeamConsentDirty(team);
                                         const consentSaving = teamConsentSavingId === team.id;
                                         const consentInputStyle: React.CSSProperties = {
@@ -5058,18 +5077,45 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                         const consentModalOpen = consentModalTeamId === team.id;
                                         return (
                                           <>
+                                          <section className="pcp-card" aria-label={`Health baseline settings for ${team.displayName}`}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                                              <h3 style={{ margin: 0, fontSize: 15, color: '#22302e' }}>Health baseline</h3>
+                                              <span style={{ fontSize: 13, fontWeight: 700, color: '#22302e' }}>{isHealthBaselineEnabled(team, organization) ? 'On' : 'Off'}</span>
+                                            </div>
+                                            <p className="pcp-tracker-copy">On by default. This controls health baseline questions, separately from the care connection. Turning it off skips those questions and the health-authorization step for this team. Other consent choices are unchanged.</p>
+                                            <label style={{ display: 'grid', gap: 6, marginTop: 12, fontSize: 13, color: '#22302e' }}>
+                                              <span>Team health baseline</span>
+                                              <select aria-label={`Health baseline for ${team.displayName}`} value={typeof team.healthBaselineEnabled === 'boolean' ? String(team.healthBaselineEnabled) : 'inherit'}
+                                                disabled={healthBaselineSaving !== null}
+                                                onChange={async event => {
+                                                  const enabled = event.target.value === 'inherit' ? null : event.target.value === 'true';
+                                                  setHealthBaselineSaving(`team:${team.id}`);
+                                                  try {
+                                                    await pulseCheckProvisioningService.setTeamHealthBaseline(team.id, enabled);
+                                                    await loadData();
+                                                    setMessage({ type: 'success', text: `${team.displayName} health baseline updated.` });
+                                                  } catch { setMessage({ type: 'error', text: 'Health baseline setting could not be updated. Please try again.' }); }
+                                                  finally { setHealthBaselineSaving(null); }
+                                                }} style={consentInputStyle}>
+                                                <option value="inherit">Use organization default ({isHealthBaselineEnabled(undefined, organization) ? 'on' : 'off'})</option>
+                                                <option value="true">On for this team</option>
+                                                <option value="false">Off for this team</option>
+                                              </select>
+                                            </label>
+                                            <p className="pcp-tracker-copy">When on, athletes review health authorization during team joining and choose whether to accept or decline. Existing decisions are retained. A care service receives health answers only with current authorization and a configured care connection.</p>
+                                          </section>
                                           <CollapsibleCard
                                             title="Consent Forms"
                                             open={teamConsentCardOpen}
                                             onToggle={() => toggleOrgCard(`${team.id}:consent`)}
-                                            preview={`${consentDraft.length} consent${consentDraft.length === 1 ? '' : 's'} athletes accept at intake. Open to edit.`}
+                                            preview={`${effectiveConsentCount} agreement${effectiveConsentCount === 1 ? '' : 's'} athletes review when joining. Open to edit.`}
                                             className="pcp-card pcp-tracker-card"
                                           >
                                             <div className="pcp-tracker-copy" style={{ marginTop: 0 }}>
-                                              Choose the audience and purpose for each set of terms. Athletes decide separately about participation, health authorization, and research. Staff see staff responsibilities. A new version requires a new decision. This editor changes terms; participants make their own decisions.
+                                              Choose the audience and purpose for each set of terms. Athletes decide separately about participation, health authorization, and research. Staff see staff responsibilities. A new version requires a new decision. This editor changes terms; participants make their own decisions. Health authorization is included automatically while the health baseline is on; use the separate health baseline setting to turn that step off.
                                             </div>
                                             <div style={{ marginTop: 12, fontSize: 13, color: '#22302e' }}>
-                                              {consentDraft.length} consent{consentDraft.length === 1 ? '' : 's'}
+                                              {effectiveConsentCount} active agreement{effectiveConsentCount === 1 ? '' : 's'} · {consentDraft.length} saved form{consentDraft.length === 1 ? '' : 's'}
                                               {consentDirty ? <span style={{ color: '#65716c' }}> · unsaved changes</span> : null}
                                             </div>
                                             <div style={{ marginTop: 12 }}>

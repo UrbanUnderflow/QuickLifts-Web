@@ -1,3 +1,4 @@
+import PhoneSignIn from '../../../components/auth/PhoneSignIn';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -45,6 +46,8 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   // the onboarding flow. Gated behind ?demo=1 (see /admin/screenDemo).
   const isDemo = router.query.demo === '1';
   const demoNextUrl = `/PulseCheck/post-activation?organizationId=${encodeURIComponent(invite.organizationId)}&teamId=${encodeURIComponent(invite.teamId)}&orgName=${encodeURIComponent(invite.organizationName)}&teamName=${encodeURIComponent(invite.teamName)}&demo=1`;
+  const [standardSignIn, setStandardSignIn] = useState(false);
+  const [referenceEmail, setReferenceEmail] = useState('');
   const [mode, setMode] = useState<AuthMode>('create-account');
   const [authReady, setAuthReady] = useState(false);
   const [authUser, setAuthUser] = useState<FirebaseAuthUser | null>(null);
@@ -90,6 +93,10 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setAuthUser(nextUser);
+      setReferenceEmail('');
+      if (nextUser) void userService.fetchUserFromFirestore(nextUser.uid).then(profile => {
+        if (auth.currentUser?.uid === nextUser.uid) setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
+      }).catch(() => undefined);
       setAuthReady(true);
     });
 
@@ -116,7 +123,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   }, [invite.targetEmail]);
 
   const normalizedTargetEmail = useMemo(() => invite.targetEmail.trim().toLowerCase(), [invite.targetEmail]);
-  const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
+  const normalizedAuthEmail = useMemo(() => (referenceEmail || authUser?.email || '').trim().toLowerCase(), [authUser, referenceEmail]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
 
   const completeRedeem = async (notificationEmail?: string) => {
@@ -623,7 +630,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                   <div className="space-y-4">
                     <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] p-4 text-sm leading-7 text-red-200">
                       This invite was sent to <span className="font-medium">{invite.targetEmail}</span>, but you&apos;re signed in as{' '}
-                      <span className="font-medium">{authUser.email}</span>. Switch to that account to continue.
+                      <span className="font-medium">{normalizedAuthEmail}</span>. Switch to that account to continue.
                     </div>
                     <button
                       type="button"
@@ -648,7 +655,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                       {submitting ? 'Activating…' : 'Activate admin access'}
                     </button>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-zinc-500">Signed in as {authUser.email}</span>
+                      <span className="text-xs text-zinc-500">Signed in as {normalizedAuthEmail}</span>
                       <button
                         type="button"
                         onClick={handleSignOut}
@@ -700,6 +707,12 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                   ) : null}
                 </div>
 
+                <PhoneSignIn organizationId={invite.organizationId} initialEmail={invite.targetEmail} disabled={submitting} onBusyChange={setSubmitting} onPolicyChange={setStandardSignIn} onSuccess={async user => {
+                  const profile = await userService.fetchUserFromFirestore(user.uid);
+                  setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
+                  setAuthUser(user);
+                }} />
+                {standardSignIn && <>
                 {/* Tabs */}
                 <div className="flex gap-6 border-b" style={{ borderColor: PC.cardBorder }}>
                   <button
@@ -871,6 +884,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                     Continue with Apple
                   </button>
                 </div>
+                </>}
               </div>
             )}
           </div>

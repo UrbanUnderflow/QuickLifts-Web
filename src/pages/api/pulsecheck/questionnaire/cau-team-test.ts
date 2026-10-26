@@ -35,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try { user = await admin.auth(app).verifyIdToken(bearer.slice(7), true); }
     catch { return res.status(401).json({error:'Sign in to PulseCheck again to continue.'}); }
     const tester = digest(`${campaign}:${user.uid}`).toString('hex').slice(0,32);
-    const externalId = `sandbox-pulse-${tester}`, submissionId = `team-test-${campaign}-${tester}-sp2`;
+    const externalId = `sandbox-pulse-${tester}`, submissionId = `team-test-${createHash('sha256').update(`${campaign}:${tester}:${QUESTIONNAIRE_VERSION}`).digest('hex')}`;
     const collection = admin.firestore(app).collection(COLLECTION);
     const recordRef = collection.doc(`sandbox_${campaign}_${tester}_${QUESTIONNAIRE_VERSION}`);
     const existing = await recordRef.get();

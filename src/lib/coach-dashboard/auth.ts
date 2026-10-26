@@ -1,3 +1,4 @@
+import { assertMemberSignIn } from '../server/auth/program-sign-in';
 import type { NextApiRequest } from 'next';
 import type { firestore } from 'firebase-admin';
 /** Verify the selected Firebase environment and revoked tokens on every request. */
@@ -9,5 +10,6 @@ export async function authorizeDashboardRequest(req: NextApiRequest): Promise<{ 
   const app = getFirebaseAdminApp(mode === 'dev');
   const token = await app.auth().verifyIdToken(req.headers.authorization.slice(7), true);
   if (!token.uid) throw new Error('Missing identity');
+  await assertMemberSignIn(app.firestore(), token);
   return { uid: token.uid, db: app.firestore() };
 }

@@ -6,6 +6,7 @@ import { signInWithPopup, OAuthProvider, UserCredential } from 'firebase/auth';
 import { Loader2, AlertCircle, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 import { auth } from '../../api/firebase/config';
 import authService from '../../api/firebase/auth';
+import PhoneSignIn from '../../components/auth/PhoneSignIn';
 import { userService, User, SubscriptionType } from '../../api/firebase/user';
 import { useUser } from '../../hooks/useUser';
 import {
@@ -60,6 +61,7 @@ const withTimeout = async <T,>(
 const CoachLogin: NextPage = () => {
   const router = useRouter();
   const currentUser = useUser();
+  const [standardSignIn, setStandardSignIn] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailAuthMode, setEmailAuthMode] = useState<'magic' | 'password'>('magic');
@@ -426,6 +428,11 @@ const CoachLogin: NextPage = () => {
             </div>
           ) : (
             <>
+              {!forgotMode && <PhoneSignIn onPolicyChange={setStandardSignIn} disabled={isBusy} onBusyChange={(busy) => setPending(busy ? 'email' : null)} onSuccess={async (user) => {
+                await ensureFirestoreUser(user);
+                goToApp();
+              }} />}
+              {standardSignIn && <>
               <form onSubmit={forgotMode ? handleForgotPassword : handleEmailSignIn} className="space-y-3">
                 {!forgotMode && (
                   <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-white/[0.04] p-1">
@@ -579,6 +586,7 @@ const CoachLogin: NextPage = () => {
                   </p>
                 </>
               )}
+              </>}
             </>
           )}
         </div>

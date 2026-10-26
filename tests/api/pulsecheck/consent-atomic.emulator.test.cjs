@@ -179,3 +179,38 @@ test('setup saves retain signature, current-document, cohort and ended-enrollmen
   }
   assert.equal((await snapshot()).events.length, 0);
 });
+
+const compiledBaselineHealth = compileTypeScriptRuntime({cacheKey:'baseline-health',entryPaths:['src/lib/questionnaires/cau-health.ts']});
+const {baselineHealthContext,saveBaselineHealthDecision}=loadCompiledModule({compiled:compiledBaselineHealth,fileName:'cau-health.js'});
+test('existing member reconsent appends exact health evidence while preserving completed baseline and earlier receipts',async()=>{
+ await save();const original=await snapshot();
+ const documents=structuredClone(input.expectedContext.documents);const health=documents.find(d=>d.category==='health_authorization');health.version='v2';health.body+=' Updated approved synthetic terms.';
+ await db.doc('pulsecheck-teams/team').update({requiredConsents:documents});
+ const assignment={teamId:'team',teamMembershipId:memberId};let context=await baselineHealthContext(db,'athlete',assignment);
+ assert.equal(context.eligible,true);assert.equal(context.healthAuthorizationRequired,true);
+ const entry={decision:'accepted',version:health.version,document:health,signedName:'Synthetic Athlete',decidedAt:'2026-10-25T12:00:00Z'};
+ await saveBaselineHealthDecision(db,'athlete',context,{[health.id]:entry},now);
+ context=await baselineHealthContext(db,'athlete',assignment);assert.equal(context.healthSharingAllowed,true);assert.equal(context.healthAuthorizationRequired,false);
+ const updated=await snapshot();assert.equal(updated.events.length,2);assert.equal(updated.member.athleteOnboarding.baselinePathStatus,'complete');
+ assert.ok(updated.events.some(e=>JSON.stringify(e.decisions)===JSON.stringify(original.events[0].decisions)));
+ assert.equal(updated.member.athleteOnboarding.intakeResponses.goal,'Synthetic goal');
+});
+test('baseline health decisions reject foreign scope, stale terms and unsigned acceptance without mutation',async()=>{
+ await save();const context=await baselineHealthContext(db,'athlete',{teamId:'team',teamMembershipId:memberId});
+ const document=context.healthDocuments[0],entry={decision:'accepted',version:document.version,document,signedName:''};const before=await snapshot();
+ await assert.rejects(saveBaselineHealthDecision(db,'athlete',context,{[document.id]:entry},now));
+ await assert.rejects(saveBaselineHealthDecision(db,'athlete',context,{[document.id]:{...entry,signedName:'Athlete',document:{...document,body:'Stale body'}}},now));
+ await db.doc(memberPath).update({organizationId:'foreign'});
+ const foreign=await baselineHealthContext(db,'athlete',{teamId:'team',teamMembershipId:memberId});assert.equal(foreign.eligible,false);
+ await assert.rejects(saveBaselineHealthDecision(db,'athlete',foreign,{[document.id]:{...entry,signedName:'Athlete'}},now));
+ assert.equal((await snapshot()).events.length,before.events.length);
+});
+test('individual health has a real private decision flow and accepts decline without fabricating a signature',async()=>{
+ const assignment={scope:'individual'};let context=await baselineHealthContext(db,'athlete',assignment);
+ assert.equal(context.healthBaselineEnabled,true);assert.equal(context.healthAuthorizationRequired,true);
+ const document=context.healthDocuments[0];
+ await saveBaselineHealthDecision(db,'athlete',context,{[document.id]:{decision:'declined',version:document.version,document,signedName:'',decidedAt:'2026-10-25T12:00:00Z'}},now);
+ context=await baselineHealthContext(db,'athlete',assignment);assert.equal(context.healthAuthorizationRequired,false);assert.equal(context.healthSharingAllowed,false);assert.equal(context.healthAuthorizationDecision,'declined');
+ const summary=(await db.doc('pulsecheck-private-users/athlete').get()).data();assert.equal(summary.baselineHealthConsentDecisions[document.id].signedName,'');
+ assert.equal((await db.collection('pulsecheck-private-users/athlete/consent-events').get()).size,1);
+});

@@ -21,6 +21,7 @@ function resolveClinicalConsentDocuments({ teamDocuments, pilot = null, productB
       if (!selected.some(existing => existing.id === doc.id)) selected.push(doc);
     }
   }
+  if (!selected.some(doc => doc.category === 'health_authorization' || doc.id === defaults.health.id)) selected.push(defaults.health);
   return selected.filter(doc => doc.category !== 'staff').map(doc => {
     if (productBrand !== 'pulsecheck') return doc;
     const key = ['participation', 'health'].find(key => ['id', 'title', 'body', 'version', 'category'].every(field => doc[field] === defaults[key][field]));
