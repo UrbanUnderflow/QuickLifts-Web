@@ -2889,7 +2889,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   
   const renderInitialStep = () => (
     <>
-      {!isSignUp && <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />}
+      <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />
       <div className="text-center mb-8 pt-4 sm:pt-0">
         <img src="/pulse-logo-white.svg" alt="Pulse Logo" className="h-8 mx-auto mb-8" />
         <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
@@ -3374,7 +3374,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const renderAthleticMindInitialStep = () => (
     <div className="amh-login-panel">
-      {!isSignUp && <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />}
+      <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />
       <div>
         <p className="amh-kicker">Council workspace access</p>
         <h2>{isSignUp ? 'Create your hub account' : 'Welcome to Athletic Mind Hub'}</h2>

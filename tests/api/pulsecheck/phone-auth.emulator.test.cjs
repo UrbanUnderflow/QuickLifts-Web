@@ -6,8 +6,8 @@ const admin = require('firebase-admin');
 // implementation so these tests exercise the same credential/session code as web.
 const Module = require('node:module');
 const driver = new Module(__filename);
-driver._compile(require('esbuild').buildSync({ stdin: { contents: `export { initializeApp, deleteApp } from 'firebase/app';export { getAuth, connectAuthEmulator, PhoneAuthProvider, signInWithCredential, updateCurrentUser, signOut, createUserWithEmailAndPassword, linkWithCredential, deleteUser } from 'firebase/auth';`, resolveDir: process.cwd() }, bundle: true, platform: 'browser', format: 'cjs', write: false }).outputFiles[0].text, __filename + '.driver');
-const { initializeApp, deleteApp, getAuth, connectAuthEmulator, PhoneAuthProvider, signInWithCredential, updateCurrentUser, signOut, createUserWithEmailAndPassword, linkWithCredential, deleteUser } = driver.exports;
+driver._compile(require('esbuild').buildSync({ stdin: { contents: `export { initializeApp, deleteApp } from 'firebase/app';export { getAuth, connectAuthEmulator, PhoneAuthProvider, signInWithCredential, updateCurrentUser, signOut, createUserWithEmailAndPassword, linkWithCredential, deleteUser, signInWithCustomToken, reauthenticateWithCredential } from 'firebase/auth';`, resolveDir: process.cwd() }, bundle: true, platform: 'browser', format: 'cjs', write: false }).outputFiles[0].text, __filename + '.driver');
+const { initializeApp, deleteApp, getAuth, connectAuthEmulator, PhoneAuthProvider, signInWithCredential, updateCurrentUser, signOut, createUserWithEmailAndPassword, linkWithCredential, deleteUser, signInWithCustomToken, reauthenticateWithCredential } = driver.exports;
 const { completePhoneProfile } = require('../../../src/lib/server/auth/phone-profile');
 const projectId = 'demo-phone-auth';
 before(async () => {
@@ -73,4 +73,19 @@ test('unlinked phone cannot claim an existing institutional email; cleanup permi
   await linkWithCredential(owner, await credential('+12025550103'));
   assert.equal((await auth.getUser(owner.uid)).phoneNumber, '+12025550103');
   assert.equal((await db.collection('users').doc(owner.uid).get()).data().completedBaseline, true);
+});
+
+test('iOS token handoff establishes an independent primary session that can reauthenticate by SMS', async () => {
+  const primary = client('ios-primary'), secondary = client('ios-secondary');
+  const verified = (await signInWithCredential(secondary, await credential('+12025550104'))).user;
+  await complete(verified, 'ios-athlete@institution.example');
+  const customToken = await auth.createCustomToken(verified.uid);
+  const result = await signInWithCustomToken(primary, customToken);
+  await signOut(secondary);
+  assert.equal(result.user.uid, verified.uid);
+  assert.equal(primary.currentUser.phoneNumber, '+12025550104');
+  await reauthenticateWithCredential(primary.currentUser, await credential('+12025550104'));
+  const token = await auth.verifyIdToken(await primary.currentUser.getIdToken(true));
+  assert.equal(token.uid, verified.uid);
+  assert.equal(token.firebase.sign_in_provider, 'phone');
 });

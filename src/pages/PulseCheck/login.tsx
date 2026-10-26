@@ -854,6 +854,10 @@ const PulseCheckLoginPage: NextPage = () => {
                     <h2 className="text-xl font-bold text-white mb-1">Create your account</h2>
                     <p className="text-sm text-zinc-400 mb-6">Get started with PulseCheck</p>
 
+                    <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={async (user) => {
+                      await ensureFirestoreUser(user);
+                      enterApp();
+                    }} />
                     {/* Social buttons */}
                     <div className="grid grid-cols-1 gap-3 mb-5 sm:grid-cols-2">
                       <button
