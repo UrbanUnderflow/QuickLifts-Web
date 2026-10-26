@@ -1,3 +1,4 @@
+import { assertOrganizationSignIn } from '../../../../../lib/pulsecheck/signInPolicy';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin, { getFirebaseAdminApp } from '../../../../../lib/firebase-admin';
 import {
@@ -43,7 +44,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const inviteRef = firestore.collection(INVITE_LINKS_COLLECTION).doc(inviteToken);
     const nowEpochSeconds = Math.floor(Date.now() / 1000);
 
-    const userId = await firestore.runTransaction(async (transaction) => {
+    const handoffSession = await firestore.runTransaction(async (transaction) => {
       const handoffSnapshot = await transaction.get(handoffRef);
       if (!handoffSnapshot.exists) {
         throw new NativeAthleteInviteHandoffError(
@@ -81,6 +82,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           uid: handoff.userId,
           email: handoff.userEmail,
           emailVerified: handoff.userEmailVerified,
+          phoneVerified: handoff.phoneReferenceAccepted === true,
         },
         nowEpochSeconds
       );
@@ -96,20 +98,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       await validateNativeHandoffParents(firestore, transaction, binding);
+      const organizationSnapshot = await transaction.get(firestore.collection('pulsecheck-organizations').doc(binding.organizationId));
+      assertOrganizationSignIn(organizationSnapshot.data(), { firebase: { sign_in_provider: 'custom' }, pulse_phone_auth: handoff.phoneAuthenticated === true }, binding.email);
 
       transaction.update(handoffRef, {
         status: 'consumed',
         consumedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      return binding.uid;
+      return { uid: binding.uid, phoneAuthenticated: handoff.phoneAuthenticated === true };
     });
 
     // The token only establishes the already-verified Firebase identity. It
     // carries no entitlement or membership claim; checkout and invite
     // redemption remain separate server-authorized steps.
-    const customToken = await admin.auth(adminApp).createCustomToken(userId);
+    const customToken = await admin.auth(adminApp).createCustomToken(handoffSession.uid, handoffSession.phoneAuthenticated ? { pulse_phone_auth: true } : undefined);
     return res.status(200).json({ customToken });
   } catch (error) {
+    if ((error as { status?: number })?.status === 403) return res.status(403).json({ error: (error as Error).message });
     const response = nativeAthleteInviteHandoffErrorResponse(error);
     if (response.statusCode >= 500) {
       console.error('[pulsecheck-native-athlete-handoff/consume] Failed:', error);

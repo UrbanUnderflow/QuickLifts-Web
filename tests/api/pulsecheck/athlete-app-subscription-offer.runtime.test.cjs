@@ -1737,3 +1737,20 @@ test('late events for a replaced Stripe subscription preserve the current paid e
     assert.equal(firebase.getDocument('users/athlete').subscriptionType, 'Monthly Subscriber');
   }
 });
+
+test('phone-only checkout uses verified phone plus stored institution email without treating email as verified', async () => {
+  const collections = baseCollections();
+  collections.users = [{ id: 'athlete_1', data: { institutionalEmail: 'athlete_1@example.com', email: 'athlete_1@example.com' } }];
+  collections['pulsecheck-organizations'][0].data.signInPolicy = { mode: 'institution-phone', emailDomains: ['example.com'] };
+  collections['pulsecheck-invite-links'][0].data.targetEmail = 'athlete_1@example.com';
+  collections['pulsecheck-teams'][0].data.commercialConfig = { commercialModel: 'athlete-pay', athleteAppSubscriptionEnabled: true, athleteAppSubscriptionOfferVersion: 1 };
+  collections['pulsecheck-athlete-app-offers'].push({ id: 'team_1', data: { offerId: 'team_1', organizationId: 'org_1', teamId: 'team_1', enabled: true, status: 'active', monthlyPriceCents: 1999, currency: 'usd', interval: 'month', version: 1, stripeByMode: { live: { priceId: 'price_server', active: true } } } });
+  const firebase = createFirestoreAdminMock({ collections });
+  delete require.cache[LIB_PATH];
+  const lib = withModuleMocks({ './pulsecheck-coach-services': coachServicesMock(firebase, 'athlete_1') }, () => require(LIB_PATH));
+  const input = { database: firebase.db, userId: 'athlete_1', authenticatedIdentity: { uid: 'athlete_1', firebase: { sign_in_provider: 'phone' } }, authenticatedEmailVerified: false, inviteToken: 'invite_1', requestedTeamId: 'team_1', stripeMode: 'live' };
+  assert.equal((await lib.loadCoachPricedInviteCheckout(input)).email, 'athlete_1@example.com');
+  for (const identity of [{ uid: 'other', firebase: { sign_in_provider: 'phone' } }, { uid: 'athlete_1', firebase: { sign_in_provider: 'google.com' } }, { uid: 'athlete_1', firebase: { sign_in_provider: 'custom' } }]) await assert.rejects(lib.loadCoachPricedInviteCheckout({ ...input, authenticatedIdentity: identity }), error => error.statusCode === 403);
+  await firebase.db.collection('pulsecheck-organizations').doc('org_1').set({ signInPolicy: { mode: 'standard', emailDomains: [] } }, { merge: true });
+  await assert.rejects(lib.loadCoachPricedInviteCheckout(input), error => error.statusCode === 403);
+});

@@ -5,15 +5,17 @@ import { createPhoneAuthAttempt, normalizeAuthPhone, phoneAuthError } from '../.
 
 type Props = {
   mode?: 'signin' | 'link';
+  organizationId?: string;
+  initialEmail?: string;
   disabled?: boolean;
   onSuccess: (user: User) => void | Promise<void>;
   onBusyChange?: (busy: boolean) => void;
   onPolicyChange?: (standard: boolean) => void;
 };
 
-export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBusyChange, onPolicyChange }: Props) {
+export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBusyChange, onPolicyChange, organizationId, initialEmail = '' }: Props) {
   const [open, setOpen] = useState(mode === 'signin');
-  const [institutionalEmail, setInstitutionalEmail] = useState('');
+  const [institutionalEmail, setInstitutionalEmail] = useState(initialEmail);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -27,14 +29,14 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
   policyChange.current = onPolicyChange;
   useEffect(() => {
     policyChange.current?.(false);
-    if (!policyChange.current || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(institutionalEmail.trim())) return;
+    const context = organizationId || new URLSearchParams(window.location.search).get('organizationId');
+    if (!policyChange.current || (!context && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(institutionalEmail.trim()))) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      const organizationId = new URLSearchParams(window.location.search).get('organizationId');
       void fetch('/.netlify/functions/program-sign-in-policy', {
         method: 'POST', signal: controller.signal,
         headers: { 'Content-Type': 'application/json', ...getFirebaseModeRequestHeaders() },
-        body: JSON.stringify({ email: institutionalEmail, organizationId }),
+        body: JSON.stringify({ email: institutionalEmail, organizationId: context }),
       }).then(async response => {
         if (!response.ok) throw new Error('Policy unavailable');
         const policy = await response.json();
@@ -42,7 +44,7 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
       }).catch(() => { /* Keep the phone entrance when policy cannot be loaded. */ });
     }, 350);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [institutionalEmail]);
+  }, [institutionalEmail, organizationId]);
   const container = useRef<HTMLDivElement>(null);
   const attempt = useRef<Awaited<ReturnType<typeof createPhoneAuthAttempt>>>();
   const active = useRef(true);
@@ -74,7 +76,7 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
   });
   const confirm = () => void run(async () => {
     if (!attempt.current) throw new Error('Request a new code to continue.');
-    const user = await attempt.current.confirm(code, institutionalEmail, acceptTerms);
+    const user = await attempt.current.confirm(code, institutionalEmail, acceptTerms, organizationId);
     if (!active.current) return;
     await onSuccess(user);
     await attempt.current.dispose(); attempt.current = undefined;

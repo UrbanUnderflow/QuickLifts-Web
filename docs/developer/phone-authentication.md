@@ -46,3 +46,10 @@ The public form starts with institutional email and phone, without explanatory i
 
 
 On 2026-10-26 the production database rules were updated by adding only the phone-policy helper and its two calls to the fetched live rules. Firebase compiled the resulting ruleset and the release was read back as `58da97d5-63dc-4d70-a56c-3f0e564cd733`. The live-source patch passed the same two emulator policy tests. Development rule access returned permission denied, so its rules were not replaced. No organization sign-in setting was changed as part of the rule release; administrators select the method and institution domains in provisioning.
+
+
+Invitation pages (athlete, coach/staff and organization activation) embed the same phone form and resolve the saved program policy using their existing organization binding. They read institutional reference email from the kept user profile, rather than requiring Firebase Auth to own that email. Standard program email-verification behavior is preserved. For phone-only programs, server-side subscription invite validation accepts phone proof plus the stored exact-domain institutional reference; existing price, invite, UID and entitlement checks remain. No test contacted Stripe.
+
+Native invite and embedded baseline handoffs retain the server-owned phone-session proof in the exchanged token. A public body cannot supply that proof. Native invite handoff records preserve email-verification and phone-reference acceptance separately. Web restored sessions are checked before app state is published; the bounded Settings connection flow remains available for linking an existing account.
+
+Final native verification on the isolated release branch: PulseCheck iOS compiled, two phone policy tests and the actual integrated-login UI test passed; AthleticMind simulator build passed. Both Android brands passed 226 unit tests and debug builds; four PulseCheck login UI tests passed. These checks sent no SMS and did not publish a store release. An existing-account email connection screen exposes its one-time email link without social or password choices.

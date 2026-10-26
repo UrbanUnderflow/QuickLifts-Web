@@ -43,3 +43,14 @@ test('server membership validation cannot be bypassed with a different public lo
   await assert.rejects(assertMemberSignIn(db, { ...phone, firebase: { sign_in_provider: 'google.com' } }), e => e.status === 403);
   assert.equal((await assertMemberSignIn(db, phone)).completedBaseline, true);
 });
+
+test('policy endpoint distinguishes malformed input and invalid identity without granting a session', async () => {
+  const { withModuleMocks } = require('../firebase-admin/_runtimeHarness.cjs');
+  const path = require('node:path');
+  const file = path.resolve('netlify/functions/program-sign-in-policy.js'); delete require.cache[file];
+  const api = withModuleMocks({ './config/firebase': { headers: {}, getFirebaseAdminApp: () => ({ auth: () => ({ verifyIdToken: async () => { throw Error('synthetic invalid token'); } }), firestore: () => database({ program: organization }) }) } }, () => require(file));
+  const malformed = await api.handler({ httpMethod: 'POST', headers: {}, body: '{' }); assert.equal(malformed.statusCode, 400);
+  const invalid = await api.handler({ httpMethod: 'POST', headers: { authorization: 'Bearer invalid-test-token' }, body: '{}' }); assert.equal(invalid.statusCode, 401); assert.match(invalid.headers['Cache-Control'], /no-store/);
+  const publicPolicy = await api.handler({ httpMethod: 'POST', headers: {}, body: JSON.stringify({ email: 'a@school.edu', uid: 'forged-user', pulse_phone_auth: true }) });
+  assert.equal(publicPolicy.statusCode, 200); assert.deepEqual(JSON.parse(publicPolicy.body), organization.signInPolicy);
+});

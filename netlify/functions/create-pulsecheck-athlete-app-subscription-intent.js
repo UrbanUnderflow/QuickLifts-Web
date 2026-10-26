@@ -134,6 +134,7 @@ const handler = async (event) => {
       userId: authenticated.userId,
       authenticatedEmail: normalizeString(authenticated.decoded?.email).toLowerCase(),
       authenticatedEmailVerified: authenticated.decoded?.email_verified === true,
+      authenticatedIdentity: authenticated.decoded,
       inviteToken,
       requestedTeamId: body.teamId,
       stripeMode,

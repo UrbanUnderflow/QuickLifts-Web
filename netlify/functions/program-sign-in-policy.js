@@ -13,11 +13,13 @@ exports.handler = async event => {
     if (++bucket.count > 180 || (attempts.size >= 10000 && !attempts.has(ip))) return reply(429, { error: 'Please wait a moment and try again.' });
     attempts.set(ip, bucket);
     if ((event.body || '').length > 2048) return reply(400, { error: 'Invalid request.' });
-    const body = JSON.parse(event.body || '{}');
+    let body;
+    try { body = JSON.parse(event.body || '{}'); } catch { return reply(400, { error: 'Invalid request.' }); }
     const app = getFirebaseAdminApp(event);
     const bearer = String(event.headers?.authorization || event.headers?.Authorization || '').match(/^Bearer (.+)$/i)?.[1];
     if (bearer) {
-      const identity = await app.auth().verifyIdToken(bearer, true);
+      let identity;
+      try { identity = await app.auth().verifyIdToken(bearer, true); } catch { return reply(401, { error: 'Sign in again to continue.', code: 'program/sign-in-required' }); }
       await assertMemberSignIn(app.firestore(), identity);
       return reply(200, { allowed: true });
     }
