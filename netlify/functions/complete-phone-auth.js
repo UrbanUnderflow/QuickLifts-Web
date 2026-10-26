@@ -1,5 +1,6 @@
-const { getFirebaseAdminApp, headers } = require('./config/firebase');
+const { getFirebaseAdminApp, headers, isDevMode } = require('./config/firebase');
 const { completePhoneProfile } = require('../../src/lib/server/auth/phone-profile');
+const { createCustomTokenForApp } = require('../../src/lib/server/firebase/custom-token');
 
 exports.handler = async (event) => {
   const reply = (statusCode, body) => ({ statusCode, headers: { ...headers, 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store' }, body: JSON.stringify(body) });
@@ -11,7 +12,11 @@ exports.handler = async (event) => {
     let body;
     try { body = JSON.parse(event.body || '{}'); } catch { return reply(400, { error: 'Invalid request.' }); }
     const app = getFirebaseAdminApp(event);
-    return reply(200, await completePhoneProfile({ auth: app.auth(), db: app.firestore(), bearer, body }));
+    const result = await completePhoneProfile({ auth: app.auth(), db: app.firestore(), bearer, body });
+    // iOS User objects retain their originating Auth instance. Establish a fresh
+    // primary session rather than moving an object tied to temporary keychain state.
+    if (body.platform === 'ios') result.customToken = await createCustomTokenForApp(app, result.uid, isDevMode(event) ? 'dev' : 'prod');
+    return reply(200, result);
   } catch (error) {
     // Never log phone numbers, institutional email addresses, codes, or tokens.
     return reply(error.status || 401, { error: error.status ? error.message : 'Phone ownership could not be verified.', code: error.reason || 'phone-auth/verification-failed' });
