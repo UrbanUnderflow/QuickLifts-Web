@@ -79,9 +79,12 @@ test('iOS token handoff establishes an independent primary session that can reau
   const primary = client('ios-primary'), secondary = client('ios-secondary');
   const verified = (await signInWithCredential(secondary, await credential('+12025550104'))).user;
   await complete(verified, 'ios-athlete@institution.example');
-  const customToken = await auth.createCustomToken(verified.uid);
+  const customToken = await auth.createCustomToken(verified.uid, { pulse_phone_auth: true });
   const result = await signInWithCustomToken(primary, customToken);
   await signOut(secondary);
+  const handedOff = await auth.verifyIdToken(await primary.currentUser.getIdToken(true));
+  assert.equal(handedOff.pulse_phone_auth, true);
+  assert.equal(handedOff.firebase.sign_in_provider, 'custom');
   assert.equal(result.user.uid, verified.uid);
   assert.equal(primary.currentUser.phoneNumber, '+12025550104');
   await reauthenticateWithCredential(primary.currentUser, await credential('+12025550104'));

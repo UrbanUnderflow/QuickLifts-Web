@@ -123,6 +123,7 @@ const PulseCheckLoginPage: NextPage = () => {
   const legacyRef = typeof router.query.ref === 'string' ? router.query.ref.trim() : '';
 
   // ── form state ──
+  const [standardSignIn, setStandardSignIn] = useState(false);
   const [view, setView] = useState<ViewState>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -595,7 +596,7 @@ const PulseCheckLoginPage: NextPage = () => {
                 <div className="mt-10 grid max-w-2xl grid-cols-3 gap-4 border-y border-white/[0.08] py-6">
                   {[
                     { label: 'Team access', value: 'Role-aware' },
-                    { label: 'Sign-in options', value: 'Google, Apple, email' },
+                    { label: 'Sign-in', value: 'Secure team access' },
                     { label: 'Workspace', value: 'PulseCheck' },
                   ].map((item) => (
                     <div key={item.label}>
@@ -667,11 +668,12 @@ const PulseCheckLoginPage: NextPage = () => {
                     <p className="text-sm text-zinc-400 mb-6">Sign in to your PulseCheck account</p>
 
                     {router.query.phoneSetup === '1' && <p className="mb-4 text-sm text-zinc-300">Use an email sign-in link below to open your existing account, then connect your phone in Settings. No password needed.</p>}
-                    {router.query.phoneSetup !== '1' && <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={async (user) => {
+                    {router.query.phoneSetup !== '1' && <PhoneSignIn onPolicyChange={setStandardSignIn} disabled={isLoading} onBusyChange={setIsLoading} onSuccess={async (user) => {
                       await ensureFirestoreUser(user);
                       enterApp();
                     }} />}
-                    {/* Social buttons */}
+                    {(standardSignIn || router.query.phoneSetup === '1') && <>
+                    {/* Legacy program methods */}
                     <div className="grid grid-cols-1 gap-3 mb-5 sm:grid-cols-2">
                       <button
                         type="button"
@@ -840,6 +842,7 @@ const PulseCheckLoginPage: NextPage = () => {
                         )}
                       </button>
                     </form>
+                    </>}
                   </motion.div>
                 )}
 
@@ -854,11 +857,12 @@ const PulseCheckLoginPage: NextPage = () => {
                     <h2 className="text-xl font-bold text-white mb-1">Create your account</h2>
                     <p className="text-sm text-zinc-400 mb-6">Get started with PulseCheck</p>
 
-                    <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={async (user) => {
+                    <PhoneSignIn onPolicyChange={setStandardSignIn} disabled={isLoading} onBusyChange={setIsLoading} onSuccess={async (user) => {
                       await ensureFirestoreUser(user);
                       enterApp();
                     }} />
-                    {/* Social buttons */}
+                    {(standardSignIn || router.query.phoneSetup === '1') && <>
+                    {/* Legacy program methods */}
                     <div className="grid grid-cols-1 gap-3 mb-5 sm:grid-cols-2">
                       <button
                         type="button"
@@ -1036,6 +1040,7 @@ const PulseCheckLoginPage: NextPage = () => {
                         Sign in
                       </button>
                     </p>
+                    </>}
                   </motion.div>
                 )}
 

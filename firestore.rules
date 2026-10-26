@@ -272,9 +272,17 @@ service cloud.firestore {
     function pcOrganizationPath(organizationId) {
       return /databases/$(database)/documents/pulsecheck-organizations/$(organizationId);
     }
+    function pcProgramSignInAllowed(organizationId) {
+      let organization = get(pcOrganizationPath(organizationId)).data;
+      let provider = request.auth.token.get('firebase', {}).get('sign_in_provider', '');
+      return isAdminUser() || organization.get('signInPolicy', {}).get('mode', 'standard') != 'institution-phone'
+        || (isSignedIn() && (provider == 'phone'
+          || (provider == 'custom' && request.auth.token.get('pulse_phone_auth', false) == true)));
+    }
     function pcOrganizationNotDecommissioned(organizationId) {
       return organizationId is string
         && exists(pcOrganizationPath(organizationId))
+        && pcProgramSignInAllowed(organizationId)
         && get(pcOrganizationPath(organizationId)).data.get('lifecycleState', null) == null
         && get(pcOrganizationPath(organizationId)).data.get('deletedAt', null) == null;
     }
@@ -305,6 +313,7 @@ service cloud.firestore {
     function pcTeamOrganizationIsActive(teamId) {
       let team = get(pcTeamPath(teamId)).data;
       return pcTeamIsActive(teamId)
+        && pcProgramSignInAllowed(team.organizationId)
         && team.organizationId is string
         && team.organizationId.size() > 0
         && exists(pcOrganizationPath(team.organizationId))

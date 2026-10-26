@@ -195,6 +195,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [showError, setShowError] = useState(false);
   const [isUsernameAvailable, setIsUsernameAvailable] = useState(false);
+  const [standardSignIn, setStandardSignIn] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const authAttemptInProgress = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -2889,7 +2890,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
   
   const renderInitialStep = () => (
     <>
-      <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />
       <div className="text-center mb-8 pt-4 sm:pt-0">
         <img src="/pulse-logo-white.svg" alt="Pulse Logo" className="h-8 mx-auto mb-8" />
         <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
@@ -2900,6 +2900,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
         </p>
       </div>
 
+      <PhoneSignIn onPolicyChange={setStandardSignIn} disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />
+      {standardSignIn && <>
       <div className="flex flex-col gap-4 mb-8">
         <button
           type="button"
@@ -3069,6 +3071,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           </div>
         )}
       </div>
+      </>}
     </>
   );
 
@@ -3374,7 +3377,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const renderAthleticMindInitialStep = () => (
     <div className="amh-login-panel">
-      <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />
       <div>
         <p className="amh-kicker">Council workspace access</p>
         <h2>{isSignUp ? 'Create your hub account' : 'Welcome to Athletic Mind Hub'}</h2>
@@ -3383,6 +3385,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
         </p>
       </div>
 
+      <PhoneSignIn onPolicyChange={setStandardSignIn} disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />
+      {standardSignIn && <>
       <div className="amh-provider-row">
         <button
           type="button"
@@ -3483,6 +3487,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         {isSignUp ? "Already have an account? " : "Need council access? "}
         <button type="button" onClick={toggleMode}>{isSignUp ? "Sign in" : "Create account"}</button>
       </p>
+      </>}
     </div>
   );
 
@@ -4298,7 +4303,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           )}
           {renderCurrentStep()}
 
-          {signUpStep !== "quiz-prompt" && signUpStep !== "quiz" && signUpStep !== "subscription" && !isForgotPassword && (
+          {(standardSignIn || signUpStep !== "initial") && signUpStep !== "quiz-prompt" && signUpStep !== "quiz" && signUpStep !== "subscription" && !isForgotPassword && (
             <div className="flex flex-col gap-4 mt-8">
               <button
                 type="submit"
@@ -4348,7 +4353,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
         {renderQuizNavigation()}
 
-        {signUpStep === "initial" && !isForgotPassword && (
+        {standardSignIn && signUpStep === "initial" && !isForgotPassword && (
           <>
             <div className="mt-6 text-center">
               <p className="text-zinc-500 text-sm font-['HK Grotesk']">

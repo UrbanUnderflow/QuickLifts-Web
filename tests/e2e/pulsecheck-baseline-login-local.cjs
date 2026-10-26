@@ -4,7 +4,7 @@ const esbuild = require('esbuild'), { chromium } = require('playwright');
 const root = path.resolve(__dirname, '../..');
 const mocks = {
   '../../api/firebase/auth/phone': `export const completeExistingEmailLink=async()=>({uid:'same-athlete'});`,
-  '../../components/auth/PhoneSignIn': `export default function PhoneSignIn(){return null}`,
+  '../../components/auth/PhoneSignIn': `import React from 'react';export default function PhoneSignIn({onPolicyChange}){React.useEffect(()=>onPolicyChange?.(true),[]);return null}`,
   'next/router': `export const useRouter=()=>window.__router;`,
   'firebase/auth': `export const getRedirectResult=async()=>null;export const signInWithPopup=async()=>({user:{uid:'same-athlete'}});export class OAuthProvider{addScope(){}}`,
   '../../api/firebase/config': `export const auth={};export const initializeFirebase=()=>{};export const isUsingDevFirebase=()=>false;`,
@@ -17,7 +17,7 @@ const mocks = {
   '../../api/firebase/auth/accountLinking': `export const assertAccountIsCanonical=async user=>user;export const linkRememberedProviderCredential=async()=>{};export const rejectAccidentalNewSocialLogin=async()=>false;export const rememberProviderCredentialFromError=()=>false;`,
 };
 (async () => {
-  const result = await esbuild.build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Login from './src/pages/PulseCheck/login';createRoot(document.getElementById('root')).render(<Login/>);`, resolveDir: root, loader: 'tsx' }, bundle: true, write: false, define: { 'process.env.NODE_ENV': '"production"' }, plugins: [{name:'offline',setup(build){build.onResolve({filter:/.*/},args=>Object.hasOwn(mocks,args.path)?{path:args.path,namespace:'mock'}:undefined);build.onLoad({filter:/.*/,namespace:'mock'},args=>({contents:mocks[args.path]}));}}] });
+  const result = await esbuild.build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Login from './src/pages/PulseCheck/login';createRoot(document.getElementById('root')).render(<Login/>);`, resolveDir: root, loader: 'tsx' }, bundle: true, write: false, define: { 'process.env.NODE_ENV': '"production"' }, plugins: [{name:'offline',setup(build){build.onResolve({filter:/.*/},args=>Object.hasOwn(mocks,args.path)?{path:args.path,namespace:'mock'}:undefined);build.onLoad({filter:/.*/,namespace:'mock'},args=>({contents:mocks[args.path],resolveDir:root}));}}] });
   const server = http.createServer((req,res)=>{res.setHeader('Content-Type',req.url==='/app.js'?'application/javascript':'text/html');res.end(req.url==='/app.js'?result.outputFiles[0].contents:'<html><div id="root"></div><script src="/app.js"></script></html>');});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const browser = await chromium.launch({headless:true}), page = await browser.newPage();

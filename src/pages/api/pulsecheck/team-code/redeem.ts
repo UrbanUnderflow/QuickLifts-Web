@@ -1,3 +1,4 @@
+import { assertOrganizationSignIn, phoneSession } from '../../../../lib/pulsecheck/signInPolicy';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
 import { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
@@ -46,7 +47,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const adminApp = getFirebaseAdminApp(forceDevFirebase);
     const decoded = await admin.auth(adminApp).verifyIdToken(idToken, true);
     const userId = decoded.uid;
-    const userEmail = normalizeEmail(decoded.email);
+    const phoneProfile = phoneSession(decoded) ? await admin.firestore(adminApp).collection('users').doc(userId).get() : null;
+    const userEmail = normalizeEmail(phoneProfile?.data()?.institutionalEmail || phoneProfile?.data()?.email || decoded.email);
     if (!userEmail) {
       return res.status(400).json({ error: 'Authenticated user must have an email address.' });
     }
@@ -72,6 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const organizationSnap = await firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId).get();
     const organizationData = organizationSnap.exists ? organizationSnap.data() || {} : {};
+    assertOrganizationSignIn(organizationData, decoded, userEmail);
     const organizationIsActive =
       organizationSnap.exists
       && normalizeString(organizationData.status) === 'active'
@@ -199,6 +202,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       alreadyMember: result.alreadyMember,
     });
   } catch (error) {
+    if ((error as { status?: number })?.status === 403) return res.status(403).json({ error: (error as Error).message, code: (error as { code?: string }).code });
     console.error('[pulsecheck-team-code/redeem] Failed to redeem team code:', error);
     return res.status(500).json({ error: 'Failed to join the team with that code.' });
   }

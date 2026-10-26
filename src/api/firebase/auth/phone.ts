@@ -9,14 +9,8 @@ import { auth, getFirebaseModeRequestHeaders } from '../config';
 import { CURRENT_PRIVACY_VERSION, CURRENT_TERMS_VERSION } from '../../../utils/legalAcceptance';
 import { clearStalePulseAuthKeys } from '../../../utils/authSessionCleanup';
 
-/** Require a country code; formatting characters are allowed, extensions are not. */
-export const normalizeAuthPhone = (value: string): string => {
-  const phone = value.trim().replace(/[\s().-]/g, '');
-  if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
-    throw new Error('Enter your phone number with its country code, for example +1 202 555 0123.');
-  }
-  return phone;
-};
+import { normalizeAuthPhone } from '../../../lib/pulsecheck/authPhone';
+export { normalizeAuthPhone };
 
 export const phoneAuthError = (error: unknown): string => {
   const code = (error as { code?: string })?.code;
@@ -25,14 +19,14 @@ export const phoneAuthError = (error: unknown): string => {
     case 'auth/invalid-verification-id':
     case 'auth/code-expired':
     case 'auth/session-expired': return 'That code expired. Request a new text message.';
-    case 'auth/invalid-phone-number': return 'Check the phone number and include its country code.';
+    case 'auth/invalid-phone-number': return 'Enter a valid 10-digit US or Canadian phone number.';
     case 'auth/credential-already-in-use': return 'This phone is already connected to another account. Sign in to that account or contact support.';
     case 'auth/provider-already-linked': return 'A phone is already connected. Remove it before connecting a different number.';
     case 'auth/requires-recent-login': return 'Sign out and sign in again before changing your phone.';
     case 'auth/too-many-requests':
-    case 'auth/quota-exceeded': return 'Text messages are temporarily limited. Wait before trying again, or use another sign-in method.';
+    case 'auth/quota-exceeded': return 'Text messages are temporarily limited. Wait before trying again.';
     case 'auth/captcha-check-failed': return 'The security check expired. Request a new code and complete the check again.';
-    case 'auth/operation-not-allowed': return 'Phone sign-in is unavailable right now. Use email, Apple, or Google.';
+    case 'auth/operation-not-allowed': return 'Phone sign-in is unavailable right now. Please try again later.';
     case 'auth/network-request-failed': return 'Check your connection and try again.';
     default: return error instanceof Error ? error.message : 'Phone verification failed. Please try again.';
   }

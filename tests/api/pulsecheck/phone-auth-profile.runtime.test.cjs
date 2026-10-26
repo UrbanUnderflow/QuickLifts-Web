@@ -7,7 +7,7 @@ function setup({ existing = null, owner = null, matches = [], identity = {}, use
   let creates = 0;
   const ref = { get: async () => ({ exists: !!saved, data: () => saved }) };
   const db = {
-    collection: () => ({ doc: () => ref, where: () => ({ limit: () => ({ get: async () => ({ docs: matches.map(id => ({ id })) }) }) }) }),
+    collection: () => ({ doc: () => ref, where: () => ({ get: async () => ({ docs: [] }), limit: () => ({ get: async () => ({ docs: matches.map(id => ({ id })) }) }) }) }),
     runTransaction: async fn => fn({ get: ref.get, create: (_, data) => { creates++; saved = data; } }),
   };
   const auth = {

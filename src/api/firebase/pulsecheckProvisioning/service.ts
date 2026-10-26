@@ -1,3 +1,4 @@
+import { normalizeSignInPolicy } from '../../../lib/pulsecheck/signInPolicy';
 import { athleteActivationCode, athleteActivationQrUrl } from '../../../utils/athleteActivationCode';
 import { saveAthleteConsentAtomically } from './consentSave';
 import { replaceInviteAtomically } from '../../../lib/pulsecheck/replaceInvite';
@@ -923,6 +924,7 @@ const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrgani
   configuredProductBrand: data.productBrand === 'athleticmind' || data.productBrand === 'pulsecheck' ? data.productBrand : undefined,
   appBranding: data.appBranding || {},
   appExperience: resolveAppExperience(data.appExperience),
+  signInPolicy: normalizeSignInPolicy(data.signInPolicy),
   displayName: data.displayName || '',
   legalName: data.legalName || '',
   organizationType: data.organizationType || '',
@@ -3223,6 +3225,7 @@ export const pulseCheckProvisioningService = {
       productBrand: validateProductBrand(input.productBrand),
       appBranding: normalizeAppBranding(input.appBranding),
       appExperience: normalizeAppExperience(input.appExperience),
+      signInPolicy: normalizeSignInPolicy(input.signInPolicy),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
       organizationType: normalizeString(input.organizationType),
@@ -3259,6 +3262,7 @@ export const pulseCheckProvisioningService = {
       throw new Error('Organization id is required.');
     }
     await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizedId), {
+      ...(input.signInPolicy !== undefined ? { signInPolicy: normalizeSignInPolicy(input.signInPolicy) } : {}),
       ...(input.productBrand !== undefined ? { productBrand: validateProductBrand(input.productBrand) } : {}),
       ...(input.appExperience !== undefined ? Object.fromEntries(
         Object.entries(normalizeAppExperience(input.appExperience))
@@ -3913,7 +3917,7 @@ export const pulseCheckProvisioningService = {
     });
   },
 
-  async updateOrganizationProductConfiguration(organizationId: string, input: Pick<CreatePulseCheckOrganizationInput, 'productBrand' | 'appBranding' | 'appExperience'>): Promise<void> {
+  async updateOrganizationProductConfiguration(organizationId: string, input: Pick<CreatePulseCheckOrganizationInput, 'productBrand' | 'appBranding' | 'appExperience' | 'signInPolicy'>): Promise<void> {
     if (!normalizeString(organizationId)) throw new Error('Organization id is required.');
     const user = auth.currentUser;
     if (!user) throw new Error('Sign in to update organization configuration.');
