@@ -45,3 +45,11 @@ To enable actual delivery, obtain the AuntEdna-issued live sending key and provi
 Local tests cover atomic backup/completion, private-field isolation, real Firestore client denial, current consent and membership, closure, pinned route/rejoin changes, immutable retry identity, receipt mismatches, expired/concurrent attempts, cleanup and paging. API tests cover non-admin/unverified/revoked/wrong-UID actors and browser-forged verification data. Browser tests cover incomplete sections, private-save versus provider-confirmation wording, metadata-only dashboard rendering, retries, deletion confirmation/conflicts, paging and mobile layout.
 
 Provider acceptance and subsequent clinical handling are not established by these local tests. Hosted publication receipts and live read-only checks are recorded in the task validation report. No live health answers or consent decisions were created or removed by the agent.
+
+## Published verification receipt
+
+Netlify production deploy `6ae0988919ef8a4792992f3a` was published on October 27 at 12:43:21 UTC from runtime commit `e8d6e128780ae58fc610346aefd9f09f7e6eceea`. Its ready/locked identity was read back. Later documentation commits do not change this runtime.
+
+The live admin page returned HTTP 200. Anonymous and invalid-token admin requests returned 401. A read authenticated as the existing verified operator returned 200 with an empty, metadata-only backup list; no test account or backup was created. The live public coach-registration API remained closed with 503, and anonymous athlete-baseline access remained protected with 401. The served baseline bundle contains the private-save wording and incomplete-section guard, with the old setup-status card absent.
+
+Checks for this change: 12 Firestore emulator scenarios, 50 unit/API cases, 25 deployment-bridge regressions, 14 real-component baseline browser scenarios and the backup-dashboard browser workflow passed. TypeScript, scoped ESLint and diff checks passed. Browser tests used synthetic data and blocked external traffic. Both branded native apps had already passed build/unit/login checks and successful physical iPhone APNs/token persistence before this shared web rollout.
