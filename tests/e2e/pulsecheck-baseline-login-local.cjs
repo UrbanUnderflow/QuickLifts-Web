@@ -36,7 +36,7 @@ const mocks = {
     for(const scenario of scenarios){
       await page.goto(`http://127.0.0.1:${server.address().port}/?${new URLSearchParams({flow:scenario.flow,target:scenario.target})}`);
       if(scenario.flow==='password'){
-        await page.getByRole('button',{name:'Password',exact:true}).click();
+        await page.getByRole('tab',{name:'Email & password',exact:true}).click();
         await page.getByPlaceholder('you@program.edu').fill('athlete@program.example');
         await page.locator('input[autocomplete="current-password"]').fill('Synthetic-only-123');
         await page.getByRole('button',{name:'Sign in with password',exact:true}).click();
