@@ -1142,8 +1142,8 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   useEffect(() => {
     if (!redeemedState || redirectingAfterRedeem) return;
 
-    setRedirectingAfterRedeem(true);
     const timeoutId = window.setTimeout(() => {
+      setRedirectingAfterRedeem(true);
       router.replace(completionHref).catch((error) => {
         console.error('[pulsecheck-team-invite] Failed to redirect after redeem:', error);
         setRedirectingAfterRedeem(false);

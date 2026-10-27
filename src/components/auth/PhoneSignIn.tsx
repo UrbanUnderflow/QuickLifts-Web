@@ -42,7 +42,7 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
         if (!response.ok) throw new Error('Policy unavailable');
         const policy = await response.json();
         if (!controller.signal.aborted) {
-          setRegistrationEnabled(policy.mode === 'institution-phone');
+          setRegistrationEnabled(policy.mode === 'institution-phone' || policy.mode === 'standard');
           policyChange.current?.(policy.mode === 'standard');
         }
       }).catch(() => { /* Standard registration remains available when policy cannot be loaded. */ });
@@ -66,7 +66,12 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
     setBusy(true); onBusyChange?.(true); setError(''); setExistingAccount(false);
     try { await operation(); }
     catch (err) { if (active.current) { setError(phoneAuthError(err)); setExistingAccount((err as { code?: string })?.code === 'phone-auth/existing-account'); } }
-    finally { if (active.current) { setBusy(false); onBusyChange?.(false); } }
+    finally {
+      if (active.current) setBusy(false);
+      // A successful sign-in can unmount this form while its parent stays open.
+      // Release the parent's pending state so team enrollment can continue.
+      onBusyChange?.(false);
+    }
   };
   const send = () => void run(async () => {
     if (mode === 'register' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(institutionalEmail.trim())) throw new Error('Enter your institutional email address.');
