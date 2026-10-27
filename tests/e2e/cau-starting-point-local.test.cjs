@@ -19,9 +19,13 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   }
   if(url.pathname.includes('/api/')){
    const decision=scenario==='pending'&&!consentSaved?'pending':scenario==='declined'?'declined':scenario==='health-off'?'disabled':'accepted';
-   let data={questionnaireVersion:version,available:true,completed:completed||scenario==='completed',required:true,healthBaselineEnabled:scenario!=='health-off',healthAuthorizationRequired:decision==='pending',healthAuthorizationDecision:decision,healthSharingAllowed:decision==='accepted',healthCollectionAvailable:scenario!=='unready',healthDocuments:[healthTerms],healthConsentDecisions:{},sportName:'Volleyball'};
+   let data={questionnaireVersion:version,available:true,completed:completed||scenario==='completed',required:true,healthBaselineEnabled:scenario!=='health-off',healthAuthorizationRequired:decision==='pending',healthAuthorizationDecision:decision,healthSharingAllowed:decision==='accepted',healthCollectionAvailable:!['unready','team-review-incomplete'].includes(scenario),healthDocuments:[healthTerms],healthConsentDecisions:{},sportName:'Volleyball'};
    if(scenario==='resumed'||scenario==='health-off'||scenario==='declined'||scenario==='unready')Object.assign(data,{draft:goalDraft,skills});
-   if(scenario==='team-review'||scenario==='team-review-health'||scenario==='team-no-details')Object.assign(data,{reviewId:'join-second',teamName:'Second Team',healthBaselineEnabled:scenario==='team-review-health',healthAuthorizationDecision:scenario==='team-review-health'?'accepted':'disabled',healthSharingAllowed:scenario==='team-review-health',skills:{...skills,completed:true},prefill:{answers:{'cau-starting-point-46':['Focus']},name:'Previous Athlete',email:'local@example.test',prefilledQuestionCount:3,unavailableHealthAnswers:true,hasPreviousBaseline:true,skillsDraft:skills.draft}});
+   if(['team-review','team-review-health','team-review-incomplete','team-no-details'].includes(scenario)){
+    const needsHealth=['team-review-health','team-review-incomplete'].includes(scenario);
+    Object.assign(data,{reviewId:'join-second',teamName:'Second Team',healthBaselineEnabled:needsHealth,healthAuthorizationDecision:needsHealth?'accepted':'disabled',healthSharingAllowed:needsHealth,skills:{...skills,completed:true},prefill:{answers:{'cau-starting-point-46':['Focus']},name:'Previous Athlete',email:'local@example.test',prefilledQuestionCount:3,unavailableHealthAnswers:true,hasPreviousBaseline:true,skillsDraft:skills.draft}});
+    if(scenario==='team-review-incomplete'){data.skills.completed=false;data.prefill.answers={};data.prefill.prefilledQuestionCount=0;}
+   }
    if(scenario==='team-no-details'){data.prefill.name='';data.prefill.email='';}
    if(scenario==='team-first')Object.assign(data,{reviewId:'join-first',teamName:'First Team',healthBaselineEnabled:false,healthAuthorizationDecision:'disabled',healthSharingAllowed:false,prefill:{answers:{},name:'',prefilledQuestionCount:0,unavailableHealthAnswers:false,hasPreviousBaseline:false}});
    if(scenario==='completed')data.questionnaireVersion='athlete-starting-point-v1';
@@ -83,7 +87,8 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
    await page.getByRole('heading',{name:'Your baseline',exact:true}).waitFor();
    if(next==='health-off')assert.equal(await page.getByRole('button',{name:/Well-being and support/}).count(),0);
    if(next==='unready'){
-    await page.getByText('Your program’s health connection is not ready.',{exact:false}).waitFor();
+    assert.equal(await page.getByText('Your program’s health connection is not ready.',{exact:false}).count(),0,'setup status is absent from athlete review');
+    await page.screenshot({path:'/tmp/baseline-without-health-setup-card.png',fullPage:true});
     await page.getByRole('button',{name:/Well-being and support/}).click();await page.locator('.cau-question-title').waitFor();
     await page.getByRole('button',{name:'Back to sections',exact:true}).click();
    }
@@ -111,7 +116,27 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   skills=originalSkills;await open('team-review-health');
   await page.getByText('Previous health answers are not available here.',{exact:false}).waitFor();
   const postsBefore=posts.length;await click('Accept answers for this team');
-  await page.locator('.cau-question-title').waitFor();assert.equal(posts.length,postsBefore,'missing health answers are not silently accepted');
+  await page.getByRole('alert').filter({hasText:'Complete Well-being and support before you submit your baseline.'}).waitFor();
+  assert.equal(posts.length,postsBefore,'missing health answers are not silently accepted');
+  assert.equal(await page.locator('.cau-question-title').count(),0,'review stays visible with a clear completion message');
+  await page.waitForFunction(()=>{const alert=document.querySelector('[role="alert"]');return alert&&alert.style.height==='auto'&&Number(getComputedStyle(alert).opacity)>0.99;});
+  assert.equal(await page.getByRole('alert').evaluate(el=>el.scrollHeight<=el.clientHeight+1),true,'completion message is fully visible');
+  await page.screenshot({path:'/tmp/team-baseline-incomplete-health.png',fullPage:true});
+  await page.getByRole('button',{name:/Well-being and support/}).click();
+  for(const q of health){
+   await page.locator('.cau-question-title').filter({hasText:q.question}).waitFor({timeout:10000});
+   await page.locator('.cau-choice-btn').first().click();if(q.type==='multi_select')await click('Continue');
+  }
+  await click('Accept answers for this team');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
+  assert.equal(posts.at(-1).shareHealth,true);assert.equal(Object.keys(posts.at(-1).answers).length,20);
+  skills=originalSkills;await open('team-review-incomplete');
+  await page.getByRole('heading',{name:'Review your baseline',exact:true}).waitFor();
+  const incompletePosts=posts.length;await click('Accept answers for this team');
+  await page.getByRole('alert').filter({hasText:'Complete Performance baseline and Well-being and support before you submit your baseline.'}).waitFor();
+  await page.waitForFunction(()=>document.querySelector('[role="alert"]')?.style.height==='auto');await layout();
+  assert.equal(await page.getByRole('alert').evaluate(el=>el.scrollHeight<=el.clientHeight+1),true,'both-section completion message fits at mobile widths');
+  assert.equal(posts.length,incompletePosts,'incomplete sections block all submission and draft requests before provider checks');
+  assert.equal(await page.getByText('Your program’s health connection is not ready.',{exact:false}).count(),0);
   skills=originalSkills;await open('team-review');await more('Edit mental skill answers');await page.getByRole('heading',{name:'How much have you used each skill?'}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Focus cues experience: I use this on purpose',exact:true}).count(),1);
   assert.equal(await page.getByRole('button',{name:'Picturing yourself performing experience: not answered',exact:true}).count(),1,'unknown experience remains blank');
@@ -140,6 +165,6 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   await page.addInitScript(()=>{window.__baselineNativeEvents=[];window.webkit={messageHandlers:{baselineSession:{postMessage(message){window.__baselineNativeEvents.push(message.action);if(message.action==='signIn')setTimeout(()=>window.dispatchEvent(new CustomEvent('pulse-baseline-session',{detail:{customToken:'synthetic',userID:'local-test'}})),0);}}}};});
   await page.reload();await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();await page.waitForFunction(()=>window.__baselineNativeEvents.includes('completed'));
   assert.deepEqual(await page.evaluate(()=>window.__baselineNativeEvents),['signIn','completed']);assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({success:true,questionnaireItems:20,familiarityItems:8,total:28,scenarios:12,version}));
+  console.log(JSON.stringify({success:true,questionnaireItems:20,familiarityItems:8,total:28,scenarios:13,version}));
  }catch(error){console.error(await page.locator('body').innerText());throw error;}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

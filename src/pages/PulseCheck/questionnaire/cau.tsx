@@ -459,11 +459,17 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   }
   async function submit() {
     if (saving || saved || !user) return;
+    const missingSections = [
+      ...(!completed.performance ? ['Performance baseline'] : []),
+      ...(status?.healthBaselineEnabled !== false && shareHealth && !completed.health ? ['Well-being and support'] : []),
+    ];
+    if (missingSections.length) {
+      setError(`Complete ${missingSections.join(' and ')} before you submit your baseline.`);
+      return;
+    }
     if (!collectionEnabled) { setError('Saving is temporarily unavailable. Please try again shortly.'); return; }
     if (status?.healthAuthorizationRequired) {setReviewHealthChoice(true);return;}
     if (shareHealth && status?.healthCollectionAvailable === false) {setError('Your program’s health connection is not ready. Your answers remain on this page. Try again later or choose Complete performance only.');return;}
-    if (!completed.performance) { openTrack('performance'); return; }
-    if (!completed.health) { openTrack('health'); return; }
     setSaving(true); setSubmittedOnce(true); setError('');
     try {
       const response = await fetch(endpoint, { method: 'POST', signal: AbortSignal.timeout(45000), headers: { ...testHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' }, body: JSON.stringify({ questionnaireVersion: QUESTIONNAIRE_VERSION, reviewId:status?.reviewId, acceptPrefilled:Boolean(status?.reviewId), name, email, answers, shareHealth, completedSections: completed }) });
@@ -629,7 +635,6 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           <p className="cau-muted-sm">This questionnaire is not monitored as an emergency service. For immediate help, contact your local urgent support service, call or text 988, or call 911 in an emergency.</p>
         </Disclosure>
 
-        {shareHealth && status.healthCollectionAvailable === false && <p role="status" className="cau-note">Your program’s health connection is not ready. Your health answers stay on this page until delivery can be confirmed. You can return later or choose Complete performance only.</p>}
         {!shareHealth && <p className="cau-note">Your health responses will remain unshared. {status.reviewId && completed.performance ? 'Review your answers, then accept them for this team.' : 'Complete the performance section, then submit to finish your baseline.'}</p>}
         {sharingLocked && !saved && <p className="cau-note">Your sharing choice is saved for this submission. If saving was interrupted, press Submit answers to retry.</p>}
 
