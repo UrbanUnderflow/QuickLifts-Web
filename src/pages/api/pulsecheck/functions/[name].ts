@@ -5,6 +5,7 @@ const SUPPORTED_FUNCTIONS = new Set([
   'pulsecheck-consent-save',
   'delete-account',
   'complete-phone-auth',
+  'complete-email-link-auth',
   'program-sign-in-policy',
   'record-clinical-escalation',
   'clinical-responder',
@@ -74,7 +75,7 @@ function resolveSiteOrigin(name: string) {
   // Forward credentials only to the configured deployment, never a caller-supplied host.
   // The existing build-only deployment origin also keeps native phone handoffs
   // on an unpublished candidate instead of the previously published release.
-  const phoneDeploymentOrigin = name === 'complete-phone-auth' || name === 'program-sign-in-policy'
+  const phoneDeploymentOrigin = name === 'complete-phone-auth' || name === 'complete-email-link-auth' || name === 'program-sign-in-policy'
     ? process.env.PULSECHECK_BASELINE_DEPLOYMENT_ORIGIN
     : undefined;
   return (phoneDeploymentOrigin || process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');

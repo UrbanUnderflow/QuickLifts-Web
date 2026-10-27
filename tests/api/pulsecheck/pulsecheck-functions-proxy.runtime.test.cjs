@@ -62,7 +62,7 @@ test('same-deployment phone proxies do not forward a candidate session to the pu
       PULSECHECK_LOCAL_FUNCTIONS_ORIGIN: 'https://ignored-local.invalid',
     }, async () => {
       const { default: handler } = loadProxyModule();
-      for (const name of ['complete-phone-auth', 'program-sign-in-policy']) {
+      for (const name of ['complete-phone-auth', 'complete-email-link-auth', 'program-sign-in-policy']) {
         const response = createResponseRecorder();
         await handler({ method: 'POST', query: { name }, body: {}, headers: {
           host: 'caller.invalid', 'x-forwarded-host': 'caller.invalid',
