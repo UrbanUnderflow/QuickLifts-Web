@@ -430,6 +430,51 @@ test('message and conversation summaries cannot be forged or written separately'
   await assertFails(forged.commit());
 });
 
+test('Android installation batch removes every legacy field before registering either brand', async () => {
+  for (const brand of ['pulsecheck', 'athleticmind']) {
+    for (const retainedField of ['pulseCheckFcmTokenOwnerUserId', 'pulseCheckFcmTokenUpdatedAt']) {
+      const installationId = `android-${brand}-${retainedField}`;
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', coachId), {
+          displayName: 'Coach Taylor',
+          pulseCheckFcmToken: 'legacy-public-token',
+          [retainedField]: retainedField.endsWith('UpdatedAt') ? oldTimestamp : coachId,
+          pushTokenSourceApp: 'pulsecheck',
+        });
+      });
+      const db = testEnv.authenticatedContext(coachId).firestore();
+      const registration = (completeCleanup) => {
+        const batch = writeBatch(db);
+        const record = {...installationWrite({owner: coachId, installationId, token: 'android-private-token'}), sourceApp: brand, platform: 'android'};
+        batch.set(doc(db, 'users', coachId, 'pulsecheckPushTokens', installationId), record);
+        batch.set(doc(db, 'pulsecheck-push-installations', installationId), record);
+        batch.set(doc(db, 'users', coachId), {
+          pulseCheckPushTokenModelVersion: 2,
+          pulseCheckFcmToken: deleteField(),
+          pushTokenSourceApp: deleteField(),
+          ...(completeCleanup ? {
+            pulseCheckFcmTokenOwnerUserId: deleteField(),
+            pulseCheckFcmTokenUpdatedAt: deleteField(),
+          } : {}),
+        }, {merge: true});
+        return batch.commit();
+      };
+      // Canonical own-profile updates also permit the old partial cleanup,
+      // which leaves legacy ownership metadata behind.
+      await assertSucceeds(registration(false));
+      assert.equal(retainedField in (await getDoc(doc(db, 'users', coachId))).data(), true);
+      await assertSucceeds(registration(true));
+      const profile = (await getDoc(doc(db, 'users', coachId))).data();
+      assert.equal(profile.displayName, 'Coach Taylor');
+      assert.equal(profile.pulseCheckPushTokenModelVersion, 2);
+      for (const field of ['pulseCheckFcmToken', 'pulseCheckFcmTokenOwnerUserId', 'pulseCheckFcmTokenUpdatedAt', 'pushTokenSourceApp']) {
+        assert.equal(field in profile, false);
+      }
+      assert.equal((await getDoc(doc(db, 'pulsecheck-push-installations', installationId))).data().sourceApp, brand);
+    }
+  }
+});
+
 test('v2 registration is private, migrates legacy root fields, and transfers safely', async () => {
   const installationId = 'installation_1234567890';
   await testEnv.withSecurityRulesDisabled(async (context) => {
