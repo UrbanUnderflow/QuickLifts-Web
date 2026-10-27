@@ -41,6 +41,19 @@ export default function TeamCoachSurveys({ teamId, pilots, review = false }: { t
     <section className={styles.card}><h3>Team check-in frequency</h3><p>Default: every three weeks (21 days). Current team setting: {data?.teamCadence?.cadenceDays ? `every ${cadenceLabel(data.teamCadence.cadenceDays)}` : 'inherit the 21-day default'}.</p><label>Team interval in days<input type="number" min={1} max={365} value={teamDays} onChange={e=>setTeamDays(e.target.value)}/></label><button type="button" disabled={busy||review||!teamDays} onClick={()=>cadenceAction('team-cadence',teamDays)}>Save team frequency</button><button type="button" disabled={busy||review} onClick={()=>cadenceAction('team-cadence','')}>Reset team to default</button><p>A frequency change starts a fresh full interval from today in each coach’s time zone. It never sends immediately or resumes paused delivery.</p></section>
     <p className={styles.notice}>Delivery is paused until release approval. {review ? 'Synthetic review only. Nothing is saved.' : ''}</p>
     <button type="button" className="pcp-ab pcp-ab-g" disabled={busy} onClick={load}>Refresh coach surveys</button>
+    {data?.publicRegistrations && <section className={styles.card} aria-label="Public baseline registrations">
+      <h3>Shared-link registrations</h3>
+      <p>Coaches who selected this team through the open baseline link. Confirm their identity and role before granting team access.</p>
+      {data.publicRegistrations.length ? <div style={{overflowX:'auto'}}><table style={{width:'100%',textAlign:'left',borderCollapse:'collapse'}}>
+        <thead><tr>{['Institutional email','Phone','Baseline','Team access'].map(label=><th key={label} scope="col" style={{padding:'12px 10px',borderBottom:'1px solid #cbd0c3'}}>{label}</th>)}</tr></thead>
+        <tbody>{data.publicRegistrations.map((registration:any)=><tr key={registration.id}>
+          <td style={{padding:'12px 10px',overflowWrap:'anywhere'}}>{registration.email}</td>
+          <td style={{padding:'12px 10px'}}>{registration.phone}</td>
+          <td style={{padding:'12px 10px'}}>{registration.baselineStatus==='completed'?'Completed':'Not completed'}{registration.submittedAtMs&&<><br/><small>{new Date(registration.submittedAtMs).toLocaleString()}</small></>}</td>
+          <td style={{padding:'12px 10px'}}>Awaiting verification and approval</td>
+        </tr>)}</tbody>
+      </table></div> : <p>No shared-link registrations for this team yet.</p>}
+    </section>}
     <form className={styles.card} onSubmit={e=>{e.preventDefault();void action('save');}}><h3>Set up a coach</h3><fieldset disabled={busy} style={{border:0,padding:0}}>
       <label className={styles.other}>Coach<select required className="pcp-finp pcp-select" value={participantId} onChange={e=>{setParticipantId(e.target.value);setConsent(false);setVerified(false);setReference('');setSmsConfirmed(false);}}><option value="">Choose an active coach</option>{data?.candidates.map((p:any)=><option key={p.uid} value={p.uid}>{p.name} · {p.email} {p.phone?`· ${p.phone}`:''}</option>)}</select></label>
       <label className={styles.other}>Pilot<select required className="pcp-finp pcp-select" value={programId} onChange={e=>setProgramId(e.target.value)}><option value="">Choose a pilot</option>{pilots.map(pilot=><option key={pilot.id} value={pilot.id}>{pilot.name}</option>)}</select></label>{!pilots.length && <p>Create a pilot for this team before setting up coach surveys.</p>}

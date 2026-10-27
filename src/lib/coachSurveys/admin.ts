@@ -127,7 +127,21 @@ export async function readCoachSurveys(db: FirebaseFirestore.Firestore, teamId: 
     const baselineLinkState = baseline.exists ? 'completed' : !invitation ? 'not created' : invitation.enabled && invitation.expiresAtMs > Date.now() ? 'ready' : 'expired or replaced';
     rows.push({ id: doc.id, baselineLinkState, config: v, cadence: effectiveSchedule(v, teamCadence), nextScheduledDate: nextScheduledDate(v,teamCadence), status: coachSurveyStatus(v, baseline.exists, history[0] as {status:string}|undefined), responses: responses.docs.map(d => ({ id:d.id,...d.data() })).filter((d:any) => d.programId===v.programId).sort((a:any,b:any)=>b.submittedAtMs-a.submittedAtMs), deliveries: history.slice(0,20) });
   }
-  return { candidates, enrollments: rows, teamCadence, manualEmailEnabled:process.env.COACH_SURVEY_MANUAL_EMAIL_ENABLED==='true', deliveryReleaseApproved: DELIVERY_RELEASE_APPROVED };
+  const pending = await root.collection('public-registrations').where('teamId', '==', teamId).get();
+  // Explicit allowlist: never return registration tokens, request IDs, identity
+  // candidates or fingerprints from this private review response.
+  const publicRegistrations = await Promise.all(pending.docs.map(async doc => {
+    const record = doc.data();
+    const baseline = /^[a-f0-9]{64}$/.test(record.baselineResponseId || '')
+      ? await root.collection('responses').doc(record.baselineResponseId).get() : null;
+    return { id: doc.id, email: String(record.email || ''), phone: String(record.phone || ''), teamId,
+      organizationId: String(record.organizationId || ''), createdAtMs: record.createdAtMs || null,
+      identityStatus: 'unverified', membershipStatus: 'pending-verification-and-approval',
+      baselineStatus: baseline?.exists ? 'completed' : 'not completed',
+      submittedAtMs: baseline?.exists ? baseline.data()?.submittedAtMs || null : null };
+  }));
+  publicRegistrations.sort((a,b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+  return { candidates, enrollments: rows, publicRegistrations, teamCadence, manualEmailEnabled:process.env.COACH_SURVEY_MANUAL_EMAIL_ENABLED==='true', deliveryReleaseApproved: DELIVERY_RELEASE_APPROVED };
 }
 
 // One-time development test results, behind the same admin authorization.
