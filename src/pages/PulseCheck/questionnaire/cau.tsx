@@ -530,7 +530,9 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       const response = await fetch('/api/pulsecheck/activation/resolve', {method:'POST',signal:AbortSignal.timeout(20000),headers:{'Content-Type':'application/json','X-PulseCheck-Firebase-Mode':dev ? 'dev' : 'prod'},body:JSON.stringify({code,forceDevFirebase:dev})});
       const result = await response.json().catch(() => ({}));
       if (!response.ok || typeof result.inviteToken !== 'string' || !result.inviteToken) throw Error(result.error || 'We couldn’t find your invitation. Check the code with your team staff and try again.');
-      window.location.assign(`/PulseCheck/team-invite/${encodeURIComponent(result.inviteToken)}`);
+      const next = new URLSearchParams({web:'1',returnTo:'/PulseCheck/baseline'});
+      if (dev) next.set('devFirebase','1');
+      window.location.assign(`/PulseCheck/team-invite/${encodeURIComponent(result.inviteToken)}?${next.toString()}`);
     } catch (e) {
       setJoinError(e instanceof Error && e.name !== 'TimeoutError' ? e.message : 'Program lookup is unavailable. Please try again.');
       setJoinBusy(false);

@@ -175,7 +175,8 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   assert.equal(await page.getByRole('link',{name:'Already have an account? Sign in'}).getAttribute('href'),'/PulseCheck/login?returnTo=%2FPulseCheck%2Fbaseline');
   await page.screenshot({path:'/tmp/baseline-web-join.png'});
   await page.getByLabel('Organization or team code').fill('WRONG');await click('Continue');await page.getByText('We couldn’t find that code.').waitFor();
-  await page.getByLabel('Organization or team code').fill('TEAM42');await click('Continue');await page.waitForURL(/\/PulseCheck\/team-invite\/invite-42$/);
+  await page.getByLabel('Organization or team code').fill('TEAM42');await click('Continue');await page.waitForURL(/\/PulseCheck\/team-invite\/invite-42\?/);
+  const webInviteUrl=new URL(page.url());assert.equal(webInviteUrl.searchParams.get('web'),'1');assert.equal(webInviteUrl.searchParams.get('returnTo'),'/PulseCheck/baseline');
   await open('completed');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
   await page.addInitScript(()=>{window.__baselineNativeEvents=[];window.webkit={messageHandlers:{baselineSession:{postMessage(message){window.__baselineNativeEvents.push(message.action);if(message.action==='signIn')setTimeout(()=>window.dispatchEvent(new CustomEvent('pulse-baseline-session',{detail:{customToken:'synthetic',userID:'local-test'}})),0);}}}};});
   await page.reload();await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();await page.waitForFunction(()=>window.__baselineNativeEvents.includes('completed'));

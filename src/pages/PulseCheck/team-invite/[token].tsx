@@ -321,6 +321,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
   const isGeneralInvite = invite.redemptionMode === 'general';
   const isAthleteInvite = invite.teamMembershipRole === 'athlete';
+  const isBaselineWebEntry = router.query.returnTo === '/PulseCheck/baseline';
   const nativeHandoffCode = router.isReady
     ? queryParamString(router.query[NATIVE_HANDOFF_QUERY_PARAM])
     : '';
@@ -351,7 +352,8 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   );
   const shouldPreferAppDownload = invite.teamMembershipRole === 'athlete' && Boolean(invite.pilotId || invite.cohortId);
   const shouldShowDownloadFirst =
-    shouldPreferAppDownload && !requiresAthleteCheckout && !showWebOnboarding && !redeemedState;
+    shouldPreferAppDownload && !requiresAthleteCheckout && !showWebOnboarding &&
+    router.query.web !== '1' && !isBaselineWebEntry && !redeemedState;
   const inviteHeadline = `Join ${invite.teamName}`;
 
   useEffect(() => {
@@ -1088,6 +1090,18 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       return nextHrefByRole(invite.teamMembershipRole, invite.organizationId, invite.teamId);
     }
 
+    // A browser baseline entry stays in the browser through required team setup.
+    // The baseline success screen owns the subsequent app-download step.
+    if (showWebOnboarding || router.query.web === '1' || isBaselineWebEntry) {
+      const params = new URLSearchParams({
+        organizationId: invite.organizationId,
+        teamId: invite.teamId,
+        returnTo: '/PulseCheck/baseline',
+      });
+      if (router.query.devFirebase === '1') params.set('devFirebase', '1');
+      return `/PulseCheck/athlete-onboarding?${params.toString()}`;
+    }
+
     const params = new URLSearchParams({
       organizationId: invite.organizationId,
       teamId: invite.teamId,
@@ -1120,6 +1134,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     invite.teamName,
     invite.token,
     router.query.devFirebase,
+    router.query.web,
+    isBaselineWebEntry,
+    showWebOnboarding,
   ]);
 
   useEffect(() => {
@@ -1624,7 +1641,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
               </div>
             ) : null}
 
-            {shouldPreferAppDownload && showWebOnboarding && !redeemedState ? (
+            {shouldPreferAppDownload && showWebOnboarding && !isBaselineWebEntry && !redeemedState ? (
               <button
                 type="button"
                 onClick={() => updateWebOnboardingPreference(false)}
