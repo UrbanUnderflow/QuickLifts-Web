@@ -23,7 +23,7 @@ export type BaselineHealthBackup = {
 type BackupList = { backups: BaselineHealthBackup[]; nextCursor: string | null };
 const endpoint = '/api/admin/pulsecheck/baseline-backups';
 const statusLabels: Record<BaselineHealthBackup['deliveryStatus'], string> = {
-  pending: 'Waiting for delivery', verified: 'AuntEdna received', blocked: 'Program connection needed',
+  pending: 'Waiting for delivery', verified: 'AuntEdna received', blocked: 'Needs review',
   retryable: 'Ready to try again', processing: 'Checking delivery',
 };
 const issueLabels = {
@@ -115,7 +115,7 @@ export default function BaselineHealthBackups() {
       } else if (result.backup.deliveryStatus === 'verified') {
         setNotice(`AuntEdna confirmed receipt for ${athleteLabel(backup)}. You can remove the Pulse backup.`);
       } else if (result.backup.deliveryStatus === 'blocked') {
-        setNotice('Delivery is waiting for the program’s connection. The private Pulse backup is still saved.');
+        setNotice('Delivery needs review. The private Pulse backup is still saved.');
       } else if (result.backup.deliveryStatus === 'retryable') {
         setNotice('Delivery did not finish. The private Pulse backup is still saved. You can try again later.');
       } else {

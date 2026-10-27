@@ -2,6 +2,10 @@
 
 October 25, 2026. Continue from the original handoff; this is not a production release approval.
 
+## October 27 continuation
+
+The user subsequently authorized restricted Pulse health backups, an admin management page and cleanup after a verified AuntEdna receipt. This supersedes the earlier protected-answer custody hold below. See [current backup behavior and live connection findings](health-baseline-backups.md). Named clinical-staff contact/alert delivery remains separate work. Both branded apps have now built, passed their unit suites and launched on the physical iPhone through successful APNs registration and push-token persistence. Historical findings below retain their original dates and do not describe current deployment status.
+
 ## Main consolidation (October 26)
 
 The first unpublished main build exposed a phone-proxy verification gap: the native `complete-phone-auth` and `program-sign-in-policy` API aliases still forwarded to the older published site. Those two aliases now use the existing server-owned, baked deployment origin, so candidate verification reaches the same release's functions. Caller host headers cannot select the destination; other function aliases retain their existing routing. The regression was reproduced before the fix. Production publication remains held.

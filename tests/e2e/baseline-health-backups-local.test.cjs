@@ -60,7 +60,7 @@ const row=(id,name,extra={})=>({id:`health_backup_${Buffer.from(id).toString('he
   await page.getByRole('textbox',{name:'Find an athlete, team or program'}).fill('Verified Athlete');assert.equal(await page.getByRole('article').count(),1);
   await page.getByRole('textbox',{name:'Find an athlete, team or program'}).fill('');
   await article('Waiting Athlete').getByRole('button',{name:'Try delivery again'}).click();
-  await page.getByRole('status').filter({hasText:'Delivery is waiting for the program’s connection.'}).waitFor();
+  await page.getByRole('status').filter({hasText:'Delivery needs review.'}).waitFor();
   await article('Waiting Athlete').getByText('Check the program’s approved AuntEdna connection and sending key before trying again.',{exact:true}).waitFor();
   assert.equal(await article('Waiting Athlete').getByRole('button',{name:/Remove backup/}).count(),0);
   await article('Waiting Athlete').getByRole('button',{name:'Try delivery again'}).click();

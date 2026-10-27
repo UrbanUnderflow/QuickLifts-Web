@@ -1,6 +1,6 @@
 # Optional AuntEdna athlete baseline integration
 
-AuntEdna delivery is deferred for the current rollout. Programs may configure their own designated clinical staff in provisioning. Staff alerts are a separate workflow and do not contain baseline answers. Do not activate a provider or infer a clinic from an institution name, product brand or key prefix.
+The October 27 rollout adds an authorized private Pulse backup and admin tracking/removal workflow. See [private health-baseline backups](../health-baseline-backups.md). Athlete completion can now use a durable private backup while AuntEdna delivery awaits actual approved routing and credentials. Programs may configure their own designated clinical staff in provisioning. Staff alerts are a separate workflow and do not contain baseline answers. Do not activate a provider or infer a clinic from an institution name, product brand or key prefix.
 
 ## Current starting profile
 
@@ -39,7 +39,7 @@ No such connection is created by baseline assignment, an athlete request, or thi
 
 The request schema is in `baseline.schema.json`; the fictional example uses SANDBOX. Values use exact question choices. Skipped questions carry `state: skipped` and no value. `state: local` in an outbound answer is a wire label and does not authorize local persistence.
 
-The performance mirror contains only the training goal and authenticated provider receipt references. Protected answers, free text, scores and answer hashes never enter performance drafts or the provider mirror. Changing protected-answer custody requires an explicit decision independent of staff notification routing.
+The performance mirror contains only the training goal, backup references and authenticated provider receipt references. Protected answers, free text, scores and answer hashes never enter performance drafts or the provider mirror. The user authorized a separate restricted health-backup payload on October 27; it remains inaccessible to clients and separate from staff notifications. Admin removal requires a matching verified AuntEdna receipt and removes the answer payload while retaining receipt/audit metadata.
 
 ## Receipts, retries and completion
 
@@ -47,7 +47,7 @@ Only an authenticated server response can confirm provider delivery. The adapter
 
 Current live-flow submission IDs hash both the trusted assignment submission ID and content version. Sandbox IDs also include content version. Drafts, attempts and mirrors use separate version namespaces, so unfinished older content cannot overwrite the new attempt.
 
-The provider call precedes mirror persistence. A persistence failure retries using the same idempotent submission identity. An interrupted combined submission retains its sharing choice. Canonical skills alone do not release the combined baseline gate.
+For normal athlete submissions, the private backup and completion mirror commit atomically before any provider attempt. Provider receipt confirmation remains a distinct state. Retries reuse the immutable payload and idempotent submission identity, recheck current scope/authorization, and fence concurrent attempts. The isolated provider-only test workflow still uses delivery-before-mirror semantics. Canonical skills alone do not release the combined baseline gate.
 
 Requests reject redirects and time out after 15 seconds. Provider bodies may contain answers and are never surfaced or logged. No clinical delivery is claimed without a matching receipt.
 
