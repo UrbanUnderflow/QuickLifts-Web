@@ -10,6 +10,7 @@ import { completedStartingProfile, saveSkills, validateSkillsDraft } from '../..
 import { retainedPrivateCopy, liveRetentionEnabled } from '../../../../lib/questionnaires/cau-retention';
 import { savePerformanceDraft } from '../../../../lib/questionnaires/cau-performance-draft';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { normalizeNativeProductBrand } from '../../../../utils/pulsecheckAppDistribution';
 import { COLLECTION, VERSION, QUESTIONNAIRE_VERSION, PREVIOUS_QUESTIONNAIRE_VERSION, PREVIOUS_QUESTIONNAIRE_VERSIONS, isCurrentQuestionnaire, baselineRecordId, baselineComplete, splitSubmission } from '../../../../lib/questionnaires/cau';
 import { deliverQuestionnaire } from '../../../../lib/questionnaires/cau-delivery';
 import { PartnerError } from '../../../../lib/questionnaires/auntedna-partner';
@@ -81,6 +82,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const clinicalDeliveryAvailable = Boolean(connection);
     if (req.method === 'GET') return res.json({ required: Boolean(active && !completed), completed, version: VERSION, questionnaireVersion: QUESTIONNAIRE_VERSION,
       reviewId: reviewId || null, teamName: teamReview?.teamName || null, prefill,
+      productBrand: normalizeNativeProductBrand(health.organization?.productBrand),
       teamWorkspaceUrl: active && assignment?.teamId && health.organizationId ? `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(health.organizationId)}&teamId=${encodeURIComponent(assignment.teamId)}` : null,
       available: Boolean(active && enabled), draft: draft || null, skills, healthSharingAllowed, healthBaselineEnabled, healthAuthorizationRequired, healthAuthorizationUrl, healthAuthorizationDecision, healthDocuments: active ? health.healthDocuments : [], healthConsentDecisions: active ? Object.fromEntries(health.healthDocuments.filter(document => health.decisions[document.id]).map(document => [document.id, health.decisions[document.id]])) : {}, submissionSharing: typeof pendingAttempt?.shareHealth === 'boolean' ? pendingAttempt.shareHealth : null, healthCollectionAvailable: clinicalDeliveryAvailable, sportName, questionnaireUrl: 'https://fitwithpulse.ai/PulseCheck/baseline' });
     if (!isCurrentQuestionnaire(req.body)) return res.status(409).json({error:'This questionnaire has changed. Reload the page to continue with the current version.'});

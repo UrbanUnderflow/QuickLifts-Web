@@ -5,7 +5,7 @@ const version=require('../../src/content/questionnaires/athlete-starting-point.j
 const source=require('../../src/content/questionnaires/athlete-starting-point.json');
 const healthTerms=require('../../src/content/consents/pulsecheck-only.json').health;
 (async()=>{
- const result=await esbuild.build({stdin:{contents:`import React from 'react';import{createRoot}from'react-dom/client';import Page from './src/pages/PulseCheck/questionnaire/cau';createRoot(document.getElementById('root')).render(<Page collectionEnabled={true}/>);`,resolveDir:root,loader:'tsx'},bundle:true,write:false,define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'offline',setup(b){b.onResolve({filter:/^(firebase\/auth|next\/head)$|api\/firebase\/config$/},a=>({path:a.path,namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:a.path==='next/head'?'export default function Head(){return null}':a.path==='firebase/auth'?`export function onAuthStateChanged(a,cb){queueMicrotask(()=>cb({uid:'local-test',displayName:location.search.includes('noDetails')?'':'Local Athlete',email:location.search.includes('noDetails')?null:'local@example.test',getIdToken:async()=>'local-only'}));return()=>{}}export async function signInWithEmailAndPassword(){}export async function signInWithCustomToken(){return {user:{uid:"local-test"}}}export async function signOut(){}`:'export const auth={};export const isUsingDevFirebase=()=>true;'}));}}]});
+ const result=await esbuild.build({stdin:{contents:`import React from 'react';import{createRoot}from'react-dom/client';import Page from './src/pages/PulseCheck/questionnaire/cau';createRoot(document.getElementById('root')).render(<Page collectionEnabled={true}/>);`,resolveDir:root,loader:'tsx'},bundle:true,write:false,define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'offline',setup(b){b.onResolve({filter:/^(firebase\/auth|next\/head)$|api\/firebase\/config$/},a=>({path:a.path,namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:a.path==='next/head'?'export default function Head(){return null}':a.path==='firebase/auth'?`export function onAuthStateChanged(a,cb){queueMicrotask(()=>cb(location.search.includes('signedOut')?null:{uid:'local-test',displayName:location.search.includes('noDetails')?'':'Local Athlete',email:location.search.includes('noDetails')?null:'local@example.test',getIdToken:async()=>'local-only'}));return()=>{}}export async function signInWithEmailAndPassword(){}export async function signInWithCustomToken(){return {user:{uid:"local-test"}}}export async function signOut(){}`:'export const auth={};export const isUsingDevFirebase=()=>true;'}));}}]});
  const server=http.createServer((req,res)=>{if(req.url==='/pulsecheck-wordmark-green.png'){res.setHeader('Content-Type','image/png');return res.end(fs.readFileSync(root+'/public/pulsecheck-wordmark-green.png'));}if(req.url==='/app.js'){res.setHeader('Content-Type','application/javascript');return res.end(result.outputFiles[0].contents);}res.setHeader('Content-Type','text/html');res.end('<html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0"><div id="root"></div><script src="/app.js"></script></body></html>');});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:390,height:844}});
@@ -13,6 +13,10 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
  page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/*',async route=>{
   const request=route.request(),url=new URL(request.url());
+  if(url.pathname==='/api/pulsecheck/activation/resolve'){
+   const code=request.postDataJSON().code;
+   return route.fulfill(code==='TEAM42'?{json:{inviteToken:'invite-42',teamName:'Second Team'}}:{status:404,json:{code:'INVITE_NOT_FOUND',error:'We couldn’t find that code.'}});
+  }
   if(url.pathname.includes('/api/')){
    const decision=scenario==='pending'&&!consentSaved?'pending':scenario==='declined'?'declined':scenario==='health-off'?'disabled':'accepted';
    let data={questionnaireVersion:version,available:true,completed:completed||scenario==='completed',required:true,healthBaselineEnabled:scenario!=='health-off',healthAuthorizationRequired:decision==='pending',healthAuthorizationDecision:decision,healthSharingAllowed:decision==='accepted',healthCollectionAvailable:scenario!=='unready',healthDocuments:[healthTerms],healthConsentDecisions:{},sportName:'Volleyball'};
@@ -21,6 +25,7 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
    if(scenario==='team-no-details'){data.prefill.name='';data.prefill.email='';}
    if(scenario==='team-first')Object.assign(data,{reviewId:'join-first',teamName:'First Team',healthBaselineEnabled:false,healthAuthorizationDecision:'disabled',healthSharingAllowed:false,prefill:{answers:{},name:'',prefilledQuestionCount:0,unavailableHealthAnswers:false,hasPreviousBaseline:false}});
    if(scenario==='completed')data.questionnaireVersion='athlete-starting-point-v1';
+   if(scenario==='unassigned')Object.assign(data,{available:false,required:false});
    if(interrupted&&scenario==='combined')data.submissionSharing=true;
    if(request.method()==='POST'){
     const input=request.postDataJSON();posts.push(input);assert.equal(input.questionnaireVersion,version);if(scenario.startsWith('team-'))assert.equal(input.reviewId,scenario==='team-first'?'join-first':'join-second');
@@ -35,7 +40,10 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   if(url.hostname!=='127.0.0.1')return route.abort();return route.continue();
  });
  const click=name=>page.getByRole('button',{name,exact:true}).click();
- const open=async next=>{scenario=next;completed=false;await page.goto(`http://127.0.0.1:${server.address().port}/${next==='team-no-details'?'?noDetails=1':''}`);};
+ const more=async name=>{await click('More options');await click(name);};
+ const skillPick=label=>page.getByRole('button',{name:new RegExp(`^${label} experience:`)});
+ const pickSkill=async(label,answer)=>{await skillPick(label).click();await page.getByRole('radio',{name:answer,exact:true}).click();};
+ const open=async next=>{scenario=next;completed=false;await page.goto(`http://127.0.0.1:${server.address().port}/${next==='team-no-details'?'?noDetails=1':next==='signed-out'?'?signedOut=1':''}`);};
  const layout=async()=>{for(const width of [320,390,430]){
   await page.setViewportSize({width,height:844});
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`Horizontal overflow at ${width}px`);
@@ -48,10 +56,11 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   assert.match(await page.locator('.cau-step-label').innerText(),/1 of 9/);await layout();
   await click('Focus');await click('Confidence');await click('Getting ready');await page.getByRole('alert').filter({hasText:'You’ve picked 2.'}).waitFor();
   await page.screenshot({path:'/tmp/baseline-28-goals.png'});await click('Continue');
-  await page.getByRole('heading',{name:'Which skills have you tried?'}).waitFor();
-  assert.equal(await page.getByRole('combobox').count(),8);assert.equal(await page.locator('.skills-mood-option').count(),0);await layout();
-  await page.getByLabel('Focus cues experience').selectOption('use_it');
-  await page.getByLabel('Breathing and body awareness experience').selectOption('new_to_me');
+  await page.getByRole('heading',{name:'How much have you used each skill?'}).waitFor();
+  assert.equal(await page.getByRole('combobox').count(),0);assert.equal(await page.locator('.skills-pick').count(),8);assert.equal(await page.locator('.skills-mood-option').count(),0);await layout();
+  await skillPick('Focus cues').click();await page.getByRole('dialog').waitFor();await page.screenshot({path:'/tmp/baseline-28-experience-sheet.png'});
+  await page.getByRole('radio',{name:'I use this on purpose',exact:true}).click();assert.equal(await page.getByRole('dialog').count(),0);
+  await pickSkill('Breathing and body awareness','I have not learned this yet');
   await page.screenshot({path:'/tmp/baseline-28-experience.png',fullPage:true});
   const style=await page.addStyleTag({content:'.skills-family-heading{font-size:30px!important}.skills-description{font-size:32px!important}'});
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await style.evaluate(el=>el.remove());
@@ -71,14 +80,14 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   const originalGoal=structuredClone(goalDraft),originalSkills=structuredClone(skills);
   for(const next of ['health-off','declined','unready','resumed']){
    goalDraft=originalGoal;skills=originalSkills;await open(next);
-   await page.getByRole('heading',{name:'Your starting point',exact:true}).waitFor();
+   await page.getByRole('heading',{name:'Your baseline',exact:true}).waitFor();
    if(next==='health-off')assert.equal(await page.getByRole('button',{name:/Well-being and support/}).count(),0);
    if(next==='unready'){
     await page.getByText('Your program’s health connection is not ready.',{exact:false}).waitFor();
     await page.getByRole('button',{name:/Well-being and support/}).click();await page.locator('.cau-question-title').waitFor();
     await page.getByRole('button',{name:'Back to sections',exact:true}).click();
    }
-   if(next==='unready'||next==='resumed')await click('Complete performance only');
+   if(next==='unready'||next==='resumed')await more('Complete performance only');
    await click('Submit answers');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();assert.equal(posts.at(-1).shareHealth,false);
   }
   await open('pending');await page.getByRole('heading',{name:'Your health authorization'}).waitFor();
@@ -94,7 +103,7 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   assert.equal(await page.getByRole('button',{name:'Focus',exact:true}).getAttribute('aria-pressed'),'true');
   await page.getByText('Prefilled from your previous baseline',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Back to sections',exact:true}).click();
-  await page.getByRole('heading',{name:'Your starting point',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Review your baseline',exact:true}).waitFor();
   await page.waitForFunction(()=>document.querySelector('.cau-stage') && getComputedStyle(document.querySelector('.cau-stage')).opacity==='1');
   await page.screenshot({path:'/tmp/team-baseline-prefilled.png',fullPage:true});
   await click('Accept answers for this team');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
@@ -103,10 +112,10 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   await page.getByText('Previous health answers are not available here.',{exact:false}).waitFor();
   const postsBefore=posts.length;await click('Accept answers for this team');
   await page.locator('.cau-question-title').waitFor();assert.equal(posts.length,postsBefore,'missing health answers are not silently accepted');
-  skills=originalSkills;await open('team-review');await click('Review mental skill answers');
-  assert.equal(await page.getByLabel('Focus cues experience').inputValue(),'use_it');
-  assert.equal(await page.getByLabel('Picturing yourself performing experience').inputValue(),'','unknown experience remains blank');
-  await page.getByLabel('Focus cues experience').selectOption('practiced_it');await click('Continue');await click('Complete Performance');
+  skills=originalSkills;await open('team-review');await more('Edit mental skill answers');await page.getByRole('heading',{name:'How much have you used each skill?'}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Focus cues experience: I use this on purpose',exact:true}).count(),1);
+  assert.equal(await page.getByRole('button',{name:'Picturing yourself performing experience: not answered',exact:true}).count(),1,'unknown experience remains blank');
+  await pickSkill('Focus cues','I have tried this in practice');await click('Continue');await click('Complete Performance');
   await click('Accept answers for this team');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
   assert.equal(skills.draft.familiarity.attention_cues,'practiced_it');
   skills=originalSkills;await open('team-no-details');
@@ -117,6 +126,17 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   await open('team-first');await page.getByRole('button',{name:'Start baseline',exact:true}).waitFor();
   assert.equal(await page.getByText('Prefilled answers',{exact:true}).count(),0);
   await open('completed');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();assert.equal(await page.getByRole('button',{name:'Start baseline',exact:true}).count(),0);
+  assert.match(await page.getByRole('link',{name:'Download for iPhone'}).getAttribute('href'),/^https:\/\/apps\.apple\.com\/.*id6747253393$/);
+  assert.match(await page.getByRole('link',{name:'Download for Android'}).getAttribute('href'),/^https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.fitwithpulse\.pulsecheck$/);
+  await page.screenshot({path:'/tmp/baseline-web-download.png'});
+  await open('unassigned');await page.getByRole('heading',{name:'Find your program.'}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Use a different account',exact:true}).count(),1);
+  await open('signed-out');await page.getByRole('heading',{name:'Find your program.'}).waitFor();
+  assert.equal(await page.getByRole('link',{name:'Already have an account? Sign in'}).getAttribute('href'),'/PulseCheck/login?returnTo=%2FPulseCheck%2Fbaseline');
+  await page.screenshot({path:'/tmp/baseline-web-join.png'});
+  await page.getByLabel('Organization or team code').fill('WRONG');await click('Continue');await page.getByText('We couldn’t find that code.').waitFor();
+  await page.getByLabel('Organization or team code').fill('TEAM42');await click('Continue');await page.waitForURL(/\/PulseCheck\/team-invite\/invite-42$/);
+  await open('completed');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
   await page.addInitScript(()=>{window.__baselineNativeEvents=[];window.webkit={messageHandlers:{baselineSession:{postMessage(message){window.__baselineNativeEvents.push(message.action);if(message.action==='signIn')setTimeout(()=>window.dispatchEvent(new CustomEvent('pulse-baseline-session',{detail:{customToken:'synthetic',userID:'local-test'}})),0);}}}};});
   await page.reload();await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();await page.waitForFunction(()=>window.__baselineNativeEvents.includes('completed'));
   assert.deepEqual(await page.evaluate(()=>window.__baselineNativeEvents),['signIn','completed']);assert.deepEqual(errors,[]);
