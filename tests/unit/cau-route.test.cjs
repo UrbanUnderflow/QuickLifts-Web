@@ -9,10 +9,10 @@ function fixtureMap(){const map=new Map();const put=map.set;map.set=function(key
  return put.call(this,key,value);
 };return map;}
 let records=fixtureMap(),writes=[],providerCalls=0;
-const snap=key=>({exists:records.has(key),data:()=>records.get(key)});
-const ref=key=>({key,get:async()=>snap(key),collection:name=>collection(key+'/'+name)});
-const collection=key=>({doc:id=>ref(key+'/'+id),where:(field,_op,value)=>({get:async()=>({docs:[...records.entries()].filter(([k,v])=>k.startsWith(key+'/')&&!k.slice(key.length+1).includes('/')&&v[field]===value).map(([k,v])=>({id:k.slice(key.length+1),data:()=>v}))})}),orderBy:()=>({limit:()=>({get:async()=>({docs:records.has(key)?[{data:()=>records.get(key)}]:[]})})})});
-const db={collection,runTransaction:async fn=>fn({get:async r=>snap(r.key),set:(r,value)=>{records.set(r.key,value);writes.push(value);},create:(r,value)=>{if(records.has(r.key))throw Error('exists');records.set(r.key,value);writes.push(value);}})};
+const snap=key=>({id:key.split('/').at(-1),ref:ref(key),exists:records.has(key),data:()=>records.get(key)});
+const ref=key=>({key,id:key.split('/').at(-1),get:async()=>snap(key),collection:name=>collection(key+'/'+name)});
+const collection=key=>({doc:(id='audit-'+writes.length)=>ref(key+'/'+id),where:(field,_op,value)=>({get:async()=>({docs:[...records.entries()].filter(([k,v])=>k.startsWith(key+'/')&&!k.slice(key.length+1).includes('/')&&v[field]===value).map(([k,v])=>({id:k.slice(key.length+1),data:()=>v}))})}),orderBy:()=>({limit:()=>({get:async()=>({docs:records.has(key)?[{data:()=>records.get(key)}]:[]})})})});
+const db={collection,runTransaction:async fn=>fn({get:async r=>r.key?snap(r.key):r.get(),set:(r,value)=>{records.set(r.key,value);writes.push(value);},create:(r,value)=>{if(records.has(r.key))throw Error('exists');records.set(r.key,value);writes.push(value);}})};
 const admin={auth:()=>({verifyIdToken:async token=>{if(token!=='valid')throw Error('bad token');return {uid:'athlete',email:'athlete@example.com'};}}),firestore:Object.assign(()=>db,{FieldValue:{serverTimestamp:()=> 'server-time'}})};
 require.cache[path.resolve('src/lib/firebase-admin.ts')]={id:path.resolve('src/lib/firebase-admin.ts'),filename:path.resolve('src/lib/firebase-admin.ts'),loaded:true,exports:{__esModule:true,default:admin,getFirebaseAdminApp:()=>({})}};
 const handler=require(path.resolve('src/pages/api/pulsecheck/questionnaire/cau.ts')).default;
@@ -30,7 +30,7 @@ async function call(method,body,token='valid'){let result={status:200};const res
 const body={questionnaireVersion:'athlete-starting-point-v2',name:'Fictional Athlete',email:'test@example.com',answers:{'cau-starting-point-39':'Less than 5 hours'},completedSections:{performance:true,health:true},shareHealth:true};
 test('status is authenticated and only active assigned accounts are required',async()=>{setup();assert.equal((await call('GET',null,'invalid')).status,401);assert.equal((await call('GET')).body.required,true);records.delete(root+'assignment_athlete');assert.equal((await call('GET')).body.required,false);});
 test('no consent cannot transmit health; performance-only resolution does not store clinical values',async()=>{setup();assert.equal((await call('POST',body)).status,403);assert.equal(providerCalls,0);assert.equal((await call('POST',{...body,shareHealth:false})).body.saved,true);assert.equal(providerCalls,0);assert.equal(JSON.stringify(writes).includes('Less than 5 hours'),false);assert.equal((await call('GET')).body.completed,true);});
-test('signed current authorization sends health once and persists references only',async()=>{setup();const doc={id:'health',title:'Health choice',version:'v1',body:'Terms',category:'health_authorization'};const decisions={health:{decision:'accepted',version:'v1',document:doc,signedName:'Fictional Athlete'}};records.set('pulsecheck-teams/team',{requiredConsents:[doc]});records.set('pulsecheck-team-memberships/team_athlete',{status:'active',athleteOnboarding:{consentDecisions:decisions}});records.set('pulsecheck-team-memberships/team_athlete/consent-events',{actorUserId:'athlete',decisions});assert.equal((await call('POST',body)).body.saved,true);assert.equal(providerCalls,1);assert.equal(JSON.stringify(writes).includes('Less than 5 hours'),false);assert.equal((await call('POST',body)).body.saved,true);assert.equal(providerCalls,1);assert.equal((await call('GET')).body.required,false);});
+test('signed current authorization saves a private backup, sends health once and keeps mirror references only',async()=>{setup();const doc={id:'health',title:'Health choice',version:'v1',body:'Terms',category:'health_authorization'};const decisions={health:{decision:'accepted',version:'v1',document:doc,signedName:'Fictional Athlete'}};records.set('pulsecheck-teams/team',{requiredConsents:[doc]});records.set('pulsecheck-team-memberships/team_athlete',{status:'active',athleteOnboarding:{consentDecisions:decisions}});records.set('pulsecheck-team-memberships/team_athlete/consent-events',{actorUserId:'athlete',decisions});assert.equal((await call('POST',body)).body.saved,true);assert.equal(providerCalls,1);assert.equal(JSON.stringify(writes.filter(value=>value.kind!=='health_backup')).includes('Less than 5 hours'),false);assert.ok(writes.some(value=>value.kind==='health_backup'));assert.equal((await call('POST',body)).body.saved,true);assert.equal(providerCalls,1);assert.equal((await call('GET')).body.required,false);});
 test('retired assignments and incomplete sections cannot submit',async()=>{setup();assert.equal((await call('POST',{...body,completedSections:{performance:true}})).status,400);records.set('pulsecheck-team-memberships/team_athlete',{status:'inactive'});assert.equal((await call('POST',body)).status,503);assert.equal(providerCalls,0);});
 
 test('stale clients are rejected before writes and old drafts never resume as new questions',async()=>{
@@ -109,7 +109,7 @@ test('active team athletes get a standard requirement without manual assignment,
  const families=require('../../src/api/firebase/mentaltraining/mentalSkillsBaseline.ts').MENTAL_SKILL_FAMILIES;
  records.set('athlete-mental-progress/athlete',{mentalSkillsBaseline:{version:6,assessmentKind:'self_report_starting_profile',familiarity:Object.fromEntries(families.map(f=>[f,'new_to_me'])),answeredFamiliarity:[]}});
  records.set('pulsecheck-teams/umes',{sportOrProgram:'Golf'});
- const initial=await call('GET');assert.equal(initial.status,200);assert.equal(initial.body.required,true);assert.equal(initial.body.healthCollectionAvailable,false);
+ const initial=await call('GET');assert.equal(initial.status,200);assert.equal(initial.body.required,true);assert.equal(initial.body.healthCollectionAvailable,false);assert.equal(initial.body.healthBackupAvailable,false);assert.equal(initial.body.providerDeliveryAvailable,false);
  assert.equal(records.get(root+'assignment_athlete').teamMembershipId,'real-membership-id');
  assert.equal(initial.body.skills.completed,true);assert.equal(initial.body.completed,false);
  records.set(root+'baseline_athlete_athlete-starting-point-v2',{status:'complete',externalId:'athlete'});
@@ -121,14 +121,14 @@ test('a temporarily unavailable baseline never clears an unfinished requirement'
  try {const result=await call('GET');assert.equal(result.body.required,true);assert.equal(result.body.available,false);}
  finally {delete process.env.ATHLETE_BASELINE_ENABLED;}
 });
-test('a configured health reservation is reported after a delivery failure and can be retried',async()=>{
+test('a provider delivery failure still completes a durable private backup and reports unverified storage',async()=>{
  setup();const doc={id:'health',title:'Health choice',version:'v1',body:'Terms',category:'health_authorization'};
  const decisions={health:{decision:'accepted',version:'v1',document:doc,signedName:'Fictional Athlete'}};
  records.set('pulsecheck-teams/team',{requiredConsents:[doc]});records.set('pulsecheck-team-memberships/team_athlete',{status:'active',athleteOnboarding:{consentDecisions:decisions}});
  records.set('pulsecheck-team-memberships/team_athlete/consent-events',{actorUserId:'athlete',decisions});
  const transport=global.fetch;global.fetch=async()=>{throw Error('network interrupted');};
- assert.equal((await call('POST',body)).status,503);
- assert.equal((await call('GET')).body.submissionSharing,true);
+ const result=await call('POST',body);assert.equal(result.status,200);assert.equal(result.body.receipt.healthStorage,'pulse_private_backup');assert.equal(result.body.receipt.providerVerified,false);
+ assert.equal((await call('GET')).body.completed,true);
  global.fetch=transport;assert.equal((await call('POST',body)).body.completed,true);
  assert.equal((await call('GET')).body.required,false);
 });
@@ -250,4 +250,37 @@ test('new-team drafts are isolated and revoked memberships cannot reuse their pe
  assert.deepEqual((await call('GET')).body.draft.answers,draft.answers);
  const member=records.get('pulsecheck-team-memberships/second_athlete');member.status='inactive';
  assert.equal((await call('POST',{...body,shareHealth:false,reviewId:initial.reviewId,acceptPrefilled:true})).status,409);
+});
+
+test('an earlier team verified receipt is never reported as the new team review receipt',async()=>{
+ setup();
+ const backupId='health_backup_'+'a'.repeat(64);
+ records.set(root+'baseline_athlete_athlete-starting-point-v2',{status:'complete',externalId:'athlete',reviewId:'old-team-review',healthBackupId:backupId});
+ records.set(root+backupId,{kind:'health_backup',externalId:'athlete',submissionId:'old-submission',deliveryStatus:'verified',backupRetained:true,receipt:{externalId:'athlete',submissionId:'old-submission',baselineId:'old-baseline',athleteId:'old-athlete',requestId:'old-request',receivedAt:'2026-10-01T00:00:00Z',created:true}});
+ records.set('pulsecheck-team-memberships/real-membership-id',{userId:'athlete',role:'athlete',teamId:'umes',status:'active',baselineJoinedAt:'2026-10-26',athleteOnboarding:{entryOnboardingStep:'complete',productConsentAccepted:true}});
+ records.set('pulsecheck-teams/umes',{sportOrProgram:'Golf'});
+ const status=await call('GET');assert.equal(status.status,200);assert.equal(status.body.required,true);assert.ok(status.body.reviewId);assert.equal(status.body.receipt,null);
+});
+
+test('a reserved submission never silently replaces the submitted performance answers',async()=>{
+ setup();assert.equal((await call('POST',{...body,shareHealth:false})).body.saved,true);
+ records.delete(root+'baseline_athlete_athlete-starting-point-v2');const before=writes.length;
+ const changed=await call('POST',{...body,shareHealth:false,answers:{'cau-starting-point-46':['Focus']}});
+ assert.equal(changed.status,409);assert.equal(writes.length,before);assert.equal(providerCalls,0);
+});
+
+test('global completion does not imply that every team health delivery was provider-verified',async()=>{
+ setup();const backupId='health_backup_'+'b'.repeat(64);
+ records.set(root+'baseline_athlete_athlete-starting-point-v2',{status:'complete',externalId:'athlete',healthBackupId:backupId});
+ records.set(root+backupId,{kind:'health_backup',externalId:'athlete',submissionId:'old-submission',deliveryStatus:'verified',backupRetained:true,receipt:{externalId:'athlete',submissionId:'old-submission',baselineId:'old-baseline',athleteId:'old-athlete',requestId:'old-request',receivedAt:'2026-10-01T00:00:00Z',created:true}});
+ const result=await call('GET');assert.equal(result.body.completed,true);assert.equal(result.body.receipt,null);
+ assert.equal((await call('POST',body)).body.receipt,null);
+});
+
+test('a malformed stored verification flag cannot produce an AuntEdna-confirmed athlete receipt',async()=>{
+ setup();records.set('pulsecheck-team-memberships/real-membership-id',{userId:'athlete',role:'athlete',teamId:'umes',status:'active',baselineJoinedAt:'2026-10-26',athleteOnboarding:{entryOnboardingStep:'complete',productConsentAccepted:true}});records.set('pulsecheck-teams/umes',{sportOrProgram:'Golf'});
+ const first=await call('GET'),reviewId=first.body.reviewId,backupId='health_backup_'+'c'.repeat(64);
+ records.set(root+`team_baseline_${reviewId}_athlete-starting-point-v2`,{externalId:'athlete',status:'pending',reviewId,healthBackupId:backupId});
+ records.set(root+backupId,{kind:'health_backup',externalId:'athlete',submissionId:'submission',deliveryStatus:'verified',backupRetained:true,receipt:{externalId:'another',submissionId:'submission'}});
+ const current=await call('GET');assert.equal(current.body.receipt.providerVerified,false);assert.equal(current.body.receipt.healthStorage,'pulse_private_backup');
 });

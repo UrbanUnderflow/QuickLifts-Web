@@ -12,7 +12,7 @@ import { savePerformanceDraft } from '../../../../lib/questionnaires/cau-perform
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { normalizeNativeProductBrand } from '../../../../utils/pulsecheckAppDistribution';
 import { COLLECTION, VERSION, QUESTIONNAIRE_VERSION, PREVIOUS_QUESTIONNAIRE_VERSION, PREVIOUS_QUESTIONNAIRE_VERSIONS, isCurrentQuestionnaire, baselineRecordId, baselineComplete, splitSubmission } from '../../../../lib/questionnaires/cau';
-import { deliverQuestionnaire } from '../../../../lib/questionnaires/cau-delivery';
+import { healthBackupId, prepareHealthBackup, processHealthBackup, readHealthBackup } from '../../../../lib/questionnaires/cau-backups';
 import { PartnerError } from '../../../../lib/questionnaires/auntedna-partner';
 
 export const config = { api: { bodyParser: { sizeLimit: '128kb' } } };
@@ -80,11 +80,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const pendingAttempt = active && !completed ? (await collection.doc(`attempt_${namespace}`).get()).data() : null;
     const connection = active ? resolveBaselineConnection(health.organizationId, assignment?.teamId, health.organization, assignment) : null;
     const clinicalDeliveryAvailable = Boolean(connection);
+    const healthBackupAvailable = Boolean(active && enabled && healthSharingAllowed);
+    const currentRecord = reviewId ? (await recordRef.get()).data() : existing.data();
+    // A historical original record never verifies delivery for another team review.
+    const currentReceiptScope = Boolean(reviewId && currentRecord?.reviewId===reviewId);
+    const priorBackupId = currentReceiptScope ? currentRecord?.healthBackupId : null;
+    const selectedBackup = typeof priorBackupId === 'string' ? await readHealthBackup(db, priorBackupId).catch(() => null) : null;
+    const priorBackup = selectedBackup?.athleteId===user.uid ? selectedBackup : null;
+    const healthReceipt = (backup: any) => backup ? {backupId:backup.id,healthStorage:backup.deliveryStatus==='verified'?'auntedna_verified':'pulse_private_backup',providerVerified:backup.deliveryStatus==='verified'} : null;
     if (req.method === 'GET') return res.json({ required: Boolean(active && !completed), completed, version: VERSION, questionnaireVersion: QUESTIONNAIRE_VERSION,
       reviewId: reviewId || null, teamName: teamReview?.teamName || null, prefill,
       productBrand: normalizeNativeProductBrand(health.organization?.productBrand),
       teamWorkspaceUrl: active && assignment?.teamId && health.organizationId ? `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(health.organizationId)}&teamId=${encodeURIComponent(assignment.teamId)}` : null,
-      available: Boolean(active && enabled), draft: draft || null, skills, healthSharingAllowed, healthBaselineEnabled, healthAuthorizationRequired, healthAuthorizationUrl, healthAuthorizationDecision, healthDocuments: active ? health.healthDocuments : [], healthConsentDecisions: active ? Object.fromEntries(health.healthDocuments.filter(document => health.decisions[document.id]).map(document => [document.id, health.decisions[document.id]])) : {}, submissionSharing: typeof pendingAttempt?.shareHealth === 'boolean' ? pendingAttempt.shareHealth : null, healthCollectionAvailable: clinicalDeliveryAvailable, sportName, questionnaireUrl: 'https://fitwithpulse.ai/PulseCheck/baseline' });
+      available: Boolean(active && enabled), draft: draft || null, skills, healthSharingAllowed, healthBaselineEnabled, healthAuthorizationRequired, healthAuthorizationUrl, healthAuthorizationDecision, healthDocuments: active ? health.healthDocuments : [], healthConsentDecisions: active ? Object.fromEntries(health.healthDocuments.filter(document => health.decisions[document.id]).map(document => [document.id, health.decisions[document.id]])) : {}, submissionSharing: typeof pendingAttempt?.shareHealth === 'boolean' ? pendingAttempt.shareHealth : null, healthCollectionAvailable: healthBackupAvailable, healthBackupAvailable, providerDeliveryAvailable: clinicalDeliveryAvailable, receipt: healthReceipt(priorBackup), sportName, questionnaireUrl: 'https://fitwithpulse.ai/PulseCheck/baseline' });
     if (!isCurrentQuestionnaire(req.body)) return res.status(409).json({error:'This questionnaire has changed. Reload the page to continue with the current version.'});
     if (!assignment || !active || !enabled) return res.status(503).json({ error: 'Your questionnaire is not available yet. Please contact your program team.' });
     if (req.body?.action === 'saveHealthDecision') {
@@ -93,7 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.json({ saved: true });
       } catch { return res.status(409).json({ error: 'Your health choice could not be saved. Review the current terms and retry.' }); }
     }
-    if (completed) return res.json({ saved: true, completed: true });
+    if (completed) return res.json({ saved: true, completed: true, receipt: healthReceipt(priorBackup) });
     if (['saveSkillsDraft','completeSkills'].includes(req.body?.action)) {
       if (!reviewId && completedStartingProfile(canonical)) return res.json({skills});
       if (!draft?.completed && !(reviewId && prefill?.performanceQuestionsComplete)) return res.status(400).json({error:'Complete your performance questions first.'});
@@ -123,31 +131,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const input = applyAdministrativeAnswers({ ...req.body, submissionId: `sp2-${createHash('sha256').update(`${assignment.submissionId}:${QUESTIONNAIRE_VERSION}`).digest('hex')}`, email: user.email || req.body.email }, await deriveAdministrativeAnswers(db,user.uid));
     let split;
     try { split = splitSubmission(input); } catch { return res.status(400).json({ error: 'Please check your answers before submitting.' }); }
-    if (req.body.shareHealth !== false && (!healthSharingAllowed || !clinicalDeliveryAvailable)) return res.status(403).json({ error: 'Review your health-sharing authorization, or complete performance only.' });
+    if (req.body.shareHealth !== false && !healthSharingAllowed) return res.status(403).json({ error: 'Review your health-sharing authorization, or complete performance only.' });
     const attemptRef = collection.doc(`attempt_${namespace}`);
     const shareHealth = req.body.shareHealth !== false;
-    const attempt = await db.runTransaction(async tx => {
-      const current = await tx.get(attemptRef);
-      if (current.exists) return current.data()!;
-      const value = { externalId: user.uid, submissionId: input.submissionId, shareHealth, pulseCheck: split.pulseCheck };
-      // Only the non-clinical snapshot is reserved. No clinical answers or hashes.
-      tx.create(attemptRef, value);
-      return value;
-    });
-    if (attempt.externalId !== user.uid || attempt.submissionId !== input.submissionId || attempt.shareHealth !== shareHealth) {
+    const existingAttempt = (await attemptRef.get()).data();
+    const attempt = existingAttempt || { externalId:user.uid,submissionId:input.submissionId,shareHealth,pulseCheck:split.pulseCheck };
+    if (attempt.externalId !== user.uid || attempt.submissionId !== input.submissionId || attempt.shareHealth !== shareHealth || JSON.stringify(attempt.pulseCheck)!==JSON.stringify(split.pulseCheck)) {
       return res.status(409).json({ error: 'A submission is already in progress. Keep the same sharing choice and press Submit answers to retry.' });
     }
     const create = async (_id: string, mirror: any) => db.runTransaction(async tx => {
       const current = await tx.get(recordRef);
       if (current.exists) return current.data() as any;
+      const reserved = await tx.get(attemptRef);
+      if (reserved.exists && (reserved.data()?.externalId!==user.uid || reserved.data()?.submissionId!==input.submissionId || reserved.data()?.shareHealth!==shareHealth)) throw Error('Submission reservation changed.');
       if (reviewId) {
         const membership = (await tx.get(db.collection('pulsecheck-team-memberships').doc(assignment.teamMembershipId))).data();
         if (membership?.userId !== user.uid || membership.status !== 'active' || membership.revokedAt || membership.archivedAt || membership.deletedAt
           || teamBaselineReviewId(user.uid, assignment.teamMembershipId, membership) !== reviewId) throw Error('Team join changed.');
       }
       const original = reviewId ? await tx.get(originalRecordRef) : null;
+      const backup = shareHealth ? await prepareHealthBackup(db, tx, {uid:user.uid,input,assignment,recordIds:[recordRef.id,...(reviewId && !original?.exists ? [originalRecordRef.id] : [])]}) : null;
       const value = { ...mirror, ...retainedPrivateCopy(input, liveRetentionEnabled(assignment, process.env.CAU_PRIVATE_RETENTION_ENABLED)), administrativeMetadata:{...input.administrativeMetadata,firstPerformanceSaveAt:draft?.startedAt || null}, fields: attempt.pulseCheck.fields, identity: attempt.pulseCheck.identity, recordedAt: admin.firestore.FieldValue.serverTimestamp(),
         ...(reviewId ? {reviewId, teamId:assignment.teamId, teamMembershipId:assignment.teamMembershipId, reviewedAt:new Date().toISOString(), reviewedBy:user.uid, acceptedPrefilled:true, startingProfile:savedSkills?.result || canonical, prefillSourceSubmissionId:prefill?.sourceSubmissionId || null} : {}) };
+      if (!reserved.exists) tx.create(attemptRef, attempt);
+      if (backup?.create) tx.create(backup.reference, backup.record);
       tx.create(recordRef, value);
       if (reviewId && !original?.exists) tx.create(originalRecordRef, value);
       return mirror;
@@ -161,10 +168,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await create(input.submissionId, mirror);
     } else {
       if (!healthSharingAllowed) return res.status(403).json({ error: 'Review your health-sharing authorization, or complete performance only.' });
-      if (!connection) return res.status(503).json({ error: 'The questionnaire connection is not available yet.' });
-      await deliverQuestionnaire(input, user.uid, connection, {
-        get: async () => { const doc = await recordRef.get(); return doc.exists ? doc.data() as any : null; }, create,
-      });
+      const backupId = healthBackupId(user.uid, input.submissionId);
+      const mirror = {...split.pulseCheck,externalId:user.uid,status:'complete',healthBackupId:backupId,
+        healthDelivery:{status:'pending'},auntEdnaReferences:Object.fromEntries(Object.entries(split.pulseCheck.auntEdnaReferences)
+          .map(([id,reference]:[string,any])=>[id,{...reference,state:'backup'}]))};
+      await create(input.submissionId, mirror);
+      // The private backup is already durable. Provider delay never turns a saved baseline into a false failure.
+      let backup;
+      try { backup = await processHealthBackup(db, backupId, user.uid); }
+      catch { backup = await readHealthBackup(db, backupId); }
+      return res.json({saved:true,completed:true,receipt:healthReceipt(backup)});
     }
     return res.json({ saved: true, completed: true });
   } catch (error) {
