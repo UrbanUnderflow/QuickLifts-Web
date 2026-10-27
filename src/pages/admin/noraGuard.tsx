@@ -176,7 +176,7 @@ const NoraGuardPage: React.FC = () => {
       <div className="min-h-screen bg-[#080a14] px-6 py-10 text-zinc-100">
         <div className="mx-auto max-w-7xl">
           <header className="mb-6 flex items-start gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-700/40 bg-violet-950/30 text-violet-200">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-clay-lime-deep/40 bg-clay-raised/30 text-clay-ink">
               <ShieldCheck className="h-6 w-6" />
             </span>
             <div className="flex-1">
@@ -242,7 +242,7 @@ const NoraGuardPage: React.FC = () => {
                         onClick={() => setSelectedId(c.id)}
                         className={`w-full rounded-lg p-2 text-left text-xs transition ${
                           selectedId === c.id
-                            ? 'bg-violet-500/15 border border-violet-500/30'
+                            ? 'bg-clay-lime/15 border border-clay-lime/30'
                             : 'hover:bg-zinc-800/50'
                         }`}
                       >

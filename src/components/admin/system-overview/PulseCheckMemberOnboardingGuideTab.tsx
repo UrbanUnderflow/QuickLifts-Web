@@ -273,7 +273,7 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
         <CardGrid columns="md:grid-cols-2">
           <InfoCard
             title="Simple Rule"
-            accent="purple"
+            accent="clay"
             body="If something needs its own customer identity or legal/admin umbrella, it should probably be a separate organization. If it needs its own long-term roster, admins, or invite flow inside that customer, it should probably be a separate team. If it is just a subgroup inside a pilot, it should be a cohort."
           />
           <InfoCard
@@ -315,7 +315,7 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
           />
           <InfoCard
             title="Why Both Matter"
-            accent="purple"
+            accent="clay"
             body="Challenge helps Nora choose what to train. Goal helps Nora explain why it matters and what the athlete is working toward. The current state still outranks both when the system decides what to do next."
           />
         </CardGrid>
@@ -341,7 +341,7 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
         <CardGrid columns="md:grid-cols-2">
           <InfoCard
             title="Default Team Clinical Route"
-            accent="purple"
+            accent="clay"
             body="If a rollout expects live escalation support, every launch-ready team should have a default clinician profile linked before athletes begin onboarding."
           />
           <InfoCard
@@ -356,7 +356,7 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
         <CardGrid columns="md:grid-cols-2">
           <InfoCard
             title="Before Athlete Testing"
-            accent="purple"
+            accent="clay"
             body={
               <BulletList
                 items={[
@@ -416,7 +416,7 @@ const ONBOARDING_ACCESS_PAGES: ArtifactPageEntry[] = [
     label: 'Member Onboarding Guide',
     subtitle: 'End-to-end entry flow from setup through the Mental Skills Starting Point unlock.',
     icon: FileText,
-    accent: '#c084fc',
+    accent: '#d4ea04',
     render: () => <MemberOnboardingGuideOverviewDoc />,
   },
   {

@@ -255,7 +255,7 @@ const FirestoreIndexRegistryTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-2">
           <InfoCard
             title="Required Checklist"
-            accent="purple"
+            accent="clay"
             body={<BulletList items={CHANGE_CHECKLIST} />}
           />
           <InfoCard

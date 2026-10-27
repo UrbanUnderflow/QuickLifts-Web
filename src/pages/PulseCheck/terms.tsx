@@ -145,8 +145,8 @@ const PulseCheckTermsPage: NextPage = () => (
     </Head>
 
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 py-8 sm:px-8 sm:py-12">
-      <section className="rounded-[32px] border border-purple-300/20 bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.34),_transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-6 sm:p-8">
-        <div className="inline-flex items-center gap-2 rounded-full border border-purple-300/25 bg-purple-500/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-purple-100">
+      <section className="rounded-[32px] border border-clay-lime/20 bg-[radial-gradient(circle_at_top_left,_rgba(212,234,4,0.34),_transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] p-6 sm:p-8">
+        <div className="inline-flex items-center gap-2 rounded-full border border-clay-lime/25 bg-clay-lime/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-clay-ink">
           PulseCheck Coach Terms
         </div>
         <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">Terms for coaches using PulseCheck.</h1>
@@ -155,7 +155,7 @@ const PulseCheckTermsPage: NextPage = () => (
           PulseCheck reports, alerts, and privacy-aware athlete support tools.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/PulseCheck/privacy" className="inline-flex items-center justify-center rounded-full bg-[#7C3AED] px-5 py-3 font-semibold text-white transition hover:bg-[#8B5CF6]">
+          <Link href="/PulseCheck/privacy" className="inline-flex items-center justify-center rounded-full bg-clay-lime px-5 py-3 font-semibold text-clay-on-lime transition hover:bg-clay-lime">
             Review privacy notice
           </Link>
           <Link href="/coach/dashboard" className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 py-3 font-medium text-zinc-100 transition hover:bg-white/10">
@@ -166,7 +166,7 @@ const PulseCheckTermsPage: NextPage = () => (
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {quickFacts.map((fact) => (
-          <article key={fact.title} className="rounded-3xl border border-purple-300/15 bg-white/[0.035] p-6">
+          <article key={fact.title} className="rounded-3xl border border-clay-lime/15 bg-white/[0.035] p-6">
             <h2 className="text-xl font-semibold">{fact.title}</h2>
             <p className="mt-3 text-sm leading-7 text-zinc-300 sm:text-base">{fact.body}</p>
           </article>
@@ -187,7 +187,7 @@ const PulseCheckTermsPage: NextPage = () => (
                 <ul className="space-y-3 pt-1 text-sm leading-7 text-zinc-300 sm:text-base">
                   {section.bullets.map((bullet) => (
                     <li key={bullet} className="flex gap-3">
-                      <span className="mt-[10px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#A78BFA]" />
+                      <span className="mt-[10px] h-1.5 w-1.5 shrink-0 rounded-full bg-clay-lime" />
                       <span>{bullet}</span>
                     </li>
                   ))}
@@ -198,15 +198,15 @@ const PulseCheckTermsPage: NextPage = () => (
         ))}
       </section>
 
-      <section className="rounded-3xl border border-purple-300/15 bg-black/20 p-6 sm:p-8">
+      <section className="rounded-3xl border border-clay-lime/15 bg-black/20 p-6 sm:p-8">
         <h2 className="text-2xl font-semibold">Questions or legal notices</h2>
         <p className="mt-3 text-sm leading-7 text-zinc-300 sm:text-base">
           For questions about PulseCheck coach terms, privacy, access, or product-specific legal notices, contact{' '}
-          <a className="text-[#A78BFA] underline underline-offset-4" href="mailto:tre@fitwithpulse.ai">
+          <a className="text-clay-lime underline underline-offset-4" href="mailto:tre@fitwithpulse.ai">
             tre@fitwithpulse.ai
           </a>{' '}
           or{' '}
-          <a className="text-[#A78BFA] underline underline-offset-4" href="mailto:info@fitwithpulse.ai">
+          <a className="text-clay-lime underline underline-offset-4" href="mailto:info@fitwithpulse.ai">
             info@fitwithpulse.ai
           </a>.
         </p>

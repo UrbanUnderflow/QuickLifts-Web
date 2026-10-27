@@ -23,14 +23,14 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 // screen mirrors the real one (the email matches send-pulsecheck-team-invite-email,
 // the accept/setup steps mirror /PulseCheck/team-invite/[token] + member-setup).
 // Styled to the on-brand PulseCheck activation onboarding (see post-activation.tsx):
-// purple chrome, Switzer/Fraunces, shared Toggle. Registered from /admin/screenDemo.
+// clay chrome, Switzer/Fraunces, shared Toggle. Registered from /admin/screenDemo.
 
 // Canonical PulseCheck brand tokens (see public/pulsecheck-design-system.html).
 const PC = {
   pageBg: '#070711',
   deepBg: '#0B0B1C',
-  purple: '#7C3AED',
-  purpleSoft: '#a78bfa',
+  clay: '#D4EA04',
+  claySoft: '#d4ea04',
   cardBorder: 'rgba(255,255,255,0.10)',
 };
 
@@ -138,7 +138,7 @@ const StaffOnboardingDemoPage: React.FC = () => {
   const primaryBtn =
     'inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90';
   const infoCardStyle: React.CSSProperties = {
-    background: 'radial-gradient(circle at top left, rgba(124,58,237,0.14), transparent 42%), #0B0B1C',
+    background: 'radial-gradient(circle at top left, rgba(212,234,4,0.14), transparent 42%), #0B0B1C',
     borderColor: PC.cardBorder,
   };
 
@@ -157,17 +157,17 @@ const StaffOnboardingDemoPage: React.FC = () => {
           <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
         </Head>
 
-        {/* Demo chrome — purple banner mirrors the coach-onboarding demo. */}
+        {/* Demo chrome — clay banner mirrors the coach-onboarding demo. */}
         <div
-          className="sticky top-0 z-40 flex items-center justify-center gap-2 px-4 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-white"
-          style={{ background: PC.purple }}
+          className="sticky top-0 z-40 flex items-center justify-center gap-2 px-4 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-clay-on-lime"
+          style={{ background: PC.clay }}
         >
           <Sparkles className="h-3.5 w-3.5" />
           Screen Demo — the email and sign-in are simulated. Press continue to walk the flow.
         </div>
 
         {/* Ambient brand glow */}
-        <div className="pointer-events-none absolute -left-32 top-10 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)' }} />
+        <div className="pointer-events-none absolute -left-32 top-10 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(212,234,4,0.18) 0%, transparent 70%)' }} />
 
         <main className="relative mx-auto w-full max-w-5xl px-4 py-8 md:px-6">
           {/* Brand header */}
@@ -186,13 +186,13 @@ const StaffOnboardingDemoPage: React.FC = () => {
                     <span
                       className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold"
                       style={{
-                        background: active || done ? PC.purple : 'rgba(255,255,255,0.06)',
+                        background: active || done ? PC.clay : 'rgba(255,255,255,0.06)',
                         color: active || done ? '#fff' : 'rgba(255,255,255,0.45)',
                       }}
                     >
                       {done ? <CheckCircle2 className="h-3.5 w-3.5" /> : index + 1}
                     </span>
-                    <span className="font-semibold" style={{ color: active ? '#fff' : done ? PC.purpleSoft : '#71717a' }}>{entry.label}</span>
+                    <span className="font-semibold" style={{ color: active ? '#fff' : done ? PC.claySoft : '#71717a' }}>{entry.label}</span>
                   </span>
                   {index < STEPS.length - 1 ? <ChevronRight className="h-4 w-4 text-zinc-700" /> : null}
                 </li>
@@ -204,7 +204,7 @@ const StaffOnboardingDemoPage: React.FC = () => {
           {step === 'email' ? (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-zinc-500">
-                <Inbox className="h-4 w-4" style={{ color: PC.purpleSoft }} />
+                <Inbox className="h-4 w-4" style={{ color: PC.claySoft }} />
                 Inbox · {DEMO.targetEmail}
               </div>
 
@@ -294,11 +294,11 @@ const StaffOnboardingDemoPage: React.FC = () => {
             <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
               <div className="rounded-[32px] border p-8 shadow-2xl" style={infoCardStyle}>
                 <div className="space-y-5">
-                  <div className="inline-flex rounded-2xl border p-3" style={{ borderColor: 'rgba(124,58,237,0.25)', background: 'rgba(124,58,237,0.12)' }}>
-                    <ShieldCheck className="h-6 w-6" style={{ color: PC.purpleSoft }} />
+                  <div className="inline-flex rounded-2xl border p-3" style={{ borderColor: 'rgba(212,234,4,0.25)', background: 'rgba(212,234,4,0.12)' }}>
+                    <ShieldCheck className="h-6 w-6" style={{ color: PC.claySoft }} />
                   </div>
                   <div className="space-y-2">
-                    <p className="text-xs uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>PulseCheck Team Invite</p>
+                    <p className="text-xs uppercase tracking-[0.22em]" style={{ color: PC.claySoft }}>PulseCheck Team Invite</p>
                     <h1 className="text-3xl font-bold text-white" style={displayFont}>Join {DEMO.teamName}</h1>
                     <p className="max-w-2xl text-sm leading-7 text-zinc-300">
                       You&apos;ve been invited to join <span className="font-medium text-white">{DEMO.teamName}</span> inside{' '}
@@ -311,7 +311,7 @@ const StaffOnboardingDemoPage: React.FC = () => {
                   <div className="grid grid-cols-1 gap-4">
                     <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
                       <div className="flex items-center gap-2">
-                        <MailPlus className="h-4 w-4" style={{ color: PC.purpleSoft }} />
+                        <MailPlus className="h-4 w-4" style={{ color: PC.claySoft }} />
                         <p className="text-sm font-semibold text-white">Target Email</p>
                       </div>
                       <p className="mt-3 text-sm text-zinc-300">{DEMO.targetEmail}</p>
@@ -335,7 +335,7 @@ const StaffOnboardingDemoPage: React.FC = () => {
               <div className="rounded-[32px] border p-8 shadow-2xl" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
                 <div className="space-y-6">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Account Required</p>
+                    <p className="text-xs uppercase tracking-[0.22em]" style={{ color: PC.claySoft }}>Account Required</p>
                     <h2 className="mt-2 text-3xl font-bold text-white" style={displayFont}>Create or access your Pulse account</h2>
                     <p className="mt-3 text-sm leading-7 text-zinc-300">
                       Use the invited email, then accept the invite from this page. New staff create a sign-in; returning
@@ -349,8 +349,8 @@ const StaffOnboardingDemoPage: React.FC = () => {
                       onClick={() => setMode('create-account')}
                       className="rounded-2xl border px-4 py-3 text-left transition"
                       style={{
-                        borderColor: mode === 'create-account' ? PC.purple : 'rgba(255,255,255,0.08)',
-                        background: mode === 'create-account' ? 'rgba(124,58,237,0.12)' : 'rgba(0,0,0,0.2)',
+                        borderColor: mode === 'create-account' ? PC.clay : 'rgba(255,255,255,0.08)',
+                        background: mode === 'create-account' ? 'rgba(212,234,4,0.12)' : 'rgba(0,0,0,0.2)',
                       }}
                     >
                       <div className="flex items-center gap-2 text-white">
@@ -364,8 +364,8 @@ const StaffOnboardingDemoPage: React.FC = () => {
                       onClick={() => setMode('sign-in')}
                       className="rounded-2xl border px-4 py-3 text-left transition"
                       style={{
-                        borderColor: mode === 'sign-in' ? PC.purple : 'rgba(255,255,255,0.08)',
-                        background: mode === 'sign-in' ? 'rgba(124,58,237,0.12)' : 'rgba(0,0,0,0.2)',
+                        borderColor: mode === 'sign-in' ? PC.clay : 'rgba(255,255,255,0.08)',
+                        background: mode === 'sign-in' ? 'rgba(212,234,4,0.12)' : 'rgba(0,0,0,0.2)',
                       }}
                     >
                       <div className="flex items-center gap-2 text-white">
@@ -410,7 +410,7 @@ const StaffOnboardingDemoPage: React.FC = () => {
                       </label>
                     )}
 
-                    <button type="submit" className={primaryBtn} style={{ background: PC.purple }}>
+                    <button type="submit" className={primaryBtn} style={{ background: PC.clay }}>
                       {mode === 'create-account' ? <UserPlus className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
                       {mode === 'create-account' ? 'Create Account and Join' : 'Sign In and Join'}
                     </button>
@@ -455,7 +455,7 @@ const StaffOnboardingDemoPage: React.FC = () => {
                 <div className="w-full max-w-md rounded-[24px] border p-6 shadow-2xl" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
                   <span
                     className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
-                    style={{ background: 'rgba(124,58,237,0.14)', color: PC.purpleSoft }}
+                    style={{ background: 'rgba(212,234,4,0.14)', color: PC.claySoft }}
                   >
                     <Sparkles className="h-3.5 w-3.5" /> One quick thing
                   </span>
@@ -478,19 +478,19 @@ const StaffOnboardingDemoPage: React.FC = () => {
                           onClick={() => setSocialChoice((current) => (current ? { ...current, selected: opt.value } : current))}
                           className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition"
                           style={{
-                            borderColor: active ? PC.purple : PC.cardBorder,
-                            background: active ? 'rgba(124,58,237,0.12)' : 'rgba(255,255,255,0.025)',
+                            borderColor: active ? PC.clay : PC.cardBorder,
+                            background: active ? 'rgba(212,234,4,0.12)' : 'rgba(255,255,255,0.025)',
                           }}
                         >
                           <span
                             className="flex h-5 w-5 flex-none items-center justify-center rounded-full border"
-                            style={{ borderColor: active ? PC.purple : 'rgba(255,255,255,0.3)', background: active ? PC.purple : 'transparent' }}
+                            style={{ borderColor: active ? PC.clay : 'rgba(255,255,255,0.3)', background: active ? PC.clay : 'transparent' }}
                           >
                             {active ? <CheckCircle2 className="h-4 w-4 text-white" /> : null}
                           </span>
                           <span className="min-w-0">
                             <span className="block truncate text-sm font-semibold text-white">{opt.value}</span>
-                            <span className="block text-[11px] uppercase tracking-[0.14em]" style={{ color: active ? PC.purpleSoft : 'rgba(255,255,255,0.4)' }}>
+                            <span className="block text-[11px] uppercase tracking-[0.14em]" style={{ color: active ? PC.claySoft : 'rgba(255,255,255,0.4)' }}>
                               {opt.tag}
                             </span>
                           </span>
@@ -502,8 +502,8 @@ const StaffOnboardingDemoPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={confirmSocialChoice}
-                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-                    style={{ background: PC.purple }}
+                    className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90"
+                    style={{ background: PC.clay }}
                   >
                     <ArrowRight className="h-4 w-4" />
                     Confirm &amp; continue
@@ -519,11 +519,11 @@ const StaffOnboardingDemoPage: React.FC = () => {
             <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
               <div className="rounded-[32px] border p-8 shadow-2xl" style={infoCardStyle}>
                 <div className="space-y-5">
-                  <div className="inline-flex rounded-2xl border p-3" style={{ borderColor: 'rgba(124,58,237,0.25)', background: 'rgba(124,58,237,0.12)' }}>
-                    <UserRound className="h-6 w-6" style={{ color: PC.purpleSoft }} />
+                  <div className="inline-flex rounded-2xl border p-3" style={{ borderColor: 'rgba(212,234,4,0.25)', background: 'rgba(212,234,4,0.12)' }}>
+                    <UserRound className="h-6 w-6" style={{ color: PC.claySoft }} />
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Member Setup</p>
+                    <p className="text-xs uppercase tracking-[0.22em]" style={{ color: PC.claySoft }}>Member Setup</p>
                     <h1 className="mt-2 text-3xl font-bold text-white" style={displayFont}>{DEMO.teamName}</h1>
                     <p className="mt-3 text-sm leading-7 text-zinc-300">
                       Confirm your identity, title, and notification posture before entering the team workspace for{' '}
@@ -557,7 +557,7 @@ const StaffOnboardingDemoPage: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <label className="mt-4 block cursor-pointer rounded-2xl border border-zinc-700 px-3 py-2 text-center text-sm font-medium text-white transition hover:border-[#7C3AED]">
+                    <label className="mt-4 block cursor-pointer rounded-2xl border border-zinc-700 px-3 py-2 text-center text-sm font-medium text-white transition hover:border-clay-lime">
                       {photoPreview ? 'Change Photo' : 'Add Photo'}
                       <input
                         type="file"
@@ -613,7 +613,7 @@ const StaffOnboardingDemoPage: React.FC = () => {
                 </div>
 
                 <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                  <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: PC.purple }}>
+                  <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90" style={{ background: PC.clay }}>
                     <CheckCircle2 className="h-4 w-4" />
                     Complete Member Setup
                   </button>
@@ -634,10 +634,10 @@ const StaffOnboardingDemoPage: React.FC = () => {
           {/* STEP 4 — handoff into the dashboard */}
           {step === 'done' ? (
             <div className="mx-auto max-w-2xl rounded-[32px] border p-10 text-center shadow-2xl" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
-              <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: 'rgba(124,58,237,0.16)' }}>
-                <CheckCircle2 className="h-8 w-8" style={{ color: PC.purpleSoft }} />
+              <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: 'rgba(212,234,4,0.16)' }}>
+                <CheckCircle2 className="h-8 w-8" style={{ color: PC.claySoft }} />
               </div>
-              <p className="mt-6 text-xs uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Access Ready</p>
+              <p className="mt-6 text-xs uppercase tracking-[0.22em]" style={{ color: PC.claySoft }}>Access Ready</p>
               <h2 className="mt-2 text-3xl font-bold text-white" style={displayFont}>
                 You&apos;re in, {DEMO.recipientFirst} 🎉
               </h2>
@@ -649,8 +649,8 @@ const StaffOnboardingDemoPage: React.FC = () => {
               <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <Link
                   href="/coach/dashboard/demo"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-                  style={{ background: PC.purple }}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90"
+                  style={{ background: PC.clay }}
                 >
                   <BarChart3 className="h-4 w-4" />
                   Open the team dashboard

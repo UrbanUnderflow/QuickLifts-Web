@@ -1032,10 +1032,10 @@ const SURVEY_METRIC_CARDS: Array<{
 }> = [
   { key: 'athleteTrust', label: 'Athlete Trust', helpKey: 'athlete-trust', accentClassName: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100' },
   { key: 'coachTrust', label: 'Coach Trust', helpKey: 'coach-trust', accentClassName: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' },
-  { key: 'clinicianTrust', label: 'Clinician Trust', helpKey: 'clinician-trust', accentClassName: 'border-violet-400/20 bg-violet-400/10 text-violet-100' },
+  { key: 'clinicianTrust', label: 'Clinician Trust', helpKey: 'clinician-trust', accentClassName: 'border-clay-lime/20 bg-clay-lime/10 text-clay-ink' },
   { key: 'athleteNps', label: 'Athlete NPS', helpKey: 'athlete-nps', accentClassName: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100' },
   { key: 'coachNps', label: 'Coach NPS', helpKey: 'coach-nps', accentClassName: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' },
-  { key: 'clinicianNps', label: 'Clinician NPS', helpKey: 'clinician-nps', accentClassName: 'border-violet-400/20 bg-violet-400/10 text-violet-100' },
+  { key: 'clinicianNps', label: 'Clinician NPS', helpKey: 'clinician-nps', accentClassName: 'border-clay-lime/20 bg-clay-lime/10 text-clay-ink' },
 ];
 
 const RECOMMENDATION_CONSUMER_ORDER = ['profile', 'nora', 'coach', 'protocol_planner', 'ops', 'research'] as const;
@@ -2490,7 +2490,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
           label: 'Practice only',
           value: String(visibleAdherenceOrchestrator.taskOnlyDays),
           helper: 'The assigned practice is complete while the daily check-in remains open.',
-          className: 'text-violet-100',
+          className: 'text-clay-ink',
         },
         {
           label: 'Follow-up needed',
@@ -6157,7 +6157,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-violet-300">
+                        <div className="flex min-w-0 flex-1 items-center gap-3 pr-2 text-clay-lime">
                         <Users2 className="h-5 w-5" />
                           <span className="text-sm font-medium leading-tight">Data coverage</span>
                         </div>
@@ -6419,8 +6419,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100">Mental Delta</div>
                               <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h3.delta.mentalPerformanceDelta)}</div>
                             </div>
-                            <div className="rounded-2xl border border-violet-400/15 bg-violet-400/5 p-3">
-                              <div className="text-[11px] uppercase tracking-[0.18em] text-violet-100">Trust Delta</div>
+                            <div className="rounded-2xl border border-clay-lime/15 bg-clay-lime/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-clay-ink">Trust Delta</div>
                               <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h3.delta.athleteTrust)}</div>
                             </div>
                           </div>
@@ -6456,8 +6456,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               <div className="text-[11px] uppercase tracking-[0.18em] text-emerald-100">Adherence Delta</div>
                               <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h5.delta.adherenceRate, ' pts')}</div>
                             </div>
-                            <div className="rounded-2xl border border-violet-400/15 bg-violet-400/5 p-3">
-                              <div className="text-[11px] uppercase tracking-[0.18em] text-violet-100">Trust Delta</div>
+                            <div className="rounded-2xl border border-clay-lime/15 bg-clay-lime/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-clay-ink">Trust Delta</div>
                               <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h5.delta.athleteTrust)}</div>
                             </div>
                           </div>
@@ -6475,7 +6475,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               <div className="text-xs uppercase tracking-[0.18em] text-cyan-300">H6</div>
                               <h3 className="mt-2 text-base font-semibold text-white">Protocol follow-through</h3>
                             </div>
-                            <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-2 py-1 text-[11px] text-violet-100">
+                            <span className="rounded-full border border-clay-lime/20 bg-clay-lime/10 px-2 py-1 text-[11px] text-clay-ink">
                               Completion slice
                             </span>
                           </div>
@@ -6505,8 +6505,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               <div className="text-[11px] uppercase tracking-[0.18em] text-cyan-100">Mental Delta</div>
                               <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h6.delta.mentalPerformanceDelta)}</div>
                             </div>
-                            <div className="rounded-2xl border border-violet-400/15 bg-violet-400/5 p-3">
-                              <div className="text-[11px] uppercase tracking-[0.18em] text-violet-100">Trust Delta</div>
+                            <div className="rounded-2xl border border-clay-lime/15 bg-clay-lime/5 p-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-clay-ink">Trust Delta</div>
                               <div className="mt-2 text-2xl font-semibold text-white">{formatSignedDelta(visibleHypothesisEvaluation.h6.delta.athleteTrust)}</div>
                             </div>
                           </div>
@@ -6788,7 +6788,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                     </div>
                     <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <NoraMetricHelpButton metricKey="hypotheses-in-scope" className="absolute right-4 top-4" />
-                      <div className="flex items-center gap-3 text-violet-300">
+                      <div className="flex items-center gap-3 text-clay-lime">
                         <CheckCircle2 className="h-5 w-5" />
                         <span className="text-sm font-medium">Hypotheses, whole pilot</span>
                       </div>

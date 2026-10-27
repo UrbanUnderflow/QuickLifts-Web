@@ -18,9 +18,9 @@ const CoachProductPage: NextPage = () => {
 
       {/* Hero */}
       <section className="relative min-h-[80vh] flex flex-col items-center justify-center text-center px-8 py-24 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-purple-950/20 to-zinc-900"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-clay-raised/20 to-zinc-900"></div>
         <div className="absolute inset-0">
-          <div className="absolute top-16 left-16 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute top-16 left-16 w-80 h-80 bg-clay-lime/10 rounded-full blur-3xl"></div>
           <div className="absolute bottom-16 right-24 w-80 h-80 bg-[#E0FE10]/10 rounded-full blur-3xl"></div>
         </div>
         <div className="relative z-10 max-w-5xl mx-auto">
@@ -35,13 +35,13 @@ const CoachProductPage: NextPage = () => {
             </div>
           ) : null}
 
-          <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-purple-500/20 to-[#E0FE10]/20 backdrop-blur-sm border border-purple-500/30 rounded-full mb-6">
-            <FaBrain className="h-4 w-4 text-purple-400" />
-            <span className="text-purple-300 text-sm font-medium">PulseCheck for Coaches</span>
+          <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-clay-lime/20 to-[#E0FE10]/20 backdrop-blur-sm border border-clay-lime/30 rounded-full mb-6">
+            <FaBrain className="h-4 w-4 text-clay-lime" />
+            <span className="text-clay-lime text-sm font-medium">PulseCheck for Coaches</span>
           </div>
           <h1 className="text-white text-5xl sm:text-6xl lg:text-7xl font-bold mb-6">
             Elevate your athletes' 
-            <span className="bg-gradient-to-r from-purple-400 to-[#E0FE10] bg-clip-text text-transparent"> mental game</span>
+            <span className="bg-clay-lime bg-clip-text text-transparent"> mental game</span>
           </h1>
           <p className="text-zinc-300 text-lg sm:text-xl max-w-3xl mx-auto mb-8">
             Give your athletes access to AI-powered mental performance coaching, mood tracking, and personalized insights. 
@@ -50,7 +50,7 @@ const CoachProductPage: NextPage = () => {
           <div className="flex flex-col sm:flex-row items-center gap-4 justify-center">
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center gap-3 bg-gradient-to-r from-purple-500 to-[#E0FE10] text-black px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-purple-500/20 transition-all"
+              className="inline-flex items-center gap-3 bg-clay-lime text-clay-on-lime px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-clay-lime/20 transition-all"
             >
               Get Started for Your Athletes
               <FaArrowRight className="h-5 w-5" />
@@ -70,9 +70,9 @@ const CoachProductPage: NextPage = () => {
         <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950/50 to-zinc-900"></div>
         <div className="relative max-w-6xl mx-auto px-6 lg:px-8">
           <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-gradient-to-r from-purple-500/20 to-[#E0FE10]/20 border border-purple-500/30 rounded-full mb-6">
-              <FaBrain className="h-4 w-4 text-purple-400" />
-              <span className="text-purple-300 text-sm font-medium">What is PulseCheck?</span>
+            <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-gradient-to-r from-clay-lime/20 to-[#E0FE10]/20 border border-clay-lime/30 rounded-full mb-6">
+              <FaBrain className="h-4 w-4 text-clay-lime" />
+              <span className="text-clay-lime text-sm font-medium">What is PulseCheck?</span>
             </div>
             <h2 className="text-white text-4xl sm:text-5xl font-bold mb-6">Mental performance coaching, powered by AI</h2>
             <p className="text-zinc-400 text-lg max-w-3xl mx-auto">
@@ -83,7 +83,7 @@ const CoachProductPage: NextPage = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="bg-zinc-800/50 backdrop-blur-sm border border-zinc-700 rounded-2xl p-8 text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-purple-400 rounded-full flex items-center justify-center mx-auto mb-6">
+              <div className="w-16 h-16 bg-clay-lime rounded-full flex items-center justify-center mx-auto mb-6">
                 <FaBrain className="h-8 w-8 text-white" />
               </div>
               <h3 className="text-xl font-bold text-white mb-4">AI Mental Coach</h3>
@@ -132,7 +132,7 @@ const CoachProductPage: NextPage = () => {
             <div>
               <div className="space-y-8">
                 <div className="flex gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-400 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <div className="w-12 h-12 bg-clay-lime rounded-xl flex items-center justify-center flex-shrink-0">
                     <FaUsers className="h-6 w-6 text-white" />
                   </div>
                   <div>
@@ -236,9 +236,9 @@ const CoachProductPage: NextPage = () => {
         <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950/50 to-zinc-900"></div>
         <div className="relative max-w-4xl mx-auto px-6 lg:px-8 text-center">
           <div className="mb-12">
-            <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-gradient-to-r from-purple-500/20 to-[#E0FE10]/20 border border-purple-500/30 rounded-full mb-6">
-              <FaBolt className="h-4 w-4 text-purple-400" />
-              <span className="text-purple-300 text-sm font-medium">Simple Pricing</span>
+            <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-gradient-to-r from-clay-lime/20 to-[#E0FE10]/20 border border-clay-lime/30 rounded-full mb-6">
+              <FaBolt className="h-4 w-4 text-clay-lime" />
+              <span className="text-clay-lime text-sm font-medium">Simple Pricing</span>
             </div>
             <h2 className="text-white text-4xl sm:text-5xl font-bold mb-6">One plan. Complete access.</h2>
             <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
@@ -292,7 +292,7 @@ const CoachProductPage: NextPage = () => {
 
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="w-full bg-gradient-to-r from-purple-500 to-[#E0FE10] text-black px-6 py-4 rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-purple-500/20 transition-all"
+              className="w-full bg-clay-lime text-clay-on-lime px-6 py-4 rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-clay-lime/20 transition-all"
             >
               Start Your Coach Subscription
             </button>
@@ -317,7 +317,7 @@ const CoachProductPage: NextPage = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-purple-400 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-white">
+              <div className="w-16 h-16 bg-clay-lime rounded-full flex items-center justify-center mx-auto mb-6 text-2xl font-bold text-clay-on-lime">
                 1
               </div>
               <h3 className="text-xl font-bold text-white mb-4">Subscribe & Setup</h3>
@@ -351,13 +351,13 @@ const CoachProductPage: NextPage = () => {
 
       {/* Mobile App Preview */}
       <section className="relative py-16 sm:py-24 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-black via-purple-950/20 to-zinc-900"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-clay-raised/20 to-zinc-900"></div>
         <div className="relative max-w-6xl mx-auto px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
-              <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-gradient-to-r from-purple-500/20 to-[#E0FE10]/20 border border-purple-500/30 rounded-full mb-6">
-                <FaMobile className="h-4 w-4 text-purple-400" />
-                <span className="text-purple-300 text-sm font-medium">Mobile App</span>
+              <div className="inline-flex items-center gap-3 px-5 py-2.5 bg-gradient-to-r from-clay-lime/20 to-[#E0FE10]/20 border border-clay-lime/30 rounded-full mb-6">
+                <FaMobile className="h-4 w-4 text-clay-lime" />
+                <span className="text-clay-lime text-sm font-medium">Mobile App</span>
               </div>
               <h2 className="text-white text-4xl sm:text-5xl font-bold mb-6">
                 Available on iOS, with Android coming soon
@@ -399,7 +399,7 @@ const CoachProductPage: NextPage = () => {
 
             <div className="text-center">
               <div className="bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 backdrop-blur-sm border border-zinc-700 rounded-3xl p-8">
-                <div className="w-24 h-24 bg-gradient-to-r from-purple-500 to-[#E0FE10] rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <div className="w-24 h-24 bg-clay-lime rounded-2xl flex items-center justify-center mx-auto mb-6">
                   <FaBrain className="h-12 w-12 text-black" />
                 </div>
                 <h3 className="text-xl font-bold text-white mb-4">PulseCheck AI Coach</h3>

@@ -38,8 +38,8 @@ const ArtifactPageLibrary: React.FC<ArtifactPageLibraryProps> = ({
     <div className="space-y-5">
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <FileText className="w-4 h-4 text-purple-400" />
-          <p className="text-xs uppercase tracking-wide text-purple-400 font-semibold">
+          <FileText className="w-4 h-4 text-clay-lime" />
+          <p className="text-xs uppercase tracking-wide text-clay-lime font-semibold">
             {eyebrow}
           </p>
         </div>

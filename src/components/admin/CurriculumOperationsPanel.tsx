@@ -133,7 +133,7 @@ const TransparencyTab: React.FC = () => (
       </div>
       <div className="rounded-2xl border border-stone-200 bg-white p-5">
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-stone-500">
-          <Route className="h-4 w-4 text-purple-800" />
+          <Route className="h-4 w-4 text-clay-lime-deep" />
           How They Move On
         </div>
         <p className="mt-3 text-sm leading-6 text-stone-700">

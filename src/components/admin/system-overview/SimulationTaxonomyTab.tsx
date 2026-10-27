@@ -84,8 +84,8 @@ const PILLARS = [
         id: 'decision' as const,
         label: 'Decision',
         icon: Crosshair,
-        accent: '#c084fc',
-        accentDim: 'rgba(192,132,252,0.08)',
+        accent: '#d4ea04',
+        accentDim: 'rgba(212,234,4,0.08)',
         description:
             'The ability to process information, inhibit incorrect responses, and act on the right signal at the right time. Decision skills separate athletes who react from athletes who choose.',
         skills: [
@@ -144,7 +144,7 @@ const SESSION_TYPES = [
 const TRIAL_SEQUENCE = [
     { stage: 'Baseline Trial', surface: 'Phone / Web', description: 'Establishes starting profile before a Program begins. Standardized assessment conditions.', color: '#60a5fa' },
     { stage: 'Program', surface: 'Phone / Web', description: 'Daily Sim training — repetition, progression, and AI adaptation through Nora.', color: '#22c55e' },
-    { stage: 'Immersive Transfer Trial', surface: 'Apple Vision Pro', description: 'Optional bridge. Higher psychological and perceptual fidelity. Tests skill retention in immersive context.', color: '#c084fc' },
+    { stage: 'Immersive Transfer Trial', surface: 'Apple Vision Pro', description: 'Optional bridge. Higher psychological and perceptual fidelity. Tests skill retention in immersive context.', color: '#d4ea04' },
     { stage: 'Field Transfer Trial', surface: 'Physical / Coach-Led', description: 'Same skill language, real-world environment. Movement, noise, timing pressure, sport-adjacent execution.', color: '#fb923c' },
     { stage: 'Competition', surface: 'Game / Match', description: 'Ultimate external endpoint. Self-report + coach observation. Not directly measured by system.', color: '#ef4444' },
 ];
@@ -190,7 +190,7 @@ function CollapsibleSection({ title, defaultOpen = false, children }: { title: s
 
 /* ---- PILLAR BADGE ---- */
 function PillarBadge({ pillar }: { pillar: 'focus' | 'composure' | 'decision' }) {
-    const config = { focus: { color: '#60a5fa', label: 'Focus' }, composure: { color: '#22c55e', label: 'Composure' }, decision: { color: '#c084fc', label: 'Decision' } };
+    const config = { focus: { color: '#60a5fa', label: 'Focus' }, composure: { color: '#22c55e', label: 'Composure' }, decision: { color: '#d4ea04', label: 'Decision' } };
     const c = config[pillar];
     return (
         <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border" style={{ color: c.color, borderColor: c.color + '40', background: c.color + '12' }}>
@@ -206,8 +206,8 @@ const SimulationTaxonomyTab: React.FC = () => {
             {/* INTRO */}
             <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                        <Brain className="w-5 h-5 text-purple-400" />
+                    <div className="p-2 rounded-xl bg-clay-lime/10 border border-clay-lime/20">
+                        <Brain className="w-5 h-5 text-clay-lime" />
                     </div>
                     <div>
                         <h2 className="text-xl font-semibold">Simulation Taxonomy</h2>
@@ -269,7 +269,7 @@ const SimulationTaxonomyTab: React.FC = () => {
             {/* 3. PILLARS & SKILL MAP */}
             <section className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-purple-400" /> 3. Core Pillars and Official Skill Map
+                    <Brain className="w-4 h-4 text-clay-lime" /> 3. Core Pillars and Official Skill Map
                 </h3>
                 <p className="text-sm text-zinc-400">Three permanent pillars. Nine trainable skills. The athlete is never reduced to a single generic cognitive score.</p>
                 <div className="space-y-4">
@@ -589,7 +589,7 @@ const SimulationTaxonomyTab: React.FC = () => {
                         {[
                             { step: '1', title: 'Mechanism Review', desc: 'Identify the cognitive construct. Confirm peer-reviewed research supports the mechanism.', color: '#94a3b8' },
                             { step: '2', title: 'Sim Design & Build', desc: 'Author the sim against the spec template. Define metrics, tiers, and pressure types.', color: '#60a5fa' },
-                            { step: '3', title: 'Internal Pilot', desc: 'Run the sim with internal testers. Validate measurement reliability and UX completion rates.', color: '#a78bfa' },
+                            { step: '3', title: 'Internal Pilot', desc: 'Run the sim with internal testers. Validate measurement reliability and UX completion rates.', color: '#d4ea04' },
                             { step: '4', title: 'Pre/Post Validation', desc: 'Measure improvement on target metrics before and after a training block. Establish effect sizes.', color: '#22c55e' },
                             { step: '5', title: 'Transfer Testing', desc: 'Test whether trained skills transfer through Trials of increasing fidelity (Immersive → Field).', color: '#E0FE10' },
                             { step: '6', title: 'Outcome Correlation', desc: 'Correlate PulseCheck data with real competition performance and coach assessments.', color: '#fb923c' },

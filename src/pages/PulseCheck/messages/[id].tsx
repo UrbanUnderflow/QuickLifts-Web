@@ -212,8 +212,8 @@ const PulseCheckMessageThread: React.FC = () => {
       <div className="min-h-screen bg-[#0a0a0b] text-white relative flex flex-col">
         {/* Ambient background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-          <FloatingOrb color="#8B5CF6" size={600} style={{ top: '-10%', left: '5%' }} />
-          <FloatingOrb color="#6366F1" size={400} style={{ bottom: '-5%', right: '10%' }} delay={2} />
+          <FloatingOrb color="#D4EA04" size={600} style={{ top: '-10%', left: '5%' }} />
+          <FloatingOrb color="#A7D7C2" size={400} style={{ bottom: '-5%', right: '10%' }} delay={2} />
           <div
             className="absolute inset-0 opacity-[0.02] mix-blend-overlay"
             style={{
@@ -232,7 +232,7 @@ const PulseCheckMessageThread: React.FC = () => {
             <div className="h-[72px] flex items-center justify-between px-6 border-b border-white/10 relative shrink-0">
               <div 
                 className="absolute inset-x-0 bottom-0 h-px opacity-40"
-                style={{ background: 'linear-gradient(90deg, transparent, #8B5CF6, transparent)' }}
+                style={{ background: 'linear-gradient(90deg, transparent, #D4EA04, transparent)' }}
               />
               
               <div className="flex items-center gap-4">
@@ -247,13 +247,13 @@ const PulseCheckMessageThread: React.FC = () => {
                   <div className="w-48 h-10 bg-white/5 animate-pulse rounded-lg" />
                 ) : (
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] flex items-center justify-center shadow-[0_0_12px_rgba(139,92,246,0.25)] relative">
+                    <div className="w-10 h-10 rounded-full bg-clay-lime flex items-center justify-center shadow-[0_0_12px_rgba(212,234,4,0.25)] relative">
                       <span className="text-white font-semibold">{otherName?.[0] || 'U'}</span>
                       <div className="absolute -bottom-1 -right-1 bg-[#10B981] w-3.5 h-3.5 border-2 border-[#0d0d0f] rounded-full" />
                     </div>
                     <div>
                       <h2 className="font-semibold text-white tracking-wide">{otherName}</h2>
-                      <div className="flex items-center gap-1.5 text-xs text-[#A78BFA] font-medium tracking-wider uppercase">
+                      <div className="flex items-center gap-1.5 text-xs text-clay-lime font-medium tracking-wider uppercase">
                         <Activity className="w-3 h-3" />
                         {otherRole}
                       </div>
@@ -267,7 +267,7 @@ const PulseCheckMessageThread: React.FC = () => {
             <div className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
               {loading ? (
                 <div className="flex items-center justify-center h-full text-zinc-500">
-                  <div className="w-8 h-8 rounded-full border-2 border-zinc-700 border-t-[#8B5CF6] animate-spin" />
+                  <div className="w-8 h-8 rounded-full border-2 border-zinc-700 border-t-clay-lime animate-spin" />
                 </div>
               ) : messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-zinc-500 opacity-80">
@@ -308,7 +308,7 @@ const PulseCheckMessageThread: React.FC = () => {
                                 <div
                                   className={`px-4 py-2.5 shadow-sm overflow-hidden relative group/bubble ${
                                     isMine 
-                                      ? 'bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] text-white' 
+                                      ? 'bg-clay-lime text-clay-on-lime' 
                                       : 'bg-white/10 border border-white/5 text-[#f4f4f5]'
                                   }`}
                                   style={{
@@ -349,7 +349,7 @@ const PulseCheckMessageThread: React.FC = () => {
 
             {/* Input Box */}
             <div className="p-4 bg-zinc-950/40 backdrop-blur-md border-t border-white/10 sticky bottom-0 z-20">
-              <div className="max-w-3xl mx-auto flex items-end gap-3 rounded-2xl bg-zinc-900 border border-white/10 p-2 shadow-inner focus-within:border-[#8B5CF6]/50 focus-within:ring-1 focus-within:ring-[#8B5CF6]/30 transition-all">
+              <div className="max-w-3xl mx-auto flex items-end gap-3 rounded-2xl bg-zinc-900 border border-white/10 p-2 shadow-inner focus-within:border-clay-lime/50 focus-within:ring-1 focus-within:ring-clay-lime/30 transition-all">
                 <textarea
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
@@ -369,7 +369,7 @@ const PulseCheckMessageThread: React.FC = () => {
                   disabled={!newMessage.trim() || sending}
                   className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all shadow-md group ${
                     newMessage.trim() && !sending
-                      ? 'bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] text-white hover:shadow-[#8B5CF6]/30 hover:shadow-lg active:scale-95 cursor-pointer'
+                      ? 'bg-clay-lime text-clay-on-lime hover:shadow-clay-lime/30 hover:shadow-lg active:scale-95 cursor-pointer'
                       : 'bg-white/5 text-zinc-600 cursor-not-allowed'
                   }`}
                 >

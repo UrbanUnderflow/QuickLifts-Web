@@ -202,7 +202,7 @@ const escalationDispositionClassName = (label: string) => {
     case 'Coach review':
       return 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100';
     case 'Support flag':
-      return 'border-violet-400/25 bg-violet-400/10 text-violet-100';
+      return 'border-clay-lime/25 bg-clay-lime/10 text-clay-ink';
     default:
       return 'border-white/10 bg-white/5 text-zinc-300';
   }
@@ -639,7 +639,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                 </div>
                 <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
                   <NoraMetricHelpButton metricKey="profile-snapshots" className="absolute right-4 top-4" />
-                  <div className="flex items-center gap-3 text-violet-300">
+                  <div className="flex items-center gap-3 text-clay-lime">
                     <FileText className="h-5 w-5" />
                     <span className="text-sm font-medium">Profile Snapshots</span>
                   </div>
@@ -827,7 +827,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                                 <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2 py-1 text-cyan-100">Coach review</span>
                               ) : null}
                               {lead.supportFlag ? (
-                                <span className="rounded-full border border-violet-400/25 bg-violet-400/10 px-2 py-1 text-violet-100">Support flag</span>
+                                <span className="rounded-full border border-clay-lime/25 bg-clay-lime/10 px-2 py-1 text-clay-ink">Support flag</span>
                               ) : null}
                               {lead.openCareEscalation ? (
                                 <span className="rounded-full border border-rose-400/25 bg-rose-400/10 px-2 py-1 text-rose-100">Open care</span>

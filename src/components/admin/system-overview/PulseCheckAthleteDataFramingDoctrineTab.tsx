@@ -61,7 +61,7 @@ export default function PulseCheckAthleteDataFramingDoctrineTab() {
         <CardGrid columns="xl:grid-cols-2">
           <InfoCard
             title="Rank order"
-            accent="purple"
+            accent="clay"
             body="Felt sense + coach judgment + sport context OUTRANK any consumer score. Nora encodes this everywhere: data informs how we train today, not whether we train. Load adjustments happen through the plan and the coach, never through athlete self-diagnosis off a dashboard."
           />
           <InfoCard

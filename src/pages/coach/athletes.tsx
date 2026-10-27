@@ -235,8 +235,8 @@ const CoachAthletes: React.FC = () => {
                       {Math.round(athletes.reduce((sum, a) => sum + a.workoutsCompleted, 0) / athletes.length)}
                     </p>
                   </div>
-                  <div className="p-3 bg-purple-500/10 rounded-lg">
-                    <FaChartLine className="h-6 w-6 text-purple-400" />
+                  <div className="p-3 bg-clay-lime/10 rounded-lg">
+                    <FaChartLine className="h-6 w-6 text-clay-lime" />
                   </div>
                 </div>
               </div>

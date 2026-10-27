@@ -112,7 +112,7 @@ const SCIENTIFIC_FOUNDATIONS = [
 const SKILL_SCORES = [
     { skill: 'Task-Specific Distraction Control', pillar: 'Focus', description: 'Accuracy difference between matched reference and distraction conditions in Noise Gate. This does not by itself establish a general attention trait.', color: ACCENT },
     { skill: 'Response Selection', pillar: 'Focus', description: 'Wrong taps and highlighted-distractor taps are kept separate so salience-driven errors are not inferred from every mistake.', color: '#60a5fa' },
-    { skill: 'Pressure Stability Candidate', pillar: 'Composure', description: 'May be studied only in a separately balanced neutral-versus-pressure design. It is not produced by the standard Noise Gate session.', color: '#c084fc' },
+    { skill: 'Pressure Stability Candidate', pillar: 'Composure', description: 'May be studied only in a separately balanced neutral-versus-pressure design. It is not produced by the standard Noise Gate session.', color: '#d4ea04' },
 ];
 
 const RAW_METRICS = [
@@ -146,7 +146,7 @@ const MODIFIER_COMPAT = [
 const DIFFICULTY_TIERS = [
     { tier: 1, name: 'Foundation', color: '#94a3b8', target: 'Learn the interaction', task: 'Visible call with a nine-marker field', distractors: 'Unscored practice, then a low-salience visual cue', modifiers: 'Fixed response window' },
     { tier: 2, name: 'Single Channel', color: '#60a5fa', target: 'Stable valid sessions', task: 'Matched layouts and targets', distractors: 'Visual or audio, tested separately', modifiers: 'One configured channel' },
-    { tier: 3, name: 'Combined Channel', color: '#c084fc', target: 'Calibrated personal progression', task: 'Same matched search task', distractors: 'Visual and audio together', modifiers: 'Combined channel only' },
+    { tier: 3, name: 'Combined Channel', color: '#d4ea04', target: 'Calibrated personal progression', task: 'Same matched search task', distractors: 'Visual and audio together', modifiers: 'Combined channel only' },
     { tier: 4, name: 'Representative Variant', color: '#22c55e', target: 'Validation required', task: 'Sport-relevant information and response mapping', distractors: 'Protocol-defined', modifiers: 'Planned, not assumed equivalent' },
 ];
 
@@ -231,7 +231,7 @@ const NoiseGateSpecTab: React.FC = () => {
             {/* SCIENTIFIC FOUNDATION */}
             <section className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-purple-400" /> Scientific Foundation
+                    <Brain className="w-4 h-4 text-clay-lime" /> Scientific Foundation
                 </h3>
                 <p className="text-xs text-zinc-500 max-w-3xl">These references support the mechanism behind the sim. They do not, by themselves, validate the full implementation; that must be established through internal validation and transfer testing.</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -305,7 +305,7 @@ const NoiseGateSpecTab: React.FC = () => {
             {/* SCORE ARCHITECTURE */}
             <section className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-purple-400" /> Score Architecture
+                    <BarChart3 className="w-4 h-4 text-clay-lime" /> Score Architecture
                 </h3>
                 <p className="text-sm text-zinc-400">Three-layer architecture: pillar composites → skill scores → raw metrics.</p>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4">
@@ -469,8 +469,8 @@ const NoiseGateSpecTab: React.FC = () => {
                             <p className="text-xs font-bold text-cyan-400 mb-1">Extended Trial Noise Gate</p>
                             <p className="text-[10px] text-zinc-400 leading-relaxed">Proposed non-adaptive reliability protocol. Duration, trial count, and condition schedule must be set before data collection and held constant.</p>
                         </div>
-                        <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
-                            <p className="text-xs font-bold text-purple-400 mb-1">Representative Environment Study</p>
+                        <div className="rounded-xl border border-clay-lime/20 bg-clay-lime/5 p-4">
+                            <p className="text-xs font-bold text-clay-lime mb-1">Representative Environment Study</p>
                             <p className="text-[10px] text-zinc-400 leading-relaxed">Planned study using sport-relevant information and actions. Greater visual realism alone would not establish representative design or transfer.</p>
                         </div>
                     </div>
@@ -527,12 +527,12 @@ const NoiseGateSpecTab: React.FC = () => {
                             ))}
                         </div>
                     </div>
-                    <div className="bg-[#090f1c] border border-purple-500/20 rounded-2xl p-4 space-y-2">
-                        <p className="text-xs font-bold text-purple-400">Trial Mode</p>
+                    <div className="bg-[#090f1c] border border-clay-lime/20 rounded-2xl p-4 space-y-2">
+                        <p className="text-xs font-bold text-clay-lime">Trial Mode</p>
                         <div className="space-y-1">
                             {['No intra-session feedback', 'Full session without scores or comparisons', 'Results shown only at session end', 'Fixed difficulty at standardized Trial level'].map((item) => (
                                 <div key={item} className="flex items-start gap-1.5">
-                                    <CheckCircle2 className="w-3 h-3 text-purple-400 flex-shrink-0 mt-0.5" />
+                                    <CheckCircle2 className="w-3 h-3 text-clay-lime flex-shrink-0 mt-0.5" />
                                     <p className="text-[10px] text-zinc-400">{item}</p>
                                 </div>
                             ))}

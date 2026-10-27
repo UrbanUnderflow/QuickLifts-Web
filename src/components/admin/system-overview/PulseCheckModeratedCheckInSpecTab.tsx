@@ -217,8 +217,8 @@ const PulseCheckModeratedCheckInSpecTab: React.FC = () => {
     <div className="space-y-8">
       <div>
         <div className="mb-1 flex items-center gap-2">
-          <HeartHandshake className="h-4 w-4 text-violet-400" />
-          <p className="text-xs font-semibold uppercase tracking-wide text-violet-400">
+          <HeartHandshake className="h-4 w-4 text-clay-lime" />
+          <p className="text-xs font-semibold uppercase tracking-wide text-clay-lime">
             PulseCheck · Coach ↔ Athlete Trust
           </p>
         </div>
@@ -232,9 +232,9 @@ const PulseCheckModeratedCheckInSpecTab: React.FC = () => {
       </div>
 
       {/* Thesis */}
-      <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.07] p-5">
+      <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/[0.07] p-5">
         <div className="flex items-start gap-3">
-          <Lock className="mt-0.5 h-5 w-5 shrink-0 text-violet-400" />
+          <Lock className="mt-0.5 h-5 w-5 shrink-0 text-clay-lime" />
           <div>
             <p className="mb-1 text-sm font-semibold text-white">Trust-capital thesis</p>
             <p className="text-sm leading-relaxed text-zinc-300">
@@ -297,19 +297,19 @@ const PulseCheckModeratedCheckInSpecTab: React.FC = () => {
       {/* Flow */}
       <div>
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-zinc-200">
-          <MessageCircle className="h-4 w-4 text-violet-400" /> End-to-End Flow
+          <MessageCircle className="h-4 w-4 text-clay-lime" /> End-to-End Flow
         </h3>
         <div className="space-y-2">
           {FLOW.map((phase) => (
             <div key={phase.n} className="flex gap-3 rounded-xl border border-zinc-800 bg-[#090f1c] p-4">
-              <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-violet-500/15 text-xs font-bold text-violet-300">
+              <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-clay-lime/15 text-xs font-bold text-clay-lime">
                 {phase.n}
               </span>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white">{phase.title}</p>
                 <p className="mt-1 text-xs leading-relaxed text-zinc-400">{phase.body}</p>
                 <p className="mt-1.5 inline-flex items-center gap-1 rounded-md bg-zinc-800/60 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
-                  <BookMarked className="h-3 w-3 text-violet-400" /> {phase.grounding}
+                  <BookMarked className="h-3 w-3 text-clay-lime" /> {phase.grounding}
                 </p>
               </div>
             </div>
@@ -355,7 +355,7 @@ const PulseCheckModeratedCheckInSpecTab: React.FC = () => {
       {/* Research foundations */}
       <div>
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-zinc-200">
-          <Sparkles className="h-4 w-4 text-violet-400" /> Research Foundations
+          <Sparkles className="h-4 w-4 text-clay-lime" /> Research Foundations
         </h3>
         <p className="mb-3 max-w-3xl text-xs text-zinc-500">
           Theoretical grounding for the moderation model. Cited at the framework level as the evidentiary basis for the
@@ -366,7 +366,7 @@ const PulseCheckModeratedCheckInSpecTab: React.FC = () => {
             <div key={c.framework} className="rounded-xl border border-zinc-800 bg-[#090f1c] p-4">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <p className="text-sm font-semibold text-white">{c.framework}</p>
-                <p className="text-[11px] font-medium text-violet-300">{c.authors}</p>
+                <p className="text-[11px] font-medium text-clay-lime">{c.authors}</p>
               </div>
               <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">{c.maps}</p>
             </div>

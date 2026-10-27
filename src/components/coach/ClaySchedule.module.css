@@ -14,7 +14,7 @@
 .imports[open] summary::after { content: '−'; }
 .schedule :global([class*="text-white"]),
 .schedule :global([class*="text-zinc-"]),
-.schedule :global([class*="text-purple-"]),
+.schedule :global([class*="text-clay-"]),
 .schedule :global([class*="text-teal-"]),
 .schedule :global([class*="text-[#E0FE10]"]) { color: #344b45; }
 .schedule :global([class*="text-zinc-5"]),

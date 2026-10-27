@@ -23,7 +23,7 @@ import {
 export const NORA_CHAT_CONTRACT_VERSION = '2026.08.20';
 export const NORA_CHAT_CONTRACT_SOURCE_SHA256 = 'd110d34c026cfcba709dbd0fc95893cc9b4a61362d2ffe576626b01f6d730095';
 
-type Tone = 'red' | 'amber' | 'blue' | 'cyan' | 'green' | 'violet' | 'zinc';
+type Tone = 'red' | 'amber' | 'blue' | 'cyan' | 'green' | 'clay' | 'zinc';
 
 const TONE_STYLES: Record<Tone, { border: string; background: string; icon: string; badge: string }> = {
   red: {
@@ -56,11 +56,11 @@ const TONE_STYLES: Record<Tone, { border: string; background: string; icon: stri
     icon: 'text-emerald-300',
     badge: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200',
   },
-  violet: {
-    border: 'border-violet-500/30',
-    background: 'bg-violet-500/[0.06]',
-    icon: 'text-violet-300',
-    badge: 'border-violet-400/30 bg-violet-400/10 text-violet-200',
+  clay: {
+    border: 'border-clay-lime/30',
+    background: 'bg-clay-lime/[0.06]',
+    icon: 'text-clay-lime',
+    badge: 'border-clay-lime/30 bg-clay-lime/10 text-clay-ink',
   },
   zinc: {
     border: 'border-zinc-700',
@@ -189,7 +189,7 @@ export const NORA_CHAT_CONTRACT_LANES: LaneDefinition[] = [
     label: 'Performance',
     priority: 7,
     icon: Bot,
-    tone: 'violet',
+    tone: 'clay',
     paragraphs: [
       'Use for sport focus, confidence, motivation, composure, decisions, routines, practice, competition, and athlete-requested mental-performance skills.',
       "Nora stays with the athlete's chosen topic. Nora uses only the parts of the engagement loop the turn needs: notice, reflect, clarify, connect, offer, and track. Nora asks at most one question. Nora asks permission before offering a skill when the athlete did not request advice.",
@@ -342,7 +342,7 @@ function BulletList({ items, tone = 'zinc' }: { items: string[]; tone?: Tone }) 
     blue: 'bg-blue-400',
     cyan: 'bg-cyan-400',
     green: 'bg-emerald-400',
-    violet: 'bg-violet-400',
+    clay: 'bg-clay-lime',
     zinc: 'bg-zinc-500',
   }[tone];
 
@@ -774,7 +774,7 @@ const PulseCheckNoraChatContractTab: React.FC = () => {
 
             <div className="pt-2">
               <p className="mb-3 font-semibold text-white">Required scenario families</p>
-              <BulletList items={SCENARIO_FAMILIES} tone="violet" />
+              <BulletList items={SCENARIO_FAMILIES} tone="clay" />
             </div>
 
             <div className="pt-2">

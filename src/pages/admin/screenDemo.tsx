@@ -8,8 +8,8 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 const PC = {
   pageBg: '#070711',
   deepBg: '#0B0B1C',
-  purple: '#7C3AED',
-  purpleSoft: '#a78bfa',
+  clay: '#D4EA04',
+  claySoft: '#d4ea04',
   cardBg: 'rgba(255,255,255,0.045)',
   cardBorder: 'rgba(255,255,255,0.10)',
 };
@@ -136,20 +136,20 @@ const ScreenDemoPage: React.FC = () => {
       </Head>
 
       <div className="relative min-h-screen overflow-hidden text-white" style={{ background: PC.pageBg, fontFamily: 'Switzer, sans-serif' }}>
-        <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)' }} />
+        <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(212,234,4,0.18) 0%, transparent 70%)' }} />
 
         <main className="relative mx-auto w-full max-w-5xl px-4 py-12 md:px-6">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: 'rgba(124,58,237,0.14)' }}>
-              <MonitorPlay className="h-5 w-5" style={{ color: PC.purpleSoft }} />
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: 'rgba(212,234,4,0.14)' }}>
+              <MonitorPlay className="h-5 w-5" style={{ color: PC.claySoft }} />
             </span>
-            <span className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>
+            <span className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.claySoft }}>
               PulseCheck Admin
             </span>
           </div>
 
           <h1 className="mt-5 text-4xl font-extrabold tracking-tight md:text-5xl" style={displayFont}>
-            Screen <span style={{ ...serifAccent, color: PC.purpleSoft, fontWeight: 500 }}>Demo</span>
+            Screen <span style={{ ...serifAccent, color: PC.claySoft, fontWeight: 500 }}>Demo</span>
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400">
             Preview real PulseCheck UI flows end-to-end without a real account or data. Each demo bypasses
@@ -165,7 +165,7 @@ const ScreenDemoPage: React.FC = () => {
               >
                 <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: PC.purpleSoft }}>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em]" style={{ color: PC.claySoft }}>
                       {demo.surface}
                     </p>
                     <h2 className="mt-2 text-2xl font-bold tracking-tight text-white" style={displayFont}>
@@ -179,8 +179,8 @@ const ScreenDemoPage: React.FC = () => {
                       href={demo.launchUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex flex-none items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-                      style={{ background: PC.purple }}
+                      className="inline-flex flex-none items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90"
+                      style={{ background: PC.clay }}
                     >
                       <Sparkles className="h-4 w-4" />
                       Launch demo
@@ -197,7 +197,7 @@ const ScreenDemoPage: React.FC = () => {
                   {demo.steps.map((step, index) => (
                     <div key={step.label} className="rounded-2xl border p-4" style={{ borderColor: PC.cardBorder, background: 'rgba(255,255,255,0.025)' }}>
                       <div className="flex items-center gap-2">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: 'rgba(124,58,237,0.16)', color: PC.purpleSoft }}>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: 'rgba(212,234,4,0.16)', color: PC.claySoft }}>
                           {index + 1}
                         </span>
                         <span className="text-sm font-semibold text-white">{step.label}</span>

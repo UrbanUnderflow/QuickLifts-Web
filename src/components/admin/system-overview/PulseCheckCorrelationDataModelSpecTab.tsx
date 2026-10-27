@@ -204,7 +204,7 @@ const PulseCheckCorrelationDataModelSpecTab: React.FC = () => {
 
       <SectionBlock icon={Brain} title="Athlete Pattern Model">
         <DataTable columns={['Field Group', 'Required Contents']} rows={PATTERN_FIELD_ROWS} />
-        <InfoCard title="Object Rules" accent="purple" body={<BulletList items={PATTERN_RULES} />} />
+        <InfoCard title="Object Rules" accent="clay" body={<BulletList items={PATTERN_RULES} />} />
       </SectionBlock>
 
       <SectionBlock icon={Workflow} title="Recommendation Projection">

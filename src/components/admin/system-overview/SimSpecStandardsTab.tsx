@@ -85,7 +85,7 @@ const FEEDBACK_MODES = [
     },
     {
         mode: 'Trial Mode',
-        color: '#c084fc',
+        color: '#d4ea04',
         description: 'Intra-session feedback is suppressed. The athlete completes the full session before seeing any performance data.',
         rationale: 'Three reasons: (1) feedback creates self-monitoring that alters performance, (2) seeing poor scores mid-session can trigger frustration spirals, (3) research data must reflect natural performance trajectory.',
     },
@@ -120,7 +120,7 @@ const VALIDATION_STAGES = [
     {
         stage: 'Stage 3',
         name: 'Discriminant Validity',
-        color: '#c084fc',
+        color: '#d4ea04',
         criteria: 'Data shows the sim differentiates meaningfully between athlete populations or predicts relevant performance differences. Scores correlate with expected outcomes.',
         example: 'Athletes with higher Reset scores show faster refocus in game-film-coded disruption events.',
     },
@@ -196,7 +196,7 @@ const SimSpecStandardsTab: React.FC = () => {
                         {[
                             { label: 'Minimum Response Sequence', desc: 'A single correct input is not sufficient. Reset requires 2 consecutive correct responses. Single-event sims (Signal Window, Brake Point) require 1 committed response.', color: '#60a5fa' },
                             { label: 'Minimum Reaction Time', desc: 'Any response faster than 150 ms is flagged as a motor artifact, not a cognitive response. Excluded from metric calculations and logged separately.', color: '#22c55e' },
-                            { label: 'Maximum Response Window', desc: 'Each sim defines a maximum allowable response window. No valid response within this window → failed trial (Section 3).', color: '#c084fc' },
+                            { label: 'Maximum Response Window', desc: 'Each sim defines a maximum allowable response window. No valid response within this window → failed trial (Section 3).', color: '#d4ea04' },
                             { label: 'False Start Definition', desc: 'A response that occurs before the valid response window opens. Reset: response during disruption. Brake Point: response before Go stimulus. Logged separately, not counted toward core metric.', color: '#f59e0b' },
                         ].map((rule) => (
                             <div key={rule.label} className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-black/20 p-3">
@@ -314,11 +314,11 @@ const SimSpecStandardsTab: React.FC = () => {
             {/* 4. MODIFIER BOUNDARIES */}
             <section className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-purple-400" /> 4. Modifier Boundary Rules
+                    <Sliders className="w-4 h-4 text-clay-lime" /> 4. Modifier Boundary Rules
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
-                    <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 px-4 py-3">
-                        <p className="text-xs text-purple-300 font-semibold mb-1">The Boundary Principle</p>
+                    <div className="rounded-xl border border-clay-lime/20 bg-clay-lime/5 px-4 py-3">
+                        <p className="text-xs text-clay-lime font-semibold mb-1">The Boundary Principle</p>
                         <p className="text-[10px] text-zinc-400 leading-relaxed">
                             Modifiers change the <span className="text-white font-semibold">psychological context</span> of a sim without changing the underlying <span className="text-white font-semibold">mechanism</span>. If a modifier changes the mechanism, the sim is no longer the same family.
                         </p>
@@ -473,7 +473,7 @@ const SimSpecStandardsTab: React.FC = () => {
             {/* 9. SKILL-SCORE SOURCING */}
             <section className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-purple-400" /> 9. Skill-Score Sourcing Standards
+                    <BarChart3 className="w-4 h-4 text-clay-lime" /> 9. Skill-Score Sourcing Standards
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                     <CollapsibleSection title="9.1 Multi-Source Requirement" defaultOpen>

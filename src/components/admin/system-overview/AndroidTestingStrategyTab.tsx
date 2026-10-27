@@ -221,7 +221,7 @@ storagePath = food/e2e-android-20260314-1530/meal-001.jpg`}
           />
           <InfoCard
             title="What stays Android-specific"
-            accent="purple"
+            accent="clay"
             body={<BulletList items={[
               'Camera, gallery picker, and permission prompts need native coverage.',
               'Compose `testTag` contracts should replace coordinate-driven taps.',

@@ -187,7 +187,7 @@ export default function PulseCheckSportScenarioPersonalizationTab() {
         <DataTable columns={['Field', 'Meaning']} rows={TELEMETRY_ROWS} />
         <InfoCard
           title="Silent Physiology Rule"
-          accent="purple"
+          accent="clay"
           body="A scenario may sample live heart-rate context to support later pattern learning. The immediate athlete response stays about felt experience and the trained response. Junior surfaces do not grade or expose raw biometric numbers."
         />
       </SectionBlock>

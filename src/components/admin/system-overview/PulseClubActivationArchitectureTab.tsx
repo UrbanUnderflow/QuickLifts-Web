@@ -253,7 +253,7 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
         <div className="space-y-4">
           <InfoCard
             title="Keep the state model small"
-            accent="purple"
+            accent="clay"
             body="The first pass should track only the activation states needed for onboarding and pairing. Broader CRM-style club lifecycle tracking is intentionally out of scope."
           />
           <DataTable

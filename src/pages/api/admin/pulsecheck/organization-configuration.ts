@@ -2,7 +2,7 @@ import { normalizeSignInPolicy } from '../../../../lib/pulsecheck/signInPolicy';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requireAdminRequest } from '../_auth';
 import admin, { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
-import { validateProductBrand, normalizeAppBranding, normalizeAppExperience } from '../../../../lib/pulsecheck/productConfig';
+import { validateProductBrand, normalizeAppBranding } from '../../../../lib/pulsecheck/productConfig';
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST required.' });
   if (!await requireAdminRequest(req)) return res.status(401).json({ error: 'Admin authentication required.' });
@@ -18,7 +18,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       productBrand: validateProductBrand(configuration?.productBrand),
       ...(configuration.signInPolicy !== undefined ? { signInPolicy: normalizeSignInPolicy(configuration.signInPolicy) } : {}),
       ...(configuration.appBranding !== undefined ? { appBranding: normalizeAppBranding(configuration.appBranding) } : {}),
-      ...(configuration.appExperience !== undefined ? { appExperience: normalizeAppExperience(configuration.appExperience) } : {}),
       productConfigurationUpdatedBy: actor.uid, updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
     const db = app.firestore();
@@ -27,11 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const [organization, closure] = await Promise.all([tx.get(ref), tx.get(db.collection('account-closure-jobs').doc(actor.uid))]);
       if (!organization.exists || closure.exists) throw new Error('Organization configuration is not available.');
       if (organization.data()?.lifecycleState || organization.data()?.deletedAt) throw new Error('Restore this organization before changing its configuration.');
-      tx.update(ref, { ...patch,
-        ...(configuration.appExperience !== undefined
-          ? { appExperience: normalizeAppExperience(configuration.appExperience, organization.data()?.appExperience) }
-          : {}),
-      });
+      tx.update(ref, patch);
     });
     return res.status(200).json({ success: true });
   } catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : 'Unable to save configuration.' }); }

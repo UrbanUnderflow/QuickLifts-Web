@@ -330,7 +330,7 @@ const AuntEdnaPilotAuthorizationMemoTab: React.FC = () => {
 
       <SectionBlock icon={Users} title="Pilot Summary and Department Authorization">
         <CardGrid columns="md:grid-cols-2">
-          <InfoCard title="Pilot Summary" accent="purple" body={<BulletList items={PILOT_SUMMARY_ITEMS} />} />
+          <InfoCard title="Pilot Summary" accent="clay" body={<BulletList items={PILOT_SUMMARY_ITEMS} />} />
           <InfoCard title="Department Authorization" accent="green" body={<BulletList items={AUTHORIZATION_ITEMS} />} />
         </CardGrid>
       </SectionBlock>
@@ -340,7 +340,7 @@ const AuntEdnaPilotAuthorizationMemoTab: React.FC = () => {
           <InfoCard title="Minimum-Necessary Boundary" accent="blue" body={<BulletList items={DATA_BOUNDARY_ITEMS} />} />
           <InfoCard
             title="Current Pilot Data Scope"
-            accent="purple"
+            accent="clay"
             body="Pilot workflows may include check-ins, readiness or recovery signals, session activity, survey responses, escalation or support workflow events, and connected wearable or health data the participant affirmatively authorizes."
           />
         </CardGrid>
@@ -364,7 +364,7 @@ const AuntEdnaPilotAuthorizationMemoTab: React.FC = () => {
           />
           <InfoCard
             title="Signature Posture"
-            accent="purple"
+            accent="clay"
             body="Use this memo for department-level authorization and acknowledgment only. It is designed to be signed by the athletics department, Pulse Intelligence Labs, and AuntEdna."
           />
         </CardGrid>

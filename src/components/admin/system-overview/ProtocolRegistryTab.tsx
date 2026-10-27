@@ -1392,7 +1392,7 @@ const ProtocolRegistryTab: React.FC = () => {
                         <InlineTag label={sourceExercise ? 'Source asset bound' : 'Source asset missing'} color={sourceExercise ? 'blue' : 'red'} />
                         <InlineTag label={practiceSpec ? 'Practice spec locked' : 'Practice spec missing'} color={practiceSpec ? 'green' : 'red'} />
                         {PRACTICE_INPUT_MODES.map((mode) => (
-                          <InlineTag key={mode} label={mode} color={mode === 'Text first' ? 'blue' : mode === 'Voice next' ? 'amber' : 'purple'} />
+                          <InlineTag key={mode} label={mode} color={mode === 'Text first' ? 'blue' : mode === 'Voice next' ? 'amber' : 'clay'} />
                         ))}
                       </div>
                       <div className="mt-3 text-sm leading-6 text-zinc-300">
@@ -1408,7 +1408,7 @@ const ProtocolRegistryTab: React.FC = () => {
                       <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Scorecard Contract</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {PRACTICE_SCORECARD_DIMENSIONS.map((dimension) => (
-                          <InlineTag key={dimension} label={dimension} color="purple" />
+                          <InlineTag key={dimension} label={dimension} color="clay" />
                         ))}
                       </div>
                       <div className="mt-3 space-y-2">

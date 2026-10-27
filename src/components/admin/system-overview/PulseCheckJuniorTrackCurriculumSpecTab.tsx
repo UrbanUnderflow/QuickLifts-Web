@@ -168,7 +168,7 @@ export default function PulseCheckJuniorTrackCurriculumSpecTab() {
         <CardGrid columns="xl:grid-cols-2">
           <InfoCard
             title="Completion And Ceremony Are Separate"
-            accent="purple"
+            accent="clay"
             body="Completing all three daily pillars sets the day-complete state. The ceremony has its own acknowledgement date so a completed athlete who leaves early still receives the moment later."
           />
           <InfoCard

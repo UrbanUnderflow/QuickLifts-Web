@@ -9,7 +9,8 @@
 .root :global([aria-current="page"]) {background:#e7efdc!important;color:#23473d!important;}
 .root :global([class*="text-white"]),.root :global([class*="text-zinc-100"]),.root :global([class*="text-zinc-200"]) {color:#22302e;}
 .root :global([class*="text-zinc-300"]),.root :global([class*="text-zinc-400"]),.root :global([class*="text-zinc-500"]),.root :global([class*="text-zinc-600"]) {color:#65716c;}
-.root :global([class*="text-[#E0FE10]"]),.root :global([class*="text-purple-"]),.root :global([class*="text-[#A78BFA]"]) {color:#246863;}
+.root :global([class*="text-[#E0FE10]"]),.root :global([class*="text-clay-"]) {color:#246863;}
+.root :global([class*="text-clay-on-lime"]) {color:#22302e;}
 .root :global([class*="bg-zinc-9"]),.root :global([class*="bg-zinc-8"]),.root :global([class*="bg-zinc-7"]) {background-color:#fff;}
 .root :global([class*="border-zinc-"]),.root :global([class*="border-white/"]) {border-color:#dfe5df;}
 .root :global([class*="bg-gradient-to-"]) {background-image:none;background-color:#edf3eb;}
@@ -81,7 +82,8 @@
 .root[data-dashboard-theme="dark"] :global([class*="bg-gradient-to-"]) {background:var(--dashboard-raised);}
 .root[data-dashboard-theme="dark"] :global([aria-current="page"]) {background:#334835!important;color:#d9f2bd!important;}
 .root[data-dashboard-theme="dark"] input,.root[data-dashboard-theme="dark"] textarea,.root[data-dashboard-theme="dark"] select {background:#15201b;color:var(--dashboard-text);border-color:var(--dashboard-border);}
-.root[data-dashboard-theme="dark"] :global([class*="text-[#E0FE10]"]),.root[data-dashboard-theme="dark"] :global([class*="text-purple-"]),.root[data-dashboard-theme="dark"] :global([class*="text-[#A78BFA]"]),.root[data-dashboard-theme="dark"] :global([class*="text-cyan-"]) {color:#a7d7c2;}
+.root[data-dashboard-theme="dark"] :global([class*="text-[#E0FE10]"]),.root[data-dashboard-theme="dark"] :global([class*="text-clay-"]),.root[data-dashboard-theme="dark"] :global([class*="text-cyan-"]) {color:#a7d7c2;}
+.root[data-dashboard-theme="dark"] :global([class*="text-clay-on-lime"]) {color:#232817;}
 .root[data-dashboard-theme="dark"] :global([class*="text-red-4"]) {color:#fca5a5;}
 .root[data-dashboard-theme="dark"] :global([class*="text-amber-3"]),.root[data-dashboard-theme="dark"] :global([class*="text-amber-4"]) {color:#fcd58c;}
 .root[data-dashboard-theme="dark"] :global([class*="text-emerald-4"]),.root[data-dashboard-theme="dark"] :global([class*="text-green-4"]) {color:#9de2b7;}

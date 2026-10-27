@@ -379,7 +379,7 @@ export default function PulseCheckOuraPage() {
       <div className="pointer-events-none absolute inset-0">
         <FloatingOrb color="#E0FE10" size="h-[520px] w-[520px]" position={{ top: '-10%', left: '-12%' }} delay={0} />
         <FloatingOrb color="#3B82F6" size="h-[420px] w-[420px]" position={{ top: '22%', right: '-6%' }} delay={2} />
-        <FloatingOrb color="#8B5CF6" size="h-[360px] w-[360px]" position={{ bottom: '8%', left: '18%' }} delay={4} />
+        <FloatingOrb color="#D4EA04" size="h-[360px] w-[360px]" position={{ bottom: '8%', left: '18%' }} delay={4} />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(12,18,32,0.84),rgba(10,10,11,1)_60%)]" />
         <div className="absolute inset-0 opacity-[0.015] bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxwYXRoIGQ9Ik0wIDBoMzAwdjMwMEgweiIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIuMDUiLz48L3N2Zz4=')]" />
       </div>
@@ -426,7 +426,7 @@ export default function PulseCheckOuraPage() {
                 <div className="flex flex-wrap gap-3">
                   <FeaturePill icon={<Waves className="h-3.5 w-3.5 text-cyan-200" />} label="Sleep + readiness insights" accent="#3B82F6" />
                   <FeaturePill icon={<Sparkles className="h-3.5 w-3.5 text-[#E0FE10]" />} label="Personalized daily guidance" accent="#E0FE10" />
-                  <FeaturePill icon={<ShieldCheck className="h-3.5 w-3.5 text-cyan-200" />} label="Disconnect anytime" accent="#8B5CF6" />
+                  <FeaturePill icon={<ShieldCheck className="h-3.5 w-3.5 text-cyan-200" />} label="Disconnect anytime" accent="#D4EA04" />
                 </div>
               </div>
 

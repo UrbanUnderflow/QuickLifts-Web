@@ -77,7 +77,7 @@ const PulseCheckPerformanceStateFlagDefinitionsTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-3">
           <InfoCard title="Pilot Thresholds" accent="amber" body="Start with conservative thresholds during pilot and tune them only after enough valid athlete-session volume exists." />
           <InfoCard title="Low-History Athletes" accent="green" body="When the athlete lacks enough history, use softer confidence and lean more heavily on self-report and context." />
-          <InfoCard title="Separation of Concerns" accent="purple" body="This page does not replace the Standards Addendum or raw family metric definitions. It interprets those measurements at the state layer." />
+          <InfoCard title="Separation of Concerns" accent="clay" body="This page does not replace the Standards Addendum or raw family metric definitions. It interprets those measurements at the state layer." />
         </CardGrid>
       </SectionBlock>
 

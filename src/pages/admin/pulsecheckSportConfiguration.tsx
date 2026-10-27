@@ -646,7 +646,7 @@ const Chip: React.FC<{ children: React.ReactNode; tone?: 'default' | 'good' | 'a
     avoid: 'border-red-900/60 bg-red-950/30 text-red-200',
     dim: 'border-zinc-800 bg-black/30 text-zinc-400',
     family: 'border-sky-900/60 bg-sky-950/30 text-sky-200',
-    focus: 'border-violet-900/60 bg-violet-950/30 text-violet-200',
+    focus: 'border-clay-raised/60 bg-clay-raised/30 text-clay-ink',
     composure: 'border-rose-900/60 bg-rose-950/30 text-rose-200',
     decisioning: 'border-amber-900/60 bg-amber-950/30 text-amber-200',
   }[tone];
@@ -1518,7 +1518,7 @@ const PulseCheckSportConfigurationPage: React.FC = () => {
                       href="/coach-report-demo"
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-[#A78BFA] transition hover:text-[#C4B5FD]"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-clay-lime transition hover:text-clay-lime"
                     >
                       View public demo-report directory
                       <ArrowUp className="h-3 w-3 rotate-45" />

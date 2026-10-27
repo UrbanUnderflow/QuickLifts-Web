@@ -9,7 +9,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 
 const Card: React.FC<{ title: string; children: React.ReactNode; tone?: 'doctrine' | 'neutral' }> = ({ title, children, tone = 'neutral' }) => (
   <div className={`rounded-2xl border p-4 ${
-    tone === 'doctrine' ? 'border-violet-700/40 bg-violet-950/20' : 'border-zinc-800 bg-zinc-950/40'
+    tone === 'doctrine' ? 'border-clay-lime-deep/40 bg-clay-raised/20' : 'border-zinc-800 bg-zinc-950/40'
   }`}>
     <h4 className="mb-2 text-sm font-semibold text-zinc-100">{title}</h4>
     <div className="space-y-2 text-sm text-zinc-300">{children}</div>
@@ -18,8 +18,8 @@ const Card: React.FC<{ title: string; children: React.ReactNode; tone?: 'doctrin
 
 const PulseCheckNoraConversationOrchestratorSpecTab: React.FC = () => (
   <div className="text-zinc-100">
-    <header className="mb-6 rounded-2xl border border-violet-700/30 bg-gradient-to-br from-violet-950/30 to-indigo-950/30 p-6">
-      <p className="text-xs uppercase tracking-wide text-violet-300">PulseCheck · Phase D</p>
+    <header className="mb-6 rounded-2xl border border-clay-lime-deep/30 bg-clay-raised/40 p-6">
+      <p className="text-xs uppercase tracking-wide text-clay-lime">PulseCheck · Phase D</p>
       <h2 className="mt-1 text-2xl font-bold">Nora Conversation Orchestrator</h2>
       <p className="mt-2 max-w-3xl text-sm text-zinc-300">
         Reactive trigger sweep + conversation state machine. Detects when to open a conversation, fires the opener,

@@ -26,7 +26,7 @@ export default function ConsentChoices({ documents, decisions, onChange, name, a
     <div className={`rounded-xl border-2 p-4 ${needsName ? 'border-red-400 bg-red-400/10' : 'border-white/20 bg-black/20'}`}>
       <label className="block text-sm font-semibold">Your full name for electronic signature
         <span className={`mt-1 block text-xs ${needsName ? 'text-red-300' : 'text-zinc-300'}`}>{needsName ? 'Signature required to agree' : 'Name entered. Review the terms, then sign below.'}</span>
-        <input className={`mt-3 w-full rounded-xl border-2 bg-black/20 p-3 text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#0B0B1C] ${needsName ? 'border-red-400 focus:ring-red-300' : 'border-white/30 focus:ring-white/50'}`} aria-describedby={signatureHintId} autoComplete="name" placeholder="Type your full name here" value={signedName} onChange={e => setSignedName(e.target.value)} />
+        <input className={`mt-3 w-full rounded-xl border-2 bg-black/20 p-3 text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-clay-paper ${needsName ? 'border-red-400 focus:ring-red-300' : 'border-white/30 focus:ring-white/50'}`} aria-describedby={signatureHintId} autoComplete="name" placeholder="Type your full name here" value={signedName} onChange={e => setSignedName(e.target.value)} />
       </label>
       <p id={signatureHintId} className={`mt-2 text-sm ${needsName ? 'text-red-200' : 'text-zinc-300'}`}>{needsName ? (athleticMind ? 'Enter your name here, then review the terms below before signing.' : 'Enter your name here, then open Read terms to enable the signing button.') : 'Your name becomes your signature when you choose Agree and sign or Authorize and sign.'}</p>
     </div>
@@ -47,7 +47,7 @@ export default function ConsentChoices({ documents, decisions, onChange, name, a
           <div className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-200">{doc.body}</div>
         </details>}
         <div className="flex flex-wrap gap-3">
-          <button type="button" disabled={!signedName.trim() || (!(athleticMind && category === 'participation') && !opened[doc.id])} onClick={() => decide(doc, 'accepted')} className="rounded-lg bg-white px-4 py-2 text-black disabled:opacity-40">{category === 'health_authorization' ? 'Authorize and sign' : 'Agree and sign'}</button>
+          <button type="button" disabled={!signedName.trim() || (!(athleticMind && category === 'participation') && !opened[doc.id])} onClick={() => decide(doc, 'accepted')} className="rounded-lg bg-clay-lime px-4 py-2 font-semibold text-clay-on-lime disabled:opacity-40">{category === 'health_authorization' ? 'Authorize and sign' : 'Agree and sign'}</button>
           {category !== 'staff' && <button type="button" onClick={() => decide(doc, 'declined')} className="rounded-lg border border-white/30 px-4 py-2">{category === 'research' ? 'Decline research' : category === 'participation' ? 'Decline participation' : 'Decline authorization'}</button>}
           {category === 'health_authorization' && current?.decision === 'accepted' && <button type="button" onClick={() => decide(doc, 'revoked')} className="rounded-lg border border-white/30 px-4 py-2">Revoke authorization</button>}
           <button type="button" onClick={() => download(doc)} className="underline text-sm">Save {current ? 'decision and terms' : 'terms'}</button>

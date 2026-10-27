@@ -2,7 +2,7 @@ import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const TRIGGERS = [
-  { title: 'Athlete message', body: 'Language opens the safety check.', accent: '#8B5CF6' },
+  { title: 'Athlete message', body: 'Language opens the safety check.', accent: '#D4EA04' },
   { title: 'Nora examines', body: 'HRV, sleep, sentiment, biometrics.', accent: '#06B6D4' },
   { title: 'Tier decision', body: 'Signal severity routes 0 to 3.', accent: '#94A3B8' },
 ] as const;
@@ -96,7 +96,7 @@ const EscalationDiagram: React.FC<EscalationDiagramProps> = ({ step, onAdvance, 
       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[42px]">
         <div
           className="absolute left-[8%] top-[12%] h-40 w-40 rounded-full blur-3xl"
-          style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.07) 0%, transparent 72%)' }}
+          style={{ background: 'radial-gradient(circle, rgba(212,234,4,0.07) 0%, transparent 72%)' }}
         />
         <div
           className="absolute right-[12%] top-[18%] h-40 w-40 rounded-full blur-3xl"

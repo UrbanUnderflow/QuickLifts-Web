@@ -178,14 +178,14 @@ const AuntEdnaIntegrationStrategyTab: React.FC = () => {
         </div>
         <CardGrid columns="md:grid-cols-3">
           <InfoCard title="Provider Layer" accent="green" body="Use a dedicated calling stack such as Twilio Voice, Agora, Stream, or another real-time provider rather than trying to carry live calling over the basic AuntEdna API alone." />
-          <InfoCard title="PulseCheck Responsibilities" accent="purple" body="Incoming call UI, athlete authentication, push notifications, accept/decline flow, and call state write-back should live on the PulseCheck side." />
+          <InfoCard title="PulseCheck Responsibilities" accent="clay" body="Incoming call UI, athlete authentication, push notifications, accept/decline flow, and call state write-back should live on the PulseCheck side." />
           <InfoCard title="AuntEdna Responsibilities" accent="red" body="The clinician-side system should initiate, cancel, and monitor the welfare-check request, while remaining the source of truth for the clinical reason and operator actions." />
         </CardGrid>
       </SectionBlock>
 
       <SectionBlock icon={Database} title="PulseCheck-Side Mirror and Cache Model">
         <CardGrid columns="md:grid-cols-2">
-          <InfoCard title="Recommended Local Objects" accent="purple" body={<DataTable columns={['Collection / Object', 'Minimum Fields', 'Purpose']} rows={CACHE_ROWS} />} />
+          <InfoCard title="Recommended Local Objects" accent="clay" body={<DataTable columns={['Collection / Object', 'Minimum Fields', 'Purpose']} rows={CACHE_ROWS} />} />
           <InfoCard
             title="Boundary Rule"
             accent="amber"

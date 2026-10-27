@@ -442,7 +442,7 @@ const PulseCheckProtocolResponsivenessInspectorTab: React.FC = () => {
               />
               <InfoCard
                 title="Planner Use"
-                accent="purple"
+                accent="clay"
                 body={
                   <BulletList
                     items={[
@@ -492,7 +492,7 @@ const PulseCheckProtocolResponsivenessInspectorTab: React.FC = () => {
               />
               <InfoCard
                 title="Planner Posture"
-                accent="purple"
+                accent="clay"
                 body={
                   <BulletList
                     items={[

@@ -139,7 +139,7 @@ export default function PulseCheckAthleteGuide() {
 
       <main className="min-h-screen bg-[#090a0d] text-white">
         <div className="fixed inset-0 -z-0 overflow-hidden" aria-hidden="true">
-          <div className="absolute left-[-14rem] top-[-10rem] h-[34rem] w-[34rem] rounded-full bg-[#7c3aed]/15 blur-[130px]" />
+          <div className="absolute left-[-14rem] top-[-10rem] h-[34rem] w-[34rem] rounded-full bg-clay-lime/15 blur-[130px]" />
           <div className="absolute right-[-12rem] top-[18rem] h-[30rem] w-[30rem] rounded-full bg-[#E0FE10]/10 blur-[150px]" />
           <div className="absolute bottom-[-14rem] left-[35%] h-[28rem] w-[28rem] rounded-full bg-[#14E7D0]/10 blur-[140px]" />
         </div>
@@ -303,13 +303,13 @@ export default function PulseCheckAthleteGuide() {
                   truth clearly enough that you, Nora, and your support team can see the pattern.
                   You are practicing language for your internal state.
                 </p>
-                <div className="mt-8 rounded-[1.75rem] border border-[#8b5cf6]/30 bg-gradient-to-br from-[#7c3aed]/20 to-[#111217] p-7 sm:p-9">
+                <div className="mt-8 rounded-[1.75rem] border border-clay-lime/30 bg-gradient-to-br from-clay-lime/20 to-[#111217] p-7 sm:p-9">
                   <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-                    <span className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl bg-[#8b5cf6]/25">
-                      <MessageCircle className="h-6 w-6 text-[#d5c3ff]" />
+                    <span className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl bg-clay-lime/25">
+                      <MessageCircle className="h-6 w-6 text-clay-ink" />
                     </span>
                     <div>
-                      <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#c4a7ff]">
+                      <div className="text-xs font-bold uppercase tracking-[0.2em] text-clay-ink">
                         Check-in language
                       </div>
                       <blockquote className="mt-3 text-2xl font-semibold leading-tight sm:text-3xl">

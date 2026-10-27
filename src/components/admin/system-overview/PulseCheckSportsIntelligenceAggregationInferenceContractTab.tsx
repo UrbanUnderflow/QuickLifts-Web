@@ -218,7 +218,7 @@ const PulseCheckSportsIntelligenceAggregationInferenceContractTab: React.FC = ()
       <SectionBlock icon={FileJson} title="Fact Ledger + Candidate Reads">
         <InfoCard
           title="AI Does Not Notice The Read"
-          accent="purple"
+          accent="clay"
           body="The engine creates the evidence frame, candidate list, scores, and blocked-claim trace before Nora or coach-report copy runs. Model output is a copy layer, not the reasoning layer."
         />
         <DataTable columns={['Ledger Field', 'Contents', 'Why It Exists']} rows={SPORTS_FACT_LEDGER_ROWS} />
@@ -273,7 +273,7 @@ const PulseCheckSportsIntelligenceAggregationInferenceContractTab: React.FC = ()
         <DataTable columns={['Record', 'Required Fields']} rows={OUTPUT_SCHEMAS} />
         <InfoCard
           title="Sample AthleteReadinessInterpretation"
-          accent="purple"
+          accent="clay"
           body={
             <pre className="overflow-x-auto rounded-xl border border-zinc-800 bg-black/30 p-4 text-xs leading-relaxed text-zinc-200">
               {SAMPLE_PAYLOAD}

@@ -995,7 +995,7 @@ const Chat: React.FC = () => {
               ? "#93C5FD"
               : uiEscalationTier >= EscalationTier.ElevatedRisk
                 ? "#F59E0B"
-                : "#8B5CF6"
+                : "#D4EA04"
           } 
           size="w-[250px] h-[250px]" 
           position={{ bottom: '10%', left: '20%' }} 

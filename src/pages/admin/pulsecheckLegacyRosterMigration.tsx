@@ -299,7 +299,7 @@ const PulseCheckLegacyRosterMigrationPage: React.FC = () => {
             <div className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6">
               <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-violet-200">Cutover Readiness Snapshot</p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-clay-ink">Cutover Readiness Snapshot</p>
                   <h2 className="mt-2 text-xl font-medium text-white">What still exists outside the PulseCheck org and team model</h2>
                 </div>
                 <div className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-xs uppercase tracking-[0.24em] text-zinc-300">

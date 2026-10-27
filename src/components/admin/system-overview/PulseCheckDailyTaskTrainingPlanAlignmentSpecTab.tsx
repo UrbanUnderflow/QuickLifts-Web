@@ -176,7 +176,7 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-3">
           <InfoCard
             title="DailyTask"
-            accent="purple"
+            accent="clay"
             body="One date-bound execution artifact. This is what launches, starts, completes, defers, expires, or gets superseded."
           />
           <InfoCard
@@ -213,7 +213,7 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-3">
           <InfoCard
             title="Home"
-            accent="purple"
+            accent="clay"
             body="Home is the DailyTask surface. It answers what today’s practice item is, why it was assigned, whether it is done, and what the next action should be."
           />
           <InfoCard
@@ -274,7 +274,7 @@ const PulseCheckDailyTaskTrainingPlanAlignmentSpecTab: React.FC = () => {
           />
           <InfoCard
             title="Status Mapping Discipline"
-            accent="purple"
+            accent="clay"
             body={
               <BulletList
                 items={[

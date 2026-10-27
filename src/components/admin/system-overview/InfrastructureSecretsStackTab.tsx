@@ -378,7 +378,7 @@ export default function InfrastructureSecretsStackTab() {
         <CardGrid columns="xl:grid-cols-3">
           <InfoCard
             title="Keep In Netlify Env"
-            accent="purple"
+            accent="clay"
             body="Small runtime values like delegated user email, calendar id, organizer email, cron secrets, feature flags, and non-bulky API settings."
           />
           <InfoCard

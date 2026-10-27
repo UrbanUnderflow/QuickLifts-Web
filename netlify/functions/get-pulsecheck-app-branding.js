@@ -2,7 +2,8 @@ const { resolveAppBranding, resolveAppExperience } = require('../../src/lib/puls
 const HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-PulseCheck-Firebase-Mode', 'Access-Control-Allow-Methods': 'GET, OPTIONS' };
 const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const active = row => row && (row.status == null || row.status === 'active') && !row.revokedAt && !row.removedAt && !row.archivedAt && !row.deletedAt && row.revoked !== true;
-const branding = organization => ({ appExperience: resolveAppExperience(organization?.appExperience), appBranding: { pulsecheck: resolveAppBranding(organization, 'pulsecheck').brand, athleticmind: resolveAppBranding(organization, 'athleticmind').brand } });
+// appExperience is always Clay; installed native builds still read it.
+const branding = organization => ({ appExperience: resolveAppExperience(), appBranding: { pulsecheck: resolveAppBranding(organization, 'pulsecheck').brand, athleticmind: resolveAppBranding(organization, 'athleticmind').brand } });
 const forbidden = () => Object.assign(new Error('This team is not available to your account.'), { statusCode: 403 });
 
 async function loadAppBranding(db, uid, teamId) {
@@ -13,7 +14,6 @@ async function loadAppBranding(db, uid, teamId) {
   // Do not choose an arbitrary program when a full context cannot be established.
   if (memberships.docs.length > 100) return branding(null);
   const organizations = new Map();
-  const athleteTeams = new Map();
   for (const snapshot of memberships.docs) {
     const member = snapshot.data();
     if (member.userId !== uid || !active(member) || !validId(member.teamId) || !validId(member.organizationId) || (teamId && member.teamId !== teamId)) continue;
@@ -24,29 +24,9 @@ async function loadAppBranding(db, uid, teamId) {
     const organization = orgSnapshot.data();
     if (!orgSnapshot.exists || !active(organization) || organization.status !== 'active') continue;
     organizations.set(member.organizationId, organization);
-    if (member.role === 'athlete') athleteTeams.set(member.teamId, member.organizationId);
   }
   if (teamId && organizations.size !== 1) throw forbidden();
-  const result = branding(organizations.size === 1 ? organizations.values().next().value : null);
-  // Appearance alone may use the athlete's saved primary coach. Branding keeps
-  // its existing unambiguous-organization behavior.
-  if (!teamId && organizations.size > 1 && athleteTeams.size) {
-    const user = (await db.collection('users').doc(uid).get()).data();
-    const coachId = user?.primaryCoachUserId;
-    if (!validId(coachId) || coachId === uid || (await db.collection('account-closure-jobs').doc(coachId).get()).exists) return result;
-    const coachMemberships = await db.collection('pulsecheck-team-memberships').where('userId', '==', coachId).limit(101).get();
-    if (coachMemberships.docs.length > 100) return result;
-    const sharedOrganizations = new Set();
-    const staffRoles = ['team-admin', 'coach', 'performance-staff', 'support-staff', 'clinician'];
-    for (const snapshot of coachMemberships.docs) {
-      const member = snapshot.data();
-      const primaryEligible = member.role === 'coach' || (typeof member.title === 'string' && member.title.toLowerCase().includes('coach'));
-      if (member.userId === coachId && active(member) && staffRoles.includes(member.role) && primaryEligible
-        && athleteTeams.has(member.teamId) && athleteTeams.get(member.teamId) === member.organizationId) sharedOrganizations.add(member.organizationId);
-    }
-    if (sharedOrganizations.size === 1) result.appExperience = resolveAppExperience(organizations.get([...sharedOrganizations][0])?.appExperience);
-  }
-  return result;
+  return branding(organizations.size === 1 ? organizations.values().next().value : null);
 }
 async function authorize(event, token) {
   const { initializeFirebaseAdmin, getFirebaseAdminApp, admin } = require('./config/firebase');

@@ -346,7 +346,7 @@ const PulseCheckPhaseJReviewerDebugSurfaceTab: React.FC = () => {
       <SectionBlock icon={ListChecks} title="Build Gates">
         <InfoCard
           title="Phase 3 Scope"
-          accent="purple"
+          accent="clay"
           body="This deliverable is the static doc skeleton only. The live tab registration, Firestore query wiring, fixture loader, role gate, and mutation handlers remain future work and should be implemented only after the gates below are satisfied."
         />
         <DataTable

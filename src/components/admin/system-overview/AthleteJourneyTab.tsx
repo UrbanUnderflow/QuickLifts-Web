@@ -57,7 +57,7 @@ const PHASES: Phase[] = [
         number: '1',
         label: 'First-Run Onboarding',
         icon: BookOpen,
-        accent: '#a78bfa',
+        accent: '#d4ea04',
         status: 'partial',
         description: 'PulseCheck explains itself in plain language and confirms why this athlete is here.',
         detail:
@@ -101,7 +101,7 @@ const PHASES: Phase[] = [
         number: '5',
         label: 'Contextualization',
         icon: Globe,
-        accent: '#c084fc',
+        accent: '#d4ea04',
         status: 'live',
         description: 'Sports Intelligence presents the same mental mechanism through language and situations that match the athlete\'s sport.',
         detail:
@@ -179,14 +179,14 @@ const IMPL_RULES = [
 
 const VARIANT_ORDER = [
     { step: 1, label: 'Mechanism Core', description: 'Define the exact mental skill and evidence being trained.', accent: '#60a5fa' },
-    { step: 2, label: 'Pressure-Type Variants', description: 'Applied once Nora has a basic profile read — same mechanism, different pressure context.', accent: '#a78bfa' },
+    { step: 2, label: 'Pressure-Type Variants', description: 'Applied once Nora has a basic profile read — same mechanism, different pressure context.', accent: '#d4ea04' },
     { step: 3, label: 'Sport-Context Variants', description: 'Make the mechanism feel closer to competition without changing the family mechanism.', accent: '#34d399' },
     { step: 4, label: 'Immersive / Field-Transfer', description: 'Trial-level fidelity using real-world or high-context scenarios to prove skill transfer.', accent: '#facc15' },
 ];
 
 const ENTRY_CONTEXTS = [
     { label: 'Standard team onboarding', description: 'Athlete enters through a team invite, sees team branding, and is linked to the persistent team container.', accent: '#60a5fa' },
-    { label: 'Pilot-linked onboarding', description: 'Athlete enters through a pilot-aware invite and is automatically connected to the correct pilot and cohort context.', accent: '#a78bfa' },
+    { label: 'Pilot-linked onboarding', description: 'Athlete enters through a pilot-aware invite and is automatically connected to the correct pilot and cohort context.', accent: '#d4ea04' },
     { label: 'Product-only onboarding (target)', description: 'Still planned, but not yet a first-class athlete entry path in the current team-centered provisioning flow.', accent: '#34d399' },
 ];
 
@@ -452,7 +452,7 @@ const AthleteJourneyTab: React.FC = () => {
                                 className="bg-[#090f1c] border border-zinc-800 rounded-xl p-4 flex flex-col gap-2"
                             >
                                 <div className="flex items-center gap-2">
-                                    <Icon className="w-4 h-4 text-purple-400 shrink-0" />
+                                    <Icon className="w-4 h-4 text-clay-lime shrink-0" />
                                     <p className="text-sm font-semibold text-white">{p.label}</p>
                                 </div>
                                 <p className="text-xs text-zinc-400 leading-relaxed">{p.description}</p>
@@ -503,9 +503,9 @@ const AthleteJourneyTab: React.FC = () => {
             </div>
 
             {/* ── DAY 1 CALLOUT ── */}
-            <div className="bg-purple-500/[0.07] border border-purple-500/20 rounded-2xl p-5">
+            <div className="bg-clay-lime/[0.07] border border-clay-lime/20 rounded-2xl p-5">
                 <div className="flex items-start gap-3">
-                    <UserCheck className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
+                    <UserCheck className="w-5 h-5 text-clay-lime shrink-0 mt-0.5" />
                     <div>
                         <p className="text-sm font-semibold text-white mb-1">Day 1 Experience</p>
                         <p className="text-sm text-zinc-300 leading-relaxed">
@@ -637,7 +637,7 @@ const AthleteJourneyTab: React.FC = () => {
                     </div>
                     <div className="bg-[#090f1c] border border-zinc-800 rounded-xl p-4 space-y-2">
                         <div className="flex items-center gap-2">
-                            <Users className="w-4 h-4 text-purple-400" />
+                            <Users className="w-4 h-4 text-clay-lime" />
                             <p className="text-sm font-semibold text-white">Coach View</p>
                         </div>
                         <p className="text-xs text-zinc-500 leading-relaxed">
@@ -707,7 +707,7 @@ const AthleteJourneyTab: React.FC = () => {
             </div>
 
             {/* ── SUMMARY ── */}
-            <div className="bg-gradient-to-br from-purple-500/10 to-sky-500/5 border border-purple-500/20 rounded-2xl p-6">
+            <div className="bg-gradient-to-br from-clay-lime/10 to-sky-500/5 border border-clay-lime/20 rounded-2xl p-6">
                 <h3 className="text-sm font-semibold text-white mb-2">Summary</h3>
                 <p className="text-sm text-zinc-300 leading-relaxed">
                     The current athlete journey is now clearer: invite or enrollment entry, athlete onboarding, Mental Skills Starting Point unlock and completion, then movement between Today, Conversations, Program, Profile, and the team workspace.

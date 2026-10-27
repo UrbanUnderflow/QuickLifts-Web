@@ -26,8 +26,8 @@ const ClinicianOnboardingPage = ({ invite }: InferGetServerSidePropsType<typeof 
       <main className="mx-auto flex min-h-screen w-full max-w-3xl items-center px-4 py-10 md:px-6">
         <section className="w-full rounded-[32px] border border-zinc-800 bg-[#090f1c] p-8 shadow-2xl">
           <div className="space-y-5">
-            <div className="inline-flex rounded-2xl border border-purple-500/25 bg-purple-500/10 p-3">
-              <Stethoscope className="h-6 w-6 text-purple-300" />
+            <div className="inline-flex rounded-2xl border border-clay-lime/25 bg-clay-lime/10 p-3">
+              <Stethoscope className="h-6 w-6 text-clay-lime" />
             </div>
 
             <div className="space-y-2">
@@ -43,7 +43,7 @@ const ClinicianOnboardingPage = ({ invite }: InferGetServerSidePropsType<typeof 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
                 <div className="flex items-center gap-2">
-                  <MailPlus className="h-4 w-4 text-purple-300" />
+                  <MailPlus className="h-4 w-4 text-clay-lime" />
                   <p className="text-sm font-semibold text-white">Target Clinician Email</p>
                 </div>
                 <p className="mt-3 text-sm text-zinc-300">{invite.targetEmail || 'Not specified'}</p>
@@ -58,7 +58,7 @@ const ClinicianOnboardingPage = ({ invite }: InferGetServerSidePropsType<typeof 
               </div>
             </div>
 
-            <div className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.06] p-4 text-sm leading-7 text-zinc-300">
+            <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/[0.06] p-4 text-sm leading-7 text-zinc-300">
               This is the PulseCheck-side clinician handoff page for now. Once AuntEdna exposes onboarding-link and SSO APIs,
               this route should continue the clinician into AuntEdna setup instead of stopping here.
             </div>

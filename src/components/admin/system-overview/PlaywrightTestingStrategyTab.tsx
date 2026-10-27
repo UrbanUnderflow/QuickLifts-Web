@@ -198,7 +198,7 @@ npm run test:e2e:smoke`}
           />
           <InfoCard
             title="Exact Import Prompt"
-            accent="purple"
+            accent="clay"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
                 {`# First ask the owner for the bundle passphrase
@@ -234,7 +234,7 @@ source .playwright/bootstrap.env`}
           />
           <InfoCard
             title="Copy/Paste Setup Prompt"
-            accent="purple"
+            accent="clay"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
                 {`Set up Playwright E2E for this repo on this machine using docs/testing/local-machine-setup.md. If this machine is brand new, ask the source machine for the encrypted bundle at .setup/local-machine-setup.bundle.enc.json and ask the human operator for the passphrase before importing it. Do not assume the passphrase is stored anywhere in the repo or docs. Then run npm run machine:setup:import, npm run test:e2e:bootstrap:check, npm run test:e2e:auth, source .playwright/bootstrap.env if it exists, and finish with a safe smoke run. Do not copy a storage-state file from another machine. If access fails, report exactly which credential, IAM role, env key, secret, passphrase step, or imported file is missing.`}
@@ -288,7 +288,7 @@ DEV_FIREBASE_SECRET_KEY`}
           />
           <InfoCard
             title="Access Verification"
-            accent="purple"
+            accent="clay"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
                 {`gcloud secrets versions access latest --secret=$PLAYWRIGHT_BOOTSTRAP_SECRET_NAME --project=$GOOGLE_SECRET_MANAGER_PROJECT_ID
@@ -400,7 +400,7 @@ npm run test:e2e:pulsecheck:write`}
           />
           <InfoCard
             title="Prefer Safe Defaults"
-            accent="purple"
+            accent="clay"
             body={<BulletList items={[
               'Default to smoke coverage before mutation coverage.',
               'Use stable ids and explicit env vars for PulseCheck teams under test.',

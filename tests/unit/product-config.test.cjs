@@ -32,20 +32,9 @@ test('server routing rejects missing and invalid persisted product', async () =>
   }
 });
 
-test('iOS app experience validates writes and defaults invalid presentation reads',()=>{
- const {normalizeAppExperience,resolveAppExperience}=require('../../src/lib/pulsecheck/productConfig');
- assert.deepEqual(normalizeAppExperience({ios:'clay',android:'standard'}),{ios:'clay',android:'standard'});
- assert.deepEqual(normalizeAppExperience(undefined),{ios:'standard',android:'standard'});
- for(const value of [null,'clay',{}, {ios:'unknown'},{ios:'clay',productBrand:'athleticmind'}])assert.throws(()=>normalizeAppExperience(value));
- assert.deepEqual(resolveAppExperience({ios:'unknown'}),{ios:'standard',android:'standard'});
-});
-
-test('platform appearance patches preserve the other platform and validate independently', () => {
- const {normalizeAppExperience,resolveAppExperience}=require('../../src/lib/pulsecheck/productConfig');
- assert.deepEqual(normalizeAppExperience({android:'clay'},{ios:'clay'}),{ios:'clay',android:'clay'});
- assert.deepEqual(normalizeAppExperience({ios:'standard'},{ios:'clay',android:'clay'}),{ios:'standard',android:'clay'});
- assert.deepEqual(normalizeAppExperience({android:'clay'}),{ios:'standard',android:'clay'});
- assert.deepEqual(resolveAppExperience({ios:'clay',android:'bad'}),{ios:'clay',android:'standard'});
- assert.deepEqual(resolveAppExperience({android:'clay'}),{ios:'standard',android:'clay'});
- for(const value of [{android:'unknown'},{ios:'clay',android:null},{web:'clay'}])assert.throws(()=>normalizeAppExperience(value));
+test('app experience is always Clay for every organization and platform', () => {
+ const { resolveAppExperience } = require('../../src/lib/pulsecheck/productConfig');
+ for (const value of [undefined, null, {}, { ios: 'standard', android: 'standard' }, { ios: 'clay' }]) assert.deepEqual(resolveAppExperience(value), { ios: 'clay', android: 'clay' });
+ const first = resolveAppExperience(); first.ios = 'standard';
+ assert.equal(resolveAppExperience().ios, 'clay');
 });

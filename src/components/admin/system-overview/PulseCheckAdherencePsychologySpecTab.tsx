@@ -324,7 +324,7 @@ const PulseCheckAdherencePsychologySpecTab: React.FC = () => {
           />
           <InfoCard
             title="Privacy Reinforcement"
-            accent="purple"
+            accent="clay"
             body="Reminder and closeout copy can say Nora logs the day privately. Do not imply coach review of private content."
           />
           <InfoCard

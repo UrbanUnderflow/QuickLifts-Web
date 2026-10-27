@@ -49,7 +49,7 @@ const answerControlStyle: React.CSSProperties = {
   boxSizing: 'border-box',
   color: '#fff',
   backgroundColor: 'rgba(255, 255, 255, 0.055)',
-  border: '1px solid rgba(196, 181, 253, 0.24)',
+  border: '1px solid rgba(212, 234, 4, 0.24)',
   borderRadius: 18,
   boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.18)',
   fontSize: 'clamp(22px, 3vw, 32px)',
@@ -297,7 +297,7 @@ export default function PulseCheckCoachIntakeDraftPage() {
         .pci-page {
           min-height: 100vh;
           background:
-            radial-gradient(circle at 18% 18%, rgba(147, 51, 234, 0.28), transparent 34%),
+            radial-gradient(circle at 18% 18%, rgba(212, 234, 4, 0.28), transparent 34%),
             linear-gradient(145deg, #09070f 0%, #100b1e 48%, #050509 100%);
           color: #fff;
           padding: 32px;
@@ -321,7 +321,7 @@ export default function PulseCheckCoachIntakeDraftPage() {
           font-weight: 800;
           letter-spacing: 0.12em;
           text-transform: uppercase;
-          color: #c4b5fd;
+          color: #d4ea04;
         }
         .pci-meta {
           margin-top: 7px;
@@ -335,9 +335,9 @@ export default function PulseCheckCoachIntakeDraftPage() {
           gap: 8px;
           padding: 0 14px;
           border-radius: 999px;
-          color: #ddd6fe;
-          background: rgba(167, 139, 250, 0.11);
-          border: 1px solid rgba(196, 181, 253, 0.26);
+          color: #f2f2e8;
+          background: rgba(212, 234, 4, 0.11);
+          border: 1px solid rgba(212, 234, 4, 0.26);
           font-size: 13px;
           font-weight: 700;
         }
@@ -356,7 +356,7 @@ export default function PulseCheckCoachIntakeDraftPage() {
           display: block;
           height: 100%;
           border-radius: inherit;
-          background: linear-gradient(90deg, #8b5cf6, #ec4899);
+          background: #D4EA04;
           transition: width 0.25s ease;
         }
         .pci-card {
@@ -376,7 +376,7 @@ export default function PulseCheckCoachIntakeDraftPage() {
           font-weight: 800;
           letter-spacing: 0.1em;
           text-transform: uppercase;
-          color: #a78bfa;
+          color: #d4ea04;
         }
         .pci-card h1 {
           margin: 14px 0 0;
@@ -407,7 +407,7 @@ export default function PulseCheckCoachIntakeDraftPage() {
           outline: none;
           color: #fff;
           background-color: rgba(255, 255, 255, 0.055);
-          border: 1px solid rgba(196, 181, 253, 0.24);
+          border: 1px solid rgba(212, 234, 4, 0.24);
           border-radius: 18px;
           box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.18);
           font-size: clamp(22px, 3vw, 32px);
@@ -426,11 +426,11 @@ export default function PulseCheckCoachIntakeDraftPage() {
         .pci-textarea:focus,
         .pci-input:focus {
           background-color: rgba(255, 255, 255, 0.075);
-          border-color: rgba(216, 180, 254, 0.7);
-          box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.16), 0 20px 48px rgba(0, 0, 0, 0.24);
+          border-color: rgba(242, 242, 232, 0.7);
+          box-shadow: 0 0 0 4px rgba(212, 234, 4, 0.16), 0 20px 48px rgba(0, 0, 0, 0.24);
         }
         .pci-textarea::placeholder {
-          color: rgba(221, 214, 254, 0.45);
+          color: rgba(242, 242, 232, 0.45);
         }
         .pci-choiceGrid {
           display: grid;
@@ -450,8 +450,8 @@ export default function PulseCheckCoachIntakeDraftPage() {
           cursor: pointer;
         }
         .pci-choice.is-selected {
-          border-color: rgba(196, 181, 253, 0.92);
-          background: linear-gradient(135deg, rgba(124, 58, 237, 0.72), rgba(219, 39, 119, 0.5));
+          border-color: rgba(212, 234, 4, 0.92);
+          background: linear-gradient(135deg, rgba(212, 234, 4, 0.72), rgba(219, 39, 119, 0.5));
         }
         .pci-actions {
           display: flex;
@@ -474,8 +474,8 @@ export default function PulseCheckCoachIntakeDraftPage() {
         }
         .pci-primary {
           border: 0;
-          color: #fff;
-          background: linear-gradient(135deg, #7c3aed, #db2777);
+          color: #232817;
+          background: #D4EA04;
         }
         .pci-secondary {
           color: rgba(255, 255, 255, 0.72);
@@ -503,9 +503,9 @@ export default function PulseCheckCoachIntakeDraftPage() {
           margin-top: 22px;
         }
         .pci-status {
-          color: #ddd6fe;
-          background: rgba(124, 58, 237, 0.12);
-          border-color: rgba(196, 181, 253, 0.26);
+          color: #f2f2e8;
+          background: rgba(212, 234, 4, 0.12);
+          border-color: rgba(212, 234, 4, 0.26);
           display: inline-flex;
           align-items: center;
           gap: 10px;
@@ -516,8 +516,8 @@ export default function PulseCheckCoachIntakeDraftPage() {
           border-radius: 20px;
           display: grid;
           place-items: center;
-          color: #fff;
-          background: linear-gradient(135deg, #7c3aed, #db2777);
+          color: #232817;
+          background: #D4EA04;
         }
         .pci-doneIcon :global(svg) {
           width: 28px;

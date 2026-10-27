@@ -142,7 +142,7 @@ export default function PulseCheckExerciseTeachingMomentsTab() {
           />
           <InfoCard
             title="Captions Carry The Lesson"
-            accent="purple"
+            accent="clay"
             body="Captions remain useful with audio muted and appear as short synchronized thoughts. They do not duplicate a long essay beneath the animation."
           />
         </CardGrid>

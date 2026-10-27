@@ -23,7 +23,7 @@ export function DocHeader({
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-purple-400">{eyebrow}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-clay-lime">{eyebrow}</p>
         <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-2xl font-semibold text-white">{title}</h2>
@@ -57,7 +57,7 @@ export function SectionBlock({
   return (
     <section className="space-y-4">
       <h3 className="flex items-center gap-2 text-lg font-semibold text-white">
-        <Icon className="h-4 w-4 text-purple-400" />
+        <Icon className="h-4 w-4 text-clay-lime" />
         {title}
       </h3>
       {children}
@@ -78,14 +78,14 @@ export function CardGrid({
 export function InfoCard({
   title,
   body,
-  accent = 'purple',
+  accent = 'clay',
 }: {
   title: string;
   body: React.ReactNode;
-  accent?: 'purple' | 'blue' | 'green' | 'amber' | 'red';
+  accent?: 'clay' | 'blue' | 'green' | 'amber' | 'red';
 }) {
   const accents = {
-    purple: 'border-purple-500/20 bg-purple-500/[0.06]',
+    clay: 'border-clay-lime/20 bg-clay-lime/[0.06]',
     blue: 'border-blue-500/20 bg-blue-500/[0.06]',
     green: 'border-green-500/20 bg-green-500/[0.06]',
     amber: 'border-amber-500/20 bg-amber-500/[0.06]',
@@ -105,7 +105,7 @@ export function BulletList({ items }: { items: string[] }) {
     <ul className="space-y-2 text-sm leading-relaxed text-zinc-300">
       {items.map((item) => (
         <li key={item} className="flex gap-2">
-          <span className="mt-[7px] h-1.5 w-1.5 rounded-full bg-purple-400" />
+          <span className="mt-[7px] h-1.5 w-1.5 rounded-full bg-clay-lime" />
           <span>{item}</span>
         </li>
       ))}
@@ -159,7 +159,7 @@ export function StepRail({
         <div key={step.title} className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-purple-500/30 bg-purple-500/10 text-xs font-semibold text-purple-300">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-clay-lime/30 bg-clay-lime/10 text-xs font-semibold text-clay-lime">
                 {index + 1}
               </div>
               <p className="text-sm font-semibold text-white">{step.title}</p>
@@ -175,13 +175,13 @@ export function StepRail({
 
 export function InlineTag({
   label,
-  color = 'purple',
+  color = 'clay',
 }: {
   label: string;
-  color?: 'purple' | 'blue' | 'green' | 'amber' | 'red';
+  color?: 'clay' | 'blue' | 'green' | 'amber' | 'red';
 }) {
   const palette = {
-    purple: 'border-purple-500/25 bg-purple-500/10 text-purple-200',
+    clay: 'border-clay-lime/25 bg-clay-lime/10 text-clay-ink',
     blue: 'border-blue-500/25 bg-blue-500/10 text-blue-200',
     green: 'border-green-500/25 bg-green-500/10 text-green-200',
     amber: 'border-amber-500/25 bg-amber-500/10 text-amber-200',

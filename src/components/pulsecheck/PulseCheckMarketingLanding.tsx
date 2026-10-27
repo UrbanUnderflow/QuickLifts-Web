@@ -218,7 +218,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           <div className="pc2-hero-visual">
             {/* Floating card — Reaction Time (top, slightly left of phone) */}
             <div className="pc2-float-card pc2-float-card--tl">
-              <div className="pc2-fc-icon" style={{ background: 'rgba(160,94,248,0.15)', color: '#A05EF8', position: 'relative', overflow: 'hidden' }}>
+              <div className="pc2-fc-icon" style={{ background: 'rgba(212,234,4,0.15)', color: '#D4EA04', position: 'relative', overflow: 'hidden' }}>
                 ⚡
                 <span className="pc2-fc-ping" />
               </div>
@@ -226,7 +226,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                 <strong>Reaction Time Test</strong>
                 <span>Optimal response · <span className="pc2-ticker">0.24s</span></span>
                 <div className="pc2-fc-bar-wrap">
-                  <div className="pc2-fc-bar" style={{ background: 'linear-gradient(90deg,#A05EF8,#6A9AFA)', animationDelay: '0s' }} />
+                  <div className="pc2-fc-bar" style={{ background: 'linear-gradient(90deg,#D4EA04,#6A9AFA)', animationDelay: '0s' }} />
                 </div>
               </div>
             </div>
@@ -235,8 +235,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
             <div className="pc2-float-card pc2-float-card--r">
               <div className="pc2-fc-ring-wrap">
                 <svg viewBox="0 0 44 44" width="44" height="44" className="pc2-fc-ring-svg">
-                  <circle cx="22" cy="22" r="17" stroke="rgba(160,94,248,0.18)" strokeWidth="4" fill="none" />
-                  <circle cx="22" cy="22" r="17" stroke="#A05EF8" strokeWidth="4" fill="none"
+                  <circle cx="22" cy="22" r="17" stroke="rgba(212,234,4,0.18)" strokeWidth="4" fill="none" />
+                  <circle cx="22" cy="22" r="17" stroke="#D4EA04" strokeWidth="4" fill="none"
                     strokeLinecap="round"
                     strokeDasharray="106.8"
                     className="pc2-fc-ring-arc"
@@ -314,7 +314,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                 </div>
                 {/* Step 4: Nora prescribes Box Breathing (2.8s) */}
                 <div className="pc2-chat-bubble pc2-chat-nora pc2-seq pc2-chat-action" style={{ animationDelay: '2.8s' }}>
-                <div style={{ fontWeight: 700, marginBottom: 4, color: '#A05EF8' }}>🫁 Box Breathing · 4 rounds</div>
+                <div style={{ fontWeight: 700, marginBottom: 4, color: '#D4EA04' }}>🫁 Box Breathing · 4 rounds</div>
                   <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>Inhale 4s · Hold 4s · Exhale 4s · Hold 4s<br />Use it to create a calmer mental environment</div>
                   <button className="pc2-chat-btn">Start Now →</button>
                 </div>
@@ -326,7 +326,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                     <span className="pc2-breath-phase">Inhale</span>
                   </div>
                   <div className="pc2-breath-stats">
-                    <span className="pc2-breath-stat"><span style={{ color: '#A05EF8' }}>HRV</span> recovering</span>
+                    <span className="pc2-breath-stat"><span style={{ color: '#D4EA04' }}>HRV</span> recovering</span>
                     <span className="pc2-breath-stat"><span style={{ color: '#22C55E' }}>Stress</span> ↓ 18%</span>
                   </div>
                 </div>
@@ -350,7 +350,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
       <section className="pc2-section pc2-section--light" id="nora" data-bg="light">
         <div className="pc2-section-inner pc2-section-inner--flip">
           <div className="pc2-section-text pc2-reveal">
-            <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>💬 Nora AI Companion</span>
+            <span className="pc2-section-label" style={{ color: '#D4EA04', background: 'rgba(212,234,4,0.08)' }}>💬 Nora AI Companion</span>
             <h2 className="pc2-h2">An always-on mental performance<br /><em>conversation.</em></h2>
             <p className="pc2-section-sub">Nora runs a frictionless 2-minute daily check-in via iMessage-style chat. She reads biometric context from HealthKit, asks targeted questions, and responds with clinically grounded mental performance drills — all in real time.</p>
             <ul className="pc2-checklist">
@@ -393,7 +393,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
       <section className="pc2-section pc2-section--offwhite" id="sims" data-bg="light">
         <div className="pc2-section-inner">
           <div className="pc2-section-text pc2-reveal">
-            <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>▶ Mental Simulations</span>
+            <span className="pc2-section-label" style={{ color: '#D4EA04', background: 'rgba(212,234,4,0.08)' }}>▶ Mental Simulations</span>
             <h2 className="pc2-h2">Measurable training<br /><em>for the mental side of execution.</em></h2>
             <p className="pc2-section-sub">
               PulseCheck is a simulation system — not a wellness app. Every session trains three
@@ -420,8 +420,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                 },
                 {
                   name: 'Decision',
-                  color: '#c084fc',
-                  accent: 'rgba(192,132,252,0.12)',
+                  color: '#d4ea04',
+                  accent: 'rgba(212,234,4,0.12)',
                   def: 'Process the signal, inhibit the wrong response, act on the right one in time.',
                   skills: ['Response Inhibition', 'Working Memory Updating', 'Signal Discrimination'],
                 },
@@ -463,7 +463,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                 {[
                   { label: 'Focus', val: 88, color: '#60a5fa' },
                   { label: 'Composure', val: 74, color: '#22c55e' },
-                  { label: 'Decision', val: 91, color: '#c084fc' },
+                  { label: 'Decision', val: 91, color: '#d4ea04' },
                 ].map((m) => (
                   <div key={m.label} className="pc2-pscore">
                     <div className="pc2-pscore-ring-wrap">
@@ -487,7 +487,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
               {/* Live sim card */}
               <div className="pc2-active-sim">
                 <div className="pc2-active-sim-head">
-                  <span className="pc2-active-sim-tag" style={{ background: 'rgba(192,132,252,0.12)', color: '#c084fc' }}>
+                  <span className="pc2-active-sim-tag" style={{ background: 'rgba(212,234,4,0.12)', color: '#d4ea04' }}>
                     Decision · Brake Point
                   </span>
                   <span className="pc2-active-sim-live"><span /> Live</span>
@@ -518,9 +518,9 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                   {[
                     { n: 'Reset', p: 'Composure', c: '#22c55e' },
                     { n: 'Noise Gate', p: 'Focus', c: '#60a5fa' },
-                    { n: 'Brake Point', p: 'Decision', c: '#c084fc', active: true },
-                    { n: 'Signal Window', p: 'Decision', c: '#c084fc' },
-                    { n: 'Sequence Shift', p: 'Decision', c: '#c084fc' },
+                    { n: 'Brake Point', p: 'Decision', c: '#d4ea04', active: true },
+                    { n: 'Signal Window', p: 'Decision', c: '#d4ea04' },
+                    { n: 'Sequence Shift', p: 'Decision', c: '#d4ea04' },
                     { n: 'Endurance Lock', p: 'Focus', c: '#60a5fa' },
                   ].map((s) => (
                     <div
@@ -547,7 +547,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
       <section className="pc2-section pc2-section--light" id="coach" data-bg="light">
         <div className="pc2-section-inner pc2-section-inner--flip">
           <div className="pc2-section-text pc2-reveal">
-            <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>📊 Coach Intelligence</span>
+            <span className="pc2-section-label" style={{ color: '#D4EA04', background: 'rgba(212,234,4,0.08)' }}>📊 Coach Intelligence</span>
             <h2 className="pc2-h2">Team-wide readiness.<br /><em>Before the tape.</em></h2>
             <p className="pc2-section-sub">The Coach Dashboard shows how physical state, routine quality, and mental-performance work are shaping the team environment — without telling coaches how to run the physical program.</p>
             <ul className="pc2-checklist">
@@ -604,12 +604,12 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
       <section className="pc2-section pc2-section--dark" id="clinical" data-bg="dark">
         <div className="pc2-section-inner">
           <div className="pc2-section-text pc2-reveal">
-            <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>🛡 Clinical Safety Net</span>
+            <span className="pc2-section-label" style={{ color: '#D4EA04', background: 'rgba(212,234,4,0.08)' }}>🛡 Clinical Safety Net</span>
             <h2 className="pc2-h2 pc2-h2--light">When it matters most,<br /><em>the system escalates.</em></h2>
             <p className="pc2-section-sub pc2-section-sub--light">When Nora detects clinical-level distress, PulseCheck securely packages the relevant context — biometrics, chat sentiment, and trend data — and starts an escalation pathway that routes the case to a clinical expert.</p>
             <ul className="pc2-checklist pc2-checklist--dark">
               {['Critical alerts bypass Do Not Disturb on clinician devices', 'Full context snapshot: sleep, HRV, chat sentiment', 'Restricted visibility — HIPAA-sensitive case handling', 'Secure handoff to clinical staff for immediate follow-up'].map(t => (
-                <li key={t}><span className="pc2-check" style={{ color: '#A05EF8' }}>✓</span><span style={{ color: '#a1a1aa' }}>{t}</span></li>
+                <li key={t}><span className="pc2-check" style={{ color: '#D4EA04' }}>✓</span><span style={{ color: '#a1a1aa' }}>{t}</span></li>
               ))}
             </ul>
           </div>
@@ -641,7 +641,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
                 <span className="pc2-cp-badge">CRITICAL</span>
               </div>
               <div className="pc2-clinical-stats">
-                {[{ l: 'Risk Level', v: 'Critical', c: '#EF4444' }, { l: 'Sleep', v: '3.2h', c: '#F97316' }, { l: 'HRV', v: '↓ Low', c: '#EF4444' }, { l: 'Sentiment', v: 'Distress', c: '#A05EF8' }].map(s => (
+                {[{ l: 'Risk Level', v: 'Critical', c: '#EF4444' }, { l: 'Sleep', v: '3.2h', c: '#F97316' }, { l: 'HRV', v: '↓ Low', c: '#EF4444' }, { l: 'Sentiment', v: 'Distress', c: '#D4EA04' }].map(s => (
                   <div key={s.l} className="pc2-cstat">
                     <div className="pc2-cstat-val" style={{ color: s.c }}>{s.v}</div>
                     <div className="pc2-cstat-label">{s.l}</div>
@@ -877,7 +877,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           border-radius: 8px; display: flex; align-items: center; justify-content: center;
         }
         .pc2-logo-img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
-        .pc2-logo-icon svg { width: 16px; height: 16px; stroke: #A05EF8; }
+        .pc2-logo-icon svg { width: 16px; height: 16px; stroke: #D4EA04; }
         .pc2-nav-links { display: flex; align-items: center; gap: 32px; }
         .pc2-nav-links a {
           text-decoration: none; font-size: 14px; font-weight: 500;
@@ -907,7 +907,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         }
         .pc2-nav-login:hover { opacity: 1; }
         .pc2-nav-cta {
-          background: linear-gradient(135deg,#6A9AFA,#A05EF8) !important;
+          background: linear-gradient(135deg,#6A9AFA,#D4EA04) !important;
           color: #fff !important; padding: 9px 20px !important;
           border-radius: 8px; font-weight: 600 !important;
           opacity: 1 !important;
@@ -937,7 +937,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           width: 1000px; height: 700px;
           background: radial-gradient(ellipse,
             rgba(106,154,250,0.07) 0%,
-            rgba(160,94,248,0.04) 40%,
+            rgba(212,234,4,0.04) 40%,
             transparent 70%);
           pointer-events: none;
           animation: pcGlowPulse 5s ease-in-out infinite;
@@ -980,7 +980,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         }
         .pc2-h1 em {
           font-style: italic;
-          background: linear-gradient(135deg,#6A9AFA,#A05EF8);
+          background: linear-gradient(135deg,#6A9AFA,#D4EA04);
           -webkit-background-clip: text; -webkit-text-fill-color: transparent;
           background-clip: text;
         }
@@ -995,7 +995,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         }
         .pc2-btn-primary {
           display: inline-flex; align-items: center; gap: 8px;
-          background: linear-gradient(135deg,#6A9AFA,#A05EF8);
+          background: linear-gradient(135deg,#6A9AFA,#D4EA04);
           color: #fff; padding: 14px 28px; border-radius: 12px;
           font-weight: 600; font-size: 15px; text-decoration: none;
           border: none; cursor: pointer;
@@ -1085,8 +1085,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         }
         /* Action card bubble (contains breathing prescription) */
         .pc2-chat-action {
-          background: rgba(160,94,248,0.08) !important;
-          border: 1px solid rgba(160,94,248,0.2);
+          background: rgba(212,234,4,0.08) !important;
+          border: 1px solid rgba(212,234,4,0.2);
           border-radius: 14px !important;
           padding: 10px 13px !important;
           margin-bottom: 8px;
@@ -1094,7 +1094,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         /* "Start Now" button inside chat */
         .pc2-chat-btn {
           display: inline-block; margin-top: 8px;
-          background: #A05EF8; color: #fff; border: none;
+          background: #D4EA04; color: #232817; border: none;
           border-radius: 8px; padding: 5px 12px;
           font-size: 10px; font-weight: 700; cursor: pointer;
           letter-spacing: 0.03em;
@@ -1103,8 +1103,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         /* ── Box Breathing HUD (Step 5) ── */
         .pc2-breath-hud {
           display: flex; align-items: center; gap: 12px;
-          background: rgba(160,94,248,0.06);
-          border: 1px solid rgba(160,94,248,0.18);
+          background: rgba(212,234,4,0.06);
+          border: 1px solid rgba(212,234,4,0.18);
           border-radius: 14px; padding: 10px 12px;
           margin-top: 4px;
         }
@@ -1115,26 +1115,26 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         .pc2-breath-ring-outer::before {
           content: ''; position: absolute; inset: 0;
           border-radius: 50%;
-          border: 3px solid rgba(160,94,248,0.15);
+          border: 3px solid rgba(212,234,4,0.15);
         }
         .pc2-breath-ring-inner {
           position: absolute; inset: 0; border-radius: 50%;
-          border: 3px solid #A05EF8;
+          border: 3px solid #D4EA04;
           animation: pcBreath 4s ease-in-out 4.2s infinite alternate;
           transform: scale(0.55);
         }
         @keyframes pcBreath {
-          0%   { transform: scale(0.55); opacity: 0.5; border-color: #A05EF8; }
-          50%  { transform: scale(1);    opacity: 1;   border-color: #A05EF8; }
+          0%   { transform: scale(0.55); opacity: 0.5; border-color: #D4EA04; }
+          50%  { transform: scale(1);    opacity: 1;   border-color: #D4EA04; }
           100% { transform: scale(0.55); opacity: 0.5; border-color: #22C55E; }
         }
         .pc2-breath-phase {
           position: absolute; font-size: 8px; font-weight: 700;
-          color: #A05EF8; letter-spacing: 0.05em;
+          color: #D4EA04; letter-spacing: 0.05em;
           animation: pcBreathLabel 4s ease-in-out 4.2s infinite alternate;
         }
         @keyframes pcBreathLabel {
-          0%,49% { content: 'Inhale'; color: #A05EF8; }
+          0%,49% { content: 'Inhale'; color: #D4EA04; }
           50%,100% { color: #22C55E; }
         }
         .pc2-breath-stats { display: flex; flex-direction: column; gap: 4px; }
@@ -1181,12 +1181,12 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         /* ── Card: ping dot ── */
         .pc2-fc-ping {
           position:absolute; top:5px; right:5px;
-          width:7px; height:7px; border-radius:50%; background:#A05EF8;
+          width:7px; height:7px; border-radius:50%; background:#D4EA04;
           animation: pcPingDot 2s ease-in-out infinite;
         }
         @keyframes pcPingDot {
-          0%,100% { box-shadow:0 0 0 0 rgba(160,94,248,0.7); }
-          50%      { box-shadow:0 0 0 5px rgba(160,94,248,0); }
+          0%,100% { box-shadow:0 0 0 0 rgba(212,234,4,0.7); }
+          50%      { box-shadow:0 0 0 5px rgba(212,234,4,0); }
         }
 
         /* ── Card: focus ring ── */
@@ -1199,9 +1199,9 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         @keyframes pcRingFill { to { stroke-dashoffset: 12; } }
         .pc2-fc-ring-label {
           position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-          font-size:13px; font-weight:700; color:#A05EF8;
+          font-size:13px; font-weight:700; color:#D4EA04;
         }
-        .pc2-fc-elite { font-size:11px; color:#A05EF8; display:block; margin-top:2px; font-weight:500; }
+        .pc2-fc-elite { font-size:11px; color:#D4EA04; display:block; margin-top:2px; font-weight:500; }
 
         /* ── Card: breathing ring ── */
         .pc2-fc-breath-wrap { position:relative; width:40px; height:40px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
@@ -1272,7 +1272,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         /* Section typography */
         .pc2-section-label {
           display: inline-block; padding: 5px 12px;
-          background: rgba(160,94,248,0.08); border-radius: 20px;
+          background: rgba(212,234,4,0.08); border-radius: 20px;
           font-size: 11px; font-weight: 700; text-transform: uppercase;
           letter-spacing: 0.1em; margin-bottom: 20px;
         }
@@ -1280,10 +1280,10 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           font-size: clamp(30px,3.2vw,50px); line-height: 1.1; font-weight: 700;
           letter-spacing: -0.025em; color: #111; margin-bottom: 20px;
         }
-        .pc2-h2 em { font-style:italic; color:#A05EF8; }
+        .pc2-h2 em { font-style:italic; color:#D4EA04; }
         .pc2-h2--light { color:#fff; }
         .pc2-h2--light em {
-          background: linear-gradient(135deg,#A05EF8,#6A9AFA);
+          background: linear-gradient(135deg,#D4EA04,#6A9AFA);
           -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
         }
         .pc2-section-sub { font-size:17px; color:#555; line-height:1.75; margin-bottom:32px; }
@@ -1291,7 +1291,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         .pc2-checklist { list-style:none; display:flex; flex-direction:column; gap:13px; }
         .pc2-checklist li { display:flex; align-items:flex-start; gap:10px; font-size:15px; color:#333; line-height:1.55; }
         .pc2-checklist--dark li { color:rgba(255,255,255,0.6); }
-        .pc2-check { font-size:14px; color:#A05EF8; font-weight:700; flex-shrink:0; margin-top:2px; }
+        .pc2-check { font-size:14px; color:#D4EA04; font-weight:700; flex-shrink:0; margin-top:2px; }
 
         /* ── REVEAL SYSTEM ── (spring feel) */
         .pc2-reveal {
@@ -1376,15 +1376,15 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           margin-top:20px;
           padding:16px 18px;
           border-radius:14px;
-          background:linear-gradient(135deg, rgba(160,94,248,0.06), rgba(106,154,250,0.06));
-          border:1px solid rgba(160,94,248,0.18);
+          background:linear-gradient(135deg, rgba(212,234,4,0.06), rgba(106,154,250,0.06));
+          border:1px solid rgba(212,234,4,0.18);
         }
         .pc2-sim-note span {
           display:block;
           font-family:ui-monospace, 'SF Mono', Menlo, monospace;
           font-size:10px; font-weight:700;
           letter-spacing:0.16em;
-          color:#A05EF8;
+          color:#D4EA04;
           margin-bottom:6px;
         }
         .pc2-sim-note p { font-size:13.5px; line-height:1.6; color:#2a2a33; }
@@ -1437,9 +1437,9 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         }
         .pc2-pscore-elite {
           font-size:9px; font-weight:700;
-          color:#c084fc;
-          background:rgba(192,132,252,0.12);
-          border:1px solid rgba(192,132,252,0.3);
+          color:#d4ea04;
+          background:rgba(212,234,4,0.12);
+          border:1px solid rgba(212,234,4,0.3);
           padding:2px 7px;
           border-radius:100px;
           letter-spacing:0.08em;
@@ -1511,8 +1511,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           color:#2a2a33;
           font-style:italic;
           padding:8px 12px;
-          border-left:2px solid #c084fc;
-          background:rgba(192,132,252,0.06);
+          border-left:2px solid #d4ea04;
+          background:rgba(212,234,4,0.06);
           border-radius:0 8px 8px 0;
         }
 
@@ -1558,7 +1558,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         }
         .pc2-sim-chip--active {
           font-weight:800;
-          box-shadow:0 4px 14px rgba(192,132,252,0.28);
+          box-shadow:0 4px 14px rgba(212,234,4,0.28);
         }
         .pc2-sim-chip--active strong { color:inherit; }
 
@@ -1604,8 +1604,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         .pc2-cstat { background:rgba(10,11,14,0.95); padding:14px 12px; text-align:center; }
         .pc2-cstat-val { font-size:21px; font-weight:700; margin-bottom:4px; }
         .pc2-cstat-label { font-size:10px; color:#444; text-transform:uppercase; letter-spacing:0.07em; }
-        .pc2-clinical-briefing { margin:14px; padding:14px; border-radius:11px; background:rgba(147,51,234,0.08); border:1px solid rgba(147,51,234,0.2); }
-        .pc2-clinical-briefing strong { display:block; font-size:11px; color:#A05EF8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px; }
+        .pc2-clinical-briefing { margin:14px; padding:14px; border-radius:11px; background:rgba(212,234,4,0.08); border:1px solid rgba(212,234,4,0.2); }
+        .pc2-clinical-briefing strong { display:block; font-size:11px; color:#D4EA04; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px; }
         .pc2-clinical-briefing p { font-size:12px; color:#777; line-height:1.65; }
 
         /* STATS */
@@ -1625,12 +1625,12 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         .pc2-cta-glow {
           position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
           width:800px; height:600px;
-          background:radial-gradient(ellipse,rgba(106,154,250,0.08) 0%,rgba(160,94,248,0.04) 40%,transparent 70%);
+          background:radial-gradient(ellipse,rgba(106,154,250,0.08) 0%,rgba(212,234,4,0.04) 40%,transparent 70%);
           pointer-events:none; animation:pcGlowPulse 5s ease-in-out infinite;
         }
         .pc2-cta-inner { position:relative; max-width:680px; margin:0 auto; }
         .pc2-cta-h2 { font-size:clamp(30px,4vw,54px); font-weight:700; color:#fff; line-height:1.1; letter-spacing:-0.025em; margin-bottom:20px; }
-        .pc2-cta-h2 em { font-style:italic; background:linear-gradient(135deg,#6A9AFA,#A05EF8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+        .pc2-cta-h2 em { font-style:italic; background:linear-gradient(135deg,#6A9AFA,#D4EA04); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
         .pc2-cta p { font-size:18px; color:rgba(255,255,255,0.45); margin-bottom:40px; line-height:1.75; }
         .pc2-cta-actions { display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
         .pc2-cta-note { font-size:13px; color:rgba(255,255,255,0.25); }
@@ -1664,13 +1664,13 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           max-height:min(680px, 92vh);
           overflow-y:auto;
           background:linear-gradient(180deg, #0f0a1a 0%, #08050e 100%);
-          border:1px solid rgba(160,94,248,0.35);
+          border:1px solid rgba(212,234,4,0.35);
           border-radius:22px;
           padding:32px 28px 28px;
           box-shadow:
             0 40px 80px rgba(0,0,0,0.6),
             0 0 0 1px rgba(255,255,255,0.04) inset,
-            0 0 80px rgba(160,94,248,0.25);
+            0 0 80px rgba(212,234,4,0.25);
           animation: pc2ModalRise 0.35s cubic-bezier(0.16,1,0.3,1);
         }
         @keyframes pc2ModalRise {
@@ -1689,8 +1689,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           transition:background 0.2s, color 0.2s, transform 0.2s;
         }
         .pc2-modal-close:hover {
-          background:rgba(160,94,248,0.18);
-          color:#c6b1ff;
+          background:rgba(212,234,4,0.18);
+          color:#f2f2e8;
           transform:scale(1.05);
         }
         .pc2-modal-close:disabled { opacity:0.4; cursor:default; }
@@ -1702,9 +1702,9 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
           font-size:10.5px; font-weight:700;
           letter-spacing:0.18em;
           text-transform:uppercase;
-          color:#c6b1ff;
-          background:rgba(160,94,248,0.12);
-          border:1px solid rgba(160,94,248,0.3);
+          color:#f2f2e8;
+          background:rgba(212,234,4,0.12);
+          border:1px solid rgba(212,234,4,0.3);
           padding:5px 11px;
           border-radius:100px;
           margin-bottom:14px;
@@ -1757,8 +1757,8 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         .pc2-modal-field input:focus,
         .pc2-modal-field textarea:focus {
           outline:none;
-          border-color:rgba(160,94,248,0.6);
-          background:rgba(160,94,248,0.06);
+          border-color:rgba(212,234,4,0.6);
+          background:rgba(212,234,4,0.06);
         }
         .pc2-modal-field textarea { resize:vertical; min-height:72px; }
 
@@ -1834,25 +1834,25 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({
         .pc2-clinical-pathway-title {
           font-size: 12px !important;
           font-weight: 500;
-          color: rgba(180,140,255,0.9) !important;
+          color: rgba(212,234,4,0.9) !important;
           letter-spacing: 0.03em;
           animation: pcClinicalPathwayGlow 3s ease-in-out infinite;
         }
         .pc2-clinical-pathway-title strong {
           font-weight: 700;
-          color: #C084FC;
+          color: #D4EA04;
         }
         @keyframes pcClinicalPathwayGlow {
           0%,100% {
             text-shadow:
-              0 0 6px rgba(192,132,252,0.4),
-              0 0 14px rgba(160,94,248,0.2);
+              0 0 6px rgba(212,234,4,0.4),
+              0 0 14px rgba(212,234,4,0.2);
             opacity: 0.85;
           }
           50% {
             text-shadow:
-              0 0 10px rgba(192,132,252,0.9),
-              0 0 24px rgba(160,94,248,0.55),
+              0 0 10px rgba(212,234,4,0.9),
+              0 0 24px rgba(212,234,4,0.55),
               0 0 40px rgba(106,154,250,0.2);
             opacity: 1;
           }

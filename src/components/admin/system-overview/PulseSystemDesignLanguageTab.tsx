@@ -220,7 +220,7 @@ const PulseSystemDesignLanguageTab: React.FC = () => {
         <CardGrid columns="xl:grid-cols-2">
           <InfoCard
             title="Native Glass Standard"
-            accent="purple"
+            accent="clay"
             body="Use background-aware material with subtle blur, tonal depth, a restrained top reflection, and continuous iOS-style corners. Filled cards should not receive a decorative chromatic outline."
           />
           <InfoCard
@@ -268,7 +268,7 @@ const PulseSystemDesignLanguageTab: React.FC = () => {
         <CardGrid columns="xl:grid-cols-2">
           <InfoCard
             title="Checklist"
-            accent="purple"
+            accent="clay"
             body={<BulletList items={REVIEW_CHECKLIST} />}
           />
           <InfoCard

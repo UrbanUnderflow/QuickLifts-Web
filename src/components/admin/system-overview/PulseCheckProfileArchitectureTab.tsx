@@ -160,7 +160,7 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
       <SectionBlock icon={Compass} title="Core Design Rule And Product Position">
         <InfoCard
           title="Core Rule"
-          accent="purple"
+          accent="clay"
           body="Profile is a stable Me surface, not a second dashboard. It should hold identity, context, durable mental-performance development, permissions, consent, support routing, and account controls while leaving daily work to Today and conversational guidance to Nora."
         />
         <DataTable columns={['Surface', 'Primary Job', 'User Question It Answers']} rows={SURFACE_ROWS} />
@@ -171,7 +171,7 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
         <CardGrid columns="md:grid-cols-2">
           <InfoCard
             title="Challenge vs Goal"
-            accent="purple"
+            accent="clay"
             body="Primary challenge means the bottleneck or breakdown pattern Nora should train around. Primary goal means the outcome the athlete is trying to achieve. They should never be stored or explained as the same field."
           />
           <InfoCard
@@ -210,7 +210,7 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
           />
           <InfoCard
             title="How Nora Uses Both"
-            accent="purple"
+            accent="clay"
             body="Challenge should steer training emphasis and intervention choice. Goal should shape framing, milestone language, and what success is meant to look like once the athlete is safe to train."
           />
         </CardGrid>
@@ -270,7 +270,7 @@ const PROFILE_SYSTEM_PAGES: ArtifactPageEntry[] = [
     label: 'Profile Architecture',
     subtitle: 'Profile IA, field schema, milestone snapshots, and explanation rules.',
     icon: FileText,
-    accent: '#c084fc',
+    accent: '#d4ea04',
     render: () => <ProfileArchitectureOverviewDoc />,
   },
   {

@@ -141,7 +141,7 @@ export default function PulseCheckAthleteDailyStateLoopTab() {
         <DataTable columns={['Stage', 'Runtime Behavior']} rows={RECALIBRATION_ROWS} />
         <InfoCard
           title="Teaching Goal"
-          accent="purple"
+          accent="clay"
           body="Three breaths are a first act of recalibration. The closeout teaches the athlete to notice what is present and choose a useful inner response; it does not claim the athlete should no longer feel drained."
         />
       </SectionBlock>

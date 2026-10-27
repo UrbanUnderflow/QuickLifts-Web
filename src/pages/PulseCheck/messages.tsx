@@ -83,20 +83,20 @@ const ConversationCard: React.FC<{
         border: '1px solid rgba(255,255,255,0.06)',
       }}
       whileHover={{
-        backgroundColor: 'rgba(139,92,246,0.06)',
-        borderColor: 'rgba(139,92,246,0.15)',
+        backgroundColor: 'rgba(212,234,4,0.06)',
+        borderColor: 'rgba(212,234,4,0.15)',
       }}
     >
-      {/* Purple accent bar */}
+      {/* Clay accent bar */}
       <div
         className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full opacity-60 group-hover:opacity-100 transition-opacity"
-        style={{ background: 'linear-gradient(180deg, #8B5CF6, #6366F1)' }}
+        style={{ background: '#D4EA04' }}
       />
 
       {/* Avatar */}
       <div
-        className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#6366F1] flex items-center justify-center shadow-lg relative"
-        style={{ boxShadow: '0 4px 16px rgba(139,92,246,0.2)' }}
+        className="flex-shrink-0 w-12 h-12 rounded-full bg-clay-lime flex items-center justify-center shadow-lg relative"
+        style={{ boxShadow: '0 4px 16px rgba(212,234,4,0.2)' }}
       >
         <span className="text-white font-semibold text-lg">
           {convo.title?.[0]?.toUpperCase() || 'U'}
@@ -118,8 +118,8 @@ const ConversationCard: React.FC<{
               <span
                 className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 uppercase tracking-wider"
                 style={{
-                  background: 'rgba(139,92,246,0.15)',
-                  color: '#A78BFA',
+                  background: 'rgba(212,234,4,0.15)',
+                  color: '#D4EA04',
                 }}
               >
                 {convo.subtitle}
@@ -210,8 +210,8 @@ const PulseCheckMessagesPage: React.FC = () => {
 
       <div className="min-h-screen bg-[#0a0a0b] text-white relative overflow-hidden">
         {/* Ambient orbs */}
-        <FloatingOrb color="#8B5CF6" size={500} style={{ top: '-12%', left: '-8%' }} delay={0} />
-        <FloatingOrb color="#6366F1" size={350} style={{ bottom: '-8%', right: '-6%' }} delay={3} />
+        <FloatingOrb color="#D4EA04" size={500} style={{ top: '-12%', left: '-8%' }} delay={0} />
+        <FloatingOrb color="#A7D7C2" size={350} style={{ bottom: '-8%', right: '-6%' }} delay={3} />
         <FloatingOrb color="#E0FE10" size={250} style={{ top: '60%', right: '25%' }} delay={6} />
 
         {/* Noise overlay */}
@@ -245,15 +245,15 @@ const PulseCheckMessagesPage: React.FC = () => {
               <div className="flex items-center gap-4">
                 {/* Icon with glow */}
                 <div className="relative">
-                  <div className="absolute -inset-2 bg-[#8B5CF6]/15 rounded-xl blur-xl" />
+                  <div className="absolute -inset-2 bg-clay-lime/15 rounded-xl blur-xl" />
                   <div
                     className="relative w-12 h-12 rounded-xl flex items-center justify-center"
                     style={{
-                      background: 'rgba(139,92,246,0.12)',
-                      border: '1px solid rgba(139,92,246,0.2)',
+                      background: 'rgba(212,234,4,0.12)',
+                      border: '1px solid rgba(212,234,4,0.2)',
                     }}
                   >
-                    <Activity className="w-5 h-5 text-[#A78BFA]" />
+                    <Activity className="w-5 h-5 text-clay-lime" />
                   </div>
                 </div>
 
@@ -275,7 +275,7 @@ const PulseCheckMessagesPage: React.FC = () => {
             {loading ? (
               <div className="flex items-center justify-center py-16">
                 <div className="flex items-center gap-3 text-zinc-400">
-                  <div className="w-5 h-5 border-2 border-zinc-700 border-t-[#8B5CF6] rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-zinc-700 border-t-clay-lime rounded-full animate-spin" />
                   Loading conversations…
                 </div>
               </div>
@@ -288,11 +288,11 @@ const PulseCheckMessagesPage: React.FC = () => {
                 <div
                   className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
                   style={{
-                    background: 'rgba(139,92,246,0.08)',
-                    border: '1px solid rgba(139,92,246,0.15)',
+                    background: 'rgba(212,234,4,0.08)',
+                    border: '1px solid rgba(212,234,4,0.15)',
                   }}
                 >
-                  <MessageCircle className="w-7 h-7 text-[#8B5CF6]" />
+                  <MessageCircle className="w-7 h-7 text-clay-lime" />
                 </div>
                 <h3 className="text-lg font-semibold text-white mb-2">No conversations yet</h3>
                 <p className="text-zinc-500 max-w-sm text-sm leading-relaxed">

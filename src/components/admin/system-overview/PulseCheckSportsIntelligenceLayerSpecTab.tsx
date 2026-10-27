@@ -222,7 +222,7 @@ const NON_NEGOTIABLES = [
   },
   {
     title: 'AI Writes, Code Reasons',
-    accent: 'purple' as const,
+    accent: 'clay' as const,
     body: 'Sports Intelligence does not ask AI to notice, diagnose, or infer from scratch. Code builds the fact ledger, selects the candidate read, blocks unsupported claims, and runs the executable Nora rubric before any athlete or coach sees the copy.',
   },
   {
@@ -267,7 +267,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
 
       <InfoCard
         title="Operating Thesis"
-        accent="purple"
+        accent="clay"
         body={
           <div className="space-y-3">
             <p className="text-lg font-semibold leading-relaxed text-white">
@@ -305,7 +305,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
                 href="/coach-report-demo"
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full border border-purple-400/30 bg-purple-400/10 px-3 py-1 font-medium text-purple-100 transition hover:border-purple-300/60"
+                className="rounded-full border border-clay-lime/30 bg-clay-lime/10 px-3 py-1 font-medium text-clay-ink transition hover:border-clay-lime/60"
               >
                 View coach mock reports
               </a>
@@ -342,7 +342,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-2">
           <InfoCard
             title="Athlete Job"
-            accent="purple"
+            accent="clay"
             body="Teach the athlete how to notice physical state, sleep, recovery habits, self-talk, and mental reps as separate signals over time. Athlete self-report and measured cognitive tasks anchor focus, composure, confidence, and decision-making; wearable data never declares those states."
           />
           <InfoCard
@@ -363,7 +363,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
       <SectionBlock icon={Cpu} title="Reasoning Layer v0.3">
         <InfoCard
           title="Nutrition Layer Pattern Applied To Sports"
-          accent="purple"
+          accent="clay"
           body="The product failure we are eliminating is data-flavored confidence. A sports read must prove what it knows, what it inferred, what it refused to say, and why the final copy passed the Nora rubric."
         />
         <DataTable columns={['Step', 'Layer', 'Responsibility']} rows={REASONING_LAYER_ROWS} />
@@ -478,7 +478,7 @@ const PulseCheckSportsIntelligenceLayerSpecTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-2">
           <InfoCard
             title="Design Posture"
-            accent="purple"
+            accent="clay"
             body="User-friendly, stunning, and easy to navigate. Calm visual hierarchy, generous whitespace, sport-color signals that match the sport-config registry, and zero raw vendor scores rendered as judgment. The dashboard should feel like a coach's home page, not an analytics console."
           />
           <InfoCard

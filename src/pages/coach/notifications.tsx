@@ -118,7 +118,7 @@ const getNotificationIcon = (notification: CoachNotificationDoc) => {
     case 'revenue':
       return <FaBell className="h-5 w-5 text-[#E0FE10]" />;
     case 'system':
-      return <FaInfoCircle className="h-5 w-5 text-purple-400" />;
+      return <FaInfoCircle className="h-5 w-5 text-clay-lime" />;
     case 'alert':
       return <FaExclamationTriangle className="h-5 w-5 text-orange-400" />;
     default:
@@ -136,7 +136,7 @@ const getNotificationBorder = (notification: CoachNotificationDoc) => {
     case 'revenue':
       return 'border-l-[#E0FE10]';
     case 'system':
-      return 'border-l-purple-400';
+      return 'border-l-clay-lime';
     case 'alert':
       return 'border-l-orange-400';
     default:

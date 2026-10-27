@@ -14,8 +14,8 @@ import { useUser, useUserLoading } from '../../hooks/useUser';
 const PC = {
   pageBg: '#070711',
   deepBg: '#0B0B1C',
-  purple: '#7C3AED',
-  purpleSoft: '#a78bfa',
+  clay: '#D4EA04',
+  claySoft: '#d4ea04',
   cardBorder: 'rgba(255,255,255,0.10)',
 };
 
@@ -195,7 +195,7 @@ export default function PulseCheckMemberSetupPage() {
   if (currentUserLoading || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-white" style={{ background: PC.pageBg }}>
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: PC.purpleSoft }} />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: PC.claySoft }} />
       </div>
     );
   }
@@ -221,7 +221,7 @@ export default function PulseCheckMemberSetupPage() {
         <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700,800,900&display=swap" />
       </Head>
 
-      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.20) 0%, transparent 70%)' }} />
+      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(212,234,4,0.20) 0%, transparent 70%)' }} />
 
       <main className="relative mx-auto w-full max-w-3xl px-4 py-8 md:px-6 md:py-10">
         {/* Brand + header */}
@@ -230,7 +230,7 @@ export default function PulseCheckMemberSetupPage() {
             <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
           </div>
           <div>
-            <p className="text-sm font-medium tracking-tight" style={{ color: PC.purpleSoft }}>Welcome to {team?.displayName || 'your team'}</p>
+            <p className="text-sm font-medium tracking-tight" style={{ color: PC.claySoft }}>Welcome to {team?.displayName || 'your team'}</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl" style={{ fontFamily: 'Switzer, sans-serif' }}>
               Finish setting up your access
             </h1>
@@ -250,7 +250,7 @@ export default function PulseCheckMemberSetupPage() {
 
         <form onSubmit={handleSubmit} className="rounded-[30px] border p-6" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
           <div className="flex items-center gap-3">
-            <UserRound className="h-5 w-5" style={{ color: PC.purpleSoft }} />
+            <UserRound className="h-5 w-5" style={{ color: PC.claySoft }} />
             <div>
               <div className="text-lg font-semibold text-white">Tell us about you</div>
               <div className="text-sm text-zinc-400">
@@ -270,7 +270,7 @@ export default function PulseCheckMemberSetupPage() {
                   </span>
                 )}
               </div>
-              <label className="mt-4 block cursor-pointer rounded-2xl border border-zinc-700 px-3 py-2 text-center text-sm font-medium text-white transition hover:border-[#7C3AED]">
+              <label className="mt-4 block cursor-pointer rounded-2xl border border-zinc-700 px-3 py-2 text-center text-sm font-medium text-white transition hover:border-clay-lime">
                 Add Photo
                 <input
                   type="file"
@@ -333,8 +333,8 @@ export default function PulseCheckMemberSetupPage() {
             <button
               type="submit"
               disabled={saving || !staffConsents.every(doc => consentDecisionComplete(doc, staffDecisions))}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ background: PC.purple }}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: PC.clay }}
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               {saving ? 'Saving…' : 'Complete Member Setup'}

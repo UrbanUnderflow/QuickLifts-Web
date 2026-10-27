@@ -233,7 +233,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
 
 const MODE_CONFIG: Record<VariantMode, { label: string; color: string; icon: React.ElementType }> = {
     branch: { label: 'Branch Variant', color: '#60a5fa', icon: Layers },
-    library: { label: 'Library Variant', color: '#c084fc', icon: BookOpen },
+    library: { label: 'Library Variant', color: '#d4ea04', icon: BookOpen },
     hybrid: { label: 'Hybrid / Trial', color: '#64748b', icon: Zap },
 };
 
@@ -248,7 +248,7 @@ const BUILD_STATUS_CONFIG: Record<SimBuildStatus, { label: string; color: string
 const VISION_STATUS_CONFIG: Record<SimVariantVisionStatus, { label: string; color: string }> = {
     spec_only: { label: 'Spec Only', color: '#71717a' },
     runtime_mapped: { label: 'Runtime Mapped', color: '#38bdf8' },
-    in_package: { label: 'In Package', color: '#a855f7' },
+    in_package: { label: 'In Package', color: '#d4ea04' },
     validated: { label: 'Validated', color: '#22c55e' },
 };
 
@@ -266,7 +266,7 @@ const FAMILY_COLORS: Record<string, string> = {
     'Noise Gate': '#f59e0b',
     'Brake Point': '#22c55e',
     'Signal Window': '#3b82f6',
-    'Sequence Shift': '#8b5cf6',
+    'Sequence Shift': '#d4ea04',
     'Endurance Lock': '#06b6d4',
     'Fault Line': '#f97316',
     'Split Stream': '#14b8a6',
@@ -6117,7 +6117,7 @@ function VariantWorkspaceModal({
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-colors border-b-2 ${activeTab === tab.id
-                                ? 'text-white border-purple-500'
+                                ? 'text-white border-clay-lime'
                                 : 'text-zinc-500 border-transparent hover:text-zinc-300'
                                 }`}
                         >
@@ -6734,7 +6734,7 @@ function VariantWorkspaceModal({
                                         <button
                                             onClick={() => rawSpec.trim() && setParsed(parseVariantSpec(rawSpec))}
                                             disabled={!rawSpec.trim()}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:bg-purple-500/15 transition-colors disabled:opacity-40"
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-clay-lime/10 border border-clay-lime/20 text-clay-lime hover:bg-clay-lime/15 transition-colors disabled:opacity-40"
                                         >
                                             <Eye className="w-3.5 h-3.5" />
                                             Refresh Preview
@@ -7077,7 +7077,7 @@ function VariantWorkspaceModal({
                                         <button
                                             onClick={handlePreviewBuild}
                                             disabled={!!configError || workspaceBusy}
-                                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/15 disabled:opacity-40 transition-colors"
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-clay-lime/10 border border-clay-lime/30 text-clay-lime hover:bg-clay-lime/15 disabled:opacity-40 transition-colors"
                                         >
                                             <Gamepad2 className="w-3.5 h-3.5" />
                                             {variantMeta.buildArtifact ? 'Preview Built Module' : 'Build + Preview'}
@@ -7559,7 +7559,7 @@ function FamilyGroup({
                     <div className="flex items-center gap-3 mt-1 text-[10px] text-zinc-500">
                         <span>{variants.length} variants</span>
                         {branchCount > 0 && <span className="text-blue-400">{branchCount} branch</span>}
-                        {libraryCount > 0 && <span className="text-purple-400">{libraryCount} library</span>}
+                        {libraryCount > 0 && <span className="text-clay-lime">{libraryCount} library</span>}
                         {hybridCount > 0 && <span className="text-zinc-500">{hybridCount} hybrid</span>}
                         <span className="text-zinc-700">|</span>
                         {specCounts['needs-spec'] > 0 && (
@@ -7689,9 +7689,9 @@ function FamilyGroup({
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onPasteSpec(v); }}
                                                 title="Paste &amp; format variant spec"
-                                                className="flex items-center justify-center w-7 h-7 rounded-lg border border-zinc-700 bg-black/20 hover:border-purple-500/60 hover:bg-purple-500/10 transition-all group"
+                                                className="flex items-center justify-center w-7 h-7 rounded-lg border border-zinc-700 bg-black/20 hover:border-clay-lime/60 hover:bg-clay-lime/10 transition-all group"
                                             >
-                                                <ClipboardPaste className="w-3.5 h-3.5 text-zinc-600 group-hover:text-purple-400 transition-colors" />
+                                                <ClipboardPaste className="w-3.5 h-3.5 text-zinc-600 group-hover:text-clay-lime transition-colors" />
                                             </button>
                                         </div>
                                     </div>
@@ -7748,14 +7748,14 @@ const INLINE_GENERATION_RESULT_TTL_MS = 2 * 60 * 1000;
 function VariantSpecTemplate() {
     const [open, setOpen] = useState(false);
     return (
-        <div className="bg-[#090f1c] border border-purple-500/20 rounded-2xl overflow-hidden">
+        <div className="bg-[#090f1c] border border-clay-lime/20 rounded-2xl overflow-hidden">
             <button
                 onClick={() => setOpen(!open)}
                 className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors text-left"
             >
                 <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                        <FileCode2 className="w-4 h-4 text-purple-400" />
+                    <div className="p-1.5 rounded-lg bg-clay-lime/10 border border-clay-lime/20">
+                        <FileCode2 className="w-4 h-4 text-clay-lime" />
                     </div>
                     <div>
                         <p className="text-sm font-bold text-white">Variant Specification Template</p>
@@ -7773,7 +7773,7 @@ function VariantSpecTemplate() {
                         transition={{ duration: 0.25 }}
                         className="overflow-hidden"
                     >
-                        <div className="border-t border-purple-500/20 p-5 space-y-5">
+                        <div className="border-t border-clay-lime/20 p-5 space-y-5">
 
                             {/* Governing note */}
                             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
@@ -7784,7 +7784,7 @@ function VariantSpecTemplate() {
                             </div>
 
                             {/* §1 Purpose */}
-                            <TemplateSection title="§1 · Purpose of This Template" icon={BookOpen} accent="#a78bfa">
+                            <TemplateSection title="§1 · Purpose of This Template" icon={BookOpen} accent="#d4ea04">
                                 <p className="text-[10px] text-zinc-400 leading-relaxed">
                                     A Variant Spec is created when a registry entry is prioritized for <span className="text-white font-semibold">build, pilot, research use, or formal Trial deployment</span>. Exploratory variants may remain in the registry until promoted into active scope.
                                 </p>
@@ -7872,14 +7872,14 @@ function VariantSpecTemplate() {
                             </TemplateSection>
 
                             {/* §8 Mode Behavior */}
-                            <TemplateSection title="§8 · Mode Behavior" icon={BarChart3} accent="#c084fc">
+                            <TemplateSection title="§8 · Mode Behavior" icon={BarChart3} accent="#d4ea04">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
                                         <p className="text-[9px] uppercase tracking-widest font-bold text-blue-400 mb-2">Training Mode</p>
                                         <p className="text-[10px] text-zinc-600 italic">Feedback behavior, adaptive difficulty handling, intra-session data display, and session length for Training Mode.</p>
                                     </div>
-                                    <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-3">
-                                        <p className="text-[9px] uppercase tracking-widest font-bold text-purple-400 mb-2">Trial Mode</p>
+                                    <div className="rounded-xl border border-clay-lime/20 bg-clay-lime/5 p-3">
+                                        <p className="text-[9px] uppercase tracking-widest font-bold text-clay-lime mb-2">Trial Mode</p>
                                         <p className="text-[10px] text-zinc-600 italic">Standardized duration, fixed difficulty level, feedback suppression rules, and output format for Trial Mode.</p>
                                     </div>
                                 </div>
@@ -8829,7 +8829,7 @@ const VariantRegistryTab: React.FC = () => {
                 {/* RULES CALLOUT */}
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-purple-400" /> Registry Rules
+                        <Shield className="w-4 h-4 text-clay-lime" /> Registry Rules
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3">
@@ -8935,7 +8935,7 @@ const VariantRegistryTab: React.FC = () => {
                             <span className="px-2 py-1 rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-300 font-semibold">
                                 {visionPackageStats.total} packages
                             </span>
-                            <span className="px-2 py-1 rounded-full border border-purple-500/20 bg-purple-500/10 text-purple-300 font-semibold">
+                            <span className="px-2 py-1 rounded-full border border-clay-lime/20 bg-clay-lime/10 text-clay-lime font-semibold">
                                 {visionPackageStats.inPackage} in package
                             </span>
                             <span className="px-2 py-1 rounded-full border border-green-500/20 bg-green-500/10 text-green-300 font-semibold">
@@ -9015,7 +9015,7 @@ const VariantRegistryTab: React.FC = () => {
                             <span className="px-2 py-1 rounded-full border border-zinc-700 bg-black/30 text-zinc-400 font-semibold">
                                 {visionStats.families} families
                             </span>
-                            <span className="px-2 py-1 rounded-full border border-purple-500/20 bg-purple-500/10 text-purple-300 font-semibold">
+                            <span className="px-2 py-1 rounded-full border border-clay-lime/20 bg-clay-lime/10 text-clay-lime font-semibold">
                                 {visionStats.inPackage} in package
                             </span>
                             <span className="px-2 py-1 rounded-full border border-green-500/20 bg-green-500/10 text-green-300 font-semibold">
@@ -9121,7 +9121,7 @@ const VariantRegistryTab: React.FC = () => {
                 {/* PROGRESS OVERVIEW */}
                 <section className="space-y-4 pb-4">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
-                        <Layers className="w-4 h-4 text-purple-400" /> Spec Completion by Family
+                        <Layers className="w-4 h-4 text-clay-lime" /> Spec Completion by Family
                     </h3>
                     <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
                         {Object.entries(

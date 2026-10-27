@@ -155,7 +155,7 @@ const AuntEdnaExhibitATab: React.FC = () => {
           />
           <InfoCard
             title="Operational Mirror Rule"
-            accent="purple"
+            accent="clay"
             body="PulseCheck may keep only the limited operational mirror of AuntEdna-origin handoff state that Exhibit A permits, and that mirror exists solely for dashboards, workflow suppression, retry logic, and non-clinical coordination."
           />
         </CardGrid>
