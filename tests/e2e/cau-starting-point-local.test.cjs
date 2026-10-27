@@ -19,8 +19,8 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   }
   if(url.pathname.includes('/api/')){
    const decision=scenario==='pending'&&!consentSaved?'pending':scenario==='declined'?'declined':scenario==='health-off'?'disabled':'accepted';
-   let data={questionnaireVersion:version,available:true,completed:completed||scenario==='completed',required:true,healthBaselineEnabled:scenario!=='health-off',healthAuthorizationRequired:decision==='pending',healthAuthorizationDecision:decision,healthSharingAllowed:decision==='accepted',healthCollectionAvailable:!['unready','team-review-incomplete'].includes(scenario),healthDocuments:[healthTerms],healthConsentDecisions:{},sportName:'Volleyball'};
-   if(scenario==='resumed'||scenario==='health-off'||scenario==='declined'||scenario==='unready')Object.assign(data,{draft:goalDraft,skills});
+   let data={questionnaireVersion:version,available:true,completed:completed||scenario==='completed',required:true,healthBaselineEnabled:scenario!=='health-off',healthAuthorizationRequired:decision==='pending',healthAuthorizationDecision:decision,healthSharingAllowed:decision==='accepted',healthCollectionAvailable:!['unready','backup-save','team-review-incomplete'].includes(scenario),healthBackupAvailable:true,providerDeliveryAvailable:scenario!=='backup-save',healthDocuments:[healthTerms],healthConsentDecisions:{},sportName:'Volleyball'};
+   if(['resumed','health-off','declined','unready','backup-save'].includes(scenario))Object.assign(data,{draft:goalDraft,skills});
    if(['team-review','team-review-health','team-review-incomplete','team-no-details'].includes(scenario)){
     const needsHealth=['team-review-health','team-review-incomplete'].includes(scenario);
     Object.assign(data,{reviewId:'join-second',teamName:'Second Team',healthBaselineEnabled:needsHealth,healthAuthorizationDecision:needsHealth?'accepted':'disabled',healthSharingAllowed:needsHealth,skills:{...skills,completed:true},prefill:{answers:{'cau-starting-point-46':['Focus']},name:'Previous Athlete',email:'local@example.test',prefilledQuestionCount:3,unavailableHealthAnswers:true,hasPreviousBaseline:true,skillsDraft:skills.draft}});
@@ -37,7 +37,7 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
     else if(input.action==='savePerformanceDraft'){goalDraft={...input.draft,revision:++revision};data={draft:goalDraft};}
     else if(input.action?.includes('Skills')){skills={draft:input.draft,completed:input.action==='completeSkills',revision:++revision};data={skills};}
     else if(scenario==='combined'&&!interrupted){interrupted=true;return route.fulfill({status:503,json:{error:'Temporary save interruption. Please retry.'}});}
-    else{completed=true;data={saved:true,completed:true};}
+    else{completed=true;data={saved:true,completed:true,...(input.shareHealth&&scenario==='backup-save'?{receipt:{backupId:'private-backup',healthStorage:'pulse_private_backup',providerVerified:false}}:input.shareHealth&&scenario==='combined'?{receipt:{healthStorage:'auntedna_verified',providerVerified:true}}:{})};}
    }
    return route.fulfill({json:data});
   }
@@ -80,6 +80,7 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   }
   await click('Submit answers');await page.getByText('Temporary save interruption. Please retry.').waitFor();
   await click('Submit answers');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
+  await page.getByText('AuntEdna confirmed receipt.',{exact:true}).waitFor();
   assert.equal(posts.filter(p=>!p.action).length,2);assert.equal(Object.keys(posts.at(-1).answers).length,20);
   const originalGoal=structuredClone(goalDraft),originalSkills=structuredClone(skills);
   for(const next of ['health-off','declined','unready','resumed']){
@@ -95,6 +96,20 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
    if(next==='unready'||next==='resumed')await more('Complete performance only');
    await click('Submit answers');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();assert.equal(posts.at(-1).shareHealth,false);
   }
+  goalDraft=originalGoal;skills=originalSkills;await open('backup-save');
+  await page.getByRole('heading',{name:'Your baseline',exact:true}).waitFor();
+  assert.equal(await page.getByText('Your program’s health connection is not ready.',{exact:false}).count(),0);
+  await page.getByRole('button',{name:/Well-being and support/}).click();
+  for(const q of health){
+   await page.locator('.cau-question-title').filter({hasText:q.question}).waitFor({timeout:10000});
+   await page.locator('.cau-choice-btn').first().click();if(q.type==='multi_select')await click('Continue');
+  }
+  await click('Submit answers');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
+  await page.getByText('Saved privately in Pulse.',{exact:true}).waitFor();
+  assert.equal(await page.getByText('AuntEdna confirmed receipt.',{exact:true}).count(),0,'private backup success never fabricates provider receipt');
+  assert.equal(posts.at(-1).shareHealth,true);assert.equal(Object.keys(posts.at(-1).answers).length,20);
+  await page.waitForFunction(()=>document.querySelector('.cau-stage')&&Number(getComputedStyle(document.querySelector('.cau-stage')).opacity)>0.99);
+  await page.screenshot({path:'/tmp/baseline-private-backup-saved.png',fullPage:true});
   await open('pending');await page.getByRole('heading',{name:'Your health authorization'}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Start baseline',exact:true}).count(),0);
   await page.screenshot({path:'/tmp/baseline-28-consent.png',fullPage:true});
@@ -165,6 +180,6 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   await page.addInitScript(()=>{window.__baselineNativeEvents=[];window.webkit={messageHandlers:{baselineSession:{postMessage(message){window.__baselineNativeEvents.push(message.action);if(message.action==='signIn')setTimeout(()=>window.dispatchEvent(new CustomEvent('pulse-baseline-session',{detail:{customToken:'synthetic',userID:'local-test'}})),0);}}}};});
   await page.reload();await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();await page.waitForFunction(()=>window.__baselineNativeEvents.includes('completed'));
   assert.deepEqual(await page.evaluate(()=>window.__baselineNativeEvents),['signIn','completed']);assert.deepEqual(errors,[]);
-  console.log(JSON.stringify({success:true,questionnaireItems:20,familiarityItems:8,total:28,scenarios:13,version}));
+  console.log(JSON.stringify({success:true,questionnaireItems:20,familiarityItems:8,total:28,scenarios:14,version}));
  }catch(error){console.error(await page.locator('body').innerText());throw error;}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

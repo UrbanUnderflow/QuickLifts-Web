@@ -3867,6 +3867,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
               <div className={ui.sidebarFooter}>
                 <Link href="/coach/dashboard"><Users2 size={17} />Coach dashboard<ExternalLink size={13} /></Link>
                 <Link href="/admin/pulsecheckOnboardingOverview"><ClipboardList size={17} />Onboarding playbook</Link>
+                <Link href="/admin/pulsecheckBaselineBackups"><ShieldPlus size={17} />Private baseline backups</Link>
                 <button type="button" onClick={() => { selectOrganization(null); setAdminTourOpen(true); }}><Sparkles size={17} />Page walkthrough</button>
               </div>
             </aside>
@@ -3895,6 +3896,10 @@ const PulseCheckProvisioningPage: React.FC = () => {
                   <Link href="/admin/pulsecheckOnboardingOverview" className="pcp-btn pcp-btn-ghost">
                     <ClipboardList />
                     Playbook
+                  </Link>
+                  <Link href="/admin/pulsecheckBaselineBackups" className="pcp-btn pcp-btn-ghost">
+                    <ShieldPlus />
+                    Backups
                   </Link>
                   <button type="button" className="pcp-btn pcp-btn-ghost" onClick={handleExportOrganizations}>
                     <Download />

@@ -109,6 +109,12 @@ const adminCardsData = [
     link: "/admin/pulsecheckProvisioning"
   },
   {
+    title: "Private Baseline Backups",
+    description: "Check AuntEdna delivery, try again, and remove a private Pulse backup after its receipt is verified.",
+    icon: <ShieldCheck className="w-5 h-5" />,
+    link: "/admin/pulsecheckBaselineBackups"
+  },
+  {
     title: "PulseCheck Onboarding Playbook",
     description: "Live board showing where every team stands in onboarding, plus the full step-by-step guide for setup, coach training, launch day, and the first 30 days.",
     icon: <ClipboardList className="w-5 h-5" />,

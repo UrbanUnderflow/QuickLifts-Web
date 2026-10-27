@@ -59,7 +59,7 @@ export function getServerSideProps({ res }: any) {
   return { props: { collectionEnabled: process.env.ATHLETE_BASELINE_ENABLED !== 'false' } };
 }
 
-type TestReceipt = { baselineId?: string; athleteId?: string; externalId?: string; submissionId?: string; receivedAt?: string; requestId?: string };
+type TestReceipt = { baselineId?: string; athleteId?: string; externalId?: string; submissionId?: string; receivedAt?: string; requestId?: string; backupId?: string; healthStorage?: 'pulse_private_backup' | 'auntedna_verified'; providerVerified?: boolean };
 
 // ─────────────────────────────────────────────────────────────────────────
 // This page ships two ways: through the normal Next.js/Tailwind build, and
@@ -469,7 +469,6 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
     }
     if (!collectionEnabled) { setError('Saving is temporarily unavailable. Please try again shortly.'); return; }
     if (status?.healthAuthorizationRequired) {setReviewHealthChoice(true);return;}
-    if (shareHealth && status?.healthCollectionAvailable === false) {setError('Your program’s health connection is not ready. Your answers remain on this page. Try again later or choose Complete performance only.');return;}
     setSaving(true); setSubmittedOnce(true); setError('');
     try {
       const response = await fetch(endpoint, { method: 'POST', signal: AbortSignal.timeout(45000), headers: { ...testHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${await user.getIdToken()}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod' }, body: JSON.stringify({ questionnaireVersion: QUESTIONNAIRE_VERSION, reviewId:status?.reviewId, acceptPrefilled:Boolean(status?.reviewId), name, email, answers, shareHealth, completedSections: completed }) });
@@ -809,6 +808,8 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
             <CheckCircle2 size={30} />
           </motion.div>
           <h1 className="cau-h1">Your answers are saved.</h1>
+          {!sandboxTest && receipt?.healthStorage === 'pulse_private_backup' && <p className="cau-body">Saved privately in Pulse.</p>}
+          {!sandboxTest && receipt?.healthStorage === 'auntedna_verified' && receipt.providerVerified === true && <p className="cau-body">AuntEdna confirmed receipt.</p>}
           {sandboxTest ? <p className="cau-body">Your test is complete. Share the receipt below so the team can check both systems.</p>
             : embedded ? <p className="cau-body">Thank you for sharing your starting point. You can return to the app.</p>
             : <p className="cau-body">Thank you for sharing your starting point. Download the {getNativeAppDistribution(status.productBrand).name} app to start training, and sign in with this same account.</p>}
