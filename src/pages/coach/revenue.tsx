@@ -647,8 +647,8 @@ const CoachRevenue: React.FC = () => {
 
               <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-purple-500/10 rounded-lg">
-                    <FaDollarSign className="h-6 w-6 text-purple-400" />
+                  <div className="p-3 bg-clay-lime/10 rounded-lg">
+                    <FaDollarSign className="h-6 w-6 text-clay-lime" />
                   </div>
                 </div>
                 <div>
@@ -682,8 +682,8 @@ const CoachRevenue: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-8">
               <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-purple-500/10 rounded-lg">
-                    <FaDollarSign className="h-6 w-6 text-purple-400" />
+                  <div className="p-3 bg-clay-lime/10 rounded-lg">
+                    <FaDollarSign className="h-6 w-6 text-clay-lime" />
                   </div>
                 </div>
                 <div>
@@ -694,8 +694,8 @@ const CoachRevenue: React.FC = () => {
               </div>
               <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800">
                 <div className="flex items-center justify-between mb-4">
-                  <div className="p-3 bg-purple-500/10 rounded-lg">
-                    <FaDollarSign className="h-6 w-6 text-purple-400" />
+                  <div className="p-3 bg-clay-lime/10 rounded-lg">
+                    <FaDollarSign className="h-6 w-6 text-clay-lime" />
                   </div>
                 </div>
                 <div>

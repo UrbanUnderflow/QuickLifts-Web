@@ -38,7 +38,7 @@ import {
 
 // ---------------------------------------------------------------------------
 // Nora orb — self-contained CSS/motion approximation of the PIL Nora orb.
-// Purple→blue→teal gradient core, soft glow, breathing; a faster shine while
+// Lime to sage to teal gradient core, soft glow, breathing; a faster shine while
 // she's actively working.
 // ---------------------------------------------------------------------------
 
@@ -47,7 +47,7 @@ export const NoraOrb: React.FC<{ size?: number; active?: boolean }> = ({ size = 
     {/* Glow */}
     <motion.div
       className="absolute inset-0 rounded-full blur-md"
-      style={{ background: 'radial-gradient(circle, rgba(167,139,250,0.7), rgba(45,212,191,0.25) 70%, transparent)' }}
+      style={{ background: 'radial-gradient(circle, rgba(212,234,4,0.7), rgba(45,212,191,0.25) 70%, transparent)' }}
       animate={{ scale: active ? [1, 1.25, 1] : [1, 1.08, 1], opacity: active ? [0.7, 1, 0.7] : [0.5, 0.7, 0.5] }}
       transition={{ duration: active ? 1.6 : 3, repeat: Infinity, ease: 'easeInOut' }}
     />
@@ -55,7 +55,7 @@ export const NoraOrb: React.FC<{ size?: number; active?: boolean }> = ({ size = 
     <motion.div
       className="absolute inset-0 rounded-full overflow-hidden"
       style={{
-        background: 'radial-gradient(circle at 32% 28%, #c4b5fd 0%, #8b5cf6 38%, #6366f1 62%, #2dd4bf 100%)',
+        background: 'radial-gradient(circle at 32% 28%, #e9f58a 0%, #d4ea04 38%, #a7d7c2 62%, #2dd4bf 100%)',
         boxShadow: 'inset 0 0 12px rgba(255,255,255,0.35)',
       }}
       animate={{ scale: active ? [1, 1.05, 1] : 1 }}
@@ -110,7 +110,7 @@ const Typewriter: React.FC<{ text: string; speed?: number; onDone?: () => void }
     <span>
       {shown}
       {typing && (
-        <PenLine className="inline-block w-3 h-3 ml-0.5 -mb-0.5 text-purple-300 animate-pulse" />
+        <PenLine className="inline-block w-3 h-3 ml-0.5 -mb-0.5 text-clay-lime animate-pulse" />
       )}
     </span>
   );
@@ -128,7 +128,7 @@ const TYPE_META: Record<
   practice: { label: 'Practice', icon: Dumbbell, chip: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', ring: 'bg-emerald-500/15 text-emerald-400' },
   lift: { label: 'Lift', icon: Dumbbell, chip: 'bg-[#E0FE10]/15 text-[#E0FE10] border-[#E0FE10]/30', ring: 'bg-[#E0FE10]/10 text-[#E0FE10]' },
   meeting: { label: 'Meeting', icon: Users, chip: 'bg-blue-500/15 text-blue-300 border-blue-500/30', ring: 'bg-blue-500/15 text-blue-400' },
-  travel: { label: 'Travel', icon: Plane, chip: 'bg-purple-500/15 text-purple-300 border-purple-500/30', ring: 'bg-purple-500/15 text-purple-400' },
+  travel: { label: 'Travel', icon: Plane, chip: 'bg-clay-lime/15 text-clay-lime border-clay-lime/30', ring: 'bg-clay-lime/15 text-clay-lime' },
   event: { label: 'Event', icon: CalendarDays, chip: 'bg-zinc-700/40 text-zinc-300 border-zinc-600/30', ring: 'bg-zinc-700/40 text-zinc-300' },
 };
 
@@ -691,7 +691,7 @@ const ScheduleBoard: React.FC<{
       {/* Link import bar */}
       <div data-schedule-url className="rounded-2xl border border-zinc-700/40 bg-zinc-800/30 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-0 flex items-center gap-2 flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-xl px-3 py-2 focus-within:border-purple-500/40">
+          <div className="min-w-0 flex items-center gap-2 flex-1 bg-zinc-900/60 border border-zinc-700/40 rounded-xl px-3 py-2 focus-within:border-clay-lime/40">
             <Link2 className="w-4 h-4 text-zinc-500 flex-shrink-0" />
             <input
               value={urlInput}
@@ -708,7 +708,7 @@ const ScheduleBoard: React.FC<{
           <button
             onClick={() => runImport(urlInput)}
             disabled={busy || !urlInput.trim() || !coachId}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-teal-500 text-white text-sm font-semibold hover:brightness-110 disabled:opacity-40 transition flex-shrink-0"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-clay-lime to-teal-500 text-clay-on-lime text-sm font-semibold hover:brightness-110 disabled:opacity-40 transition flex-shrink-0"
           >
             <Sparkles className="w-4 h-4" /> Import with Nora
           </button>
@@ -731,7 +731,7 @@ const ScheduleBoard: React.FC<{
           if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInputRef.current?.click(); }
         }}
         className={`rounded-2xl border-2 border-dashed p-6 text-center cursor-pointer transition-colors ${
-          dragOver ? 'border-purple-400/60 bg-purple-500/5' : 'border-zinc-700/50 hover:border-zinc-600/60 bg-zinc-800/20'
+          dragOver ? 'border-clay-lime/60 bg-clay-lime/5' : 'border-zinc-700/50 hover:border-zinc-600/60 bg-zinc-800/20'
         }`}
       >
         <UploadCloud className="w-7 h-7 text-zinc-500 mx-auto mb-1.5" />
@@ -742,7 +742,7 @@ const ScheduleBoard: React.FC<{
             </span>
           ) : (
             <>
-              Drop a <span className="text-purple-300">schedule link</span> or a file here, or{' '}
+              Drop a <span className="text-clay-lime">schedule link</span> or a file here, or{' '}
               <span className="text-[#E0FE10]">browse</span>
             </>
           )}
@@ -753,7 +753,7 @@ const ScheduleBoard: React.FC<{
       {/* Third-party scheduling integrations — wired up by the Pulse team during pilot setup */}
       <div
         data-schedule-integrations
-        className="rounded-2xl border border-teal-500/20 bg-gradient-to-br from-teal-500/[0.06] to-purple-500/[0.04] p-5"
+        className="rounded-2xl border border-teal-500/20 bg-gradient-to-br from-teal-500/[0.06] to-clay-lime/[0.04] p-5"
       >
         <div className="flex items-start gap-2.5 mb-3">
           <div className="w-8 h-8 rounded-lg bg-teal-500/15 flex items-center justify-center flex-shrink-0">
@@ -914,7 +914,7 @@ const ScheduleBoard: React.FC<{
               key={d.id}
               className="group flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800/50 border border-zinc-700/40 text-xs text-zinc-300"
             >
-              <FileText className="w-3.5 h-3.5 text-purple-400" />
+              <FileText className="w-3.5 h-3.5 text-clay-lime" />
               <span className="truncate max-w-[180px]">{d.title}</span>
               <button onClick={() => removeDoc(d)} aria-label={`Remove ${d.title}`} className="opacity-100 text-zinc-500 hover:text-red-400">
                 <X className="w-3 h-3" />
@@ -931,7 +931,7 @@ const ScheduleBoard: React.FC<{
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-teal-500/5 p-4 flex items-center gap-3"
+            className="rounded-2xl border border-clay-lime/30 bg-gradient-to-br from-clay-lime/10 to-teal-500/5 p-4 flex items-center gap-3"
           >
             <NoraOrb size={44} active={busy} />
             <div className="flex-1 min-w-0">
@@ -945,7 +945,7 @@ const ScheduleBoard: React.FC<{
               </div>
               <div className="mt-2 h-1.5 rounded-full bg-zinc-700/50 overflow-hidden">
                 <motion.div
-                  className="h-full bg-gradient-to-r from-purple-400 to-teal-400"
+                  className="h-full bg-gradient-to-r from-clay-lime to-teal-400"
                   animate={{
                     width:
                       phase === 'fetching'
@@ -1026,14 +1026,14 @@ const EventRow: React.FC<{ event: CalendarEvent; past: boolean; onEdit?: () => v
         isBooking
           ? 'bg-teal-500/5 border-teal-500/30'
           : event.live
-          ? 'bg-purple-500/5 border-purple-500/30'
+          ? 'bg-clay-lime/5 border-clay-lime/30'
           : 'bg-zinc-800/40 border-zinc-700/30 hover:bg-zinc-800/60'
       }`}
     >
       {/* ink bar that draws in for freshly-written rows */}
       {event.live && (
         <motion.span
-          className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-gradient-to-b from-purple-400 to-teal-400"
+          className="absolute left-0 top-2 bottom-2 w-0.5 rounded-full bg-gradient-to-b from-clay-lime to-teal-400"
           initial={{ scaleY: 0 }}
           animate={{ scaleY: 1 }}
           transition={{ duration: 0.3 }}
@@ -1106,7 +1106,7 @@ const CalendarChip: React.FC<{ event: CalendarEvent }> = ({ event }) => {
         booking
           ? 'bg-teal-500/15 text-teal-200 border border-teal-500/20'
           : event.live
-          ? 'bg-purple-500/15 text-purple-200 border border-purple-500/20'
+          ? 'bg-clay-lime/15 text-clay-ink border border-clay-lime/20'
           : 'bg-zinc-800/80 text-zinc-300 border border-zinc-700/50'
       }`}
       title={event.title}

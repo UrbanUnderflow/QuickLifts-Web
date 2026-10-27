@@ -654,7 +654,7 @@ export default function PulseCheckAthleteOnboardingPage() {
       <div className="fixed inset-0 pointer-events-none">
         <FloatingOrb color="#E0FE10" size="w-[500px] h-[500px]" position={{ top: '-8%', left: '-8%' }} delay={0} />
         <FloatingOrb color="#3B82F6" size="w-[400px] h-[400px]" position={{ top: '30%', right: '-6%' }} delay={3} />
-        <FloatingOrb color="#8B5CF6" size="w-[350px] h-[350px]" position={{ bottom: '5%', left: '15%' }} delay={6} />
+        <FloatingOrb color="#D4EA04" size="w-[350px] h-[350px]" position={{ bottom: '5%', left: '15%' }} delay={6} />
         {/* Noise texture */}
         <div
           className="absolute inset-0 opacity-[0.018]"
@@ -727,7 +727,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="rounded-2xl border border-violet-500/25 bg-violet-500/[0.07] p-4 text-sm leading-7 text-zinc-300"
+                    className="rounded-2xl border border-clay-lime/25 bg-clay-lime/[0.07] p-4 text-sm leading-7 text-zinc-300"
                   >
                     You are joining{' '}
                     <span className="font-medium text-white">

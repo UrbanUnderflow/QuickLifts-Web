@@ -256,7 +256,7 @@ const HEALTH_CONTEXT_DOCS: HealthContextDocEntry[] = [
     label: 'Architecture Overview',
     subtitle: 'Current reality, target lanes, canonical context design, and rollout path.',
     icon: Brain,
-    accent: '#a78bfa',
+    accent: '#d4ea04',
     render: () => <HealthContextArchitectureOverviewDoc />,
   },
   {
@@ -264,7 +264,7 @@ const HEALTH_CONTEXT_DOCS: HealthContextDocEntry[] = [
     label: 'Physiology-Cognition Correlation Engine',
     subtitle: 'Joined-model system for learning athlete-specific mind-body patterns from physiology plus sims.',
     icon: Brain,
-    accent: '#8b5cf6',
+    accent: '#d4ea04',
     render: () => <PulseCheckPhysiologyCognitionCorrelationEngineTab />,
   },
   {
@@ -382,8 +382,8 @@ const PulseCheckHealthChatArchitectureTab: React.FC = () => {
     <div className="space-y-5">
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <FileText className="w-4 h-4 text-purple-400" />
-          <p className="text-xs uppercase tracking-wide text-purple-400 font-semibold">
+          <FileText className="w-4 h-4 text-clay-lime" />
+          <p className="text-xs uppercase tracking-wide text-clay-lime font-semibold">
             PulseCheck · Health Context Pipeline
           </p>
         </div>

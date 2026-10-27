@@ -71,7 +71,7 @@ const AdaptationFramingLayerPage: React.FC = () => {
       <div className="min-h-screen bg-[#080a14] px-6 py-10 text-zinc-100">
         <div className="mx-auto max-w-6xl">
           <header className="mb-8 flex items-start gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-700/40 bg-violet-950/30 text-violet-200">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-clay-lime-deep/40 bg-clay-raised/30 text-clay-ink">
               <Layers className="h-6 w-6" />
             </span>
             <div>
@@ -90,7 +90,7 @@ const AdaptationFramingLayerPage: React.FC = () => {
                 onClick={() => setActiveTab(t.key)}
                 className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm transition ${
                   activeTab === t.key
-                    ? 'bg-violet-500/20 text-violet-100 border border-violet-500/30'
+                    ? 'bg-clay-lime/20 text-clay-ink border border-clay-lime/30'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -152,7 +152,7 @@ const TranslationTab: React.FC = () => {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="Filter by text…"
-          className="flex-1 rounded-lg border border-zinc-700 bg-black/40 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-violet-400/60 focus:outline-none"
+          className="flex-1 rounded-lg border border-zinc-700 bg-black/40 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-clay-lime/60 focus:outline-none"
         />
         <select
           value={domainFilter}
@@ -180,7 +180,7 @@ const TranslationTab: React.FC = () => {
               <li key={r.id} className="rounded-xl border border-zinc-800 bg-black/25 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-violet-200">
+                    <span className="rounded-full border border-clay-lime/30 bg-clay-lime/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-clay-ink">
                       {r.domain}
                     </span>
                     <span className="ml-2 text-sm font-mono text-zinc-300">{r.state}</span>
@@ -242,7 +242,7 @@ const ConversationTab: React.FC = () => {
         <div key={b.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
           <div className="flex items-start justify-between">
             <div>
-              <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-violet-200">
+              <span className="rounded-full border border-clay-lime/30 bg-clay-lime/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-clay-ink">
                 {b.trigger}
               </span>
               <p className="mt-2 text-sm font-semibold">{b.id}</p>
@@ -411,7 +411,7 @@ const LogTab: React.FC = () => {
                 <div>
                   <p className="text-xs font-mono text-zinc-500">{r.athleteUserId}</p>
                   <p className="mt-1 text-sm">
-                    <span className="rounded border border-violet-500/30 bg-violet-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-violet-200">
+                    <span className="rounded border border-clay-lime/30 bg-clay-lime/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-clay-ink">
                       {r.domain}/{r.state}
                     </span>
                   </p>
@@ -524,7 +524,7 @@ const PreviewTab: React.FC = () => {
         <button
           onClick={handlePreview}
           disabled={loading}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-violet-500/40 bg-violet-500/15 px-4 py-2 text-sm font-medium text-violet-100 transition hover:bg-violet-500/25 disabled:opacity-50"
+          className="mt-4 inline-flex items-center gap-2 rounded-xl border border-clay-lime/40 bg-clay-lime/15 px-4 py-2 text-sm font-medium text-clay-ink transition hover:bg-clay-lime/25 disabled:opacity-50"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlayCircle className="h-4 w-4" />}
           Preview translation

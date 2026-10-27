@@ -178,7 +178,7 @@ const PulseCheckPhysiologyCognitionCorrelationEngineTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-3">
           <InfoCard
             title="Joined-Model Thesis"
-            accent="purple"
+            accent="clay"
             body="The product edge is not that PulseCheck has wearable data. The edge is that PulseCheck can observe how this athlete thinks and performs under different body states."
           />
           <InfoCard

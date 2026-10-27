@@ -59,7 +59,7 @@ const LIFECYCLE_STATUSES = [
     { status: 'Nominated', color: '#94a3b8', description: 'Proposed by team via team nomination. Spec template submitted.' },
     { status: 'Flagged', color: '#f59e0b', description: 'Identified by Nora via divergence detection. Awaiting team review.' },
     { status: 'In Evaluation', color: '#60a5fa', description: 'Deployed in live environment. Scoring under parent family. Shadow metrics being tracked.' },
-    { status: 'Promotion Report Issued', color: '#c084fc', description: 'Data threshold reached. Nora has generated the distinctness analysis.' },
+    { status: 'Promotion Report Issued', color: '#d4ea04', description: 'Data threshold reached. Nora has generated the distinctness analysis.' },
     { status: 'Promoted', color: '#22c55e', description: 'Locked as a new family in the taxonomy. Own profile slot, own programming logic.' },
     { status: 'Classified as Variant', color: '#fb923c', description: 'Permanently filed under parent family. Scores contribute to parent composite.' },
     { status: 'Dismissed', color: '#ef4444', description: 'Flag reviewed and dismissed as artifact (small sample, data quality issue).' },
@@ -84,7 +84,7 @@ const EVALUATION_PHASES = [
         phase: 'Phase 2',
         icon: Hammer,
         title: 'Build and Deploy',
-        color: '#c084fc',
+        color: '#d4ea04',
         checkpoints: [
             { name: 'Live Availability', desc: 'Candidate assigned through Nora\'s normal programming logic when the athlete profile suggests the relevant skill needs work.' },
             { name: 'Transparent Experience', desc: 'The athlete sees the candidate as part of normal training; no new profile line appears during evaluation.' },
@@ -163,11 +163,11 @@ const PromotionProtocolTab: React.FC = () => {
             {/* INTRO */}
             <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                        <Shield className="w-5 h-5 text-purple-400" />
+                    <div className="p-2 rounded-xl bg-clay-lime/10 border border-clay-lime/20">
+                        <Shield className="w-5 h-5 text-clay-lime" />
                     </div>
                     <div>
-                        <p className="text-[10px] uppercase tracking-widest text-purple-400 font-bold">PULSE CHECK</p>
+                        <p className="text-[10px] uppercase tracking-widest text-clay-lime font-bold">PULSE CHECK</p>
                         <h2 className="text-xl font-semibold">Sim Family Promotion Protocol</h2>
                         <p className="text-xs text-zinc-500">System protocol addendum · governance refinement v2.1</p>
                     </div>
@@ -214,7 +214,7 @@ const PromotionProtocolTab: React.FC = () => {
             {/* 3. ENTRY PATHWAYS */}
             <section className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <GitMerge className="w-4 h-4 text-purple-400" /> 3. Entry Pathways Into the Pipeline
+                    <GitMerge className="w-4 h-4 text-clay-lime" /> 3. Entry Pathways Into the Pipeline
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* 3.1 Team Nomination */}
@@ -497,8 +497,8 @@ const PromotionProtocolTab: React.FC = () => {
                                 If new data shows that a previously locked variant is diverging from its parent family, Nora re-flags it for review. The team decides whether to re-enter the evaluation pipeline.
                             </p>
                         </div>
-                        <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
-                            <h4 className="text-xs font-bold text-purple-400 mb-2">Families Can Be Flagged for Merger</h4>
+                        <div className="rounded-xl border border-clay-lime/20 bg-clay-lime/5 p-4">
+                            <h4 className="text-xs font-bold text-clay-lime mb-2">Families Can Be Flagged for Merger</h4>
                             <p className="text-[10px] text-zinc-400 leading-relaxed">
                                 When sustained high overlap suggests two families may no longer be measuring distinct abilities, they can be flagged for merger.
                             </p>

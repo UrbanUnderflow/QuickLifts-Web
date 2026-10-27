@@ -185,7 +185,7 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
         </CardGrid>
         <InfoCard
           title="Derived Output: Overall Readiness"
-          accent="purple"
+          accent="clay"
           body="Readiness is the routing summary built from the four dimensions. It should never hide why the athlete is Yellow or Red because different underlying patterns call for different actions."
         />
       </SectionBlock>

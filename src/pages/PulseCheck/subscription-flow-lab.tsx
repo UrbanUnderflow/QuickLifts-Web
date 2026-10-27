@@ -431,7 +431,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
             key={value}
             type="button"
             onClick={() => applyPreset(value as Preset)}
-            className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xs font-semibold text-zinc-300 transition hover:border-violet-300/40 hover:text-white"
+            className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-xs font-semibold text-zinc-300 transition hover:border-clay-lime/40 hover:text-white"
           >
             {label}
           </button>
@@ -576,7 +576,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
             </div>
           ) : null}
           {visibility.coach ? (
-            <div className="rounded-2xl border border-violet-400/20 bg-violet-400/[0.06] p-4">
+            <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/[0.06] p-4">
               <p className="font-semibold text-white">Coach referral</p>
             </div>
           ) : null}
@@ -690,7 +690,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
   const renderAthleteAccount = () => (
     <div className="space-y-5">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-300">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-clay-lime">
           Athlete landing
         </p>
         <h2 className="mt-2 text-2xl font-semibold text-white">
@@ -708,8 +708,8 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
       </div>
 
       {initialPreviewAccess ? (
-        <div className="rounded-2xl border border-violet-300/20 bg-violet-300/[0.06] p-4 text-xs leading-5 text-zinc-400">
-          <p className="font-semibold text-violet-200">Flow Lab athlete preview</p>
+        <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/[0.06] p-4 text-xs leading-5 text-zinc-400">
+          <p className="font-semibold text-clay-ink">Flow Lab athlete preview</p>
           <p className="mt-1">
             Saved test price:{' '}
             <span
@@ -740,11 +740,11 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
             onClick={() => setAccountMethod(value)}
             className={`rounded-2xl border p-4 text-left transition ${
               accountMethod === value
-                ? 'border-violet-300/50 bg-violet-300/[0.08]'
+                ? 'border-clay-lime/50 bg-clay-lime/[0.08]'
                 : 'border-white/10 bg-black/20'
             }`}
           >
-            <Icon className="h-5 w-5 text-violet-300" />
+            <Icon className="h-5 w-5 text-clay-lime" />
             <p className="mt-3 text-sm font-semibold text-white">{label}</p>
             <p className="mt-1 text-xs text-zinc-500">Simulated sign in</p>
           </button>
@@ -773,7 +773,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
   const renderCheckout = () => (
     <div className="space-y-5">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-300">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-clay-lime">
           Simulated Stripe checkout
         </p>
         <h2 className="mt-2 text-2xl font-semibold text-white">
@@ -793,7 +793,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
             onClick={() => setCheckoutScenario(scenario.value)}
             className={`rounded-2xl border p-4 text-left transition ${
               checkoutScenario === scenario.value
-                ? 'border-violet-300/50 bg-violet-300/[0.08]'
+                ? 'border-clay-lime/50 bg-clay-lime/[0.08]'
                 : 'border-white/10 bg-black/20'
             }`}
           >
@@ -882,9 +882,9 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
     if (checkoutScenario === 'pending activation') {
       return (
         <div className="space-y-5">
-          <RefreshCw className="h-10 w-10 animate-spin text-violet-300" />
+          <RefreshCw className="h-10 w-10 animate-spin text-clay-lime" />
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-300">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-clay-lime">
               Pending activation
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-white">
@@ -900,7 +900,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
               setCheckoutScenario('successful payment');
               setCheckoutRan(true);
             }}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-violet-300/30 bg-violet-300/[0.08] px-4 py-3 text-sm font-bold text-violet-100"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-clay-lime/30 bg-clay-lime/[0.08] px-4 py-3 text-sm font-bold text-clay-ink"
           >
             Simulate webhook arrival
           </button>
@@ -958,7 +958,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-violet-300">Step 1</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-clay-lime">Step 1</p>
           <p className="mt-2 font-semibold text-white">Download the app</p>
           <div className="mt-3 flex gap-2 text-xs text-zinc-400">
             <span className="rounded-lg border border-white/10 px-2 py-1">iPhone</span>
@@ -966,7 +966,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
           </div>
         </div>
         <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs font-bold uppercase tracking-wide text-violet-300">Step 2</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-clay-lime">Step 2</p>
           <p className="mt-2 font-semibold text-white">Open the saved invite</p>
           <p className="mt-3 break-all font-mono text-[10px] text-zinc-500">
             pulsecheck://open?inviteToken={INVITE_TOKEN}
@@ -989,7 +989,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
   const renderAppHandoff = () => (
     <div className="space-y-5">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-300">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-clay-lime">
           Mobile app handoff
         </p>
         <h2 className="mt-2 text-2xl font-semibold text-white">
@@ -1109,7 +1109,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
           </div>
 
           <header className="mb-6">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-clay-lime">
               PulseCheck product review
             </p>
             <h1 className="mt-2 text-3xl font-semibold sm:text-4xl">
@@ -1130,7 +1130,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
                     key={item.key}
                     className={`flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${
                       active
-                        ? 'border-violet-300/40 bg-violet-300/[0.08] text-white'
+                        ? 'border-clay-lime/40 bg-clay-lime/[0.08] text-white'
                         : complete
                           ? 'border-emerald-300/20 text-emerald-300'
                           : 'border-white/10 text-zinc-600'
@@ -1158,7 +1158,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
             <aside className="space-y-4">
               <div className="rounded-2xl border border-white/10 bg-[#101018] p-4">
                 <div className="flex items-center gap-2">
-                  <ClipboardCheck className="h-5 w-5 text-violet-300" />
+                  <ClipboardCheck className="h-5 w-5 text-clay-lime" />
                   <h2 className="text-sm font-semibold text-white">Flow records</h2>
                 </div>
                 <div className="mt-3">
@@ -1230,7 +1230,7 @@ const SubscriptionFlowLab: React.FC<FlowLabProps> = ({
                   onChange={(event) => setReviewNotes(event.target.value)}
                   rows={5}
                   placeholder="Example: Show the app download buttons before the confirmation details."
-                  className="mt-3 w-full resize-none rounded-xl border border-white/10 bg-black/25 p-3 text-xs leading-5 text-white outline-none placeholder:text-zinc-700 focus:border-violet-300/40"
+                  className="mt-3 w-full resize-none rounded-xl border border-white/10 bg-black/25 p-3 text-xs leading-5 text-white outline-none placeholder:text-zinc-700 focus:border-clay-lime/40"
                 />
               </label>
 

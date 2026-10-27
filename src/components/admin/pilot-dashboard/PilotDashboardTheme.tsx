@@ -168,9 +168,9 @@ export const PilotDashboardThemeFrame: React.FC<React.PropsWithChildren> = ({ ch
           background: #fff1f2 !important;
         }
 
-        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='bg-violet-400/5'],
-        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='bg-violet-400/10'] {
-          background: #f5f3ff !important;
+        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='bg-clay-lime/5'],
+        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='bg-clay-lime/10'] {
+          background: #e7efdc !important;
         }
 
         .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='bg-emerald-300'],
@@ -234,9 +234,9 @@ export const PilotDashboardThemeFrame: React.FC<React.PropsWithChildren> = ({ ch
           border-color: #be123c !important;
         }
 
-        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='border-violet-400/15'],
-        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='border-violet-400/20'] {
-          border-color: #6d28d9 !important;
+        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='border-clay-lime/15'],
+        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='border-clay-lime/20'] {
+          border-color: #cbd8c3 !important;
         }
 
         .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='border-zinc-700'] {
@@ -347,10 +347,9 @@ export const PilotDashboardThemeFrame: React.FC<React.PropsWithChildren> = ({ ch
           color: #be123c !important;
         }
 
-        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-violet-100'],
-        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-violet-200'],
-        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-violet-300'] {
-          color: #5b21b6 !important;
+        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-clay-ink'],
+        .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-clay-lime'] {
+          color: #246863 !important;
         }
 
         .pilot-dashboard-theme-frame[data-pilot-theme='light'] [class~='text-blue-100'] {

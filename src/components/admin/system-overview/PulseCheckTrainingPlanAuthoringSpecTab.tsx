@@ -186,7 +186,7 @@ const PulseCheckTrainingPlanAuthoringSpecTab: React.FC = () => {
           />
           <InfoCard
             title="Coach Replacement"
-            accent="purple"
+            accent="clay"
             body="If staff replaces the primary plan, keep the old block in history, mark it superseded, and let Nora resume authorship after the coach block completes."
           />
           <InfoCard

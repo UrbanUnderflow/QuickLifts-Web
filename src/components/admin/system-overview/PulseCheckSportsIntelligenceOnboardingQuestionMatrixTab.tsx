@@ -28,11 +28,11 @@ interface SportMatrixEntry {
   rows: FieldRow[];
 }
 
-const VERDICT_COLOR: Record<Verdict, 'purple' | 'blue' | 'green' | 'amber' | 'red'> = {
+const VERDICT_COLOR: Record<Verdict, 'clay' | 'blue' | 'green' | 'amber' | 'red'> = {
   cut: 'red',
   dup: 'blue',
   review: 'amber',
-  fix: 'purple',
+  fix: 'clay',
   keep: 'green',
 };
 
@@ -304,7 +304,7 @@ const PulseCheckSportsIntelligenceOnboardingQuestionMatrixTab: React.FC = () => 
             <span className="flex items-center gap-2"><InlineTag label="Cut" color="red" /> nutrition / macro content, removed</span>
             <span className="flex items-center gap-2"><InlineTag label="Duplicate" color="blue" /> re-asked the position picker</span>
             <span className="flex items-center gap-2"><InlineTag label="Review" color="amber" /> borderline, unresolved</span>
-            <span className="flex items-center gap-2"><InlineTag label="Fix" color="purple" /> UI or required-flag bug</span>
+            <span className="flex items-center gap-2"><InlineTag label="Fix" color="clay" /> UI or required-flag bug</span>
             <span className="flex items-center gap-2 text-zinc-500"><span className="text-zinc-600">—</span> legitimate sport-specific detail</span>
           </div>
         }

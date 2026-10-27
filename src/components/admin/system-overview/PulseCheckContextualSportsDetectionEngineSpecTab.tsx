@@ -584,7 +584,7 @@ const PulseCheckContextualSportsDetectionEngineSpecTab: React.FC = () => {
       <SectionBlock icon={Brain} title="Audience Policy Boundary">
         <InfoCard
           title="Same Bridge, Different Audience Contract"
-          accent="purple"
+          accent="clay"
           body="Coach-facing language must not be routed through athlete-facing translation policy unless the bridge is explicitly role-aware and invoked with a coach policy profile. Athlete and coach copy can share infrastructure, but not the same audience contract."
         />
         <DataTable columns={['Policy', 'Rule', 'Why']} rows={AUDIENCE_POLICY_ROWS} />
@@ -603,7 +603,7 @@ const PulseCheckContextualSportsDetectionEngineSpecTab: React.FC = () => {
       </SectionBlock>
 
       <SectionBlock icon={ClipboardCheck} title="Product Rules To Preserve">
-        <InfoCard title="Rules" accent="purple" body={<BulletList items={PRODUCT_RULES} />} />
+        <InfoCard title="Rules" accent="clay" body={<BulletList items={PRODUCT_RULES} />} />
       </SectionBlock>
 
       <SectionBlock icon={Workflow} title="Build Order">

@@ -34,8 +34,8 @@ type AuthMode = 'create-account' | 'sign-in';
 const PC = {
   pageBg: '#070711',
   deepBg: '#0B0B1C',
-  purple: '#7C3AED',
-  purpleSoft: '#a78bfa',
+  clay: '#D4EA04',
+  claySoft: '#d4ea04',
   cardBg: 'rgba(255,255,255,0.045)',
   cardBorder: 'rgba(255,255,255,0.10)',
 };
@@ -432,10 +432,10 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   };
 
   const passwordInputClass =
-    'w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 pr-12 text-sm text-white outline-none transition focus:border-[#7C3AED]';
+    'w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 pr-12 text-sm text-white outline-none transition focus:border-clay-lime';
   const textInputClass =
-    'w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-[#7C3AED] disabled:cursor-not-allowed disabled:opacity-70';
-  const primaryBtnStyle: React.CSSProperties = { background: PC.purple };
+    'w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-clay-lime disabled:cursor-not-allowed disabled:opacity-70';
+  const primaryBtnStyle: React.CSSProperties = { background: PC.clay };
   const displayFont: React.CSSProperties = { fontFamily: 'Switzer, sans-serif' };
   // Greet by last name ("Coach Grant"), not first — matches how coaches are
   // addressed elsewhere in the app.
@@ -491,15 +491,15 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       </Head>
 
       {isDemo ? (
-        <div className="sticky top-0 z-40 flex items-center justify-center gap-2 px-4 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-white" style={{ background: PC.purple }}>
+        <div className="sticky top-0 z-40 flex items-center justify-center gap-2 px-4 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-clay-on-lime" style={{ background: PC.clay }}>
           <Sparkles className="h-3.5 w-3.5" />
           Screen Demo — auth is bypassed. Press continue with empty fields to walk the flow.
         </div>
       ) : null}
 
       {/* Ambient brand glow */}
-      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.22) 0%, transparent 70%)' }} />
-      <div className="pointer-events-none absolute -bottom-40 right-[-10%] h-[460px] w-[460px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(167,139,250,0.12) 0%, transparent 70%)' }} />
+      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(212,234,4,0.22) 0%, transparent 70%)' }} />
+      <div className="pointer-events-none absolute -bottom-40 right-[-10%] h-[460px] w-[460px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(212,234,4,0.12) 0%, transparent 70%)' }} />
 
       <main className="relative mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-10 md:px-6">
         <div className="mx-auto w-full max-w-[520px]">
@@ -520,9 +520,9 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                       className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition"
                       style={
                         isActive
-                          ? { background: PC.purpleSoft, color: '#000' }
+                          ? { background: PC.claySoft, color: '#000' }
                           : isComplete
-                            ? { background: 'rgba(167,139,250,0.3)', color: PC.purpleSoft }
+                            ? { background: 'rgba(212,234,4,0.3)', color: PC.claySoft }
                             : { border: `1px solid ${PC.cardBorder}`, color: '#71717a' }
                       }
                     >
@@ -538,7 +538,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                   {idx < wizardSteps.length - 1 ? (
                     <span
                       className="h-px w-6"
-                      style={{ background: wizardStep.index < step ? 'rgba(167,139,250,0.5)' : 'rgba(255,255,255,0.10)' }}
+                      style={{ background: wizardStep.index < step ? 'rgba(212,234,4,0.5)' : 'rgba(255,255,255,0.10)' }}
                     />
                   ) : null}
                 </React.Fragment>
@@ -562,16 +562,16 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
 
             {!authReady && !isDemo ? (
               <div className="flex min-h-[420px] items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin" style={{ color: PC.purpleSoft }} />
+                <Loader2 className="h-6 w-6 animate-spin" style={{ color: PC.claySoft }} />
               </div>
             ) : step === 3 && redeemedState ? (
               /* STEP 3 — Done */
               <div className="space-y-6">
-                <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: 'rgba(124,58,237,0.16)' }}>
-                  <CheckCircle2 className="h-7 w-7" style={{ color: PC.purpleSoft }} />
+                <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: 'rgba(212,234,4,0.16)' }}>
+                  <CheckCircle2 className="h-7 w-7" style={{ color: PC.claySoft }} />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>You&apos;re set up</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.claySoft }}>You&apos;re set up</p>
                   <h2 className="mt-2 text-3xl font-bold text-white" style={displayFont}>
                     {redeemedState.organizationName} is active 🎉
                   </h2>
@@ -584,7 +584,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <Link
                     href={`/PulseCheck/post-activation?organizationId=${encodeURIComponent(redeemedState.organizationId)}&teamId=${encodeURIComponent(redeemedState.teamId)}`}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90"
                     style={primaryBtnStyle}
                   >
                     Set up my team
@@ -603,7 +603,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
               /* STEP 2 — Review & activate */
               <div className="space-y-6">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.purpleSoft }}>Review &amp; activate</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: PC.claySoft }}>Review &amp; activate</p>
                   <h2 className="mt-2 text-3xl font-bold text-white" style={displayFont}>Confirm your admin access</h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
                     Activating claims your admin access and turns on the{' '}
@@ -648,7 +648,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                       type="button"
                       onClick={handleRedeemSignedInUser}
                       disabled={submitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                       style={primaryBtnStyle}
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -672,14 +672,14 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
               /* STEP 1 — Account (signed out) */
               <div className="space-y-6">
                 <div>
-                  <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ background: 'rgba(124,58,237,0.14)', color: PC.purpleSoft }}>
+                  <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ background: 'rgba(212,234,4,0.14)', color: PC.claySoft }}>
                     <Sparkles className="h-3.5 w-3.5" /> You&apos;re invited
                   </span>
                   <h2 className="mt-3 text-3xl font-bold leading-tight text-white" style={displayFont}>
                     {coachLastName ? (
                       <>
                         Welcome{' '}
-                        <span style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontWeight: 500, fontSize: '0.82em', color: PC.purpleSoft }}>
+                        <span style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontWeight: 500, fontSize: '0.82em', color: PC.claySoft }}>
                           Coach
                         </span>{' '}
                         {coachLastName}
@@ -701,7 +701,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                   </p>
                   {invite.targetEmail ? (
                     <div className="mt-3 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs text-zinc-300" style={{ borderColor: PC.cardBorder }}>
-                      <CheckCircle2 className="h-3.5 w-3.5" style={{ color: PC.purpleSoft }} />
+                      <CheckCircle2 className="h-3.5 w-3.5" style={{ color: PC.claySoft }} />
                       Invited as <span className="font-medium text-white">{invite.targetEmail}</span>
                     </div>
                   ) : null}
@@ -716,7 +716,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                     onClick={() => setMode('sign-in')}
                     className="-mb-px border-b-2 pb-3 text-sm font-semibold transition"
                     style={{
-                      borderColor: mode === 'sign-in' ? PC.purpleSoft : 'transparent',
+                      borderColor: mode === 'sign-in' ? PC.claySoft : 'transparent',
                       color: mode === 'sign-in' ? '#fff' : '#71717a',
                     }}
                   >
@@ -728,7 +728,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                     onClick={() => setMode('create-account')}
                     className="-mb-px border-b-2 pb-3 text-sm font-semibold transition"
                     style={{
-                      borderColor: mode === 'create-account' ? PC.purpleSoft : 'transparent',
+                      borderColor: mode === 'create-account' ? PC.claySoft : 'transparent',
                       color: mode === 'create-account' ? '#fff' : '#71717a',
                     }}
                   >
@@ -799,7 +799,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                       style={primaryBtnStyle}
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
@@ -841,7 +841,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                       style={primaryBtnStyle}
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
@@ -903,7 +903,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
           <div className="w-full max-w-md rounded-[24px] border p-6 shadow-2xl" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
             <span
               className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
-              style={{ background: 'rgba(124,58,237,0.14)', color: PC.purpleSoft }}
+              style={{ background: 'rgba(212,234,4,0.14)', color: PC.claySoft }}
             >
               <Sparkles className="h-3.5 w-3.5" /> One quick thing
             </span>
@@ -924,17 +924,17 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                     type="button"
                     onClick={() => setEmailChoice((current) => (current ? { ...current, selected: opt.value } : current))}
                     className="flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition"
-                    style={{ borderColor: active ? PC.purple : PC.cardBorder, background: active ? 'rgba(124,58,237,0.12)' : 'rgba(255,255,255,0.025)' }}
+                    style={{ borderColor: active ? PC.clay : PC.cardBorder, background: active ? 'rgba(212,234,4,0.12)' : 'rgba(255,255,255,0.025)' }}
                   >
                     <span
                       className="flex h-5 w-5 flex-none items-center justify-center rounded-full border"
-                      style={{ borderColor: active ? PC.purple : 'rgba(255,255,255,0.3)', background: active ? PC.purple : 'transparent' }}
+                      style={{ borderColor: active ? PC.clay : 'rgba(255,255,255,0.3)', background: active ? PC.clay : 'transparent' }}
                     >
                       {active ? <CheckCircle2 className="h-4 w-4 text-white" /> : null}
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-white">{opt.value}</span>
-                      <span className="block text-[11px] uppercase tracking-[0.14em]" style={{ color: active ? PC.purpleSoft : 'rgba(255,255,255,0.4)' }}>{opt.tag}</span>
+                      <span className="block text-[11px] uppercase tracking-[0.14em]" style={{ color: active ? PC.claySoft : 'rgba(255,255,255,0.4)' }}>{opt.tag}</span>
                     </span>
                   </button>
                 );
@@ -945,8 +945,8 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
               type="button"
               onClick={() => void confirmEmailChoice()}
               disabled={submitting}
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-60"
-              style={{ background: PC.purple }}
+              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-clay-on-lime transition disabled:opacity-60"
+              style={{ background: PC.clay }}
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               {submitting ? 'Finishing…' : 'Confirm & continue'}

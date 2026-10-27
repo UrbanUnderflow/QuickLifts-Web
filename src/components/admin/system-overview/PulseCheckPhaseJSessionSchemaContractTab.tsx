@@ -288,7 +288,7 @@ const PulseCheckPhaseJSessionSchemaContractTab: React.FC = () => {
           />
           <InfoCard
             title="Storage Rule"
-            accent="purple"
+            accent="clay"
             body={<BulletList items={['Candidates are working records.', 'Confirmation events are durable evidence.', 'Session records are the canonical downstream contract.']} />}
           />
           <InfoCard

@@ -2,9 +2,11 @@ import React from 'react';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import { isPipeListsRoute } from '../utils/pipelistsRuntime';
+import { isClayRoute } from '../styles/clay/clayRoutes';
 import '../components/Footer/GlisteningButton.css';
 import '../index.css';
 import '../styles/animations.css';
+import '../styles/clay/clay.css';
 
 // React.lazy runs this import only if the shell is rendered. Next's Pages SSR
 // renderer waits for Suspense, including ESM-only dependencies in optimized
@@ -20,5 +22,6 @@ export default function MyApp(props: AppProps) {
     return <><Head><meta name="viewport" content="width=device-width, initial-scale=1" /></Head><Component {...pageProps} /></>;
   }
 
-  return <React.Suspense fallback={null}><ApplicationShell {...props} /></React.Suspense>;
+  const shell = <React.Suspense fallback={null}><ApplicationShell {...props} /></React.Suspense>;
+  return isClayRoute(props.router.pathname) ? <div className="clay-route">{shell}</div> : shell;
 }

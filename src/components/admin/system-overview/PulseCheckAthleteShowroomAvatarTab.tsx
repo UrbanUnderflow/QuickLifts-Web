@@ -155,7 +155,7 @@ const PulseCheckAthleteShowroomAvatarTab: React.FC = () => {
           />
           <InfoCard
             title="Primary Flow"
-            accent="purple"
+            accent="clay"
             body="Profile CTA -> capture intro -> front/left/back/right guided capture -> review -> upload -> generation -> RealityKit showroom."
           />
           <InfoCard
@@ -192,7 +192,7 @@ const PulseCheckAthleteShowroomAvatarTab: React.FC = () => {
           />
           <InfoCard
             title="Backend Validation"
-            accent="purple"
+            accent="clay"
             body="The server validates all angles together, including angle confidence, outfit consistency, mask quality, pose consistency, occlusion risk, texture usability, face policy, and generation readiness."
           />
         </CardGrid>
@@ -215,7 +215,7 @@ const PulseCheckAthleteShowroomAvatarTab: React.FC = () => {
       <SectionBlock icon={Box} title="RealityKit Showroom Contract">
         <CardGrid columns="xl:grid-cols-4">
           <InfoCard title="Load Path" accent="blue" body="Show thumbnail first, download/cache the USDZ, then fade into the RealityKit viewer." />
-          <InfoCard title="Visual Direction" accent="purple" body="Dark glass chamber, subtle pedestal, teal/lime rim glow, soft fill, contact shadow, and athletic scouting-combine tone." />
+          <InfoCard title="Visual Direction" accent="clay" body="Dark glass chamber, subtle pedestal, teal/lime rim glow, soft fill, contact shadow, and athletic scouting-combine tone." />
           <InfoCard title="Motion" accent="green" body="Slow idle rotation by default; pause offscreen/backgrounded; disable or minimize for Reduce Motion." />
           <InfoCard title="Failure" accent="amber" body="If model loading fails, keep thumbnail visible with retry affordance and keep Profile usable." />
         </CardGrid>
@@ -245,7 +245,7 @@ const PulseCheckAthleteShowroomAvatarTab: React.FC = () => {
         </CardGrid>
         <InfoCard
           title="Default Retention Recommendation"
-          accent="purple"
+          accent="clay"
           body="Delete source captures 30 days after successful generation, delete failed sessions after 7 days, and keep generated model/thumbnail until the athlete deletes the avatar."
         />
       </SectionBlock>

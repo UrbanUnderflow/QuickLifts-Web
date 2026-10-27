@@ -77,7 +77,7 @@ const CoachReportDemoIndexPage: React.FC = () => {
         className="min-h-screen text-zinc-100"
         style={{
           background: `
-            radial-gradient(ellipse 90% 50% at 50% -10%, rgba(167, 139, 250, 0.18) 0%, transparent 55%),
+            radial-gradient(ellipse 90% 50% at 50% -10%, rgba(212, 234, 4, 0.18) 0%, transparent 55%),
             radial-gradient(ellipse 40% 60% at 0% 25%, rgba(34, 197, 94, 0.10) 0%, transparent 60%),
             radial-gradient(ellipse 40% 60% at 100% 35%, rgba(96, 165, 250, 0.10) 0%, transparent 60%),
             linear-gradient(180deg, #070912 0%, #050709 100%)
@@ -86,7 +86,7 @@ const CoachReportDemoIndexPage: React.FC = () => {
       >
         <div className="mx-auto max-w-6xl px-6 pb-24 pt-12 sm:px-8 sm:pt-16">
           <header className="border-b border-zinc-800/60 pb-12">
-            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-violet-300">
+            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-clay-lime">
               Pulse Sports Intelligence
             </p>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">

@@ -184,7 +184,7 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
           />
           <InfoCard
             title="Sim Rules"
-            accent="purple"
+            accent="clay"
             body={
               <BulletList
                 items={[

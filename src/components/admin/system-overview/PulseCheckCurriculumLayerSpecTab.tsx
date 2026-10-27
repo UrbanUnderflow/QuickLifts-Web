@@ -23,7 +23,7 @@ const Card: React.FC<{ title: string; children: React.ReactNode; tone?: 'neutral
   <div
     className={`rounded-2xl border p-5 ${
       tone === 'doctrine'
-        ? 'border-violet-700/40 bg-violet-950/20'
+        ? 'border-clay-lime-deep/40 bg-clay-raised/20'
         : tone === 'warn'
           ? 'border-amber-700/40 bg-amber-950/20'
           : 'border-zinc-800 bg-zinc-950/40'
@@ -68,8 +68,8 @@ const IMPLEMENTATION_GAP_ROWS = [
 const PulseCheckCurriculumLayerSpecTab: React.FC = () => {
   return (
     <div className="text-zinc-100">
-      <header className="mb-8 rounded-2xl border border-violet-700/30 bg-gradient-to-br from-violet-950/30 to-indigo-950/30 p-6">
-        <p className="text-xs uppercase tracking-wide text-violet-300">PulseCheck · Phase I</p>
+      <header className="mb-8 rounded-2xl border border-clay-lime-deep/30 bg-clay-raised/40 p-6">
+        <p className="text-xs uppercase tracking-wide text-clay-lime">PulseCheck · Phase I</p>
         <h2 className="mt-1 text-2xl font-bold">Daily Curriculum Layer</h2>
         <p className="mt-2 max-w-3xl text-sm text-zinc-300">
           Proactive six-exercise toolkit per athlete: three protocol slots for mental regulation and three simulation

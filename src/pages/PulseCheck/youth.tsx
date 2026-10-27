@@ -89,7 +89,7 @@ const CHECK_INS: CheckInOption[] = [
 const BOX_BREATHING_PHASES = [
   { id: 'inhale', label: 'Breathe in', guide: 'Fill your lungs', color: '#14E7D0' },
   { id: 'hold', label: 'Hold', guide: 'Stay still', color: '#E0FE10' },
-  { id: 'exhale', label: 'Breathe out', guide: 'Empty your lungs', color: '#9A7BFF' },
+  { id: 'exhale', label: 'Breathe out', guide: 'Empty your lungs', color: '#D4EA04' },
   { id: 'holdEmpty', label: 'Hold empty', guide: 'Stay empty', color: '#FFB84D' },
 ] as const;
 
@@ -114,7 +114,7 @@ const TRAINING_SKILL_CATEGORIES = [
     label: 'Visualization',
     description: 'Picture the action, pressure, and response before the real moment begins.',
     examples: ['Perfect play rehearsal', 'Pressure preview', 'Comeback visualization', 'Competition walkthrough'],
-    color: '#9A7BFF',
+    color: '#D4EA04',
     icon: Eye,
   },
   {
@@ -234,7 +234,7 @@ const WALKTHROUGH_STEPS = [
     prompt: 'Today’s mental skill',
     response: 'One play can stay one play. Your next job is still available.',
     takeaway: 'Education gives the athlete language they can remember.',
-    color: '#9A7BFF',
+    color: '#D4EA04',
     icon: Sparkles,
   },
   {
@@ -309,7 +309,7 @@ function BrandMark() {
   );
 }
 
-function NoraOrb({ color = '#9A7BFF', compact = false }: { color?: string; compact?: boolean }) {
+function NoraOrb({ color = '#D4EA04', compact = false }: { color?: string; compact?: boolean }) {
   return (
     <span
       className={`pcy-nora-orb ${compact ? 'pcy-nora-orb--compact' : ''}`}
@@ -1629,7 +1629,7 @@ const PulseCheckYouthPage: React.FC = () => {
           --pcy-line: rgba(255, 255, 255, 0.1);
           --pcy-teal: #14e7d0;
           --pcy-lime: #e0fe10;
-          --pcy-purple: #9a7bff;
+          --pcy-clay: #d4ea04;
         }
 
         html {
@@ -1645,7 +1645,7 @@ const PulseCheckYouthPage: React.FC = () => {
           overflow: hidden;
           color: var(--pcy-text);
           background:
-            radial-gradient(circle at 70% 6%, rgba(91, 64, 203, 0.13), transparent 31rem),
+            radial-gradient(circle at 70% 6%, rgba(212, 234, 4, 0.13), transparent 31rem),
             linear-gradient(180deg, #07080d 0%, #090a10 48%, #07080d 100%);
           font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           isolation: isolate;
@@ -1694,7 +1694,7 @@ const PulseCheckYouthPage: React.FC = () => {
         .pcy-background-orb--two {
           right: -20rem;
           top: 58%;
-          background: var(--pcy-purple);
+          background: var(--pcy-clay);
         }
 
         .pcy-nav {
@@ -1729,7 +1729,7 @@ const PulseCheckYouthPage: React.FC = () => {
           width: 36px;
           height: 36px;
           border-radius: 11px;
-          box-shadow: 0 0 28px rgba(154, 123, 255, 0.22);
+          box-shadow: 0 0 28px rgba(212, 234, 4, 0.22);
         }
 
         .pcy-brand > span {
@@ -1848,7 +1848,7 @@ const PulseCheckYouthPage: React.FC = () => {
           padding-bottom: 0.12em;
           margin-bottom: -0.12em;
           color: transparent;
-          background: linear-gradient(100deg, #ffffff 0%, #adffe8 43%, #9a7bff 100%);
+          background: linear-gradient(100deg, #ffffff 0%, #adffe8 43%, #d4ea04 100%);
           -webkit-background-clip: text;
           background-clip: text;
         }
@@ -1953,8 +1953,8 @@ const PulseCheckYouthPage: React.FC = () => {
         .pcy-orbit--two span {
           bottom: 29px;
           left: 95px;
-          background: var(--pcy-purple);
-          box-shadow: 0 0 18px var(--pcy-purple);
+          background: var(--pcy-clay);
+          box-shadow: 0 0 18px var(--pcy-clay);
         }
 
         .pcy-phone {
@@ -1970,7 +1970,7 @@ const PulseCheckYouthPage: React.FC = () => {
           box-shadow:
             0 45px 100px rgba(0, 0, 0, 0.55),
             inset 0 0 0 5px rgba(255, 255, 255, 0.025),
-            0 0 90px rgba(154, 123, 255, 0.08);
+            0 0 90px rgba(212, 234, 4, 0.08);
         }
 
         .pcy-phone-glow {
@@ -2037,9 +2037,9 @@ const PulseCheckYouthPage: React.FC = () => {
 
         .pcy-phone-nora {
           padding: 15px;
-          border: 1px solid rgba(154, 123, 255, 0.18);
+          border: 1px solid rgba(212, 234, 4, 0.18);
           border-radius: 18px;
-          background: rgba(154, 123, 255, 0.07);
+          background: rgba(212, 234, 4, 0.07);
         }
 
         .pcy-phone-nora-heading,
@@ -2061,7 +2061,7 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-nora-orb {
-          --orb-color: #9a7bff;
+          --orb-color: #d4ea04;
           position: relative;
           width: 40px;
           height: 40px;
@@ -2071,8 +2071,8 @@ const PulseCheckYouthPage: React.FC = () => {
           border-radius: 50%;
           background:
             radial-gradient(circle at 67% 70%, var(--pcy-teal), transparent 28%),
-            radial-gradient(circle at 35% 28%, #d4c8ff, transparent 25%),
-            linear-gradient(135deg, var(--orb-color), #4e28ac);
+            radial-gradient(circle at 35% 28%, #f2f2e8, transparent 25%),
+            linear-gradient(135deg, var(--orb-color), #a9bb03);
           box-shadow: 0 0 30px color-mix(in srgb, var(--orb-color) 45%, transparent);
         }
 
@@ -2257,8 +2257,8 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-float-card--next > span {
-          color: var(--pcy-purple);
-          background: rgba(154, 123, 255, 0.1);
+          color: var(--pcy-clay);
+          background: rgba(212, 234, 4, 0.1);
         }
 
         .pcy-hero-proof {
@@ -2551,7 +2551,7 @@ const PulseCheckYouthPage: React.FC = () => {
         .pcy-pillar-section {
           padding-bottom: 150px;
           background:
-            radial-gradient(circle at 50% 40%, rgba(154, 123, 255, 0.06), transparent 36rem);
+            radial-gradient(circle at 50% 40%, rgba(212, 234, 4, 0.06), transparent 36rem);
         }
 
         .pcy-centered-heading {
@@ -2982,7 +2982,7 @@ const PulseCheckYouthPage: React.FC = () => {
         .pcy-journey-halo--right {
           right: -21rem;
           bottom: 6%;
-          background: var(--pcy-purple);
+          background: var(--pcy-clay);
         }
 
         .pcy-journey-map {
@@ -3006,7 +3006,7 @@ const PulseCheckYouthPage: React.FC = () => {
         .pcy-journey-rail span {
           display: block;
           height: 100%;
-          background: linear-gradient(90deg, var(--pcy-teal), var(--pcy-lime), var(--pcy-purple));
+          background: linear-gradient(90deg, var(--pcy-teal), var(--pcy-lime), var(--pcy-clay));
         }
 
         .pcy-journey-map button {
@@ -3361,8 +3361,8 @@ const PulseCheckYouthPage: React.FC = () => {
         .pcy-final-orbit > span:nth-child(3) {
           bottom: 3%;
           left: 42%;
-          color: var(--pcy-purple);
-          background: var(--pcy-purple);
+          color: var(--pcy-clay);
+          background: var(--pcy-clay);
         }
 
         @keyframes pcy-slow-spin {
@@ -3920,17 +3920,17 @@ const PulseCheckYouthPage: React.FC = () => {
           gap: 10px;
           margin-top: 10px;
           padding: 11px 12px;
-          border-left: 2px solid var(--pcy-purple);
+          border-left: 2px solid var(--pcy-clay);
           border-radius: 0 13px 13px 0;
-          background: rgba(154, 123, 255, 0.075);
+          background: rgba(212, 234, 4, 0.075);
         }
 
         .pcy-app-why-box > svg {
-          color: var(--pcy-purple);
+          color: var(--pcy-clay);
         }
 
         .pcy-app-why-box small {
-          color: var(--pcy-purple);
+          color: var(--pcy-clay);
         }
 
         .pcy-app-why-box p {
@@ -4135,7 +4135,7 @@ const PulseCheckYouthPage: React.FC = () => {
           background:
             linear-gradient(90deg, var(--pcy-teal), transparent 38%) top left / 52% 1px no-repeat,
             linear-gradient(180deg, var(--pcy-lime), transparent 38%) top right / 1px 52% no-repeat,
-            linear-gradient(270deg, var(--pcy-purple), transparent 38%) bottom right / 52% 1px no-repeat,
+            linear-gradient(270deg, var(--pcy-clay), transparent 38%) bottom right / 52% 1px no-repeat,
             linear-gradient(0deg, #ffb84d, transparent 38%) bottom left / 1px 52% no-repeat;
           opacity: 0.72;
         }
@@ -4562,7 +4562,7 @@ const PulseCheckYouthPage: React.FC = () => {
           overflow: hidden;
           color: #111319;
           background:
-            radial-gradient(circle at 7% 12%, rgba(154, 123, 255, 0.18), transparent 27rem),
+            radial-gradient(circle at 7% 12%, rgba(212, 234, 4, 0.18), transparent 27rem),
             radial-gradient(circle at 91% 90%, rgba(20, 231, 208, 0.16), transparent 25rem),
             #f3f2eb;
         }
@@ -4587,7 +4587,7 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-skills-library-heading .pcy-kicker {
-          color: #6f4fd6;
+          color: #d4ea04;
         }
 
         .pcy-skills-library-heading h2 {
@@ -4602,7 +4602,7 @@ const PulseCheckYouthPage: React.FC = () => {
         .pcy-skills-library-heading h2 strong {
           display: inline-block;
           color: transparent;
-          background: linear-gradient(100deg, #15aa9b, #7456e6 76%);
+          background: linear-gradient(100deg, #15aa9b, #d4ea04 76%);
           -webkit-background-clip: text;
           background-clip: text;
           font-weight: inherit;
@@ -4928,7 +4928,7 @@ const PulseCheckYouthPage: React.FC = () => {
         .pcy-walkthrough {
           padding: 140px 0;
           background:
-            radial-gradient(circle at 12% 15%, rgba(154, 123, 255, 0.1), transparent 25rem),
+            radial-gradient(circle at 12% 15%, rgba(212, 234, 4, 0.1), transparent 25rem),
             #08090d;
         }
 
@@ -5504,7 +5504,7 @@ const PulseCheckYouthPage: React.FC = () => {
           padding: 150px 0;
           color: #101319;
           background:
-            radial-gradient(circle at 8% 18%, rgba(154, 123, 255, 0.22), transparent 28rem),
+            radial-gradient(circle at 8% 18%, rgba(212, 234, 4, 0.22), transparent 28rem),
             radial-gradient(circle at 94% 82%, rgba(20, 231, 208, 0.19), transparent 30rem),
             #f1f0e9;
         }
@@ -5530,7 +5530,7 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-teaching-heading .pcy-kicker {
-          color: #6750c9;
+          color: #d4ea04;
         }
 
         .pcy-teaching-heading h2 {
@@ -5566,7 +5566,7 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-teaching-explainer > span {
-          color: #6750c9;
+          color: #d4ea04;
           font-size: 9px;
           font-weight: 950;
           letter-spacing: 0.18em;
@@ -5599,10 +5599,10 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-teaching-stage-picker button.is-active {
-          border-color: #9a7bff;
-          color: white;
-          background: #6f55d8;
-          box-shadow: 0 14px 30px rgba(84, 59, 181, 0.2);
+          border-color: #d4ea04;
+          color: #232817;
+          background: #d4ea04;
+          box-shadow: 0 14px 30px rgba(212, 234, 4, 0.2);
         }
 
         .pcy-teaching-stage-picker small {
@@ -5654,11 +5654,11 @@ const PulseCheckYouthPage: React.FC = () => {
           gap: 13px;
           margin-top: 31px;
           padding: 19px;
-          border: 1px solid rgba(103, 80, 201, 0.18);
+          border: 1px solid rgba(212, 234, 4, 0.18);
           border-radius: 16px;
-          color: #6750c9;
+          color: #d4ea04;
           background: rgba(255, 255, 255, 0.62);
-          box-shadow: 0 18px 38px rgba(48, 40, 84, 0.06);
+          box-shadow: 0 18px 38px rgba(46, 51, 52, 0.06);
         }
 
         .pcy-teaching-copy > div > svg {
@@ -5666,7 +5666,7 @@ const PulseCheckYouthPage: React.FC = () => {
           height: 40px;
           padding: 9px;
           border-radius: 12px;
-          background: rgba(154, 123, 255, 0.14);
+          background: rgba(212, 234, 4, 0.14);
         }
 
         .pcy-teaching-copy > div span {
@@ -5678,7 +5678,7 @@ const PulseCheckYouthPage: React.FC = () => {
         .pcy-teaching-copy > div strong {
           display: block;
           margin-bottom: 4px;
-          color: #6750c9;
+          color: #d4ea04;
           font-size: 8px;
           letter-spacing: 0.14em;
         }
@@ -5694,9 +5694,9 @@ const PulseCheckYouthPage: React.FC = () => {
           border-radius: 34px;
           color: white;
           background:
-            radial-gradient(circle at 52% 38%, rgba(154, 123, 255, 0.16), transparent 29rem),
+            radial-gradient(circle at 52% 38%, rgba(212, 234, 4, 0.16), transparent 29rem),
             linear-gradient(150deg, #17141e, #090a0f 68%);
-          box-shadow: 0 46px 100px rgba(36, 29, 67, 0.28);
+          box-shadow: 0 46px 100px rgba(46, 51, 52, 0.28);
         }
 
         .pcy-teaching-demo::before {
@@ -5713,7 +5713,7 @@ const PulseCheckYouthPage: React.FC = () => {
           align-items: center;
           justify-content: space-between;
           gap: 16px;
-          color: var(--pcy-purple);
+          color: var(--pcy-clay);
         }
 
         .pcy-teaching-demo-header span {
@@ -5727,7 +5727,7 @@ const PulseCheckYouthPage: React.FC = () => {
 
         .pcy-teaching-demo-header small {
           padding: 7px 9px;
-          border: 1px solid rgba(154, 123, 255, 0.24);
+          border: 1px solid rgba(212, 234, 4, 0.24);
           border-radius: 999px;
           color: rgba(255, 255, 255, 0.52);
           font-size: 7px;
@@ -5760,8 +5760,8 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-teaching-demo-progress button.is-complete i {
-          background: var(--pcy-purple);
-          box-shadow: 0 0 12px rgba(154, 123, 255, 0.38);
+          background: var(--pcy-clay);
+          box-shadow: 0 0 12px rgba(212, 234, 4, 0.38);
         }
 
         .pcy-teaching-demo-progress span {
@@ -5771,7 +5771,7 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-teaching-demo-progress span.is-current {
-          color: var(--pcy-purple);
+          color: var(--pcy-clay);
         }
 
         .pcy-teaching-demo > h3 {
@@ -5789,7 +5789,7 @@ const PulseCheckYouthPage: React.FC = () => {
           overflow: hidden;
           margin-top: 18px;
           padding: 0;
-          border: 1px solid rgba(183, 155, 255, 0.36);
+          border: 1px solid rgba(212, 234, 4, 0.36);
           border-radius: 25px;
           color: white;
           background: #080911;
@@ -5829,7 +5829,7 @@ const PulseCheckYouthPage: React.FC = () => {
           background:
             linear-gradient(90deg, rgba(7, 8, 14, 0.86) 0%, rgba(7, 8, 14, 0.5) 42%, rgba(7, 8, 14, 0.08) 72%),
             linear-gradient(0deg, rgba(7, 8, 14, 0.94) 0%, transparent 45%, rgba(7, 8, 14, 0.32) 100%),
-            radial-gradient(circle at 78% 42%, transparent 0%, transparent 10%, rgba(63, 38, 107, 0.34) 35%, transparent 58%);
+            radial-gradient(circle at 78% 42%, transparent 0%, transparent 10%, rgba(169, 187, 3, 0.34) 35%, transparent 58%);
           pointer-events: none;
         }
 
@@ -5841,7 +5841,7 @@ const PulseCheckYouthPage: React.FC = () => {
           width: 68%;
           height: 65%;
           background:
-            linear-gradient(90deg, rgba(154, 123, 255, 0), rgba(154, 123, 255, 0.19) 55%, rgba(20, 231, 208, 0.15));
+            linear-gradient(90deg, rgba(212, 234, 4, 0), rgba(212, 234, 4, 0.19) 55%, rgba(20, 231, 208, 0.15));
           clip-path: polygon(0 43%, 100% 0, 100% 100%, 0 58%);
           transform-origin: left center;
           filter: blur(1px);
@@ -5858,14 +5858,14 @@ const PulseCheckYouthPage: React.FC = () => {
           display: grid;
           place-items: center;
           color: white;
-          filter: drop-shadow(0 0 18px rgba(154, 123, 255, 0.55));
+          filter: drop-shadow(0 0 18px rgba(212, 234, 4, 0.55));
           pointer-events: none;
         }
 
         .pcy-imagination-rings span {
           position: absolute;
           inset: 0;
-          border: 1px solid rgba(189, 165, 255, 0.55);
+          border: 1px solid rgba(242, 242, 232, 0.55);
           border-radius: 50%;
         }
 
@@ -5891,7 +5891,7 @@ const PulseCheckYouthPage: React.FC = () => {
           display: inline-flex;
           align-items: center;
           gap: 7px;
-          color: #c7b4ff;
+          color: #f2f2e8;
           font-size: 8px;
           font-weight: 950;
           letter-spacing: 0.16em;
@@ -5933,7 +5933,7 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-rehearsal-scene-details small {
-          color: var(--pcy-purple);
+          color: var(--pcy-clay);
           font-size: 6px;
         }
 
@@ -5980,16 +5980,16 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-brain-plan span i {
-          color: var(--pcy-purple);
+          color: var(--pcy-clay);
           font-size: 8px;
           font-style: normal;
         }
 
         .pcy-brain-plan span.is-active {
-          border-color: #bba4ff;
+          border-color: #f2f2e8;
           color: white;
-          background: rgba(111, 85, 216, 0.86);
-          box-shadow: 0 0 28px rgba(154, 123, 255, 0.48);
+          background: rgba(212, 234, 4, 0.86);
+          box-shadow: 0 0 28px rgba(212, 234, 4, 0.48);
         }
 
         .pcy-mental-rehearsal-visual--understand .pcy-vision-statement {
@@ -6046,11 +6046,11 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-practice-beats span.is-active {
-          border-color: #c7b4ff;
+          border-color: #f2f2e8;
           color: white;
           opacity: 1;
           transform: translateY(-5px);
-          box-shadow: 0 17px 34px rgba(81, 57, 170, 0.34);
+          box-shadow: 0 17px 34px rgba(212, 234, 4, 0.34);
         }
 
         .pcy-practice-beats span.is-active > i {
@@ -6081,7 +6081,7 @@ const PulseCheckYouthPage: React.FC = () => {
         }
 
         .pcy-teaching-tap svg {
-          color: var(--pcy-purple);
+          color: var(--pcy-clay);
         }
 
         .pcy-teaching-caption {
@@ -6107,12 +6107,12 @@ const PulseCheckYouthPage: React.FC = () => {
           border: 0;
           border-radius: 12px;
           color: #100d17;
-          background: var(--pcy-purple);
+          background: var(--pcy-clay);
           font: inherit;
           font-size: 11px;
           font-weight: 950;
           cursor: pointer;
-          box-shadow: 0 15px 30px rgba(154, 123, 255, 0.19);
+          box-shadow: 0 15px 30px rgba(212, 234, 4, 0.19);
           transition: transform 0.22s ease, filter 0.22s ease;
         }
 
@@ -6148,8 +6148,8 @@ const PulseCheckYouthPage: React.FC = () => {
           height: 42px;
           padding: 10px;
           border-radius: 12px;
-          color: #6750c9;
-          background: rgba(154, 123, 255, 0.12);
+          color: #d4ea04;
+          background: rgba(212, 234, 4, 0.12);
         }
 
         .pcy-teaching-principles strong {

@@ -301,7 +301,7 @@ const ClinicalBridgePayloadSchemasTab: React.FC = () => (
     <SectionBlock icon={FileJson} title="Expected Partner Responses">
       <CardGrid columns="xl:grid-cols-2">
         <InfoCard title="Care-state read" accent="green" body={<CodeBlock code={INBOUND_CARE_STATE_PAYLOAD} />} />
-        <InfoCard title="Signed webhook event" accent="purple" body={<CodeBlock code={WEBHOOK_SAMPLE_PAYLOAD} />} />
+        <InfoCard title="Signed webhook event" accent="clay" body={<CodeBlock code={WEBHOOK_SAMPLE_PAYLOAD} />} />
       </CardGrid>
     </SectionBlock>
 

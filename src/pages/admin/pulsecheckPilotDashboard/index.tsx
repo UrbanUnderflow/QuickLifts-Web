@@ -76,7 +76,7 @@ const getDashboardQueryValue = (value: string | string[] | undefined) => {
 
 type StudyModeValue = PilotDashboardDirectoryEntry['pilot']['studyMode'];
 type PilotLifecycleStatus = PilotDashboardDirectoryEntry['pilot']['status'];
-type MetricTone = 'teal' | 'emerald' | 'amber' | 'blue' | 'violet';
+type MetricTone = 'teal' | 'emerald' | 'amber' | 'blue' | 'clay';
 type InviteToastTone = 'success' | 'error' | 'info';
 
 interface AdminInviteEmailDraft {
@@ -127,9 +127,9 @@ const getStudyModeMeta = (studyMode: StudyModeValue) => {
     case 'research':
       return {
         label: 'Research',
-        badgeClassName: 'border-violet-400/25 bg-violet-400/10 text-violet-200',
-        dotClassName: 'bg-violet-300',
-        legendCountClassName: 'text-violet-200',
+        badgeClassName: 'border-clay-lime/25 bg-clay-lime/10 text-clay-ink',
+        dotClassName: 'bg-clay-lime',
+        legendCountClassName: 'text-clay-ink',
       };
     case 'pilot':
       return {
@@ -214,8 +214,8 @@ const getMetricValueClassName = (value: number, tone: MetricTone) => {
       return 'text-amber-200';
     case 'blue':
       return 'text-sky-200';
-    case 'violet':
-      return 'text-violet-200';
+    case 'clay':
+      return 'text-clay-ink';
     case 'teal':
     default:
       return 'text-[#7cefd6]';
@@ -1327,10 +1327,10 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
       label: 'Stable Rate',
       value: formatPercent(summary.avgStablePatternRate),
       icon: Users2,
-      iconClassName: 'text-violet-200',
-      shellClassName: 'border-violet-400/20 bg-violet-400/10',
+      iconClassName: 'text-clay-ink',
+      shellClassName: 'border-clay-lime/20 bg-clay-lime/10',
       metricKey: 'stable-rate',
-      tone: 'violet',
+      tone: 'clay',
       numericValue: summary.avgStablePatternRate,
       testId: 'pilot-dashboard-metric-help-stable-rate',
     },
@@ -1347,7 +1347,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
       label: 'Avg Evidence',
       value: formatAverage(summary.avgEvidenceRecordsPerAthlete),
       metricKey: 'avg-evidence',
-      tone: 'violet',
+      tone: 'clay',
       numericValue: summary.avgEvidenceRecordsPerAthlete,
     },
     {
@@ -2419,7 +2419,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                           label: 'Hypotheses',
                           value: String(entry.hypothesisCount),
                           metricKey: 'hypotheses',
-                          tone: 'violet',
+                          tone: 'clay',
                           numericValue: entry.hypothesisCount,
                         },
                         {
@@ -2454,7 +2454,7 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                           label: 'Avg Projections',
                           value: formatAverage(entry.avgRecommendationProjectionsPerActiveAthlete),
                           metricKey: 'avg-projections-per-athlete',
-                          tone: 'violet',
+                          tone: 'clay',
                           numericValue: entry.avgRecommendationProjectionsPerActiveAthlete,
                         },
                       ];

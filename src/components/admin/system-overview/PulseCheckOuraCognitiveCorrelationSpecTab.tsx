@@ -157,7 +157,7 @@ const PulseCheckOuraCognitiveCorrelationSpecTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-3">
           <InfoCard
             title="Why Start With Oura"
-            accent="purple"
+            accent="clay"
             body="Oura is the cleanest first recovery lane because it gives sleep, readiness, HRV, and resting heart rate in one coherent physiology posture."
           />
           <InfoCard

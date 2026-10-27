@@ -102,7 +102,7 @@ const CoachNoraTransparencyPanel: React.FC<Props> = ({ athleteUserId, showAssign
     <div className="space-y-4">
       <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
         <div className="mb-3 flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-violet-300" />
+          <MessageSquare className="h-4 w-4 text-clay-lime" />
           <h3 className="text-sm font-semibold">What Nora has said to this athlete</h3>
         </div>
         {conversations.length === 0 ? (
@@ -112,7 +112,7 @@ const CoachNoraTransparencyPanel: React.FC<Props> = ({ athleteUserId, showAssign
             {conversations.map((c) => (
               <li key={c.id} className="rounded-xl border border-zinc-800 bg-black/25 p-3">
                 <div className="flex items-center gap-2">
-                  <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-violet-200">
+                  <span className="rounded-full border border-clay-lime/30 bg-clay-lime/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-clay-ink">
                     {c.trigger}
                   </span>
                   <span className="text-[10px] text-zinc-500">{c.state}</span>
@@ -147,7 +147,7 @@ const CoachNoraTransparencyPanel: React.FC<Props> = ({ athleteUserId, showAssign
       {showAssignments && (
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
           <div className="mb-3 flex items-center gap-2">
-            <Target className="h-4 w-4 text-violet-300" />
+            <Target className="h-4 w-4 text-clay-lime" />
             <h3 className="text-sm font-semibold">Recent assigned protocols + simulations</h3>
           </div>
           {assignments.length === 0 ? (
@@ -158,7 +158,7 @@ const CoachNoraTransparencyPanel: React.FC<Props> = ({ athleteUserId, showAssign
                 <li key={a.id} className="rounded-xl border border-zinc-800 bg-black/25 p-3 text-xs">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="rounded border border-violet-500/30 bg-violet-500/10 px-1.5 py-0.5 text-[9px] uppercase text-violet-200">
+                      <span className="rounded border border-clay-lime/30 bg-clay-lime/10 px-1.5 py-0.5 text-[9px] uppercase text-clay-ink">
                         {a.actionType}
                       </span>
                       <span className="ml-2 text-zinc-300">{a.protocolLabel || a.id}</span>

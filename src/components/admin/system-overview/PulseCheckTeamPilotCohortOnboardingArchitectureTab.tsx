@@ -192,7 +192,7 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
           <InfoCard title="Team" accent="green" body={<DataTable columns={['Field', 'Purpose']} rows={TEAM_DATA_ROWS} />} />
         </CardGrid>
         <CardGrid columns="md:grid-cols-2">
-          <InfoCard title="Access and Invite Objects" accent="purple" body={<DataTable columns={['Object', 'Minimum Required Fields']} rows={ACCESS_DATA_ROWS} />} />
+          <InfoCard title="Access and Invite Objects" accent="clay" body={<DataTable columns={['Object', 'Minimum Required Fields']} rows={ACCESS_DATA_ROWS} />} />
           <InfoCard title="Pilot and Cohort Objects" accent="amber" body={<DataTable columns={['Object', 'Minimum Required Fields']} rows={PILOT_DATA_ROWS} />} />
         </CardGrid>
       </SectionBlock>
@@ -210,7 +210,7 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
           <InfoCard title="Team" accent="blue" body="Answers: who is in the system, and which persistent sport or unit do they belong to? Teams stay alive even when no pilot is active." />
           <InfoCard title="Pilot" accent="amber" body="Answers: what internal time-bound initiative are we running inside this team? Pilots start and end." />
           <InfoCard title="Cohort" accent="green" body="Answers: how are people grouped inside the pilot for reporting, programming, or experimentation? Use this for control vs intervention or subgroups, not for different sports that should be separate teams." />
-          <InfoCard title="Enrollment" accent="purple" body="Answers: what is true for this person inside this pilot? This is the pilot-scoped truth object." />
+          <InfoCard title="Enrollment" accent="clay" body="Answers: what is true for this person inside this pilot? This is the pilot-scoped truth object." />
         </CardGrid>
       </SectionBlock>
 
@@ -286,7 +286,7 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-3">
           <InfoCard title="Baseline Is the First Trial" accent="green" body="Onboarding should hand the athlete directly into a standardized baseline path instead of making them navigate to it later." />
           <InfoCard title="Pilot-Aware Branching" accent="amber" body="Research-enrolled athletes should enter the research baseline path; product-only athletes should still enter the standard baseline path." />
-          <InfoCard title="Clinician Bridge Cohesion" accent="purple" body="Clinicians should be invited and provisioned from inside PulseCheck so the AuntEdna escalation bridge stays administratively coherent." />
+          <InfoCard title="Clinician Bridge Cohesion" accent="clay" body="Clinicians should be invited and provisioned from inside PulseCheck so the AuntEdna escalation bridge stays administratively coherent." />
         </CardGrid>
       </SectionBlock>
 

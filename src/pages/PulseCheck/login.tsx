@@ -24,8 +24,8 @@ import {
   rememberProviderCredentialFromError,
 } from '../../api/firebase/auth/accountLinking';
 
-const PULSECHECK_PURPLE = '#E0FE10';
-const PULSECHECK_PURPLE_DEEP = '#A6C900';
+const PULSECHECK_CLAY = '#E0FE10';
+const PULSECHECK_CLAY_DEEP = '#A6C900';
 
 // ─────────────────────────────────────────────────
 // GLASS SURFACE — reusable glassy container
@@ -34,7 +34,7 @@ const GlassSurface: React.FC<{
   children: React.ReactNode;
   accentColor?: string;
   className?: string;
-}> = ({ children, accentColor = PULSECHECK_PURPLE, className = '' }) => (
+}> = ({ children, accentColor = PULSECHECK_CLAY, className = '' }) => (
   <div className={`relative ${className}`}>
     <div
       className="absolute -inset-[1px] rounded-2xl overflow-hidden pointer-events-none"
@@ -621,7 +621,7 @@ const PulseCheckLoginPage: NextPage = () => {
                   <p className="text-sm text-zinc-500">Secure access for your team workspace</p>
                 </div>
 
-                <GlassSurface accentColor={view === 'forgot' ? '#3B82F6' : PULSECHECK_PURPLE}>
+                <GlassSurface accentColor={view === 'forgot' ? '#3B82F6' : PULSECHECK_CLAY}>
                   <div className="p-5 sm:p-7 lg:p-8">
                 {legacyFlowMessage ? (
                   <motion.div
@@ -783,7 +783,7 @@ const PulseCheckLoginPage: NextPage = () => {
                         disabled={isLoading}
                         className="w-full rounded-xl py-3.5 text-sm font-semibold text-[#050506] transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
                         style={{
-                          background: `linear-gradient(135deg, ${PULSECHECK_PURPLE}, ${PULSECHECK_PURPLE_DEEP})`,
+                          background: `linear-gradient(135deg, ${PULSECHECK_CLAY}, ${PULSECHECK_CLAY_DEEP})`,
                           boxShadow: '0 4px 20px rgba(224,254,16,0.22)',
                         }}
                       >
@@ -1009,7 +1009,7 @@ const PulseCheckLoginPage: NextPage = () => {
                         disabled={isLoading}
                         className="w-full rounded-xl py-3.5 text-sm font-semibold text-[#050506] transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
                         style={{
-                          background: `linear-gradient(135deg, ${PULSECHECK_PURPLE}, ${PULSECHECK_PURPLE_DEEP})`,
+                          background: `linear-gradient(135deg, ${PULSECHECK_CLAY}, ${PULSECHECK_CLAY_DEEP})`,
                           boxShadow: '0 4px 20px rgba(224,254,16,0.22)',
                         }}
                       >

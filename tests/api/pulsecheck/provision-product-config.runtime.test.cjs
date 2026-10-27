@@ -17,10 +17,7 @@ test('provisioning rejects unsupported product and app identities', () => {
   assert.throws(() => buildProvisioningPayload(input({ productBrand: 'unknown' })));
   assert.throws(() => buildProvisioningPayload(input({ appBranding: { pulsecheck: 'unknown' } })));
 });
-test('paired provisioning stores visual experience independently and validates explicit choices',()=>{
-  const standard=buildProvisioningPayload(input({productBrand:'athleticmind'})).organizationPayload;
-  assert.deepEqual(standard.appExperience,{ios:'standard',android:'standard'});
-  const clay=buildProvisioningPayload(input({productBrand:'pulsecheck',appBranding:{pulsecheck:'athleticmind'},appExperience:{ios:'clay',android:'standard'}})).organizationPayload;
-  assert.deepEqual(clay.appExperience,{ios:'clay',android:'standard'});assert.equal(clay.productBrand,'pulsecheck');assert.equal(clay.appBranding.pulsecheck,'athleticmind');
-  assert.throws(()=>buildProvisioningPayload(input({productBrand:'pulsecheck',appExperience:{ios:'invalid'}})));
+test('paired provisioning no longer writes the retired appearance setting',()=>{
+  const payload=buildProvisioningPayload(input({productBrand:'pulsecheck',appBranding:{pulsecheck:'athleticmind'},appExperience:{ios:'standard'}})).organizationPayload;
+  assert.equal(payload.appExperience,undefined);assert.equal(payload.productBrand,'pulsecheck');assert.equal(payload.appBranding.pulsecheck,'athleticmind');
 });

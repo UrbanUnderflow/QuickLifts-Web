@@ -51,7 +51,7 @@ const FAMILY_SPECS: FamilySpecEntry[] = [
         label: 'Sequence Shift',
         subtitle: 'Task-switching — maintain rules, detect changes, update in real time.',
         icon: Shuffle,
-        accent: '#a78bfa',
+        accent: '#d4ea04',
     },
     {
         id: 'endurance-lock',
@@ -94,8 +94,8 @@ const SimFamilySpecTab: React.FC = () => {
             {/* ---- HEADER ---- */}
             <div>
                 <div className="flex items-center gap-2 mb-1">
-                    <FileText className="w-4 h-4 text-purple-400" />
-                    <p className="text-xs uppercase tracking-wide text-purple-400 font-semibold">
+                    <FileText className="w-4 h-4 text-clay-lime" />
+                    <p className="text-xs uppercase tracking-wide text-clay-lime font-semibold">
                         PulseCheck · Sim Family Specs
                     </p>
                 </div>

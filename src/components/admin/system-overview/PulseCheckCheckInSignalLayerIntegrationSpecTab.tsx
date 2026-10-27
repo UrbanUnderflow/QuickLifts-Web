@@ -101,8 +101,8 @@ const DECISION_FLOW_COLUMNS = [
   },
   {
     title: 'Bounded Planning',
-    accentClass: 'border-violet-500/20 bg-violet-500/[0.06]',
-    labelClass: 'text-violet-200',
+    accentClass: 'border-clay-lime/20 bg-clay-lime/[0.06]',
+    labelClass: 'text-clay-ink',
     nodes: [
       {
         eyebrow: 'Inventory assembly',

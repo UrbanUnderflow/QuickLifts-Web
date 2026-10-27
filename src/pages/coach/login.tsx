@@ -20,9 +20,9 @@ import {
 // surfaces (PulseCheck/login, SignInModal): email + password, Google, Apple.
 // On success (or if already signed in) we send the coach to `?redirect=` when
 // it's a safe in-app path, else /coach/dashboard.
-const PC_PURPLE = '#8B5CF6';
-const PC_PURPLE_SOFT = '#A78BFA';
-const PC_PURPLE_DEEP = '#7C3AED';
+const PC_CLAY = '#D4EA04';
+const PC_CLAY_SOFT = '#D4EA04';
+const PC_CLAY_DEEP = '#D4EA04';
 const DEFAULT_DEST = '/coach/dashboard';
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'coach_magic_link_email';
 const GOOGLE_AUTH_TIMEOUT_MS = 45000;
@@ -318,7 +318,7 @@ const CoachLogin: NextPage = () => {
   };
 
   const inputCls =
-    'w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#A78BFA]/50';
+    'w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-clay-lime/50';
 
   return (
     <div
@@ -348,7 +348,7 @@ const CoachLogin: NextPage = () => {
       <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-black/75 via-black/45 to-black" />
       <div
         className="pointer-events-none fixed inset-0 mix-blend-overlay"
-        style={{ background: `linear-gradient(45deg, ${PC_PURPLE}2b 0%, transparent 42%, ${PC_PURPLE_SOFT}24 100%)` }}
+        style={{ background: `linear-gradient(45deg, ${PC_CLAY}2b 0%, transparent 42%, ${PC_CLAY_SOFT}24 100%)` }}
       />
 
       <main className="relative z-10 mx-auto grid min-h-screen w-full max-w-6xl items-center gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,500px)] lg:gap-16">
@@ -363,7 +363,7 @@ const CoachLogin: NextPage = () => {
           <div className="mt-14">
             <span
               className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em]"
-              style={{ color: PC_PURPLE_SOFT }}
+              style={{ color: PC_CLAY_SOFT }}
             >
               Coach access
             </span>
@@ -409,7 +409,7 @@ const CoachLogin: NextPage = () => {
 
           {resetSent ? (
             <div className="flex flex-col items-center gap-3 py-4 text-center">
-              <CheckCircle2 className="h-8 w-8" style={{ color: PC_PURPLE_SOFT }} />
+              <CheckCircle2 className="h-8 w-8" style={{ color: PC_CLAY_SOFT }} />
               <p className="text-sm text-zinc-300">
                 If an account exists for <span className="font-medium text-white">{email}</span>, a reset link is on its way.
               </p>
@@ -420,7 +420,7 @@ const CoachLogin: NextPage = () => {
                   setForgotMode(false);
                 }}
                 className="mt-1 text-sm font-medium"
-                style={{ color: PC_PURPLE_SOFT }}
+                style={{ color: PC_CLAY_SOFT }}
               >
                 Back to sign in
               </button>
@@ -450,7 +450,7 @@ const CoachLogin: NextPage = () => {
                             ? 'text-black'
                             : 'text-zinc-500 hover:text-zinc-300'
                         }`}
-                        style={emailAuthMode === item.mode ? { background: PC_PURPLE } : undefined}
+                        style={emailAuthMode === item.mode ? { background: PC_CLAY } : undefined}
                       >
                         {item.label}
                       </button>
@@ -518,7 +518,7 @@ const CoachLogin: NextPage = () => {
                   type="submit"
                   disabled={isBusy}
                   className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
-                  style={{ background: `linear-gradient(135deg, ${PC_PURPLE} 0%, ${PC_PURPLE_DEEP} 100%)` }}
+                  style={{ background: `linear-gradient(135deg, ${PC_CLAY} 0%, ${PC_CLAY_DEEP} 100%)` }}
                 >
                   {pending === 'email' && <Loader2 className="h-4 w-4 animate-spin" />}
                   {forgotMode ? 'Send reset link' : emailAuthMode === 'password' ? 'Sign in with password' : 'Send magic link'}
@@ -595,7 +595,7 @@ const CoachLogin: NextPage = () => {
           )}
         </div>
 
-        <p className="mt-6 text-center text-xs" style={{ color: PC_PURPLE_SOFT }}>
+        <p className="mt-6 text-center text-xs" style={{ color: PC_CLAY_SOFT }}>
           PulseCheck — Coaching Platform
         </p>
         </section>

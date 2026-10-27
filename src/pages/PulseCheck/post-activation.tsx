@@ -91,8 +91,8 @@ const Toggle = ({
 const PC = {
   pageBg: '#070711',
   deepBg: '#0B0B1C',
-  purple: '#7C3AED',
-  purpleSoft: '#a78bfa',
+  clay: '#D4EA04',
+  claySoft: '#d4ea04',
   cardBorder: 'rgba(255,255,255,0.10)',
 };
 
@@ -139,13 +139,13 @@ const Stepper = ({ current }: { current: number }) => (
             <span
               className="inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition"
               style={{
-                background: active || done ? PC.purple : 'rgba(255,255,255,0.06)',
+                background: active || done ? PC.clay : 'rgba(255,255,255,0.06)',
                 color: active || done ? '#fff' : '#71717a',
               }}
             >
               {done ? <CheckCircle2 className="h-4 w-4" /> : stepNumber}
             </span>
-            <span className="text-xs font-semibold" style={{ color: active ? '#fff' : done ? PC.purpleSoft : '#71717a' }}>
+            <span className="text-xs font-semibold" style={{ color: active ? '#fff' : done ? PC.claySoft : '#71717a' }}>
               {label}
             </span>
           </div>
@@ -570,7 +570,7 @@ export default function PulseCheckPostActivationPage() {
   if (!isDemo && (currentUserLoading || initializing)) {
     return (
       <div className="flex min-h-screen items-center justify-center text-white" style={{ background: PC.pageBg }}>
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: PC.purpleSoft }} />
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: PC.claySoft }} />
       </div>
     );
   }
@@ -583,7 +583,7 @@ export default function PulseCheckPostActivationPage() {
     return (
       <div className="min-h-screen px-4 py-16 text-white" style={{ background: PC.pageBg }}>
         <div className="mx-auto max-w-3xl rounded-[32px] border p-10 text-center shadow-2xl" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
-          <Shield className="mx-auto h-10 w-10" style={{ color: PC.purpleSoft }} />
+          <Shield className="mx-auto h-10 w-10" style={{ color: PC.claySoft }} />
           <h1 className="mt-6 text-3xl font-bold">This setup is just for team admins</h1>
           <p className="mt-4 text-sm leading-7 text-zinc-300">
             Your account is active — this page is only for the coach setting up the team. Head to your workspace to get going.
@@ -594,8 +594,8 @@ export default function PulseCheckPostActivationPage() {
                 ? `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`
                 : '/coach/dashboard'
             }
-            className="mt-8 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ background: PC.purple }}
+            className="mt-8 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90"
+            style={{ background: PC.clay }}
           >
             {membership?.role === 'athlete' ? 'Go to my workspace' : 'Go to the coach dashboard'}
             <ChevronRight className="h-4 w-4" />
@@ -620,13 +620,13 @@ export default function PulseCheckPostActivationPage() {
       </Head>
 
       {isDemo ? (
-        <div className="sticky top-0 z-40 flex items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-medium tracking-normal" style={{ background: 'rgba(124,58,237,0.12)', color: PC.purpleSoft, borderBottom: '1px solid rgba(124,58,237,0.22)' }}>
+        <div className="sticky top-0 z-40 flex items-center justify-center gap-2 px-4 py-2.5 text-center text-xs font-medium tracking-normal" style={{ background: 'rgba(212,234,4,0.12)', color: PC.claySoft, borderBottom: '1px solid rgba(212,234,4,0.22)' }}>
           <Sparkles className="h-3.5 w-3.5" />
           Screen demo — nothing is saved. Advance through each step to reach the dashboard.
         </div>
       ) : null}
 
-      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(124,58,237,0.20) 0%, transparent 70%)' }} />
+      <div className="pointer-events-none absolute -left-32 -top-40 h-[520px] w-[520px] rounded-full blur-3xl" style={{ background: 'radial-gradient(circle, rgba(212,234,4,0.20) 0%, transparent 70%)' }} />
 
       <main className="relative mx-auto w-full max-w-3xl px-4 py-8 md:px-6 md:py-10">
         {/* Brand + progress header */}
@@ -635,7 +635,7 @@ export default function PulseCheckPostActivationPage() {
             <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
           </div>
           <div>
-            <p className="text-sm font-medium tracking-tight" style={{ color: PC.purpleSoft }}>Let's set up {team?.displayName || (isDemo ? demoTeamName : 'your team')}</p>
+            <p className="text-sm font-medium tracking-tight" style={{ color: PC.claySoft }}>Let's set up {team?.displayName || (isDemo ? demoTeamName : 'your team')}</p>
             <h1 className="mt-2 text-3xl font-bold tracking-tight md:text-4xl" style={{ fontFamily: 'Switzer, sans-serif' }}>
               A few quick steps and you're live
             </h1>
@@ -659,7 +659,7 @@ export default function PulseCheckPostActivationPage() {
               {step === 1 && (
               <form onSubmit={handleSaveProfile} className="rounded-[30px] border p-6" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
                 <div className="flex items-center gap-3">
-                  <UserRound className="h-5 w-5" style={{ color: PC.purpleSoft }} />
+                  <UserRound className="h-5 w-5" style={{ color: PC.claySoft }} />
                   <div>
                     <div className="text-lg font-semibold text-white">Tell us about you</div>
                     <div className="text-sm text-zinc-400">Your name, photo, and how you'll use PulseCheck with your team.</div>
@@ -812,8 +812,8 @@ export default function PulseCheckPostActivationPage() {
                   <button
                     type="submit"
                     disabled={savingProfile || !staffConsents.every(doc => consentDecisionComplete(doc, staffDecisions))}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                    style={{ background: PC.purple }}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    style={{ background: PC.clay }}
                   >
                     {savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                     {savingProfile ? 'Saving…' : 'Save & continue'}
@@ -825,7 +825,7 @@ export default function PulseCheckPostActivationPage() {
               {step === 2 && (
                 <form onSubmit={handleCreateAdultInvite} className="rounded-[30px] border p-6" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
                   <div className="flex items-center gap-3">
-                    <Users className="h-5 w-5" style={{ color: PC.purpleSoft }} />
+                    <Users className="h-5 w-5" style={{ color: PC.claySoft }} />
                     <div>
                       <div className="text-lg font-semibold text-white">Bring your staff in</div>
                       <div className="text-sm text-zinc-400">Invite the coaches and staff who'll help run the team. Optional — you can do this anytime.</div>
@@ -998,8 +998,8 @@ export default function PulseCheckPostActivationPage() {
                         setStep(3);
                         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
-                      className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-                      style={{ background: PC.purple }}
+                      className="inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90"
+                      style={{ background: PC.clay }}
                     >
                       {adultInviteLinks.length > 0 ? 'Continue' : 'Skip for now'}
                       <ChevronRight className="h-4 w-4" />
@@ -1011,8 +1011,8 @@ export default function PulseCheckPostActivationPage() {
               {step === 3 && (
                 <div className="rounded-[30px] border p-8" style={{ background: PC.deepBg, borderColor: PC.cardBorder }}>
                   <div className="text-center">
-                    <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: 'rgba(124,58,237,0.16)' }}>
-                      <CheckCircle2 className="h-8 w-8" style={{ color: PC.purpleSoft }} />
+                    <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: 'rgba(212,234,4,0.16)' }}>
+                      <CheckCircle2 className="h-8 w-8" style={{ color: PC.claySoft }} />
                     </div>
                     <h2 className="mt-5 text-3xl font-bold text-white" style={{ fontFamily: 'Switzer, sans-serif' }}>
                       You're all set, Coach 🎉
@@ -1043,12 +1043,12 @@ export default function PulseCheckPostActivationPage() {
 
                     <div className="mt-5 grid gap-3 sm:grid-cols-2">
                       <div className="rounded-xl border p-4" style={{ borderColor: PC.cardBorder }}>
-                        <Users className="h-4 w-4" style={{ color: PC.purpleSoft }} />
+                        <Users className="h-4 w-4" style={{ color: PC.claySoft }} />
                         <div className="mt-2 text-2xl font-bold text-white">{adultInviteLinks.length}</div>
                         <div className="mt-1 text-xs tracking-normal text-zinc-500">Staff invited</div>
                       </div>
                       <div className="rounded-xl border p-4" style={{ borderColor: PC.cardBorder }}>
-                        <Sparkles className="h-4 w-4" style={{ color: PC.purpleSoft }} />
+                        <Sparkles className="h-4 w-4" style={{ color: PC.claySoft }} />
                         <div className="mt-2 text-sm font-medium leading-6 text-white">{notificationSummary}</div>
                         <div className="mt-1 text-xs tracking-normal text-zinc-500">Notifications</div>
                       </div>
@@ -1060,8 +1060,8 @@ export default function PulseCheckPostActivationPage() {
                       type="button"
                       onClick={() => void handleOpenCoachDashboard()}
                       disabled={openingDashboard}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-                      style={{ background: PC.purple }}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90"
+                      style={{ background: PC.clay }}
                     >
                       {openingDashboard ? (
                         <>

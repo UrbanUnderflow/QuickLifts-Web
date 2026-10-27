@@ -1613,8 +1613,8 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         :root {
           --yi-ink: #101015;
           --yi-paper: #f0ede4;
-          --yi-lavender: #dcd3f5;
-          --yi-purple: #6f55ee;
+          --yi-lavender: #e7efdc;
+          --yi-clay: #246863;
           --yi-muted: #6c6963;
           --yi-line: rgba(16, 16, 21, 0.22);
         }
@@ -1794,7 +1794,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           inset: 9% -18% 7%;
           z-index: 0;
           border-radius: 999px;
-          background: rgba(111, 85, 238, .18);
+          background: rgba(36, 104, 99, .18);
           filter: blur(34px);
         }
         .yi-hero-phone-frame {
@@ -1819,7 +1819,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           overflow: hidden;
           background:
             radial-gradient(circle at 50% 48%, rgba(40, 214, 232, .22), transparent 28%),
-            radial-gradient(circle at 55% 34%, rgba(111, 85, 238, .14), transparent 36%),
+            radial-gradient(circle at 55% 34%, rgba(36, 104, 99, .14), transparent 36%),
             linear-gradient(180deg, #071823 0%, #05171d 43%, #061219 100%);
           color: #eef3f5;
           font-family: 'DM Sans', Arial, sans-serif;
@@ -2074,7 +2074,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         }
         .yi-system-copy { max-width: 690px; }
         .yi-system h2 { margin: 0 0 34px; font-size: clamp(62px, 7vw, 112px); line-height: .88; }
-        .yi-number { display: block; margin-bottom: 13px; color: var(--yi-purple); font-size: 1.22em; }
+        .yi-number { display: block; margin-bottom: 13px; color: var(--yi-clay); font-size: 1.22em; }
         .yi-intro { max-width: 620px; margin: 0; color: #47453f; font-size: clamp(17px, 1.5vw, 21px); line-height: 1.65; }
         .yi-skill-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 34px; }
         .yi-skill-list span {
@@ -2089,7 +2089,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           position: relative;
           z-index: 2;
           width: 100%;
-          filter: drop-shadow(0 42px 48px rgba(35,26,69,.25));
+          filter: drop-shadow(0 42px 48px rgba(36,104,99,.25));
         }
         .yi-phone-halo {
           position: absolute;
@@ -2099,7 +2099,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           left: -7.5%;
           top: 19%;
           border-radius: 50%;
-          background: #d9cff7;
+          background: #e7efdc;
         }
         .yi-phone-figure figcaption { position: relative; z-index: 3; margin-top: 21px; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: .18em; }
 
@@ -2120,7 +2120,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         .yi-process-card { min-height: 360px; padding: 34px; border-right: 1px solid rgba(255,255,255,.28); }
         .yi-process-card:first-child { border-left: 1px solid rgba(255,255,255,.28); }
         .yi-process-index { display: flex; align-items: baseline; gap: 13px; margin-bottom: 89px; }
-        .yi-process-index span { color: #a987ff; font: 400 55px/1 'Bebas Neue', sans-serif; }
+        .yi-process-index span { color: #e7efdc; font: 400 55px/1 'Bebas Neue', sans-serif; }
         .yi-process-index small { font-size: 9px; font-weight: 700; letter-spacing: .18em; }
         .yi-process-card h3 { margin: 0 0 13px; font: 400 clamp(34px, 3vw, 48px)/1 'Bebas Neue', sans-serif; }
         .yi-process-card p { max-width: 340px; margin: 0; color: #aaa7a2; font-size: 15px; line-height: 1.65; }
@@ -2232,7 +2232,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           justify-content: center;
           padding: 89px clamp(34px, 7vw, 110px) 89px clamp(34px, 6vw, 89px);
           color: var(--yi-ink);
-          background: #d9d0f1;
+          background: #e7efdc;
         }
         .yi-wearables-copy h3 {
           max-width: 570px;
@@ -2248,7 +2248,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           margin: 55px 0 34px;
           border: 1px solid rgba(17,17,21,.2);
           background:
-            radial-gradient(circle at 50% 47%, rgba(111,85,238,.26), transparent 31%),
+            radial-gradient(circle at 50% 47%, rgba(36,104,99,.26), transparent 31%),
             radial-gradient(circle at 50% 50%, rgba(255,255,255,.58), transparent 48%);
           overflow: hidden;
         }
@@ -2370,7 +2370,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           padding: 110px clamp(34px, 7vw, 110px);
           border-top: 1px solid var(--yi-line);
           color: var(--yi-ink);
-          background: #d9d0f1;
+          background: #e7efdc;
         }
         .yi-trust-heading h2 {
           margin: 0;
@@ -2413,7 +2413,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         .yi-trust-grid article > span {
           display: block;
           margin-bottom: 34px;
-          color: var(--yi-purple);
+          color: var(--yi-clay);
           font: 400 36px/1 'Bebas Neue', Impact, sans-serif;
         }
         .yi-trust-grid h3 {
@@ -2436,7 +2436,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
         .yi-text-link { display: inline-flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid currentColor; text-decoration: none; font-size: 12px; font-weight: 700; }
         .yi-research-actions { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 21px 34px; }
         .yi-research-actions .yi-learn-link { margin-top: 0; }
-        .yi-research-stat { display: flex; flex-direction: column; justify-content: center; padding: 89px; color: #fff; background: var(--yi-purple); }
+        .yi-research-stat { display: flex; flex-direction: column; justify-content: center; padding: 89px; color: #fff; background: var(--yi-clay); }
         .yi-research-stat strong { font: 400 clamp(150px, 17vw, 300px)/.78 'Bebas Neue', sans-serif; letter-spacing: -.04em; }
         .yi-research-stat p { max-width: 480px; margin: 55px 0 89px; font: 400 clamp(30px, 3vw, 48px)/1 'Bebas Neue', sans-serif; }
         .yi-research-citation {
@@ -2475,7 +2475,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           letter-spacing: -.03em;
         }
         .yi-auntedna-pro-wordmark b::first-letter {
-          color: #d8b4fe;
+          color: #d4ea04;
         }
         .yi-auntedna-pro-wordmark small {
           color: rgba(244,167,208,.72);
@@ -2581,7 +2581,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           color: #343139;
         }
         .youth-info:not(.pro-info):not(.performers-info) .yi-support-path b {
-          color: var(--yi-purple);
+          color: var(--yi-clay);
         }
         .youth-info:not(.pro-info):not(.performers-info) .yi-support-path i {
           background: rgba(16,16,21,.3);
@@ -2606,7 +2606,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           gap: clamp(55px, 8vw, 144px);
           padding: 110px clamp(34px, 7vw, 110px);
           color: var(--yi-ink);
-          background: #d9d0f1;
+          background: #e7efdc;
         }
         .yi-recovery h2 {
           margin: 0;
@@ -2774,7 +2774,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           border-bottom: 1px solid var(--yi-line);
         }
         .yi-education-sections article > span {
-          color: var(--yi-purple);
+          color: var(--yi-clay);
           font: 400 34px/1 'Bebas Neue', Impact, sans-serif;
         }
         .yi-education-sections h3 {
@@ -2803,7 +2803,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           top: 34px;
           bottom: 34px;
           width: 3px;
-          background: var(--yi-purple);
+          background: var(--yi-clay);
         }
         .yi-education-citation {
           width: fit-content;
@@ -2831,7 +2831,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           --yi-ink: #090a0e;
           --yi-paper: #e9e5dc;
           --yi-lavender: #c8c2b9;
-          --yi-purple: #6b2f3f;
+          --yi-clay: #6b2f3f;
           --yi-muted: #716e72;
           --yi-line: rgba(9, 10, 14, .22);
         }
@@ -2950,7 +2950,7 @@ export const PulseCheckYouthInfoPage: React.FC<PulseCheckInfoPageProps> = ({ aud
           --yi-ink: #080a0d;
           --yi-paper: #e7e2d8;
           --yi-lavender: #c7d0d8;
-          --yi-purple: #315f76;
+          --yi-clay: #315f76;
           --yi-muted: #696d70;
           --yi-line: rgba(8, 10, 13, .23);
         }

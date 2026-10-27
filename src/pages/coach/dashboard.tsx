@@ -613,7 +613,7 @@ const CURRICULUM_ITEM_META: Record<
   },
   simulation: {
     icon: Brain,
-    color: '#8B5CF6',
+    color: '#D4EA04',
     label: 'Simulation',
     description: 'A mental game that sharpens cognitive skills by recreating the mind-state of high-focus, high-pressure moments that require fast, clear decisions.',
   },
@@ -2002,7 +2002,7 @@ const CoachDashboard: React.FC = () => {
         // Training mode: walk the coach through the dashboard on demo data, with
         // their real name. Finishing swaps to real data (see finishTraining).
         <>
-          <div className="bg-[#150f2b] border-b border-purple-500/30 text-purple-200 text-xs px-4 py-1.5 text-center">
+          <div className="bg-[#150f2b] border-b border-clay-lime/30 text-clay-ink text-xs px-4 py-1.5 text-center">
             Training walkthrough — sample data. Finish to load your team.
           </div>
           {mockReady && (
@@ -2361,7 +2361,7 @@ const HomeSection: React.FC<{
 
 // The horizontal "what's being done" trail shown on every alert card.
 const StepTrail: React.FC<{ steps: AlertStep[]; tone: 'amber' | 'rose' }> = ({ steps, tone }) => {
-  const activeColor = tone === 'amber' ? '#F59E0B' : '#A78BFA';
+  const activeColor = tone === 'amber' ? '#F59E0B' : '#D4EA04';
   return (
     <div className="flex items-center">
       {steps.map((s, i) => {
@@ -2428,7 +2428,7 @@ const NoraActionRow: React.FC<{ action: AlertNoraAction }> = ({ action }) => {
     action.status === 'completed'
       ? { chip: 'bg-green-500/15 text-green-400 border-green-500/25', label: 'Completed' }
       : action.status === 'active'
-      ? { chip: 'bg-[#A78BFA]/15 text-[#A78BFA] border-[#A78BFA]/25', label: 'Active' }
+      ? { chip: 'bg-clay-lime/15 text-clay-lime border-clay-lime/25', label: 'Active' }
       : { chip: 'bg-zinc-700/40 text-zinc-500 border-zinc-600/30', label: 'Queued' };
   return (
     <div className="flex items-start gap-3 p-2.5 rounded-lg bg-zinc-800/40 border border-zinc-700/30">
@@ -2445,8 +2445,8 @@ const NoraActionRow: React.FC<{ action: AlertNoraAction }> = ({ action }) => {
 };
 
 const Sparkle: React.FC = () => (
-  <div className="w-7 h-7 rounded-lg bg-[#A78BFA]/12 border border-[#A78BFA]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-    <Brain className="w-3.5 h-3.5 text-[#A78BFA]" />
+  <div className="w-7 h-7 rounded-lg bg-clay-lime/12 border border-clay-lime/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+    <Brain className="w-3.5 h-3.5 text-clay-lime" />
   </div>
 );
 
@@ -2549,18 +2549,18 @@ const Tier3MonitorCard: React.FC<{ alert: AthleteAlert }> = ({ alert }) => {
     <div
       className="rounded-2xl p-5"
       style={{
-        background: 'linear-gradient(135deg, rgba(167,139,250,0.08) 0%, rgba(99,102,241,0.05) 100%)',
-        border: '1px solid rgba(167,139,250,0.28)',
+        background: 'linear-gradient(135deg, rgba(212,234,4,0.08) 0%, rgba(99,102,241,0.05) 100%)',
+        border: '1px solid rgba(212,234,4,0.28)',
       }}
     >
       <div className="flex items-start gap-3 mb-3">
-        <div className="w-10 h-10 rounded-xl bg-[#A78BFA]/20 flex items-center justify-center flex-shrink-0">
-          <ShieldCheck className="w-5 h-5 text-[#A78BFA]" />
+        <div className="w-10 h-10 rounded-xl bg-clay-lime/20 flex items-center justify-center flex-shrink-0">
+          <ShieldCheck className="w-5 h-5 text-clay-lime" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-white">{alert.athleteName}</span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#A78BFA]/20 text-[#A78BFA] border border-[#A78BFA]/30 font-semibold">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-clay-lime/20 text-clay-lime border border-clay-lime/30 font-semibold">
               In clinical care
             </span>
           </div>
@@ -2613,10 +2613,10 @@ const Tier3MonitorCard: React.FC<{ alert: AthleteAlert }> = ({ alert }) => {
       )}
 
       {/* Guardrail — this is awareness, not a coaching task */}
-      <div className="rounded-xl bg-[#A78BFA]/8 border border-[#A78BFA]/25 p-3 flex items-start gap-2.5">
-        <Shield className="w-4 h-4 text-[#A78BFA] flex-shrink-0 mt-0.5" />
+      <div className="rounded-xl bg-clay-lime/8 border border-clay-lime/25 p-3 flex items-start gap-2.5">
+        <Shield className="w-4 h-4 text-clay-lime flex-shrink-0 mt-0.5" />
         <div>
-          <div className="text-[10px] font-semibold text-[#A78BFA] uppercase tracking-wide mb-1">
+          <div className="text-[10px] font-semibold text-clay-lime uppercase tracking-wide mb-1">
             Your role right now
           </div>
           <p className="text-xs text-zinc-300 leading-relaxed">{alert.recommendation}</p>
@@ -2739,9 +2739,9 @@ const AlertsSection: React.FC<{ alerts: AthleteAlert[]; loading: boolean; canSee
       {tier3.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <ShieldCheck className="w-4 h-4 text-[#A78BFA]" />
+            <ShieldCheck className="w-4 h-4 text-clay-lime" />
             <h3 className="text-sm font-semibold text-white">Being handled by clinical care</h3>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#A78BFA]/15 text-[#A78BFA] border border-[#A78BFA]/25 font-bold">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-clay-lime/15 text-clay-lime border border-clay-lime/25 font-bold">
               {tier3.length}
             </span>
           </div>
@@ -2938,7 +2938,7 @@ const CoachInboxConversationThread: React.FC<{
 
         <div className="min-w-0">
           <div className="text-sm font-bold text-white truncate">{thread.name}</div>
-          <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase text-[#A78BFA]">
+          <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider uppercase text-clay-lime">
             <Activity className="w-3 h-3" />
             Athlete
           </div>
@@ -4401,9 +4401,9 @@ const CURRICULUM_ADHERENCE_META: Record<
   },
   paused: {
     label: 'Paused',
-    color: '#A78BFA',
-    bg: 'rgba(167,139,250,0.10)',
-    border: 'rgba(167,139,250,0.24)',
+    color: '#D4EA04',
+    bg: 'rgba(212,234,4,0.10)',
+    border: 'rgba(212,234,4,0.24)',
     action: 'No action',
   },
   assigned: {
@@ -4992,11 +4992,11 @@ const AthleteProfileDrawer: React.FC<{
             <div className="px-6 py-5 space-y-6">
               {/* Walled-off / watch-list banner (Tier 3) */}
               {walledOff && (
-                <div className="rounded-2xl p-4 border" style={{ background: 'rgba(167,139,250,0.08)', borderColor: 'rgba(167,139,250,0.35)' }}>
+                <div className="rounded-2xl p-4 border" style={{ background: 'rgba(212,234,4,0.08)', borderColor: 'rgba(212,234,4,0.35)' }}>
                   <div className="flex items-center gap-2 mb-1.5">
-                    <Lock className="w-4 h-4 text-[#A78BFA]" />
+                    <Lock className="w-4 h-4 text-clay-lime" />
                     <span className="text-sm font-bold text-white">On clinical watch list</span>
-                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#A78BFA]/20 text-[#A78BFA] border border-[#A78BFA]/30 font-bold uppercase tracking-wide">
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-clay-lime/20 text-clay-lime border border-clay-lime/30 font-bold uppercase tracking-wide">
                       Mental modules paused
                     </span>
                   </div>
@@ -5025,8 +5025,8 @@ const AthleteProfileDrawer: React.FC<{
                   <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1.5">Care &amp; escalation</div>
                   {walledOff ? (
                     <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-3.5 h-3.5 text-[#A78BFA]" />
-                      <span className="text-sm font-semibold text-[#A78BFA]">In clinical care</span>
+                      <ShieldCheck className="w-3.5 h-3.5 text-clay-lime" />
+                      <span className="text-sm font-semibold text-clay-lime">In clinical care</span>
                     </div>
                   ) : tier2 ? (
                     <div className="flex items-center gap-2">
@@ -5217,7 +5217,7 @@ const AthleteProfileDrawer: React.FC<{
                     Mental module curriculum
                   </h3>
                   {walledOff ? (
-                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#A78BFA]/15 text-[#A78BFA] border border-[#A78BFA]/25 font-semibold flex items-center gap-1">
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-clay-lime/15 text-clay-lime border border-clay-lime/25 font-semibold flex items-center gap-1">
                       <Lock className="w-3 h-3" /> Paused
                     </span>
                   ) : (
@@ -5248,7 +5248,7 @@ const AthleteProfileDrawer: React.FC<{
                     curriculumAdherence.map(({ item, adherence }) => {
                       const meta = CURRICULUM_ITEM_META[item.kind];
                       const Icon = meta.icon;
-                      // Per-module library accent (e.g. 4-7-8 = #A78BFA); falls
+                      // Per-module library accent (e.g. 4-7-8 = #D4EA04); falls
                       // back to the TYPE color when there's no library match.
                       const accent = resolveCurriculumItemAccent(item.kind, item.moduleKey, item.title) ?? meta.color;
                       const effectiveStatus = walledOff ? 'paused' : item.status;
@@ -5540,7 +5540,7 @@ const ReferralLinksSection: React.FC<{
             Coaches can use this link to start PulseCheck with attribution back to you for their future athlete-paid subscriptions.
           </div>
         </div>
-        <span className="rounded-full border border-purple-500/25 bg-purple-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-purple-300">
+        <span className="rounded-full border border-clay-lime/25 bg-clay-lime/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-clay-lime">
           Coach
         </span>
       </div>
@@ -6198,8 +6198,8 @@ const TrainNoraSection: React.FC<{
           onClick={() => setChatOpen((o) => !o)}
           className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
             chatOpen
-              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
-              : 'bg-gradient-to-r from-purple-500 to-blue-500 text-white hover:brightness-110'
+              ? 'bg-clay-lime/20 text-clay-lime border border-clay-lime/40'
+              : 'bg-gradient-to-r from-clay-lime to-blue-500 text-clay-on-lime hover:brightness-110'
           }`}
         >
           <MessageSquare className="w-4 h-4" /> Chat with Nora
@@ -6390,8 +6390,8 @@ const VaultRow: React.FC<{ entry: NoraVaultEntry; onDelete: () => void }> = ({ e
     entry.type === 'image' ? ImageIcon : entry.type === 'link' ? Link2 : entry.type === 'note' ? FileText : FileText;
   return (
     <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30 hover:bg-zinc-800/60 transition-colors group">
-      <div className="w-9 h-9 rounded-lg bg-purple-500/15 flex items-center justify-center flex-shrink-0">
-        <Icon className="w-4 h-4 text-purple-400" />
+      <div className="w-9 h-9 rounded-lg bg-clay-lime/15 flex items-center justify-center flex-shrink-0">
+        <Icon className="w-4 h-4 text-clay-lime" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -6500,12 +6500,12 @@ const NoraChatPanel: React.FC<{
   };
 
   return (
-    <div className="rounded-2xl border border-purple-500/25 bg-[#0d0d1a]/95 backdrop-blur-xl shadow-[0_24px_70px_rgba(0,0,0,0.55)] overflow-hidden">
+    <div className="rounded-2xl border border-clay-lime/25 bg-[#0d0d1a]/95 backdrop-blur-xl shadow-[0_24px_70px_rgba(0,0,0,0.55)] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-purple-500/15">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-clay-lime/15">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-purple-500/20 flex items-center justify-center">
-            <Brain className="w-4 h-4 text-purple-400" />
+          <div className="w-7 h-7 rounded-lg bg-clay-lime/20 flex items-center justify-center">
+            <Brain className="w-4 h-4 text-clay-lime" />
           </div>
           <div className="leading-tight">
             <div className="text-sm font-bold text-white">Chat with Nora</div>
@@ -6535,7 +6535,7 @@ const NoraChatPanel: React.FC<{
                 <button
                   key={s}
                   onClick={() => send(s)}
-                  className="text-[11px] px-2.5 py-1.5 rounded-full bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:border-purple-500/40 hover:text-purple-300 transition-colors"
+                  className="text-[11px] px-2.5 py-1.5 rounded-full bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:border-clay-lime/40 hover:text-clay-lime transition-colors"
                 >
                   {s}
                 </button>
@@ -6555,7 +6555,7 @@ const NoraChatPanel: React.FC<{
             >
               <div className="whitespace-pre-wrap">{m.content}</div>
               {m.savedNote && (
-                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-purple-300 bg-purple-500/15 border border-purple-500/25 rounded-lg px-2 py-1">
+                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-clay-lime bg-clay-lime/15 border border-clay-lime/25 rounded-lg px-2 py-1">
                   <Check className="w-3 h-3 flex-shrink-0" />
                   <span className="truncate">Added to vault: {m.savedNote.title}</span>
                 </div>
@@ -6568,9 +6568,9 @@ const NoraChatPanel: React.FC<{
           <div className="flex justify-start">
             <div className="bg-zinc-800/70 border border-zinc-700/40 rounded-2xl px-3.5 py-2.5">
               <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce [animation-delay:-0.3s]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce [animation-delay:-0.15s]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" />
+                <span className="w-1.5 h-1.5 rounded-full bg-clay-lime animate-bounce [animation-delay:-0.3s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-clay-lime animate-bounce [animation-delay:-0.15s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-clay-lime animate-bounce" />
               </div>
             </div>
           </div>
@@ -6582,7 +6582,7 @@ const NoraChatPanel: React.FC<{
       )}
 
       {/* Composer */}
-      <div className="flex items-end gap-2 px-4 py-3 border-t border-purple-500/15">
+      <div className="flex items-end gap-2 px-4 py-3 border-t border-clay-lime/15">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -6594,12 +6594,12 @@ const NoraChatPanel: React.FC<{
           }}
           placeholder="Message Nora… (e.g. “Remember the bus leaves at 6 AM Saturday.”)"
           rows={1}
-          className="flex-1 resize-none bg-zinc-900/60 border border-zinc-700/40 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-purple-500/40 max-h-32"
+          className="flex-1 resize-none bg-zinc-900/60 border border-zinc-700/40 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-clay-lime/40 max-h-32"
         />
         <button
           onClick={() => send(input)}
           disabled={sending || !input.trim()}
-          className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white disabled:opacity-40 hover:brightness-110 transition flex-shrink-0"
+          className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-r from-clay-lime to-blue-500 text-clay-on-lime disabled:opacity-40 hover:brightness-110 transition flex-shrink-0"
           aria-label="Send"
         >
           <Send className="w-4 h-4" />
@@ -6649,21 +6649,21 @@ const NoraChatFab: React.FC<{
         data-nora-chat-fab
         onClick={() => setOpen((o) => !o)}
         aria-label="Ask Nora"
-        className="fixed bottom-5 right-5 z-[58] flex items-center gap-2.5 rounded-full border border-purple-400/30 bg-[#0d0d1a]/90 py-2 pl-2 pr-4 shadow-[0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur transition-colors hover:border-purple-400/60"
+        className="fixed bottom-5 right-5 z-[58] flex items-center gap-2.5 rounded-full border border-clay-lime/30 bg-[#0d0d1a]/90 py-2 pl-2 pr-4 shadow-[0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur transition-colors hover:border-clay-lime/60"
       >
         <span className="relative flex h-8 w-8 flex-none items-center justify-center">
           <span
             className="h-8 w-8 rounded-full"
             style={{
               background:
-                'radial-gradient(circle at 32% 28%, rgba(255,255,255,0.55), #a78bfa 45%, #6d28d9 100%)',
-              boxShadow: '0 0 14px rgba(167,139,250,0.5)',
+                'radial-gradient(circle at 32% 28%, rgba(255,255,255,0.55), #d4ea04 45%, #a9bb03 100%)',
+              boxShadow: '0 0 14px rgba(212,234,4,0.5)',
             }}
           />
           {!open && (
             <span
               className="absolute inset-0 animate-ping rounded-full opacity-40"
-              style={{ background: 'rgba(167,139,250,0.5)' }}
+              style={{ background: 'rgba(212,234,4,0.5)' }}
             />
           )}
         </span>
@@ -9709,11 +9709,11 @@ const AthleteAppSubscriptionOfferPanel: React.FC<{
   };
 
   return (
-    <div className="rounded-2xl border border-violet-400/20 bg-violet-950/10 p-5">
+    <div className="rounded-2xl border border-clay-lime/20 bg-clay-raised/10 p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-2xl">
           <div className="flex items-center gap-2 text-sm font-bold text-white">
-            <Wallet className="h-4 w-4 text-violet-300" />
+            <Wallet className="h-4 w-4 text-clay-lime" />
             Athlete app subscription
           </div>
           <p className="mt-2 text-xs leading-5 text-zinc-400">
@@ -9752,7 +9752,7 @@ const AthleteAppSubscriptionOfferPanel: React.FC<{
 
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Monthly price</span>
-              <div className="mt-2 flex items-center rounded-xl border border-zinc-700 bg-zinc-950/60 px-3 focus-within:border-violet-400/50">
+              <div className="mt-2 flex items-center rounded-xl border border-zinc-700 bg-zinc-950/60 px-3 focus-within:border-clay-lime/50">
                 <span className="text-sm text-zinc-500">$</span>
                 <input
                   type="number"

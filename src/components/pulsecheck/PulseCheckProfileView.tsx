@@ -89,7 +89,7 @@ const pathwayCopy = (pathway?: MentalPathway) => {
 };
 
 const pillarMeta: Array<{ key: TaxonomyPillar; label: string; color: string; ring: string; glow: string }> = [
-  { key: TaxonomyPillar.Composure, label: 'Composure', color: 'text-violet-300', ring: '#a78bfa', glow: 'rgba(167,139,250,0.15)' },
+  { key: TaxonomyPillar.Composure, label: 'Composure', color: 'text-clay-lime', ring: '#d4ea04', glow: 'rgba(212,234,4,0.15)' },
   { key: TaxonomyPillar.Focus,     label: 'Focus',     color: 'text-sky-300',    ring: '#38bdf8', glow: 'rgba(56,189,248,0.15)' },
   { key: TaxonomyPillar.Decision,  label: 'Decision',  color: 'text-emerald-300',ring: '#34d399', glow: 'rgba(52,211,153,0.15)' },
 ];
@@ -187,18 +187,18 @@ const PillarRing: React.FC<{
 
 // Card accent colors cycle for Q&A cards
 const CARD_BORDERS = [
-  'border-l-violet-500/60',
+  'border-l-clay-lime/60',
   'border-l-[#E0FE10]/40',
   'border-l-sky-500/60',
-  'border-l-violet-500/60',
+  'border-l-clay-lime/60',
   'border-l-[#E0FE10]/40',
   'border-l-sky-500/60',
 ];
 const CARD_NUM_COLORS = [
-  'from-violet-500/20 to-violet-500/5',
+  'from-clay-lime/20 to-clay-lime/5',
   'from-[#E0FE10]/15 to-[#E0FE10]/5',
   'from-sky-500/20 to-sky-500/5',
-  'from-violet-500/20 to-violet-500/5',
+  'from-clay-lime/20 to-clay-lime/5',
   'from-[#E0FE10]/15 to-[#E0FE10]/5',
   'from-sky-500/20 to-sky-500/5',
 ];
@@ -502,7 +502,7 @@ const PulseCheckProfileView: React.FC = () => {
     >
       {/* ── Ambient orbs ── */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -top-24 -left-24 h-[400px] w-[400px] rounded-full bg-violet-600/10 blur-[120px]" />
+        <div className="absolute -top-24 -left-24 h-[400px] w-[400px] rounded-full bg-clay-lime/10 blur-[120px]" />
         <div className="absolute top-1/2 -right-32 h-[320px] w-[320px] rounded-full bg-[#E0FE10]/6 blur-[100px]" />
       </div>
 
@@ -511,12 +511,12 @@ const PulseCheckProfileView: React.FC = () => {
         {/* ──────────────────────── HERO ──────────────────────── */}
         <motion.section
           variants={fadeUp}
-          className="relative overflow-hidden rounded-[32px] border border-white/[0.08] bg-[linear-gradient(135deg,_rgba(167,139,250,0.12),_rgba(255,255,255,0.03)_40%,_rgba(224,254,16,0.06))] p-6 sm:p-8 backdrop-blur-xl"
+          className="relative overflow-hidden rounded-[32px] border border-white/[0.08] bg-[linear-gradient(135deg,_rgba(212,234,4,0.12),_rgba(255,255,255,0.03)_40%,_rgba(224,254,16,0.06))] p-6 sm:p-8 backdrop-blur-xl"
         >
           {/* Subtle grid */}
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:36px_36px]" />
           {/* Top shimmer line */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-400/40 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-clay-lime/40 to-transparent" />
 
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start justify-between gap-4 lg:flex-1">
@@ -524,8 +524,8 @@ const PulseCheckProfileView: React.FC = () => {
               <div className="flex items-center gap-5">
                 <div className="relative shrink-0">
                   {/* Glow ring */}
-                  <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-violet-500/50 to-[#E0FE10]/30 blur-sm" />
-                  <div className="relative h-[88px] w-[88px] overflow-hidden rounded-full border border-violet-400/30 bg-zinc-900">
+                  <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-clay-lime/50 to-[#E0FE10]/30 blur-sm" />
+                  <div className="relative h-[88px] w-[88px] overflow-hidden rounded-full border border-clay-lime/30 bg-zinc-900">
                     {currentUser.profileImage?.profileImageURL ? (
                       <img src={currentUser.profileImage.profileImageURL} alt={displayName} className="h-full w-full object-cover" />
                     ) : (
@@ -537,8 +537,8 @@ const PulseCheckProfileView: React.FC = () => {
                 </div>
 
                 <div>
-                  <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-0.5 text-[10px] font-bold uppercase tracking-[0.3em] text-violet-300">
-                    <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
+                  <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full border border-clay-lime/30 bg-clay-lime/10 px-3 py-0.5 text-[10px] font-bold uppercase tracking-[0.3em] text-clay-lime">
+                    <span className="h-1.5 w-1.5 rounded-full bg-clay-lime" />
                     PulseCheck Athlete
                   </div>
                   <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">{displayName}</h1>
@@ -563,7 +563,7 @@ const PulseCheckProfileView: React.FC = () => {
             {/* Stats strip */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:shrink-0">
               {[
-                { label: 'Pathway', value: pathway, accent: 'text-violet-300' },
+                { label: 'Pathway', value: pathway, accent: 'text-clay-lime' },
                 { label: 'MPR', value: mprScore !== null ? `${mprScore.toFixed(1)}/10` : '—', accent: 'text-[#E0FE10]' },
                 { label: 'Assignments', value: assignments !== null ? String(assignments) : '—', accent: 'text-sky-300' },
                 { label: 'Streak', value: streak !== null ? `${streak}d` : '—', accent: 'text-emerald-300' },
@@ -653,7 +653,7 @@ const PulseCheckProfileView: React.FC = () => {
                     </div>
                     <div className="h-1 w-full overflow-hidden rounded-full bg-white/5">
                       <motion.div
-                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-[#E0FE10]"
+                        className="h-full rounded-full bg-clay-lime"
                         initial={{ width: 0 }}
                         animate={{ width: hasVal ? `${pct}%` : '0%' }}
                         transition={{ duration: 1.1, ease: 'easeOut', delay: 0.5 }}

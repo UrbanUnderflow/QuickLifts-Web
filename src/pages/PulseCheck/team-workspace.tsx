@@ -41,7 +41,7 @@ const FloatingOrb: React.FC<{ color: string; size: string; style: React.CSSPrope
 );
 
 const GlassCard: React.FC<{ children: React.ReactNode; accentColor?: string; className?: string; delay?: number; animate?: boolean }> = ({
-  children, accentColor = '#7C3AED', className = '', delay = 0, animate = true,
+  children, accentColor = '#D4EA04', className = '', delay = 0, animate = true,
 }) => {
   const inner = (
     <div className={`relative group ${className}`}>
@@ -62,7 +62,7 @@ const GlassCard: React.FC<{ children: React.ReactNode; accentColor?: string; cla
 };
 
 const InfoCard: React.FC<{ icon: React.ReactNode; title: string; accentColor?: string; children: React.ReactNode; delay?: number }> = ({
-  icon, title, accentColor = '#7C3AED', children, delay = 0,
+  icon, title, accentColor = '#D4EA04', children, delay = 0,
 }) => (
   <motion.div
     initial={{ opacity: 0, y: 12 }}
@@ -782,8 +782,8 @@ export default function PulseCheckTeamWorkspacePage() {
     return (
       <div className="flex min-h-screen items-center justify-center" style={{ background: '#070711' }}>
         <div className="relative">
-          <div className="absolute inset-0 rounded-full bg-[#7C3AED]/20 blur-2xl" />
-          <Loader2 className="relative h-8 w-8 animate-spin text-[#7C3AED]" />
+          <div className="absolute inset-0 rounded-full bg-clay-lime/20 blur-2xl" />
+          <Loader2 className="relative h-8 w-8 animate-spin text-clay-lime" />
         </div>
       </div>
     );
@@ -802,9 +802,9 @@ export default function PulseCheckTeamWorkspacePage() {
 
       {/* Ambient background orbs */}
       <div className="fixed inset-0 pointer-events-none">
-        <FloatingOrb color="#7C3AED" size="w-[550px] h-[550px]" style={{ top: '-10%', left: '-8%' }} delay={0} />
+        <FloatingOrb color="#D4EA04" size="w-[550px] h-[550px]" style={{ top: '-10%', left: '-8%' }} delay={0} />
         <FloatingOrb color="#3B82F6" size="w-[420px] h-[420px]" style={{ top: '25%', right: '-6%' }} delay={3} />
-        <FloatingOrb color="#8B5CF6" size="w-[380px] h-[380px]" style={{ bottom: '5%', left: '20%' }} delay={6} />
+        <FloatingOrb color="#D4EA04" size="w-[380px] h-[380px]" style={{ bottom: '5%', left: '20%' }} delay={6} />
         <div className="absolute inset-0 opacity-[0.018]" style={{ backgroundImage: `url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxwYXRoIGQ9Ik0wIDBoMzAwdjMwMEgweiIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIuMDUiLz48L3N2Zz4=")` }} />
       </div>
 
@@ -834,9 +834,9 @@ export default function PulseCheckTeamWorkspacePage() {
                   !consentComplete ? (
                     <Link
                       href={`/PulseCheck/post-activation?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
-                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:opacity-90"
-                      style={{ background: '#7C3AED' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(124,58,237,0.35)'; }}
+                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-clay-on-lime transition-all hover:opacity-90"
+                      style={{ background: '#D4EA04' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(212,234,4,0.35)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                     >
                       Finish Setup
@@ -848,9 +848,9 @@ export default function PulseCheckTeamWorkspacePage() {
                         type="button"
                         onClick={handleLaunchBaseline}
                         disabled={athleteTaskLoading}
-                        className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                        style={{ background: '#7C3AED' }}
-                        onMouseEnter={(e) => { if (!athleteTaskLoading) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(124,58,237,0.35)'; }}
+                        className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-clay-on-lime transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{ background: '#D4EA04' }}
+                        onMouseEnter={(e) => { if (!athleteTaskLoading) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(212,234,4,0.35)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                       >
                         {athleteTaskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
@@ -885,9 +885,9 @@ export default function PulseCheckTeamWorkspacePage() {
                       </Link>
                       <Link
                         href="/PulseCheck"
-                        className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:opacity-90"
-                        style={{ background: '#7C3AED' }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(124,58,237,0.35)'; }}
+                        className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-clay-on-lime transition-all hover:opacity-90"
+                        style={{ background: '#D4EA04' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(212,234,4,0.35)'; }}
                         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                       >
                         Go to Today
@@ -905,9 +905,9 @@ export default function PulseCheckTeamWorkspacePage() {
                     </Link>
                     <Link
                       href={`/coach/sports-intelligence-reports?teamId=${encodeURIComponent(teamId)}`}
-                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:opacity-90"
-                      style={{ background: '#7C3AED' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(124,58,237,0.35)'; }}
+                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-clay-on-lime transition-all hover:opacity-90"
+                      style={{ background: '#D4EA04' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(212,234,4,0.35)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                     >
                       View athlete reports
@@ -926,7 +926,7 @@ export default function PulseCheckTeamWorkspacePage() {
                   exit={{ opacity: 0, y: -8, height: 0 }}
                   className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
                     message.type === 'success'
-                      ? 'border-[#7C3AED]/20 bg-[#7C3AED]/[0.06] text-[#7C3AED]'
+                      ? 'border-clay-lime/20 bg-clay-lime/[0.06] text-clay-lime'
                       : 'border-red-500/20 bg-red-500/[0.06] text-red-300'
                   }`}
                 >
@@ -940,13 +940,13 @@ export default function PulseCheckTeamWorkspacePage() {
           {isAthleteWorkspace ? (
             <div className="mt-8 space-y-6">
               <div className={`grid gap-6 ${showAthleteVisionProSummary ? 'xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]' : ''}`}>
-                <div className="rounded-[30px] border border-zinc-800 bg-[radial-gradient(circle_at_top_left,_rgba(124,58,237,0.12),_transparent_38%),#091326] p-6">
+                <div className="rounded-[30px] border border-zinc-800 bg-[radial-gradient(circle_at_top_left,_rgba(212,234,4,0.12),_transparent_38%),#091326] p-6">
                   <div className="flex items-start gap-4">
-                    <div className="rounded-2xl border border-[#7C3AED]/25 bg-[#7C3AED]/10 p-3">
+                    <div className="rounded-2xl border border-clay-lime/25 bg-clay-lime/10 p-3">
                       {requiredTasksComplete ? (
-                        <CheckCircle2 className="h-6 w-6 text-[#7C3AED]" />
+                        <CheckCircle2 className="h-6 w-6 text-clay-lime" />
                       ) : (
-                        <Lock className="h-6 w-6 text-[#7C3AED]" />
+                        <Lock className="h-6 w-6 text-clay-lime" />
                       )}
                     </div>
                     <div className="flex-1">
@@ -966,13 +966,13 @@ export default function PulseCheckTeamWorkspacePage() {
 
                   <div className="mt-6 grid gap-4 md:grid-cols-3">
                     {[
-                      { label: 'Required Tasks', value: requiredTasksComplete || baselineComplete ? '2 / 2' : '1 / 2', sub: 'Consent plus Mental Skills Starting Point', accent: '#7C3AED' },
+                      { label: 'Required Tasks', value: requiredTasksComplete || baselineComplete ? '2 / 2' : '1 / 2', sub: 'Consent plus Mental Skills Starting Point', accent: '#D4EA04' },
                       { label: 'Current Assignments', value: athleteCurrentAssignmentCount, sub: requiredTasksComplete ? 'Ready for you now' : 'These appear after your Starting Point', accent: '#3B82F6' },
-                      { label: 'Today\'s Nora Task', value: requiredTasksComplete && todayTaskName ? todayTaskName : requiredTasksComplete && nextProgramName ? nextProgramName : 'After your Starting Point', sub: todayTaskSubtitle, accent: '#8B5CF6' },
+                      { label: 'Today\'s Nora Task', value: requiredTasksComplete && todayTaskName ? todayTaskName : requiredTasksComplete && nextProgramName ? nextProgramName : 'After your Starting Point', sub: todayTaskSubtitle, accent: '#D4EA04' },
                     ].map((stat) => (
                       <div key={stat.label} className="rounded-[20px] border border-white/8 bg-black/25 p-4" style={{ borderColor: `${stat.accent}18` }}>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{stat.label}</div>
-                        <div className="mt-3 text-2xl font-bold capitalize" style={{ color: stat.accent !== '#7C3AED' ? '#fff' : stat.accent }}>{stat.value}</div>
+                        <div className="mt-3 text-2xl font-bold capitalize" style={{ color: stat.accent !== '#D4EA04' ? '#fff' : stat.accent }}>{stat.value}</div>
                         <div className="mt-1 text-sm text-zinc-400">{stat.sub}</div>
                       </div>
                     ))}
@@ -981,7 +981,7 @@ export default function PulseCheckTeamWorkspacePage() {
 
                 {showAthleteVisionProSummary ? (
                   <div className="grid gap-4">
-                    <InfoCard icon={<ScanLine className="h-4 w-4 text-[#8B5CF6]" />} title="Optional Vision Pro Session" accentColor="#8B5CF6" delay={0.5}>
+                    <InfoCard icon={<ScanLine className="h-4 w-4 text-clay-lime" />} title="Optional Vision Pro Session" accentColor="#D4EA04" delay={0.5}>
                       <p className="text-sm leading-7 text-zinc-400">
                         {visionProTaskState === 'completed'
                           ? 'Your optional Vision Pro session is complete. If your team uses it, they may count it as an extra checkpoint.'
@@ -1010,13 +1010,13 @@ export default function PulseCheckTeamWorkspacePage() {
                 </div>
 
                 <div className="mt-6 grid gap-4 lg:grid-cols-3">
-                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: consentComplete ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.07)' }}>
+                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: consentComplete ? 'rgba(212,234,4,0.2)' : 'rgba(255,255,255,0.07)' }}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Required</div>
                         <div className="mt-2 text-lg font-semibold text-white">Getting Started Consent</div>
                       </div>
-                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: consentComplete ? '#7C3AED' : '#FCD34D', background: consentComplete ? 'rgba(124,58,237,0.1)' : 'rgba(252,211,77,0.1)', border: `1px solid ${consentComplete ? 'rgba(124,58,237,0.25)' : 'rgba(252,211,77,0.2)'}` }}>
+                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: consentComplete ? '#D4EA04' : '#FCD34D', background: consentComplete ? 'rgba(212,234,4,0.1)' : 'rgba(252,211,77,0.1)', border: `1px solid ${consentComplete ? 'rgba(212,234,4,0.25)' : 'rgba(252,211,77,0.2)'}` }}>
                         {consentComplete ? 'Complete' : 'Pending'}
                       </div>
                     </div>
@@ -1025,13 +1025,13 @@ export default function PulseCheckTeamWorkspacePage() {
                     </p>
                   </div>
 
-                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: baselineComplete ? 'rgba(124,58,237,0.2)' : baselineStarted ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.07)' }}>
+                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: baselineComplete ? 'rgba(212,234,4,0.2)' : baselineStarted ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.07)' }}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Required</div>
                         <div className="mt-2 text-lg font-semibold text-white">Mental Skills Starting Point</div>
                       </div>
-                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: baselineComplete ? '#7C3AED' : baselineStarted ? '#3B82F6' : '#a1a1aa', background: baselineComplete ? 'rgba(124,58,237,0.1)' : baselineStarted ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.06)', border: `1px solid ${baselineComplete ? 'rgba(124,58,237,0.25)' : baselineStarted ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.1)'}` }}>
+                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: baselineComplete ? '#D4EA04' : baselineStarted ? '#3B82F6' : '#a1a1aa', background: baselineComplete ? 'rgba(212,234,4,0.1)' : baselineStarted ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.06)', border: `1px solid ${baselineComplete ? 'rgba(212,234,4,0.25)' : baselineStarted ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.1)'}` }}>
                         {baselineComplete ? 'Complete' : baselineStarted ? 'In Progress' : 'Ready'}
                       </div>
                     </div>
@@ -1042,9 +1042,9 @@ export default function PulseCheckTeamWorkspacePage() {
                       type="button"
                       disabled={athleteTaskLoading || baselineComplete}
                       onClick={handleLaunchBaseline}
-                      className="mt-5 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                      style={{ background: '#7C3AED' }}
-                      onMouseEnter={(e) => { if (!baselineComplete) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 18px rgba(124,58,237,0.4)'; }}
+                      className="mt-5 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-clay-on-lime transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ background: '#D4EA04' }}
+                      onMouseEnter={(e) => { if (!baselineComplete) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 18px rgba(212,234,4,0.4)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
                     >
                       {athleteTaskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
@@ -1052,13 +1052,13 @@ export default function PulseCheckTeamWorkspacePage() {
                     </button>
                   </div>
 
-                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: visionProTaskState === 'completed' ? 'rgba(124,58,237,0.2)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.07)' }}>
+                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: visionProTaskState === 'completed' ? 'rgba(212,234,4,0.2)' : visionProTaskState === 'queued' ? 'rgba(212,234,4,0.2)' : 'rgba(255,255,255,0.07)' }}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Optional</div>
                         <div className="mt-2 text-lg font-semibold text-white">Vision Pro Session</div>
                       </div>
-                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: visionProTaskState === 'completed' ? '#7C3AED' : visionProTaskState === 'queued' ? '#8B5CF6' : '#71717a', background: visionProTaskState === 'completed' ? 'rgba(124,58,237,0.1)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.1)' : 'rgba(255,255,255,0.05)', border: `1px solid ${visionProTaskState === 'completed' ? 'rgba(124,58,237,0.25)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.25)' : 'rgba(255,255,255,0.08)'}` }}>
+                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: visionProTaskState === 'completed' ? '#D4EA04' : visionProTaskState === 'queued' ? '#D4EA04' : '#71717a', background: visionProTaskState === 'completed' ? 'rgba(212,234,4,0.1)' : visionProTaskState === 'queued' ? 'rgba(212,234,4,0.1)' : 'rgba(255,255,255,0.05)', border: `1px solid ${visionProTaskState === 'completed' ? 'rgba(212,234,4,0.25)' : visionProTaskState === 'queued' ? 'rgba(212,234,4,0.25)' : 'rgba(255,255,255,0.08)'}` }}>
                         {visionProTaskState === 'completed' ? 'Complete' : visionProTaskState === 'queued' ? 'Queued' : 'Optional'}
                       </div>
                     </div>
@@ -1068,7 +1068,7 @@ export default function PulseCheckTeamWorkspacePage() {
                   </div>
                 </div>
 
-                <div className={`mt-6 rounded-[20px] border px-5 py-4 text-sm ${ requiredTasksComplete ? 'border-[#7C3AED]/20 bg-[#7C3AED]/[0.05] text-[#7C3AED]' : 'border-amber-500/20 bg-amber-500/[0.05] text-amber-200' }`}>
+                <div className={`mt-6 rounded-[20px] border px-5 py-4 text-sm ${ requiredTasksComplete ? 'border-clay-lime/20 bg-clay-lime/[0.05] text-clay-lime' : 'border-amber-500/20 bg-amber-500/[0.05] text-amber-200' }`}>
                   {requiredTasksComplete
                     ? todayDailyAssignment
                       ? `Today's Nora task is ${todayTaskIsActive ? 'ready' : dailyTaskStatusLabel(todayDailyAssignment.status).toLowerCase()}: ${todayTaskName || 'Nora task'}.`
@@ -1255,7 +1255,7 @@ export default function PulseCheckTeamWorkspacePage() {
             <div className="grid gap-4">
               <div className="rounded-[28px] border border-zinc-800 bg-[#091326] p-5">
                 <div className="flex items-center gap-3">
-                  <ClipboardList className="h-5 w-5" style={{ color: '#a78bfa' }} />
+                  <ClipboardList className="h-5 w-5" style={{ color: '#d4ea04' }} />
                   <div className="text-base font-semibold text-white">Good to know</div>
                 </div>
                 <div className="mt-4 space-y-3 text-sm leading-7 text-zinc-300">
@@ -1311,7 +1311,7 @@ export default function PulseCheckTeamWorkspacePage() {
 
               <div className="rounded-[28px] border border-zinc-800 bg-[#091326] p-5">
                 <div className="flex items-center gap-3">
-                  <Shield className="h-5 w-5 text-purple-300" />
+                  <Shield className="h-5 w-5 text-clay-lime" />
                   <div className="text-base font-semibold text-white">Who you can see</div>
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">

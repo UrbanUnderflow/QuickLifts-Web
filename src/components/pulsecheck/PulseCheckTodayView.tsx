@@ -616,7 +616,7 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <FloatingOrb color="#E0FE10" size={500} position={{ top: '-8%', left: '-6%' }} delay={0} />
         <FloatingOrb color="#3B82F6" size={400} position={{ top: '30%', right: '-8%' }} delay={3} />
-        <FloatingOrb color="#8B5CF6" size={350} position={{ bottom: '5%', left: '15%' }} delay={5} />
+        <FloatingOrb color="#D4EA04" size={350} position={{ bottom: '5%', left: '15%' }} delay={5} />
         <FloatingOrb color="#EF4444" size={250} position={{ bottom: '-5%', right: '25%' }} delay={7} />
 
         {/* Noise texture overlay */}
@@ -672,7 +672,7 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
                   className="text-3xl font-bold tracking-tight text-white md:text-4xl lg:text-[2.6rem] leading-[1.15]"
                 >
                   {greetingName},{' '}
-                  <span className="bg-gradient-to-r from-[#E0FE10] via-[#3B82F6]/80 to-[#8B5CF6]/60 bg-clip-text text-transparent">
+                  <span className="text-clay-lime">
                     this is your command center.
                   </span>
                 </motion.h2>
@@ -705,10 +705,10 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
                 delay={0.5}
               />
               <StatTile
-                icon={<Users className="h-4.5 w-4.5 text-[#8B5CF6]" />}
+                icon={<Users className="h-4.5 w-4.5 text-clay-lime" />}
                 label="Teams"
                 value={membershipLoading ? '...' : String(memberships.length)}
-                accentColor="#8B5CF6"
+                accentColor="#D4EA04"
                 delay={0.6}
               />
             </div>
@@ -735,7 +735,7 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
             ) : null}
 
             {/* ── READINESS CHECK-IN ── */}
-            <GlassCard accentColor="#8B5CF6" delay={0.2} hoverLift={false}>
+            <GlassCard accentColor="#D4EA04" delay={0.2} hoverLift={false}>
               <div className="p-6 lg:p-7">
                 <div className="mb-6 flex items-start justify-between gap-4">
                   <div>
@@ -743,11 +743,11 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
                       <div
                         className="inline-flex rounded-xl p-2.5 border"
                         style={{
-                          borderColor: 'rgba(139,92,246,0.25)',
-                          background: 'rgba(139,92,246,0.1)',
+                          borderColor: 'rgba(212,234,4,0.25)',
+                          background: 'rgba(212,234,4,0.1)',
                         }}
                       >
-                        <Waves className="h-4.5 w-4.5 text-[#8B5CF6]" />
+                        <Waves className="h-4.5 w-4.5 text-clay-lime" />
                       </div>
                       <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-medium">
                         Readiness Check-In
@@ -765,7 +765,7 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
                     <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500 font-medium">Daily Task Status</p>
                     <p className="mt-1 text-sm text-zinc-300">{readinessStatusCopy}</p>
                   </div>
-                  {checkInSaving ? <Loader2 className="h-4.5 w-4.5 animate-spin text-[#8B5CF6]" /> : null}
+                  {checkInSaving ? <Loader2 className="h-4.5 w-4.5 animate-spin text-clay-lime" /> : null}
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -1121,19 +1121,19 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
                         type="button"
                         onClick={handleJumpToAccessHub}
                         whileHover={{ x: 4 }}
-                        className="flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all duration-300 border border-white/[0.06] hover:border-[#8B5CF6]/20 group"
+                        className="flex w-full items-center justify-between rounded-xl px-4 py-3.5 text-left transition-all duration-300 border border-white/[0.06] hover:border-clay-lime/20 group"
                         style={{ background: 'rgba(255,255,255,0.02)' }}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-[#8B5CF6]/10 flex items-center justify-center border border-[#8B5CF6]/20">
-                            <ShieldCheck className="h-3.5 w-3.5 text-[#8B5CF6]" />
+                          <div className="w-8 h-8 rounded-lg bg-clay-lime/10 flex items-center justify-center border border-clay-lime/20">
+                            <ShieldCheck className="h-3.5 w-3.5 text-clay-lime" />
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-white">Review access hub</p>
                             <p className="text-xs text-zinc-500">Organizations and teams</p>
                           </div>
                         </div>
-                        <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-[#8B5CF6] transition-colors" />
+                        <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-clay-lime transition-colors" />
                       </motion.button>
                     )}
                   </div>

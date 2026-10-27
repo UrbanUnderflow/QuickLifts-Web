@@ -162,13 +162,13 @@ import type {
 
 const CONNECTION_COLORS: Record<ConnectionType, string> = {
   data: "#38bdf8",
-  auth: "#a78bfa",
+  auth: "#d4ea04",
   events: "#facc15",
 };
 
 const LAYER_STYLES: Record<EcosystemNode["layer"], string> = {
   surface: "bg-blue-500/10 border-blue-400/40",
-  backend: "bg-purple-500/10 border-purple-400/40",
+  backend: "bg-clay-lime/10 border-clay-lime/40",
   integration: "bg-amber-500/10 border-amber-400/40",
   agent: "bg-green-500/10 border-green-400/40",
 };
@@ -186,7 +186,7 @@ const PRODUCT_POSITIONING = [
     title: "PulseCheck",
     eyebrow: "Elite athlete service tech",
     icon: Brain,
-    accent: "border-violet-400/25 bg-violet-400/[0.06] text-violet-200",
+    accent: "border-clay-lime/25 bg-clay-lime/[0.06] text-clay-ink",
     body:
       "White-glove mental performance, readiness, protocols, simulations, coach visibility, team pilots, and operator-facing athlete support.",
   },
@@ -265,7 +265,7 @@ const SYSTEM_TABS: SystemTab[] = [
     id: "pulsecheck",
     label: "PulseCheck",
     icon: Brain,
-    accent: "#c084fc",
+    accent: "#d4ea04",
     sectionIds: [
       "simulation-taxonomy",
       "sim-family-tree",
@@ -367,7 +367,7 @@ const SYSTEM_TABS: SystemTab[] = [
     id: "education",
     label: "Education",
     icon: GraduationCap,
-    accent: "#a78bfa",
+    accent: "#d4ea04",
     sectionIds: ["pulse-education-offerings"],
   },
   {
@@ -610,10 +610,10 @@ const CoachServicePaymentsSystemOverview = () => {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-violet-400/25 bg-gradient-to-br from-violet-500/10 via-[#090f1c] to-cyan-500/5 p-5">
+      <section className="rounded-2xl border border-clay-lime/25 bg-gradient-to-br from-clay-lime/10 via-[#090f1c] to-cyan-500/5 p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-4xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-300">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-clay-lime">
               PulseCheck commerce architecture
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-white">
@@ -664,7 +664,7 @@ const CoachServicePaymentsSystemOverview = () => {
               key={step.title}
               className="flex gap-3 rounded-xl border border-zinc-800 bg-black/20 p-4"
             >
-              <div className="flex h-7 w-7 flex-none items-center justify-center rounded-full border border-violet-400/30 bg-violet-400/10 text-xs font-bold text-violet-200">
+              <div className="flex h-7 w-7 flex-none items-center justify-center rounded-full border border-clay-lime/30 bg-clay-lime/10 text-xs font-bold text-clay-ink">
                 {index + 1}
               </div>
               <div>
@@ -775,8 +775,8 @@ const CoachServicePaymentsSystemOverview = () => {
                 status, paid time, scheduled time, and refund state.
               </p>
             </div>
-            <div className="rounded-xl border border-violet-400/20 bg-violet-400/[0.05] p-4">
-              <code className="text-xs text-violet-300">
+            <div className="rounded-xl border border-clay-lime/20 bg-clay-lime/[0.05] p-4">
+              <code className="text-xs text-clay-lime">
                 coach-athlete-conversations/{"{conversationId}"}.activeBooking
               </code>
               <p className="mt-2 text-xs leading-relaxed text-zinc-400">
@@ -902,7 +902,7 @@ const CoachServicePaymentsSystemOverview = () => {
               ].map((eventName) => (
                 <div
                   key={eventName}
-                  className="rounded-lg border border-zinc-800 bg-black/20 px-3 py-2 font-mono text-xs text-violet-300"
+                  className="rounded-lg border border-zinc-800 bg-black/20 px-3 py-2 font-mono text-xs text-clay-lime"
                 >
                   {eventName}
                 </div>
@@ -927,7 +927,7 @@ const CoachServicePaymentsSystemOverview = () => {
               "A partially refunded order is excluded from earned totals until refund accounting policy is finalized.",
             ].map((item) => (
               <li key={item} className="flex gap-2">
-                <Activity className="mt-0.5 h-3.5 w-3.5 flex-none text-violet-300" />
+                <Activity className="mt-0.5 h-3.5 w-3.5 flex-none text-clay-lime" />
                 <span>{item}</span>
               </li>
             ))}
@@ -1485,7 +1485,7 @@ const SystemOverviewPage: React.FC = () => {
         value: String(systemOverviewManifest.backendServices.length),
         icon: <Server className="w-5 h-5" />,
         caption: "Core platform runtime services",
-        tone: "from-purple-500/30 to-purple-300/10",
+        tone: "from-clay-lime/30 to-clay-lime/10",
       },
       {
         title: "Integrations",
@@ -1637,7 +1637,7 @@ const SystemOverviewPage: React.FC = () => {
                 Data
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-[#a78bfa] inline-block" />
+                <span className="w-3 h-3 rounded-full bg-clay-lime inline-block" />
                 Auth
               </span>
               <span className="flex items-center gap-1">
@@ -1746,7 +1746,7 @@ const SystemOverviewPage: React.FC = () => {
 
               <article className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                 <div className="flex items-center gap-2">
-                  <Brain className="w-4 h-4 text-violet-300" />
+                  <Brain className="w-4 h-4 text-clay-lime" />
                   <h3 className="text-lg font-semibold">PulseCheck</h3>
                 </div>
                 <div className="space-y-3 text-sm text-zinc-300">
@@ -1834,7 +1834,7 @@ const SystemOverviewPage: React.FC = () => {
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               <article className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                 <div className="flex items-center gap-2">
-                  <Server className="w-4 h-4 text-purple-300" />
+                  <Server className="w-4 h-4 text-clay-lime" />
                   <h3 className="text-lg font-semibold">Delivery Lanes</h3>
                 </div>
                 <div className="space-y-3 text-sm">
@@ -1981,7 +1981,7 @@ const SystemOverviewPage: React.FC = () => {
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
                 <div className="flex items-center gap-2">
-                  <Server className="w-4 h-4 text-purple-300" />
+                  <Server className="w-4 h-4 text-clay-lime" />
                   <h3 className="text-lg font-semibold">Backend Services</h3>
                 </div>
                 <div className="space-y-3 text-sm">
@@ -2788,11 +2788,11 @@ const SystemOverviewPage: React.FC = () => {
                 },
                 {
                   label: "Stretch",
-                  color: "#a855f7",
+                  color: "#d4ea04",
                   icon: "🧘",
                   file: "WorkoutShareStoryView.swift / WorkoutSummaryView.swift",
                   stats: "Duration · Stretches · Calories",
-                  note: "Same WorkoutShareStoryView as Lift, themed purple. inferredHistoryType == .stretch triggers purple palette.",
+                  note: "Same WorkoutShareStoryView as Lift, themed clay. inferredHistoryType == .stretch triggers clay palette.",
                 },
                 {
                   label: "Fat Burn",
@@ -2909,7 +2909,7 @@ const SystemOverviewPage: React.FC = () => {
                   ],
                   [
                     "WorkoutShareStoryView.swift",
-                    "Lift + Stretch card. Workout title as hero, category icon in stats bar. Green / Purple theme.",
+                    "Lift + Stretch card. Workout title as hero, category icon in stats bar. Green / Clay theme.",
                   ],
                   [
                     "WorkoutSummaryView.swift",

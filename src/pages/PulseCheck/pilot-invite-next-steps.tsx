@@ -238,7 +238,7 @@ const PilotInviteNextStepsPage = ({
               <div className="flex flex-col gap-3 sm:flex-row">
                 <a
                   href={nativeAppHref}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-clay-lime px-4 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90"
                 >
                   <Smartphone className="h-4 w-4" />
                   Open {appDistribution.name} App

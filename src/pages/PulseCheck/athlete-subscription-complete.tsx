@@ -225,7 +225,7 @@ const AthleteSubscriptionCompletePage = ({
       </Head>
 
       <main className="relative min-h-screen overflow-hidden bg-[#070711] px-4 py-8 text-white sm:px-6 sm:py-12">
-        <div className="pointer-events-none absolute -left-40 -top-48 h-[560px] w-[560px] rounded-full bg-violet-600/20 blur-3xl" />
+        <div className="pointer-events-none absolute -left-40 -top-48 h-[560px] w-[560px] rounded-full bg-clay-lime/20 blur-3xl" />
         <div className="relative mx-auto max-w-4xl">
           <div className="mb-7 flex items-center gap-3">
             <img src="/pulsecheck-wordmark-green.png" alt="PulseCheck" width={180} height={29} style={{ width: 180, maxWidth: '100%', height: 'auto' }} />
@@ -236,13 +236,13 @@ const AthleteSubscriptionCompletePage = ({
               className={`inline-flex rounded-2xl border p-3 ${
                 confirmed
                   ? 'border-emerald-400/25 bg-emerald-400/10'
-                  : 'border-violet-400/25 bg-violet-400/10'
+                  : 'border-clay-lime/25 bg-clay-lime/10'
               }`}
             >
               {confirmed ? (
                 <CheckCircle2 className="h-7 w-7 text-emerald-300" />
               ) : (
-                <Loader2 className={`h-7 w-7 text-violet-300 ${busy ? 'animate-spin' : ''}`} />
+                <Loader2 className={`h-7 w-7 text-clay-lime ${busy ? 'animate-spin' : ''}`} />
               )}
             </div>
 
@@ -278,7 +278,7 @@ const AthleteSubscriptionCompletePage = ({
               <button
                 type="button"
                 onClick={() => setAttempt((current) => current + 1)}
-                className="mt-5 inline-flex items-center gap-2 rounded-xl border border-violet-300/30 bg-violet-300/10 px-4 py-2.5 text-sm font-semibold text-violet-100"
+                className="mt-5 inline-flex items-center gap-2 rounded-xl border border-clay-lime/30 bg-clay-lime/10 px-4 py-2.5 text-sm font-semibold text-clay-ink"
               >
                 <RefreshCw className="h-4 w-4" />
                 Retry confirmation
@@ -308,7 +308,7 @@ const AthleteSubscriptionCompletePage = ({
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">Step 1</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-clay-lime">Step 1</p>
                     <h2 className="mt-2 text-lg font-semibold">Download {appDistribution.name}</h2>
                     <p className="mt-2 text-sm leading-6 text-zinc-400">
                       Install the app from your phone&apos;s app store.
@@ -338,7 +338,7 @@ const AthleteSubscriptionCompletePage = ({
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-300">Step 2</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-clay-lime">Step 2</p>
                     <h2 className="mt-2 text-lg font-semibold">Come back and open the app</h2>
                     <p className="mt-2 text-sm leading-6 text-zinc-400">
                       Return to this page after installation, then use the button below. Sign in with the same account shown above and continue through onboarding.

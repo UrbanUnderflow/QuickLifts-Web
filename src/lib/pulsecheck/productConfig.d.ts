@@ -10,6 +10,6 @@ export function resolveAppBranding(organization: OrganizationProductConfiguratio
 export function validateProductBrand(value: unknown): ProductBrand;
 export function normalizeAppBranding(value: unknown): Partial<Record<ProductBrand, ProductBrand>>;
 
-export type AppExperience = Partial<Record<'ios' | 'android', 'standard' | 'clay'>>;
-export function resolveAppExperience(value: unknown): Required<AppExperience>;
-export function normalizeAppExperience(value: unknown, existing?: unknown): Required<AppExperience>;
+export type AppExperience = Record<'ios' | 'android', 'clay'>;
+/** Always Clay. Kept for installed native builds that still read appExperience. */
+export function resolveAppExperience(): AppExperience;

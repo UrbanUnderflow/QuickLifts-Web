@@ -50,10 +50,10 @@ export default function InviteUnavailablePage({ reason }: { reason: string }) {
 
       <div
         className="w-full max-w-md rounded-[28px] border border-white/10 p-8 text-center shadow-[0_20px_80px_rgba(0,0,0,0.45)]"
-        style={{ background: 'radial-gradient(circle at top, rgba(124,58,237,0.12), transparent 60%), #111118' }}
+        style={{ background: 'radial-gradient(circle at top, rgba(212,234,4,0.12), transparent 60%), #111118' }}
       >
-        <div className="mx-auto inline-flex rounded-2xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 p-3">
-          <Mail className="h-6 w-6 text-[#A78BFA]" />
+        <div className="mx-auto inline-flex rounded-2xl border border-clay-lime/30 bg-clay-lime/10 p-3">
+          <Mail className="h-6 w-6 text-clay-lime" />
         </div>
 
         <h1 className="mt-6 text-2xl font-bold">{copy.title}</h1>
@@ -69,8 +69,8 @@ export default function InviteUnavailablePage({ reason }: { reason: string }) {
           </button>
           <Link
             href="https://pulsecheckmind.ai"
-            className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ background: '#7C3AED' }}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90"
+            style={{ background: '#D4EA04' }}
           >
             Learn about PulseCheck
           </Link>

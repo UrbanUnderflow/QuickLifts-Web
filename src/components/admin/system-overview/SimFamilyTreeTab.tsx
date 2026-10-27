@@ -38,7 +38,7 @@ function CollapsibleSection({ title, defaultOpen = false, children }: { title: s
 
 /* ---- PILLAR BADGE ---- */
 function PillarBadge({ pillar }: { pillar: 'focus' | 'composure' | 'decision' }) {
-    const config = { focus: { color: '#60a5fa', label: 'Focus' }, composure: { color: '#22c55e', label: 'Composure' }, decision: { color: '#c084fc', label: 'Decision' } };
+    const config = { focus: { color: '#60a5fa', label: 'Focus' }, composure: { color: '#22c55e', label: 'Composure' }, decision: { color: '#d4ea04', label: 'Decision' } };
     const c = config[pillar];
     return (
         <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border" style={{ color: c.color, borderColor: c.color + '40', background: c.color + '12' }}>
@@ -218,7 +218,7 @@ const HYBRID_MODULES: HybridModule[] = [
 const PILLAR_OWNERSHIP = [
     { pillar: 'Focus', color: '#60a5fa', families: ['Noise Gate', 'Endurance Lock', 'Split Stream*', 'Quiet Eye*'], note: '* = Candidate' },
     { pillar: 'Composure', color: '#22c55e', families: ['Reset', 'Fault Line*', 'Heat Check*'], note: '* = Candidate' },
-    { pillar: 'Decision', color: '#c084fc', families: ['Brake Point', 'Signal Window', 'Sequence Shift', 'Blind Commit*', 'Chaos Read*'], note: '* = Candidate' },
+    { pillar: 'Decision', color: '#d4ea04', families: ['Brake Point', 'Signal Window', 'Sequence Shift', 'Blind Commit*', 'Chaos Read*'], note: '* = Candidate' },
 ];
 
 /* ---- VARIANT LIBRARY (grouped by parent) ---- */
@@ -251,8 +251,8 @@ const SimFamilyTreeTab: React.FC = () => {
             {/* INTRO */}
             <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                        <TreePine className="w-5 h-5 text-purple-400" />
+                    <div className="p-2 rounded-xl bg-clay-lime/10 border border-clay-lime/20">
+                        <TreePine className="w-5 h-5 text-clay-lime" />
                     </div>
                     <div>
                         <h2 className="text-xl font-semibold">Sim Family Tree v2</h2>
@@ -299,10 +299,10 @@ const SimFamilyTreeTab: React.FC = () => {
                                     <p className="text-[9px] text-zinc-600"><span className="text-zinc-400 font-semibold">Profile slot:</span> Squat strength</p>
                                 </div>
                             </div>
-                            <div className="rounded-xl border border-purple-500/20 bg-purple-500/[0.03] p-4">
+                            <div className="rounded-xl border border-clay-lime/20 bg-clay-lime/[0.03] p-4">
                                 <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-500 mb-2">🧠 PulseCheck</p>
                                 <p className="text-xs font-bold text-white mb-2">Reset <span className="text-zinc-500 font-normal">← Family</span></p>
-                                <div className="space-y-1 pl-3 border-l-2 border-purple-500/30">
+                                <div className="space-y-1 pl-3 border-l-2 border-clay-lime/30">
                                     {['Visual Disruption Reset', 'Audio Disruption Reset', 'Cognitive-Provocation Reset', 'Sport-Context Reset', 'Immersive Reset Chamber'].map((v) => (
                                         <p key={v} className="text-[10px] text-zinc-400">{v}</p>
                                     ))}
@@ -323,7 +323,7 @@ const SimFamilyTreeTab: React.FC = () => {
                             {[
                                 { num: '1', title: 'Unique Mechanism', desc: 'Trains a cognitive operation that is measurably different from every other family. Not a surface-level variation — a different underlying process.', color: '#60a5fa' },
                                 { num: '2', title: 'Unique Core Metric', desc: 'Produces a primary measurement output that no other family already captures. If two families measure the same thing, one is probably a variant of the other.', color: '#22c55e' },
-                                { num: '3', title: 'Unique Profile Value', desc: 'Tells the athlete or coach something actionable that no existing family score communicates. A new score that doesn\'t change coaching decisions isn\'t worth the complexity.', color: '#c084fc' },
+                                { num: '3', title: 'Unique Profile Value', desc: 'Tells the athlete or coach something actionable that no existing family score communicates. A new score that doesn\'t change coaching decisions isn\'t worth the complexity.', color: '#d4ea04' },
                             ].map((item) => (
                                 <div key={item.num} className="rounded-xl border border-zinc-800 bg-black/20 p-3">
                                     <div className="flex items-center gap-2 mb-1.5">
@@ -417,7 +417,7 @@ const SimFamilyTreeTab: React.FC = () => {
                                     icon: User,
                                     title: 'Athlete-Facing Naming',
                                     subtitle: 'What the athlete sees',
-                                    color: '#c084fc',
+                                    color: '#d4ea04',
                                     example: 'Reset',
                                     reason: 'Crowd Reset · 3 min',
                                 },
@@ -443,8 +443,8 @@ const SimFamilyTreeTab: React.FC = () => {
                     </div>
 
                     {/* NAMING RECOMMENDATION */}
-                    <div className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.03] p-5 space-y-3">
-                        <p className="text-[9px] uppercase tracking-widest font-bold text-purple-400">Recommended Athlete-Facing Display</p>
+                    <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/[0.03] p-5 space-y-3">
+                        <p className="text-[9px] uppercase tracking-widest font-bold text-clay-lime">Recommended Athlete-Facing Display</p>
                         <p className="text-xs text-zinc-400 leading-relaxed">Show <span className="text-white font-semibold">family name + variant subtitle</span>. This strikes the best balance: the athlete builds familiarity with the family (what they&apos;re training) while still seeing variation in the experience.</p>
                         <div className="rounded-xl border border-zinc-700 bg-black/40 p-4 max-w-xs">
                             <p className="text-base font-bold text-white">Reset</p>
@@ -481,7 +481,7 @@ const SimFamilyTreeTab: React.FC = () => {
                     <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-6 py-5 text-center">
                         <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-500 mb-2">The Operating Rule</p>
                         <p className="text-lg md:text-xl font-bold text-white leading-snug">
-                            Programs prescribe <span className="text-green-400">families</span>. Sessions deliver <span className="text-blue-400">variants</span>. Profiles score <span className="text-purple-400">both</span>.
+                            Programs prescribe <span className="text-green-400">families</span>. Sessions deliver <span className="text-blue-400">variants</span>. Profiles score <span className="text-clay-lime">both</span>.
                         </p>
                     </div>
                 </div>
@@ -516,7 +516,7 @@ const SimFamilyTreeTab: React.FC = () => {
             {/* PILLAR OWNERSHIP */}
             <section className="space-y-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                    <Brain className="w-4 h-4 text-purple-400" /> Pillar Ownership at a Glance
+                    <Brain className="w-4 h-4 text-clay-lime" /> Pillar Ownership at a Glance
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {PILLAR_OWNERSHIP.map((p) => (

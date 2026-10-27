@@ -12,7 +12,8 @@
 .root :global([class*="bg-gradient-to-"]) {background-image:none;background-color:#edf3eb;}
 .root :global([class*="text-cyan-"]),.root :global([class*="text-teal-"]),.root :global([class*="text-emerald-"]),.root :global([class*="text-green-"]),.root :global([class*="text-lime-"]),.root :global([class*="text-[#d7ff00]"]) {color:#24635a;}
 .root :global([class*="text-amber-"]),.root :global([class*="text-orange-"]),.root :global([class*="text-yellow-"]) {color:#865313;}
-.root :global([class*="text-blue-"]),.root :global([class*="text-indigo-"]),.root :global([class*="text-purple-"]) {color:#485d84;}
+.root :global([class*="text-blue-"]),.root :global([class*="text-indigo-"]) {color:#485d84;}
+.root :global([class*="text-clay-lime"]),.root :global([class*="text-clay-sage"]),.root :global([class*="text-clay-ink"]) {color:#246863;}
 .root :global([class*="text-red-"]),.root :global([class*="text-rose-"]) {color:#a13737;}
 .root :global(input),.root :global(select),.root :global(textarea) {color:#22302e;background:#fff;border-color:#d7ded4;}
 .root :global(button:focus-visible),.root :global(a:focus-visible),.root :global(input:focus-visible),.root :global(select:focus-visible) {outline:2px solid #286b62;outline-offset:3px;}

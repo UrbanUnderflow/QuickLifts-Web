@@ -181,7 +181,7 @@ const PulseCheckProtocolPracticeConversationSpecTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-3">
           <InfoCard
             title="Text First"
-            accent="purple"
+            accent="clay"
             body="Text input should be the guaranteed baseline so the practice layer works in preview, web, and low-permission contexts immediately."
           />
           <InfoCard

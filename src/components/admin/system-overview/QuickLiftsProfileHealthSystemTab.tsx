@@ -241,7 +241,7 @@ export const QuickLiftsProfileHealthStorySpecTab: React.FC = () => {
           />
           <InfoCard
             title="Goal Context Fallback"
-            accent="purple"
+            accent="clay"
             body="If the athlete has no active goal, keep the module visible with a generic training-context explanation rather than leaving an empty gap beneath the hero."
           />
         </CardGrid>
@@ -408,7 +408,7 @@ export const QuickLiftsProfileHealthEnergyMergeSpecTab: React.FC = () => {
           />
           <InfoCard
             title="Coverage Drives Trust"
-            accent="purple"
+            accent="clay"
             body="Coverage is a first-class snapshot field because confidence, historical completeness, and rollout safety all depend on how much of the day is direct, corrected, inferred, or still missing."
           />
         </CardGrid>

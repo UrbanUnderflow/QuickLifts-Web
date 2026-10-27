@@ -82,7 +82,7 @@ export const EvidenceAlignedSimSpec: React.FC<{ config: EvidenceAlignedSimSpecCo
       </div>
     </div>
 
-    <Section icon={<Gamepad2 className="h-4 w-4 text-violet-300" />} title="Runtime and Schedule Rules">
+    <Section icon={<Gamepad2 className="h-4 w-4 text-clay-lime" />} title="Runtime and Schedule Rules">
       <List items={config.scheduleRules} accent={config.accent} />
     </Section>
 

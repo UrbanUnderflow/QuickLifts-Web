@@ -168,7 +168,7 @@ const CurriculumIntentPanel: React.FC<CurriculumIntentPanelProps> = ({
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">How long</p>
             <p className="mt-1 text-sm leading-6 text-zinc-300">{intent.progressionCriteria}</p>
           </div>
-          <div className="border-l border-[#C084FC]/30 pl-3">
+          <div className="border-l border-clay-lime/30 pl-3">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">When you move on</p>
             <p className="mt-1 text-sm leading-6 text-zinc-300">{intent.nextLikelyStep}</p>
           </div>
@@ -228,7 +228,7 @@ const CurriculumIntentPanel: React.FC<CurriculumIntentPanelProps> = ({
         </div>
         <div>
           <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
-            <Route className="h-3.5 w-3.5 text-[#C084FC]" />
+            <Route className="h-3.5 w-3.5 text-clay-lime" />
             What is next
           </div>
           <p className="mt-2 text-sm leading-6 text-zinc-300">{intent.nextLikelyStep}</p>

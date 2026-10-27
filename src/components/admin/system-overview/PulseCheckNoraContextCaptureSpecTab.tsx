@@ -221,7 +221,7 @@ const PulseCheckNoraContextCaptureSpecTab: React.FC = () => {
           />
           <InfoCard
             title="What Nora Extracts"
-            accent="purple"
+            accent="clay"
             body={
               <BulletList
                 items={[

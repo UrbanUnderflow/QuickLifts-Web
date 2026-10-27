@@ -524,7 +524,6 @@ export interface PulseCheckOrganizationImplementationMetadata {
   notes?: string;
 }
 
-export type PulseCheckAppExperience = Partial<Record<'ios' | 'android', 'standard' | 'clay'>>;
 export type PulseCheckProductBrand = 'athleticmind' | 'pulsecheck';
 export type PulseCheckAppBranding = Partial<Record<PulseCheckProductBrand, PulseCheckProductBrand>>;
 
@@ -535,7 +534,6 @@ export interface PulseCheckOrganization {
   configuredProductBrand?: PulseCheckProductBrand;
   productBrand?: PulseCheckProductBrand;
   appBranding?: PulseCheckAppBranding;
-  appExperience?: PulseCheckAppExperience;
   signInPolicy?: import('../../../lib/pulsecheck/signInPolicy').ProgramSignInPolicy;
   id: string;
   displayName: string;
@@ -565,7 +563,6 @@ export interface CreatePulseCheckOrganizationInput {
   healthBaselineEnabled?: boolean;
   productBrand?: PulseCheckProductBrand;
   appBranding?: PulseCheckAppBranding;
-  appExperience?: PulseCheckAppExperience;
   signInPolicy?: import('../../../lib/pulsecheck/signInPolicy').ProgramSignInPolicy;
   displayName: string;
   legalName: string;

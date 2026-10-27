@@ -1,9 +1,13 @@
+const { clayCssVariables, clayTailwindColors } = require('./src/styles/clay/tokens');
+
 module.exports = {
   content: ['./src/**/*.{js,jsx,ts,tsx}', './public/index.html'],
   darkMode: 'media', // or 'media' or 'class'
   theme: {
     extend: {
       colors: {
+        // PulseCheck Clay palette (src/styles/clay/tokens.js).
+        clay: clayTailwindColors(),
         lime: {
           DEFAULT: '#C5FF00',
         },
@@ -104,6 +108,8 @@ module.exports = {
   variants: {
     extend: {},
   },
-  plugins: [],
+  plugins: [
+    ({ addBase }) => addBase({ ':root': clayCssVariables() }),
+  ],
 }
 

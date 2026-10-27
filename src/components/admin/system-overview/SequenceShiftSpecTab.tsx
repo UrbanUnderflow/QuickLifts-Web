@@ -4,7 +4,7 @@ import EvidenceAlignedSimSpec, { type EvidenceAlignedSimSpecConfig } from './Evi
 const config: EvidenceAlignedSimSpecConfig = {
   family: 'Sequence Shift',
   version: 'Spec v3.0 · August 2026',
-  accent: '#a78bfa',
+  accent: '#d4ea04',
   purpose: 'Practice switching between two cued classification rules while response keys remain stable.',
   task: 'Each stimulus contains a letter and a number. A cue selects the Letter or Number rule. The left key means vowel or odd; the right key means consonant or even. Balanced scored trials repeat or switch the active rule.',
   observedMeasures: [

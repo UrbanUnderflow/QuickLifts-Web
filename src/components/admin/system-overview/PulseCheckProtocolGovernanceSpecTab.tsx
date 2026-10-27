@@ -142,7 +142,7 @@ const ProtocolGovernanceOverviewDoc: React.FC = () => {
           />
           <InfoCard
             title="Why Athlete Responsiveness Matters"
-            accent="purple"
+            accent="clay"
             body="Two athletes can both be Yellow, but one may respond well to acute breathing while another responds better to anchor-word or imagery priming. Governance should anticipate that the system will learn those differences over time."
           />
         </CardGrid>
@@ -184,7 +184,7 @@ const PROTOCOL_SYSTEM_PAGES: ArtifactPageEntry[] = [
     label: 'Governance Overview',
     subtitle: 'Ontology, lifecycle, evidence model, and review rules for protocols.',
     icon: FileText,
-    accent: '#c084fc',
+    accent: '#d4ea04',
     render: () => <ProtocolGovernanceOverviewDoc />,
   },
   {

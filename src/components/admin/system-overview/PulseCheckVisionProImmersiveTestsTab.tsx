@@ -965,7 +965,7 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
 
                 <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
-                    <ClipboardList className="h-4 w-4 text-purple-400" />
+                    <ClipboardList className="h-4 w-4 text-clay-lime" />
                     Lane Sequence
                   </h4>
                   <div className="mt-4">
@@ -1055,9 +1055,9 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5">
+                <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/5 p-5">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
-                    <Trophy className="h-4 w-4 text-purple-400" />
+                    <Trophy className="h-4 w-4 text-clay-lime" />
                     V1 Scope Contract
                   </h4>
                   <div className="mt-4">
@@ -1190,9 +1190,9 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5">
+                  <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/5 p-5">
                     <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
-                      <Trophy className="h-4 w-4 text-purple-400" />
+                      <Trophy className="h-4 w-4 text-clay-lime" />
                       Feature Tiering
                     </h4>
                     <div className="mt-4">
@@ -1251,9 +1251,9 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5">
+                <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/5 p-5">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
-                    <ClipboardList className="h-4 w-4 text-purple-400" />
+                    <ClipboardList className="h-4 w-4 text-clay-lime" />
                     Milestone 1 File Manifest
                   </h4>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-300">
@@ -1266,7 +1266,7 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
 
                 <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
-                    <ClipboardList className="h-4 w-4 text-purple-400" />
+                    <ClipboardList className="h-4 w-4 text-clay-lime" />
                     RealityKit Build Sequence
                   </h4>
                   <div className="mt-4">
@@ -1314,7 +1314,7 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                   />
                   <InfoCard
                     title="Definition Of Done"
-                    accent="purple"
+                    accent="clay"
                     body="The Vision build is up to spec when the athlete experiences authored football-space interactions inside RealityKit, while telemetry, validity, and operator flow still map cleanly back to the locked event script and pilot protocol."
                   />
                 </CardGrid>
@@ -1410,7 +1410,7 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
 
                 <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
-                    <ClipboardList className="h-4 w-4 text-purple-400" />
+                    <ClipboardList className="h-4 w-4 text-clay-lime" />
                     Player Task Loop
                   </h4>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-300">
@@ -1443,9 +1443,9 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5">
+                <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/5 p-5">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
-                    <Wrench className="h-4 w-4 text-purple-400" />
+                    <Wrench className="h-4 w-4 text-clay-lime" />
                     Design-First Build Order
                   </h4>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-300">
@@ -1481,7 +1481,7 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                 <CardGrid columns="xl:grid-cols-2">
                   <InfoCard
                     title="Milestone Scope"
-                    accent="purple"
+                    accent="clay"
                     body="One complete playable Crowd Tunnel loop. The athlete starts the sim, understands the task, plays a real rep, finishes, and receives a score. Nothing less counts as done."
                   />
                   <InfoCard
@@ -1536,9 +1536,9 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5">
+                <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/5 p-5">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
-                    <Wrench className="h-4 w-4 text-purple-400" />
+                    <Wrench className="h-4 w-4 text-clay-lime" />
                     Build Order
                   </h4>
                   <div className="mt-4">
@@ -1548,7 +1548,7 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
 
                 <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
-                    <ClipboardList className="h-4 w-4 text-purple-400" />
+                    <ClipboardList className="h-4 w-4 text-clay-lime" />
                     File Manifest
                   </h4>
                   <div className="mt-4">
@@ -1578,27 +1578,27 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
         <CardGrid columns="xl:grid-cols-2">
           <InfoCard
             title="Protocol Enforcement"
-            accent="purple"
+            accent="clay"
             body="The session model is much closer to the spec now. The next gap is enforcing pilot rules at queue/start time: baseline recency, eligibility, escalation hold posture, cohort enrollment, and comfort screening."
           />
           <InfoCard
             title="visionOS Runtime Build"
-            accent="purple"
+            accent="clay"
             body="The signed-out kiosk flow and football runtime now compile inside the dedicated PulseCheckVision target. The next implementation layer is building the spec-faithful RealityKit environment and measured family interactions inside that runtime."
           />
           <InfoCard
             title="Measurement And Reporting"
-            accent="purple"
+            accent="clay"
             body="Transfer Gap, Immersive Baseline designation, and session-level athlete/coach report summaries are now in the contract. Dedicated rendering surfaces and exports still need to catch up."
           />
           <InfoCard
             title="Operator-Safe Session Controls"
-            accent="purple"
+            accent="clay"
             body="Pause, abort, comfort handling, session outcome classification, and post-session reconciliation should be represented in product state so the ops runbook is enforceable instead of purely manual."
           />
           <InfoCard
             title="visionOS Verification Lane"
-            accent="purple"
+            accent="clay"
             body="The dedicated visionOS lane now exists and runs against the Apple Vision Pro simulator. The next hardening move is expanding beyond smoke coverage into richer runtime, operator, and regression checks."
           />
         </CardGrid>

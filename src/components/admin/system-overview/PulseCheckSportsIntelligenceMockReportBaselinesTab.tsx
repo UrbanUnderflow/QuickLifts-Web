@@ -394,7 +394,7 @@ const SportMockDetails = ({ sport }: { sport: SportMockReportBaseline }) => (
           </p>
           <p className="mt-1 text-xs text-zinc-500">{sport.roles}</p>
         </div>
-        <span className="rounded-full border border-purple-500/25 bg-purple-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-purple-200">
+        <span className="rounded-full border border-clay-lime/25 bg-clay-lime/10 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-clay-ink">
           Report outline
         </span>
       </div>
@@ -430,7 +430,7 @@ const SportMockDetails = ({ sport }: { sport: SportMockReportBaseline }) => (
       <CardGrid columns="lg:grid-cols-3">
         <InfoCard
           title="Core Dimension Map"
-          accent="purple"
+          accent="clay"
           body={<BulletList items={dimensionMapFromPolicy(sport.id) || CORE_DIMENSION_MAP[sport.id] || CORE_DIMENSION_MAP.other} />}
         />
         <InfoCard

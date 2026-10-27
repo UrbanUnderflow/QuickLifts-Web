@@ -42,7 +42,7 @@ const SPEC_CARDS: DetailCard[] = [
     title: "Policy packs",
     body:
       "Ambiguous business language is replaced by versioned mission, domain, benchmark, risk, quality, and calibration policies that are resolved and snapshotted at evaluation time.",
-    accent: "text-violet-300",
+    accent: "text-clay-lime",
     icon: <ShieldCheck className="h-4 w-4" />,
   },
   {
@@ -56,7 +56,7 @@ const SPEC_CARDS: DetailCard[] = [
     title: "Outcome graph",
     body:
       "Parent-child outcomes, dependency edges, and deterministic rollup rules let the planner map enabling work and invalidations back to the terminal outcomes they support or de-risk.",
-    accent: "text-fuchsia-300",
+    accent: "text-clay-sage",
     icon: <GitBranch className="h-4 w-4" />,
   },
   {
@@ -126,7 +126,7 @@ export function AgentOutcomeRubricSpecTab() {
           <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-cyan-200">
             Outcome-first runtime
           </span>
-          <span className="rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-1 text-violet-200">
+          <span className="rounded-full border border-clay-lime/20 bg-clay-lime/10 px-3 py-1 text-clay-ink">
             Execute gate required
           </span>
         </div>
@@ -196,7 +196,7 @@ export function AgentOutcomeRubricSpecTab() {
         </div>
         <div className="rounded-2xl border border-zinc-800 bg-black/20 p-5 space-y-3">
           <div className="flex items-center gap-2">
-            <Layers3 className="h-4 w-4 text-violet-300" />
+            <Layers3 className="h-4 w-4 text-clay-lime" />
             <h3 className="text-lg font-semibold text-white">
               Reporting expectation
             </h3>

@@ -292,13 +292,13 @@ const buildGoldenFixtureReport = (
   };
 };
 
-const Chip: React.FC<{ children: React.ReactNode; tone?: 'zinc' | 'green' | 'amber' | 'red' | 'purple' }> = ({ children, tone = 'zinc' }) => {
+const Chip: React.FC<{ children: React.ReactNode; tone?: 'zinc' | 'green' | 'amber' | 'red' | 'clay' }> = ({ children, tone = 'zinc' }) => {
   const classes = {
     zinc: 'border-zinc-700 bg-zinc-900 text-zinc-300',
     green: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
     amber: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
     red: 'border-red-500/30 bg-red-500/10 text-red-200',
-    purple: 'border-purple-500/30 bg-purple-500/10 text-purple-200',
+    clay: 'border-clay-lime/30 bg-clay-lime/10 text-clay-ink',
   };
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${classes[tone]}`}>
@@ -319,7 +319,7 @@ const TextareaField: React.FC<{
       value={value || ''}
       rows={rows}
       onChange={(event) => onChange(event.target.value)}
-      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-purple-400/60 focus:ring-2 focus:ring-purple-400/15"
+      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-clay-lime/60 focus:ring-2 focus:ring-clay-lime/15"
     />
   </label>
 );
@@ -335,7 +335,7 @@ const ArrayTextarea: React.FC<{
       value={(values || []).join('\n')}
       rows={4}
       onChange={(event) => onChange(event.target.value.split('\n').map((line) => line.trim()).filter(Boolean))}
-      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 outline-none transition focus:border-purple-400/60 focus:ring-2 focus:ring-purple-400/15"
+      className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 outline-none transition focus:border-clay-lime/60 focus:ring-2 focus:ring-clay-lime/15"
     />
   </label>
 );
@@ -637,7 +637,7 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
         <div className="mx-auto max-w-[1800px] px-5 py-8">
           <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="flex items-center gap-3 text-sm text-purple-200">
+              <div className="flex items-center gap-3 text-sm text-clay-ink">
                 <ClipboardCheck className="h-4 w-4" />
                 <span className="uppercase tracking-[0.2em]">Sports Intelligence</span>
               </div>
@@ -691,12 +691,12 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                     value={teamFilter}
                     onChange={(event) => setTeamFilter(event.target.value)}
                     placeholder="Optional teamId filter"
-                    className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-purple-400/60"
+                    className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-clay-lime/60"
                   />
                   <button
                     type="button"
                     onClick={loadReports}
-                    className="rounded-xl bg-purple-500 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-400"
+                    className="rounded-xl bg-clay-lime px-3 py-2 text-sm font-semibold text-clay-on-lime hover:bg-clay-lime"
                   >
                     Load
                   </button>
@@ -717,14 +717,14 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                             key={`${report.teamId}-${report.id}`}
                             type="button"
                             onClick={() => selectReport(report)}
-                            className={`w-full rounded-2xl border p-4 text-left transition ${selectedId === report.id ? 'border-purple-400/60 bg-purple-500/10' : 'border-zinc-800 bg-zinc-950 hover:bg-zinc-900'}`}
+                            className={`w-full rounded-2xl border p-4 text-left transition ${selectedId === report.id ? 'border-clay-lime/60 bg-clay-lime/10' : 'border-zinc-800 bg-zinc-950 hover:bg-zinc-900'}`}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="font-semibold text-white">{report.coachSurface?.meta?.sportName || report.sportId}</p>
                                 <p className="mt-1 text-xs text-zinc-500">{report.coachSurface?.meta?.weekLabel || report.weekStart}</p>
                               </div>
-                              <Chip tone={report.reviewStatus === 'published' ? 'green' : 'purple'}>{report.reviewStatus}</Chip>
+                              <Chip tone={report.reviewStatus === 'published' ? 'green' : 'clay'}>{report.reviewStatus}</Chip>
                             </div>
                             <p className="mt-3 text-xs text-zinc-500">{formatTimestamp(report.updatedAt)}</p>
                           </button>
@@ -762,7 +762,7 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
 
               <section className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-5">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-purple-300" />
+                  <Sparkles className="h-4 w-4 text-clay-lime" />
                   <h2 className="font-semibold">Seed from fixture</h2>
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-zinc-500">
@@ -773,7 +773,7 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                   <select
                     value={fixtureScenario}
                     onChange={(event) => setFixtureScenario(event.target.value as SportsIntelligenceFixtureScenario)}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-purple-400/60"
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-clay-lime/60"
                   >
                     {SPORTS_INTELLIGENCE_FIXTURE_SCENARIOS.map((scenario) => (
                       <option key={scenario} value={scenario}>
@@ -789,7 +789,7 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                       type="button"
                       disabled={saving}
                       onClick={() => seedFromFixture(sport.id)}
-                      className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-left text-sm text-zinc-200 hover:border-purple-400/50 hover:bg-purple-500/10 disabled:opacity-50"
+                      className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-left text-sm text-zinc-200 hover:border-clay-lime/50 hover:bg-clay-lime/10 disabled:opacity-50"
                     >
                       <span className="mr-1">{sport.emoji}</span>
                       {sport.name}
@@ -811,7 +811,7 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                       <div>
                         <h2 className="text-xl font-semibold">{reportTitle(draft)}</h2>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <Chip tone="purple">{draft.reviewStatus}</Chip>
+                          <Chip tone="clay">{draft.reviewStatus}</Chip>
                           <Chip>{selectedSport.name}</Chip>
                           <Chip>{draft.coachSurface.adherence.confidenceLabel}</Chip>
                         </div>
@@ -869,7 +869,7 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                             <p className="text-sm font-semibold text-white">Coach copy editor</p>
                             <p className="mt-1 text-xs text-zinc-500">Edits update the left preview live.</p>
                           </div>
-                          <ShieldCheck className="h-5 w-5 text-purple-300" />
+                          <ShieldCheck className="h-5 w-5 text-clay-lime" />
                         </div>
                         <div className="space-y-4">
                           <TextareaField
@@ -943,7 +943,7 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                                     },
                                   };
                                 })}
-                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-purple-400/60"
+                                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-clay-lime/60"
                               />
                             </label>
                           ))}
@@ -958,7 +958,7 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                                   confidenceLabel: event.target.value,
                                 },
                               }))}
-                              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-purple-400/60"
+                              className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-clay-lime/60"
                             >
                               {confidenceOptions.map((option) => <option key={option}>{option}</option>)}
                             </select>
@@ -1030,9 +1030,9 @@ const SportsIntelligenceReportsAdminPage: React.FC = () => {
                         </div>
                       </section>
 
-                      <section className="rounded-3xl border border-purple-500/20 bg-purple-950/10 p-5">
+                      <section className="rounded-3xl border border-clay-lime/20 bg-clay-raised/10 p-5">
                         <div className="mb-5 flex items-center gap-2">
-                          <ShieldCheck className="h-4 w-4 text-purple-200" />
+                          <ShieldCheck className="h-4 w-4 text-clay-ink" />
                           <h3 className="font-semibold text-white">Sports Intelligence Layer QA</h3>
                         </div>
                         <div className="grid gap-3 text-sm sm:grid-cols-2">

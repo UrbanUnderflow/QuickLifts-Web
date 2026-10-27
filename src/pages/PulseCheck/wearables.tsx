@@ -152,7 +152,7 @@ const deviceGuides: DeviceGuide[] = [
     name: 'Polar 360',
     shortName: 'Polar 360',
     image: '/pulsecheck-youth/wearables/polar-360.png',
-    accent: '#a78bfa',
+    accent: '#d4ea04',
     supportedOn: ['ios', 'android'],
     signal: 'Live heart rate, recovery context',
     officialHelp: {

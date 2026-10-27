@@ -35,7 +35,7 @@ const ASSESSMENTS = [
   {
     title: 'Athletic Trainer — Performance Neuroscience Readiness',
     body: '9 scenarios. Clinical register kept. Reframed from "are you a competent AT" to extending clinical expertise into performance neuroscience + mental performance.',
-    accent: 'purple' as const,
+    accent: 'clay' as const,
   },
 ];
 
@@ -118,7 +118,7 @@ function CourseCard({ course, tier }: { course: Course; tier: string }) {
           <p className="mt-1 text-sm font-semibold text-white">{course.name}</p>
           <p className="mt-1 text-xs text-zinc-500">{course.format}</p>
         </div>
-        <span className="rounded-lg bg-purple-500/15 px-2.5 py-1 text-sm font-semibold text-purple-300">{course.price}</span>
+        <span className="rounded-lg bg-clay-lime/15 px-2.5 py-1 text-sm font-semibold text-clay-lime">{course.price}</span>
       </div>
       <div className="mt-3">
         <BulletList items={course.modules} />

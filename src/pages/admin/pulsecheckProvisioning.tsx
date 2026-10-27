@@ -105,7 +105,6 @@ import {
 const defaultOrganizationForm: CreatePulseCheckOrganizationInput = {
   productBrand: undefined,
   appBranding: { pulsecheck: 'pulsecheck', athleticmind: 'athleticmind' },
-  appExperience: { ios: 'standard' },
   displayName: '',
   legalName: '',
   organizationType: 'athletic-department',
@@ -441,8 +440,8 @@ const getPilotStatusDisplay = (status?: PulseCheckPilot['status']): StatusDispla
     default:
       return {
         label: 'Draft',
-        tone: 'border-violet-400/40 bg-violet-500/15 text-violet-50',
-        dotTone: 'bg-violet-300',
+        tone: 'border-clay-lime/40 bg-clay-lime/15 text-clay-ink',
+        dotTone: 'bg-clay-lime',
       };
   }
 };
@@ -488,8 +487,8 @@ const getCohortStatusDisplay = (status?: PulseCheckPilotCohortStatus): StatusDis
     default:
       return {
         label: 'Draft',
-        tone: 'border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-50',
-        dotTone: 'bg-fuchsia-300',
+        tone: 'border-clay-sage/40 bg-clay-sage/15 text-clay-ink',
+        dotTone: 'bg-clay-sage',
       };
   }
 };
@@ -3471,8 +3470,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
             --green-d: rgba(74, 222, 128, 0.08);
             --blue: #3c647d;
             --blue-d: rgba(96, 165, 250, 0.08);
-            --purple: #70558c;
-            --purple-d: rgba(167, 139, 250, 0.08);
+            --clay: #70558c;
+            --clay-d: rgba(212, 234, 4, 0.08);
             --mb: rgba(34, 48, 46, 0.07);
             --glass: rgba(34, 48, 46, 0.028);
             --glass2: rgba(34, 48, 46, 0.045);
@@ -3555,7 +3554,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-si-t { background: var(--teal-d); border: 0.5px solid var(--teal-b); color: var(--teal); }
           .pcp-si-b { background: var(--blue-d); border: 0.5px solid rgba(96, 165, 250, 0.2); color: var(--blue); }
           .pcp-si-a { background: var(--amber-d); border: 0.5px solid rgba(245, 166, 35, 0.2); color: var(--amber); }
-          .pcp-si-p { background: var(--purple-d); border: 0.5px solid rgba(167, 139, 250, 0.2); color: var(--purple); }
+          .pcp-si-p { background: var(--clay-d); border: 0.5px solid rgba(212, 234, 4, 0.2); color: var(--clay); }
           .pcp-stat-n { font-family: var(--fm); font-size: 20px; line-height: 1; }
           .pcp-stat-l { font-size: 13px; color: var(--t3); margin-top: 2px; }
           .pcp-toolbar { padding: 13px 36px; display: grid; grid-template-columns: minmax(260px, 420px) minmax(0, 1fr) max-content; align-items: center; gap: 12px; border-bottom: 0.5px solid var(--mb); position: sticky; top: 56px; z-index: 50; background: #f7f8f5; backdrop-filter: blur(20px); }
@@ -3774,12 +3773,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .pcp-t-desc { font-size: 13px; color: var(--t2); line-height: 1.5; }
           .pcp-route-mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
           .pcp-route-mode { border-radius: 10px; border: 0.5px solid var(--mb); background: var(--glass); color: var(--t2); padding: 12px 13px; text-align: left; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
-          .pcp-route-mode.active { border-color: rgba(167, 139, 250, 0.35); background: rgba(167, 139, 250, 0.12); color: var(--t1); }
+          .pcp-route-mode.active { border-color: rgba(212, 234, 4, 0.35); background: rgba(212, 234, 4, 0.12); color: var(--t1); }
           .pcp-route-mode-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
           .pcp-route-mode-copy { font-size: 13px; color: var(--t2); line-height: 1.5; }
           .pcp-clinician-card { border-radius: 10px; border: 0.5px solid var(--mb); background: rgba(34, 48, 46, 0.02); padding: 12px 13px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; }
           .pcp-chip-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 18px; }
-          .pcp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 9999px; background: rgba(167, 139, 250, 0.12); border: 0.5px solid rgba(167, 139, 250, 0.22); color: #70558c; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+          .pcp-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 9999px; background: rgba(212, 234, 4, 0.12); border: 0.5px solid rgba(212, 234, 4, 0.22); color: #70558c; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
           .pcp-chip button { background: transparent; border: none; color: inherit; cursor: pointer; display: inline-flex; align-items: center; }
           .pcp-chip-input { min-width: 180px; flex: 1; background: transparent; border: none; outline: none; color: var(--t1); font-size: 13px; }
           .pcp-modal-ft { padding: 14px 24px; border-top: 0.5px solid var(--mb); display: flex; align-items: center; justify-content: space-between; position: sticky; bottom: 0; background: #fff; z-index: 10; }
@@ -5167,9 +5166,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                             justifyContent: 'center',
                                                             gap: 8,
                                                             padding: '13px 14px',
-                                                            background: active ? 'rgba(167,139,250,0.14)' : 'transparent',
+                                                            background: active ? 'rgba(212,234,4,0.14)' : 'transparent',
                                                             border: 'none',
-                                                            borderBottom: active ? '2px solid #A78BFA' : '2px solid transparent',
+                                                            borderBottom: active ? '2px solid #D4EA04' : '2px solid transparent',
                                                             color: active ? '#22302e' : '#65716c',
                                                             fontSize: 13,
                                                             fontWeight: active ? 700 : 500,
@@ -5415,9 +5414,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                           justifyContent: 'center',
                                                           gap: 8,
                                                           padding: '13px 12px',
-                                                          background: active ? 'rgba(167,139,250,0.14)' : 'transparent',
+                                                          background: active ? 'rgba(212,234,4,0.14)' : 'transparent',
                                                           border: 'none',
-                                                          borderBottom: active ? '2px solid #A78BFA' : '2px solid transparent',
+                                                          borderBottom: active ? '2px solid #D4EA04' : '2px solid transparent',
                                                           color: active ? '#22302e' : '#65716c',
                                                           fontSize: 13,
                                                           fontWeight: active ? 700 : 500,
@@ -5431,11 +5430,11 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                                           fontWeight: 600,
                                                           padding: '1px 7px',
                                                           borderRadius: 999,
-                                                          background: active ? 'rgba(167,139,250,0.3)' : 'rgba(34,48,46,0.08)',
+                                                          background: active ? 'rgba(212,234,4,0.3)' : 'rgba(34,48,46,0.08)',
                                                           color: active ? '#22302e' : '#65716c',
                                                         }}>{tabCount}</span>
                                                         {tabDirty ? (
-                                                          <span style={{ width: 6, height: 6, borderRadius: 999, background: '#A78BFA', display: 'inline-block' }} />
+                                                          <span style={{ width: 6, height: 6, borderRadius: 999, background: '#D4EA04', display: 'inline-block' }} />
                                                         ) : null}
                                                       </button>
                                                     );

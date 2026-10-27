@@ -41,7 +41,7 @@ const COACH_PHASES: CoachPhase[] = [
     number: '1',
     label: 'Initial Setup',
     icon: BookOpen,
-    accent: '#a78bfa',
+    accent: '#d4ea04',
     description: 'Coach configures notifications, visibility scope, and operating preferences.',
     detail:
       'Day-1 setup should establish dashboard defaults, team or unit scope, and notification preferences. This is where the coach learns the three-panel model, understands that support and safety visibility are bounded by permissions, and knows that the notification center is the follow-up queue for Nora auto-assignments plus post-session updates.',
@@ -81,7 +81,7 @@ const COACH_PHASES: CoachPhase[] = [
     number: '5',
     label: 'Support Coordination',
     icon: Users,
-    accent: '#c084fc',
+    accent: '#d4ea04',
     description: 'Coach responds to recurring instability without collapsing it into clinical alerting.',
     detail:
       'Persistent-red and protocol-demand patterns should surface the right athletes for human follow-up and staff coordination while staying visibly distinct from escalation-lane safety events.',
@@ -267,9 +267,9 @@ const CoachJourneyTab: React.FC = () => {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.07] p-5">
+      <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/[0.07] p-5">
         <div className="flex items-start gap-3">
-          <ClipboardCheck className="mt-0.5 h-5 w-5 shrink-0 text-purple-400" />
+          <ClipboardCheck className="mt-0.5 h-5 w-5 shrink-0 text-clay-lime" />
           <div>
             <p className="mb-1 text-sm font-semibold text-white">Day 1 Coach Checklist</p>
             <div className="space-y-2">
@@ -334,7 +334,7 @@ const CoachJourneyTab: React.FC = () => {
         </div>
         <div className="rounded-xl border border-zinc-800 bg-[#090f1c] p-4">
           <div className="flex items-center gap-2">
-            <LayoutPanelTop className="h-4 w-4 text-purple-400" />
+            <LayoutPanelTop className="h-4 w-4 text-clay-lime" />
             <p className="text-sm font-semibold text-white">How It Connects to Dashboard IA</p>
           </div>
           <p className="mt-2 text-xs leading-relaxed text-zinc-500">

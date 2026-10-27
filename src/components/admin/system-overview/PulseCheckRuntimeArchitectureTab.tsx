@@ -273,7 +273,7 @@ const RUNTIME_STACK_PAGES: ArtifactPageEntry[] = [
     label: 'Runtime Overview',
     subtitle: 'Top-level map for perception, routing, execution, and escalation.',
     icon: FileText,
-    accent: '#c084fc',
+    accent: '#d4ea04',
     render: () => <RuntimeArchitectureOverviewDoc />,
   },
   {
@@ -297,7 +297,7 @@ const RUNTIME_STACK_PAGES: ArtifactPageEntry[] = [
     label: 'Daily Task + Training Plan Alignment',
     subtitle: 'Surface-coherence contract for DailyTask, TrainingPlan, lifecycle, and event truth.',
     icon: Layers,
-    accent: '#8b5cf6',
+    accent: '#d4ea04',
     render: () => <PulseCheckDailyTaskTrainingPlanAlignmentSpecTab />,
   },
   {

@@ -1160,9 +1160,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <span
                     className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition ${
                       isActive
-                        ? 'bg-[#A78BFA] text-black'
+                        ? 'bg-clay-lime text-clay-on-lime'
                         : isComplete
-                          ? 'bg-[#A78BFA]/30 text-[#A78BFA]'
+                          ? 'bg-clay-lime/30 text-clay-lime'
                           : 'border border-zinc-700 text-zinc-500'
                     }`}
                   >
@@ -1177,7 +1177,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   </span>
                 </div>
                 {idx < steps.length - 1 ? (
-                  <span className={`h-px w-6 ${step.index < staffStep ? 'bg-[#A78BFA]/50' : 'bg-zinc-800'}`} />
+                  <span className={`h-px w-6 ${step.index < staffStep ? 'bg-clay-lime/50' : 'bg-zinc-800'}`} />
                 ) : null}
               </React.Fragment>
             );
@@ -1290,7 +1290,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     type="button"
                     onClick={handleRedeemSignedInUser}
                     disabled={submitting}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-clay-lime px-4 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                     {submitting ? 'Joining...' : 'Accept invite'}
@@ -1332,7 +1332,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   onClick={() => setMode('sign-in')}
                   className={`-mb-px border-b-2 pb-3 text-sm font-semibold transition ${
                     mode === 'sign-in'
-                      ? 'border-[#A78BFA] text-white'
+                      ? 'border-clay-lime text-white'
                       : 'border-transparent text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
@@ -1344,7 +1344,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   onClick={() => setMode('create-account')}
                   className={`-mb-px border-b-2 pb-3 text-sm font-semibold transition ${
                     mode === 'create-account'
-                      ? 'border-[#A78BFA] text-white'
+                      ? 'border-clay-lime text-white'
                       : 'border-transparent text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
@@ -1406,7 +1406,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-clay-lime px-4 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                     {submitting ? 'Creating Account...' : 'Create account and continue'}
@@ -1438,7 +1438,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-clay-lime px-4 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                     {submitting ? 'Signing In...' : 'Sign in and continue'}
@@ -1529,7 +1529,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <div className="grid grid-cols-1 gap-4">
                     <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
                       <div className="flex items-center gap-2">
-                        <MailPlus className="h-4 w-4 text-[#a78bfa]" />
+                        <MailPlus className="h-4 w-4 text-clay-lime" />
                         <p className="text-sm font-semibold text-white">{isGeneralInvite ? 'Link Type' : 'Target Email'}</p>
                       </div>
                       <p className="mt-3 text-sm text-zinc-300">
@@ -1545,7 +1545,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   ) : null}
 
                   {invite.cohortId ? (
-                    <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] p-4 text-sm leading-7 text-zinc-200">
+                    <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/[0.06] p-4 text-sm leading-7 text-zinc-200">
                       This athlete invite is linked to{' '}
                       <span className="font-medium text-white">{invite.cohortName || 'a cohort'}</span>
                       {invite.pilotName ? (
@@ -1558,7 +1558,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   ) : null}
 
                   {isGeneralInvite ? (
-                    <div className="rounded-2xl border border-[#7C3AED]/20 bg-[#7C3AED]/[0.06] p-4 text-sm leading-7 text-[#a78bfa]">
+                    <div className="rounded-2xl border border-clay-lime/20 bg-clay-lime/[0.06] p-4 text-sm leading-7 text-clay-lime">
                       {isStaffInvite
                         ? 'This is a reusable team access link. Each invited team member who opens it can join from the same QR code or shared URL.'
                         : 'This is a reusable pilot access link. Each athlete who opens it can join this pilot from the same QR code or shared URL.'}
@@ -1571,7 +1571,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                         teamPlanBypassesPaywall
                           ? 'border-green-500/20 bg-green-500/[0.08] text-green-100'
                           : requiresAthleteCheckout
-                            ? 'border-[#7C3AED]/25 bg-[#7C3AED]/[0.08] text-violet-100'
+                            ? 'border-clay-lime/25 bg-clay-lime/[0.08] text-clay-ink'
                             : 'border-amber-500/20 bg-amber-500/[0.08] text-amber-100'
                       }`}
                     >
@@ -1628,7 +1628,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
               <button
                 type="button"
                 onClick={() => updateWebOnboardingPreference(false)}
-                className="mb-5 inline-flex items-center gap-2 rounded-2xl border border-[#7C3AED]/30 bg-[#7C3AED]/10 px-4 py-3 text-sm font-semibold text-[#a78bfa] transition hover:bg-[#7C3AED]/15"
+                className="mb-5 inline-flex items-center gap-2 rounded-2xl border border-clay-lime/30 bg-clay-lime/10 px-4 py-3 text-sm font-semibold text-clay-lime transition hover:bg-clay-lime/15"
               >
                 <Smartphone className="h-4 w-4" />
                 Prefer the mobile app instead
@@ -1724,7 +1724,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     </p>
                   ) : null}
                   {requiresTargetEmailVerification && verificationEmailSent ? (
-                    <div className="mt-4 rounded-2xl border border-violet-300/20 bg-violet-300/[0.06] p-4 text-sm leading-7 text-violet-100">
+                    <div className="mt-4 rounded-2xl border border-clay-lime/20 bg-clay-lime/[0.06] p-4 text-sm leading-7 text-clay-ink">
                       Open the verification email sent to <span className="font-medium">{normalizedAuthEmail}</span>.
                       Come back here after you verify it, then use the button below.
                     </div>
@@ -1753,7 +1753,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                       type="button"
                       onClick={handleRedeemSignedInUser}
                       disabled={submitting || startingCheckout}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-clay-lime px-4 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting || startingCheckout ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -1807,7 +1807,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     onClick={() => setMode('create-account')}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       mode === 'create-account'
-                        ? 'border-[#7C3AED] bg-[#7C3AED]/[0.12] text-white'
+                        ? 'border-clay-lime bg-clay-lime/[0.12] text-white'
                         : 'border-zinc-800 bg-black/20 text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
@@ -1824,7 +1824,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     onClick={() => setMode('sign-in')}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       mode === 'sign-in'
-                        ? 'border-[#7C3AED] bg-[#7C3AED]/[0.12] text-white'
+                        ? 'border-clay-lime bg-clay-lime/[0.12] text-white'
                         : 'border-zinc-800 bg-black/20 text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
@@ -1938,7 +1938,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     <button
                       type="submit"
                       disabled={submitting || startingCheckout}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-clay-lime px-4 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                       {submitting || startingCheckout
@@ -1978,7 +1978,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     <button
                       type="submit"
                       disabled={submitting || startingCheckout}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-clay-lime px-4 py-3 text-sm font-semibold text-clay-on-lime transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                       {submitting || startingCheckout

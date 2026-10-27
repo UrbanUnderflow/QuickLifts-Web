@@ -101,7 +101,7 @@ const PulseCheckEscalationIntegrationSpecTab: React.FC = () => {
       <SectionBlock icon={Link2} title="Prompt Augmentation Pattern">
         <InfoCard
           title="Recommended Prompt Block"
-          accent="purple"
+          accent="clay"
           body='Current athlete state: overallReadiness, confidence, four canonical state dimensions, performanceFlags, contextTags, persistentRed, and sourcesUsed. Use this only as context. Hard safety language and admin escalation conditions remain authoritative.'
         />
       </SectionBlock>

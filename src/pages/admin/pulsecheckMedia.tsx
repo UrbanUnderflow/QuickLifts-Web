@@ -222,7 +222,7 @@ const PulseCheckMediaPage: React.FC = () => {
             </Link>
             <div className="flex flex-col items-start justify-between gap-7 lg:flex-row lg:items-end">
               <div>
-                <p className="font-mono text-xs font-bold uppercase tracking-[0.28em] text-[#A875FF]">
+                <p className="font-mono text-xs font-bold uppercase tracking-[0.28em] text-clay-lime">
                   PULSECHECK · MEDIA LIBRARY
                 </p>
                 <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">
@@ -293,7 +293,7 @@ const PulseCheckMediaPage: React.FC = () => {
                       onClick={() => setActive(item)}
                       className="group text-left"
                     >
-                      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#161618] shadow-xl transition-transform duration-300 group-hover:-translate-y-1 group-hover:border-[#A875FF]/50">
+                      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#161618] shadow-xl transition-transform duration-300 group-hover:-translate-y-1 group-hover:border-clay-lime/50">
                         <img
                           src={item.src}
                           alt={item.title}
@@ -358,7 +358,7 @@ const PulseCheckMediaPage: React.FC = () => {
                 <a
                   href={fullResolutionPath(active)}
                   download
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#A875FF] px-5 py-2.5 text-sm font-bold text-white transition-transform hover:scale-105"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-clay-lime px-5 py-2.5 text-sm font-bold text-clay-on-lime transition-transform hover:scale-105"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Download size={15} /> Download full-res

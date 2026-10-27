@@ -138,7 +138,7 @@ const MacraSystemOverviewTab: React.FC = () => {
         <div className="flex flex-wrap gap-2">
           <InlineTag label="6 screenshots" color="green" />
           <InlineTag label="1242 x 2688" color="blue" />
-          <InlineTag label="6.5-inch display" color="purple" />
+          <InlineTag label="6.5-inch display" color="clay" />
           <InlineTag label="Dummy data" color="amber" />
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
@@ -195,7 +195,7 @@ const MacraSystemOverviewTab: React.FC = () => {
         <CardGrid columns="xl:grid-cols-2">
           <InfoCard
             title="Client Request Shape"
-            accent="purple"
+            accent="clay"
             body="Macra sends OpenAI-style chat completion payloads with a Firebase ID token and a feature label in the openai-organization header. The client never owns provider credentials."
           />
           <InfoCard
@@ -232,7 +232,7 @@ const MacraSystemOverviewTab: React.FC = () => {
           />
           <InfoCard
             title="Pinned Library"
-            accent="purple"
+            accent="clay"
             body="Pinned label scans and pinned food snaps are separate quick-add summaries, so repeat choices do not mutate the original scan or meal record."
           />
           <InfoCard
@@ -272,7 +272,7 @@ const MacraSystemOverviewTab: React.FC = () => {
           />
           <InfoCard
             title="Beta Path"
-            accent="purple"
+            accent="clay"
             body="Local beta access and Macra-owned root markers can grant access during controlled beta rollout."
           />
         </CardGrid>
@@ -292,7 +292,7 @@ const MacraSystemOverviewTab: React.FC = () => {
           />
           <InfoCard
             title="Bridge Safety"
-            accent="purple"
+            accent="clay"
             body="Feature limits in the bridge should be kept aligned with Macra client labels so one route cannot silently consume another feature's budget."
           />
           <InfoCard

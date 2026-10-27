@@ -505,7 +505,7 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
         </CardGrid>
         <InfoCard
           title="Reference Payload (current wire shape)"
-          accent="purple"
+          accent="clay"
           body={
             <div className="space-y-3">
               <p>
@@ -570,7 +570,7 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-3">
           <InfoCard
             title="AuntEdna Decides When, PulseCheck Decides What"
-            accent="purple"
+            accent="clay"
             body="Every state transition is a clinician-owned signal from AuntEdna. What each state means inside the product — which curriculum runs, what is suppressed, how the re-entry ramp is shaped — is PulseCheck product logic. AuntEdna never prescribes training content, and PulseCheck never overrides a clinical state."
           />
           <InfoCard
@@ -603,7 +603,7 @@ const AuntEdnaEscalationDataExchangeContractTab: React.FC = () => {
         </CardGrid>
         <InfoCard
           title="Current Implementation Hooks"
-          accent="purple"
+          accent="clay"
           body="PulseCheck already operates the in-product side of this flow: a watch-list operational state (watchListActive with applied/cleared timestamps, reason codes, and review-due dates), per-athlete restriction flags (suppressAssignments, suppressSurveys, suppressNudges, excludeFromAdherence, manualHold), and a Tier 3 crisis wall (crisisWallActive). The AuntEdna-driven signals in this section attach clinician authority to those existing primitives."
         />
       </SectionBlock>

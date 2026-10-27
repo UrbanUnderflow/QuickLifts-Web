@@ -9,7 +9,7 @@ type CoverageArea = {
   scope: string;
   evidence: string[];
   note: string;
-  tone: 'blue' | 'green' | 'amber' | 'purple' | 'red';
+  tone: 'blue' | 'green' | 'amber' | 'clay' | 'red';
 };
 
 const COVERAGE_AREAS: CoverageArea[] = [
@@ -38,7 +38,7 @@ const COVERAGE_AREAS: CoverageArea[] = [
     scope: 'Profile-health stories, shared-link surfaces, and the native app paths that need deterministic device validation.',
     evidence: ['profile-health docs', 'share-preview strategy', 'surface-level regression intent'],
     note: 'The handbook coverage is solid, but the native test layer is still narrower than the product surface.',
-    tone: 'purple',
+    tone: 'clay',
   },
   {
     area: 'PulseCheck iOS',
@@ -173,7 +173,7 @@ const SystemCoverageTab: React.FC = () => {
           />
           <InfoCard
             title="Areas at target"
-            accent="purple"
+            accent="clay"
             body={
               <div className="space-y-2">
                 <p className="text-3xl font-semibold text-white">{areasAtTarget}</p>
@@ -207,8 +207,8 @@ const SystemCoverageTab: React.FC = () => {
                           ? 'border-green-500/25 bg-green-500/10 text-green-200'
                           : area.tone === 'blue'
                             ? 'border-blue-500/25 bg-blue-500/10 text-blue-200'
-                            : area.tone === 'purple'
-                              ? 'border-purple-500/25 bg-purple-500/10 text-purple-200'
+                            : area.tone === 'clay'
+                              ? 'border-clay-lime/25 bg-clay-lime/10 text-clay-ink'
                               : area.tone === 'amber'
                                 ? 'border-amber-500/25 bg-amber-500/10 text-amber-200'
                                 : 'border-red-500/25 bg-red-500/10 text-red-200'
@@ -232,8 +232,8 @@ const SystemCoverageTab: React.FC = () => {
                           ? 'bg-gradient-to-r from-emerald-400 via-green-400 to-cyan-400'
                           : area.tone === 'blue'
                             ? 'bg-gradient-to-r from-sky-400 via-blue-400 to-cyan-400'
-                            : area.tone === 'purple'
-                              ? 'bg-gradient-to-r from-violet-400 via-purple-400 to-fuchsia-400'
+                            : area.tone === 'clay'
+                              ? 'bg-clay-lime'
                               : area.tone === 'amber'
                                 ? 'bg-gradient-to-r from-amber-400 via-orange-400 to-yellow-400'
                                 : 'bg-gradient-to-r from-rose-400 via-red-400 to-orange-400'

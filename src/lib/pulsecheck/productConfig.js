@@ -30,17 +30,11 @@ function normalizeAppBranding(value) {
   }
   return result;
 }
-// Presentation only: this setting never selects program processing or care routes.
-function resolveAppExperience(value) {
-  return { ios: value?.ios === 'clay' ? 'clay' : 'standard', android: value?.android === 'clay' ? 'clay' : 'standard' };
+// Clay is the only app appearance. Installed iOS and Android builds still read
+// appExperience from the branding endpoint and fall back to their retired
+// standard look when it is missing, so every organization reports Clay.
+const CLAY_APP_EXPERIENCE = Object.freeze({ ios: 'clay', android: 'clay' });
+function resolveAppExperience() {
+  return { ...CLAY_APP_EXPERIENCE };
 }
-function normalizeAppExperience(value, existing) {
-  const result = resolveAppExperience(existing);
-  if (value === undefined) return result;
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.keys(value).length ||
-      Object.entries(value).some(([key, appearance]) => !['ios', 'android'].includes(key) || !['standard', 'clay'].includes(appearance))) {
-    throw new Error('Invalid app appearance');
-  }
-  return { ...result, ...value };
-}
-module.exports = { resolveAppExperience, normalizeAppExperience, PRODUCTS, validateProductBrand, normalizeAppBranding, normalizeProductBrand, resolveProductConfig, resolveAppBranding };
+module.exports = { resolveAppExperience, PRODUCTS, validateProductBrand, normalizeAppBranding, normalizeProductBrand, resolveProductConfig, resolveAppBranding };

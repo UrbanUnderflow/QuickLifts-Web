@@ -99,8 +99,8 @@ const READINESS_SIGNALS: ReadinessSignal[] = [
     id: 'primed',
     label: 'Primed',
     score: 91,
-    color: '#A68BFF',
-    glow: 'rgba(166, 139, 255, 0.24)',
+    color: '#D4EA04',
+    glow: 'rgba(212, 234, 4, 0.24)',
     headline: 'Use today’s energy for a harder challenge.',
     message:
       'Your energy, recent work, and check-in point toward a challenge day. Today trains smart decisions when time and pressure close in.',
@@ -138,7 +138,7 @@ const SLATES: Record<
       type: 'Confidence skills training',
       time: '3 min',
       detail: 'Build confidence from proof you have already earned.',
-      color: '#A68BFF',
+      color: '#D4EA04',
     },
   ],
   simulations: [
@@ -156,7 +156,7 @@ const SLATES: Record<
       type: 'Recovery simulation',
       time: '75 sec',
       detail: 'Recover from a mistake before the next decision arrives.',
-      color: '#A68BFF',
+      color: '#D4EA04',
     },
     {
       number: '06',
@@ -186,7 +186,7 @@ const BLOCK_MOMENTS = [
     body: 'The same mental skill shows up in new situations, so the athlete learns how to use it beyond one exercise.',
     metric: '4 of 6',
     value: 'Sessions trained',
-    color: '#A68BFF',
+    color: '#D4EA04',
   },
   {
     day: '10',
@@ -243,7 +243,7 @@ const PATHWAYS: Pathway[] = [
     description: 'Build confidence from evidence and create a faster response after setbacks.',
     gain: 'Belief that survives hard moments',
     unlock: 'Pressure Performance',
-    color: '#A68BFF',
+    color: '#D4EA04',
   },
   {
     name: 'Pressure Performance',
@@ -387,7 +387,7 @@ function HeroConsole() {
           {[
             { icon: Target, label: 'PROTOCOL', title: 'Signal lock', time: '3 min', color: '#46E7F2' },
             { icon: Waves, label: 'PROTOCOL', title: 'Pressure breath', time: '2 min', color: '#FFB84D' },
-            { icon: Zap, label: 'SIMULATION', title: 'Noise under pressure', time: '60 sec', color: '#A68BFF' },
+            { icon: Zap, label: 'SIMULATION', title: 'Noise under pressure', time: '60 sec', color: '#D4EA04' },
           ].map((rep, index) => {
             const Icon = rep.icon;
             return (
@@ -1209,7 +1209,7 @@ function ExperienceRail() {
       number: '03',
       title: 'Train',
       body: 'Learn the skill and rehearse the response with intent.',
-      color: '#A68BFF',
+      color: '#D4EA04',
     },
     {
       icon: Gauge,
@@ -1300,7 +1300,7 @@ function AthleteDaySection() {
       label: 'SET THE PRIORITY',
       title: 'Train the clearest opportunity',
       detail: 'The athlete receives one mental-performance focus matched to today’s demand.',
-      color: '#A68BFF',
+      color: '#D4EA04',
     },
     {
       label: 'EARN THE NEXT MOVE',
@@ -1384,7 +1384,7 @@ function ValueAtGlance() {
       title: 'Better performance conversations',
       body: 'Useful patterns and shared language help the coach support the next step.',
       icon: MessageCircle,
-      color: '#A68BFF',
+      color: '#D4EA04',
     },
     {
       label: 'FOR THE PROGRAM',
@@ -1453,7 +1453,7 @@ function DeepDiveSection() {
       title: 'What the athlete trains',
       body: 'Explore the short protocols and pressure simulations inside a session.',
       action: 'Open the workout',
-      color: '#A68BFF',
+      color: '#D4EA04',
     },
     {
       id: 'growth',
@@ -1692,7 +1692,7 @@ const PulseCheckProPage: React.FC = () => {
         <div className="pcp-final-rings" aria-hidden="true"><span /><span /><span /></div>
         <div className="pcp-shell">
           <Reveal className="pcp-final-content">
-            <SignalOrb color="#A68BFF" />
+            <SignalOrb color="#D4EA04" />
             <span className="pcp-kicker">Mental performance that keeps moving</span>
             <h2>Give every athlete a next skill worth training.</h2>
             <p>
@@ -1730,7 +1730,7 @@ const PulseCheckProPage: React.FC = () => {
           --pcp-muted: #8d96a7;
           --pcp-line: rgba(255, 255, 255, 0.09);
           --pcp-cyan: #46e7f2;
-          --pcp-violet: #a68bff;
+          --pcp-clay: #d4ea04;
           --pcp-amber: #ffb84d;
         }
 
@@ -1780,7 +1780,7 @@ const PulseCheckProPage: React.FC = () => {
         }
 
         .pcp-background-glow--one { top: 18%; left: -20rem; background: var(--pcp-cyan); }
-        .pcp-background-glow--two { top: 58%; right: -20rem; background: var(--pcp-violet); }
+        .pcp-background-glow--two { top: 58%; right: -20rem; background: var(--pcp-clay); }
 
         .pcp-nav {
           position: fixed;
@@ -1812,7 +1812,7 @@ const PulseCheckProPage: React.FC = () => {
           width: 36px;
           height: 36px;
           border-radius: 11px;
-          box-shadow: 0 0 28px rgba(166, 139, 255, 0.22);
+          box-shadow: 0 0 28px rgba(212, 234, 4, 0.22);
         }
 
         .pcp-brand > span { display: flex; align-items: baseline; gap: 7px; }
@@ -1908,7 +1908,7 @@ const PulseCheckProPage: React.FC = () => {
         .pcp-hero h1 span {
           display: block;
           color: transparent;
-          background: linear-gradient(100deg, #ffffff 0%, #a9f6ff 40%, #a68bff 100%);
+          background: linear-gradient(100deg, #ffffff 0%, #a9f6ff 40%, #d4ea04 100%);
           -webkit-background-clip: text;
           background-clip: text;
         }
@@ -2001,8 +2001,8 @@ const PulseCheckProPage: React.FC = () => {
         .pcp-console-orbit--inner span {
           bottom: 38px;
           left: 92px;
-          background: var(--pcp-violet);
-          box-shadow: 0 0 18px var(--pcp-violet);
+          background: var(--pcp-clay);
+          box-shadow: 0 0 18px var(--pcp-clay);
         }
 
         .pcp-console {
@@ -2135,7 +2135,7 @@ const PulseCheckProPage: React.FC = () => {
           height: 100%;
           display: block;
           border-radius: inherit;
-          background: linear-gradient(90deg, var(--pcp-cyan), var(--pcp-violet));
+          background: linear-gradient(90deg, var(--pcp-cyan), var(--pcp-clay));
           box-shadow: 0 0 18px rgba(70, 231, 242, 0.35);
         }
 
@@ -2198,7 +2198,7 @@ const PulseCheckProPage: React.FC = () => {
         .pcp-float-card--signal { left: -10px; top: 30%; }
         .pcp-float-card--signal > span { color: var(--pcp-cyan); background: rgba(70, 231, 242, 0.09); }
         .pcp-float-card--unlock { right: -8px; bottom: 21%; }
-        .pcp-float-card--unlock > span { color: var(--pcp-violet); background: rgba(166, 139, 255, 0.1); }
+        .pcp-float-card--unlock > span { color: var(--pcp-clay); background: rgba(212, 234, 4, 0.1); }
 
         .pcp-hero-proof {
           display: flex;
@@ -2258,7 +2258,7 @@ const PulseCheckProPage: React.FC = () => {
           padding: 175px 0;
           overflow: hidden;
           background:
-            radial-gradient(circle at 76% 40%, rgba(166, 139, 255, 0.12), transparent 28rem),
+            radial-gradient(circle at 76% 40%, rgba(212, 234, 4, 0.12), transparent 28rem),
             radial-gradient(circle at 18% 72%, rgba(70, 231, 242, 0.08), transparent 24rem),
             #05070c;
         }
@@ -2289,7 +2289,7 @@ const PulseCheckProPage: React.FC = () => {
           margin-left: clamp(0px, 16vw, 240px);
           padding-right: 0.04em;
           color: transparent;
-          background: linear-gradient(95deg, #68eae8, #a68bff 68%, #ff8aa5);
+          background: linear-gradient(95deg, #68eae8, #d4ea04 68%, #ff8aa5);
           background-clip: text;
           -webkit-background-clip: text;
           font-style: normal;
@@ -2365,7 +2365,7 @@ const PulseCheckProPage: React.FC = () => {
           width: fit-content;
           padding-right: 0.04em;
           color: transparent;
-          background: linear-gradient(100deg, #f8fafc 8%, #71e9e6 52%, #a68bff 96%);
+          background: linear-gradient(100deg, #f8fafc 8%, #71e9e6 52%, #d4ea04 96%);
           background-clip: text;
           -webkit-background-clip: text;
         }
@@ -2635,7 +2635,7 @@ const PulseCheckProPage: React.FC = () => {
           background:
             radial-gradient(circle at 68% 70%, #65f0c2, transparent 25%),
             radial-gradient(circle at 34% 28%, white, transparent 21%),
-            linear-gradient(135deg, var(--signal-color), #4933a4);
+            linear-gradient(135deg, var(--signal-color), #d4ea04);
           box-shadow: 0 0 34px color-mix(in srgb, var(--signal-color) 40%, transparent);
         }
         .pcp-signal-orb::after {
@@ -2671,7 +2671,7 @@ const PulseCheckProPage: React.FC = () => {
           top: 80px;
           right: -380px;
           border-radius: 50%;
-          background: rgba(166, 139, 255, 0.05);
+          background: rgba(212, 234, 4, 0.05);
           filter: blur(90px);
         }
         .pcp-block-heading { max-width: 850px; }
@@ -2706,7 +2706,7 @@ const PulseCheckProPage: React.FC = () => {
         .pcp-block-line span {
           height: 100%;
           display: block;
-          background: linear-gradient(90deg, var(--pcp-cyan), var(--pcp-violet));
+          background: linear-gradient(90deg, var(--pcp-cyan), var(--pcp-clay));
         }
         .pcp-block-rail button {
           position: relative;
@@ -2823,7 +2823,7 @@ const PulseCheckProPage: React.FC = () => {
         .pcp-pathway-section {
           border-block: 1px solid rgba(255, 255, 255, 0.06);
           background:
-            radial-gradient(circle at 50% 54%, rgba(166, 139, 255, 0.06), transparent 36rem),
+            radial-gradient(circle at 50% 54%, rgba(212, 234, 4, 0.06), transparent 36rem),
             #070a10;
         }
         .pcp-pathway-map { margin-top: 62px; }
@@ -2933,7 +2933,7 @@ const PulseCheckProPage: React.FC = () => {
         .pcp-trust-ring { position: absolute; border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 50%; }
         .pcp-trust-ring--one { width: 350px; height: 350px; }
         .pcp-trust-ring--two { width: 500px; height: 500px; border-style: dashed; }
-        .pcp-trust-ring span { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--pcp-violet); box-shadow: 0 0 15px var(--pcp-violet); }
+        .pcp-trust-ring span { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--pcp-clay); box-shadow: 0 0 15px var(--pcp-clay); }
         .pcp-trust-ring--one span { top: 40px; right: 60px; }
         .pcp-trust-ring--two span { bottom: 65px; left: 70px; background: var(--pcp-cyan); }
         .pcp-trust-node {
@@ -3140,8 +3140,8 @@ const PulseCheckProPage: React.FC = () => {
           background: rgba(70, 231, 242, 0.09);
         }
         .pcp-hero-gameplan-steps > div:nth-child(2) > span {
-          color: var(--pcp-violet);
-          background: rgba(166, 139, 255, 0.1);
+          color: var(--pcp-clay);
+          background: rgba(212, 234, 4, 0.1);
         }
         .pcp-hero-gameplan-steps > div:nth-child(3) > span {
           color: var(--pcp-amber);
@@ -3174,7 +3174,7 @@ const PulseCheckProPage: React.FC = () => {
           color: white;
           background:
             radial-gradient(circle at 68% 31%, rgba(70, 231, 242, 0.09), transparent 32%),
-            radial-gradient(circle at 25% 77%, rgba(166, 139, 255, 0.08), transparent 30%),
+            radial-gradient(circle at 25% 77%, rgba(212, 234, 4, 0.08), transparent 30%),
             linear-gradient(160deg, #10141d 0%, #07090e 55%, #0d1018 100%);
           box-shadow:
             inset 0 0 0 1px rgba(255, 255, 255, 0.12),
@@ -3272,7 +3272,7 @@ const PulseCheckProPage: React.FC = () => {
 
         .pcp-pro-phone-progress button.is-active { color: var(--pcp-cyan); }
         .pcp-pro-phone-progress button.is-active i {
-          background: linear-gradient(90deg, var(--pcp-cyan), var(--pcp-violet));
+          background: linear-gradient(90deg, var(--pcp-cyan), var(--pcp-clay));
           box-shadow: 0 0 10px rgba(70, 231, 242, 0.72);
         }
 
@@ -3440,7 +3440,7 @@ const PulseCheckProPage: React.FC = () => {
 
         .pcp-pro-rep--signal { --rep-accent: #46e7f2; }
         .pcp-pro-rep--control { --rep-accent: #ffb84d; }
-        .pcp-pro-rep--confidence { --rep-accent: #a68bff; }
+        .pcp-pro-rep--confidence { --rep-accent: #d4ea04; }
         .pcp-pro-rep > span {
           width: 39px;
           height: 39px;
@@ -3605,12 +3605,12 @@ const PulseCheckProPage: React.FC = () => {
           gap: 10px;
           margin-top: 11px;
           padding: 12px;
-          border-left: 2px solid var(--pcp-violet);
+          border-left: 2px solid var(--pcp-clay);
           border-radius: 0 13px 13px 0;
-          background: rgba(166, 139, 255, 0.075);
+          background: rgba(212, 234, 4, 0.075);
         }
-        .pcp-pro-skill-why > svg { color: var(--pcp-violet); }
-        .pcp-pro-skill-why small { color: var(--pcp-violet); }
+        .pcp-pro-skill-why > svg { color: var(--pcp-clay); }
+        .pcp-pro-skill-why small { color: var(--pcp-clay); }
         .pcp-pro-skill-why p {
           margin: 3px 0 0;
           color: rgba(255, 255, 255, 0.58);
@@ -3693,8 +3693,8 @@ const PulseCheckProPage: React.FC = () => {
           top: 40px;
           right: 33px;
           border-radius: 50%;
-          background: var(--pcp-violet);
-          box-shadow: 0 0 14px var(--pcp-violet);
+          background: var(--pcp-clay);
+          box-shadow: 0 0 14px var(--pcp-clay);
         }
 
         .pcp-pro-launch-radar strong {
@@ -3820,7 +3820,7 @@ const PulseCheckProPage: React.FC = () => {
           height: 18px;
           border: 2px solid currentColor;
           border-radius: 5px;
-          color: var(--pcp-violet);
+          color: var(--pcp-clay);
           box-shadow: 0 0 16px currentColor;
         }
         .pcp-pro-decoy--one { top: 52px; left: 62px; }
@@ -3945,7 +3945,7 @@ const PulseCheckProPage: React.FC = () => {
           height: 100%;
           display: block;
           border-radius: inherit;
-          background: linear-gradient(90deg, var(--pcp-cyan), var(--pcp-violet));
+          background: linear-gradient(90deg, var(--pcp-cyan), var(--pcp-clay));
           box-shadow: 0 0 12px rgba(70, 231, 242, 0.35);
           transition: width 0.25s ease;
         }
@@ -4619,7 +4619,7 @@ const PulseCheckProPage: React.FC = () => {
           width: fit-content;
           padding-right: 0.04em;
           color: transparent;
-          background: linear-gradient(100deg, #10151d 4%, #156f77 52%, #5746a8 100%);
+          background: linear-gradient(100deg, #10151d 4%, #156f77 52%, #d4ea04 100%);
           background-clip: text;
           -webkit-background-clip: text;
         }
@@ -4772,7 +4772,7 @@ const PulseCheckProPage: React.FC = () => {
           overflow: hidden;
           isolation: isolate;
           background:
-            radial-gradient(circle at 12% 20%, rgba(166, 139, 255, 0.09), transparent 25rem),
+            radial-gradient(circle at 12% 20%, rgba(212, 234, 4, 0.09), transparent 25rem),
             #070a10;
         }
         .pcp-athlete-story-heading {

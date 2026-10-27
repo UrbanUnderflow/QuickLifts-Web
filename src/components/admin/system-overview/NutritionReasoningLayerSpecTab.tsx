@@ -305,7 +305,7 @@ const NutritionReasoningLayerSpecTab: React.FC = () => {
         <DataTable columns={['Consumer', 'Use Case', 'Contract']} rows={CROSS_APP_ROWS} />
         <InfoCard
           title="PulseCheck Future Contract"
-          accent="purple"
+          accent="clay"
           body="PulseCheck should consume nutrition as a source-aware context layer: macro consistency, fueling timing, recovery-relevant intake, supplement signals when available, goal direction, history coverage, and confidence. It should not treat nutrition data as diagnosis, medical instruction, or coach-visible certainty when provenance is weak."
         />
       </SectionBlock>

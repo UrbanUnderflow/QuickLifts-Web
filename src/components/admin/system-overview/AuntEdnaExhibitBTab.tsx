@@ -124,7 +124,7 @@ const AuntEdnaExhibitBTab: React.FC = () => {
 
       <SectionBlock icon={ClipboardList} title="Measurement Rules">
         <CardGrid columns="md:grid-cols-2">
-          <InfoCard title="Measurement and Source-of-Truth Rules" accent="purple" body={<BulletList items={MEASUREMENT_ITEMS} />} />
+          <InfoCard title="Measurement and Source-of-Truth Rules" accent="clay" body={<BulletList items={MEASUREMENT_ITEMS} />} />
           <InfoCard
             title="Tier 2 Exclusions"
             accent="amber"

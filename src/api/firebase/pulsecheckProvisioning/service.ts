@@ -3,7 +3,7 @@ import { normalizeSignInPolicy } from '../../../lib/pulsecheck/signInPolicy';
 import { athleteActivationCode, athleteActivationQrUrl } from '../../../utils/athleteActivationCode';
 import { saveAthleteConsentAtomically } from './consentSave';
 import { replaceInviteAtomically } from '../../../lib/pulsecheck/replaceInvite';
-import { normalizeProductBrand, validateProductBrand, normalizeAppExperience, resolveAppExperience, normalizeAppBranding } from '../../../lib/pulsecheck/productConfig';
+import { normalizeProductBrand, validateProductBrand, normalizeAppBranding } from '../../../lib/pulsecheck/productConfig';
 import { healthBaselineConsentDocuments, assertCurrentConsentDecisions, selectConsentDocumentsForProduct, consentCategory, consentDecisionComplete, researchEligible, staffConsentDocuments, type ConsentDecisions } from './consentPolicy';
 import { addDoc, arrayUnion, collection, deleteDoc, deleteField, doc, getDoc, getDocFromServer, getDocs, getDocsFromServer, increment, orderBy, query, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db, getFirebaseModeRequestHeaders, isUsingDevFirebase } from '../config';
@@ -928,7 +928,6 @@ const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrgani
   productBrand: normalizeProductBrand(data.productBrand),
   configuredProductBrand: data.productBrand === 'athleticmind' || data.productBrand === 'pulsecheck' ? data.productBrand : undefined,
   appBranding: data.appBranding || {},
-  appExperience: resolveAppExperience(data.appExperience),
   signInPolicy: normalizeSignInPolicy(data.signInPolicy),
   displayName: data.displayName || '',
   legalName: data.legalName || '',
@@ -3232,7 +3231,6 @@ export const pulseCheckProvisioningService = {
       ...(typeof input.healthBaselineEnabled === 'boolean' ? { healthBaselineEnabled: input.healthBaselineEnabled } : {}),
       productBrand: validateProductBrand(input.productBrand),
       appBranding: normalizeAppBranding(input.appBranding),
-      appExperience: normalizeAppExperience(input.appExperience),
       signInPolicy: normalizeSignInPolicy(input.signInPolicy),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
@@ -3273,11 +3271,6 @@ export const pulseCheckProvisioningService = {
       ...(typeof input.healthBaselineEnabled === 'boolean' ? { healthBaselineEnabled: input.healthBaselineEnabled } : {}),
       ...(input.signInPolicy !== undefined ? { signInPolicy: normalizeSignInPolicy(input.signInPolicy) } : {}),
       ...(input.productBrand !== undefined ? { productBrand: validateProductBrand(input.productBrand) } : {}),
-      ...(input.appExperience !== undefined ? Object.fromEntries(
-        Object.entries(normalizeAppExperience(input.appExperience))
-          .filter(([platform]) => Object.prototype.hasOwnProperty.call(input.appExperience, platform))
-          .map(([platform, appearance]) => [`appExperience.${platform}`, appearance])
-      ) : {}),
       ...(input.appBranding !== undefined ? { appBranding: normalizeAppBranding(input.appBranding) } : {}),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
@@ -3927,7 +3920,7 @@ export const pulseCheckProvisioningService = {
     });
   },
 
-  async updateOrganizationProductConfiguration(organizationId: string, input: Pick<CreatePulseCheckOrganizationInput, 'productBrand' | 'appBranding' | 'appExperience' | 'signInPolicy'>): Promise<void> {
+  async updateOrganizationProductConfiguration(organizationId: string, input: Pick<CreatePulseCheckOrganizationInput, 'productBrand' | 'appBranding' | 'signInPolicy'>): Promise<void> {
     if (!normalizeString(organizationId)) throw new Error('Organization id is required.');
     const user = auth.currentUser;
     if (!user) throw new Error('Sign in to update organization configuration.');

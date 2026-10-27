@@ -454,7 +454,7 @@ const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
     label: 'Device Integration Strategy',
     subtitle: 'Cross-device taxonomy, wishlist priorities, routing, and rollout guidance.',
     icon: FileText,
-    accent: '#c084fc',
+    accent: '#d4ea04',
     render: () => <DeviceIntegrationStrategyOverviewDoc />,
   },
   {

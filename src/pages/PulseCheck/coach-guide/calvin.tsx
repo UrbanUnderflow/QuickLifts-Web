@@ -107,7 +107,7 @@ export default function CoachCalvinGuide() {
 
       <main className="min-h-screen bg-[#090a0d] text-white">
         <div className="fixed inset-0 -z-0 overflow-hidden" aria-hidden="true">
-          <div className="absolute left-[-14rem] top-[-10rem] h-[34rem] w-[34rem] rounded-full bg-[#7c3aed]/15 blur-[130px]" />
+          <div className="absolute left-[-14rem] top-[-10rem] h-[34rem] w-[34rem] rounded-full bg-clay-lime/15 blur-[130px]" />
           <div className="absolute right-[-12rem] top-[18rem] h-[30rem] w-[30rem] rounded-full bg-[#E0FE10]/10 blur-[150px]" />
           <div className="absolute bottom-[-14rem] left-[35%] h-[28rem] w-[28rem] rounded-full bg-[#14E7D0]/10 blur-[140px]" />
         </div>
@@ -183,7 +183,7 @@ export default function CoachCalvinGuide() {
             </div>
 
             <div className="relative">
-              <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-[#8b5cf6]/20 via-transparent to-[#E0FE10]/10 blur-2xl" />
+              <div className="absolute -inset-6 rounded-[2rem] bg-gradient-to-br from-clay-lime/20 via-transparent to-[#E0FE10]/10 blur-2xl" />
               <div className="relative rounded-[1.75rem] border border-white/10 bg-[#111217]/90 p-5 shadow-2xl shadow-black/40 sm:p-7">
                 <div className="mb-6 flex items-center justify-between">
                   <div>
@@ -275,7 +275,7 @@ export default function CoachCalvinGuide() {
                 </div>
                 <Link
                   href={LOGIN_URL}
-                  className="mt-8 inline-flex items-center gap-2 rounded-xl bg-[#7c3aed] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#8b5cf6]"
+                  className="mt-8 inline-flex items-center gap-2 rounded-xl bg-clay-lime px-5 py-3 text-sm font-bold text-clay-on-lime transition hover:bg-clay-lime"
                 >
                   Go to Coach sign in
                   <ArrowRight className="h-4 w-4" />
@@ -284,8 +284,8 @@ export default function CoachCalvinGuide() {
 
               <div className="rounded-[1.75rem] border border-white/10 bg-[#111217] p-5 shadow-2xl shadow-black/30 sm:p-7">
                 <div className="flex items-center gap-3 border-b border-white/10 pb-5">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#7c3aed]/20">
-                    <LogIn className="h-5 w-5 text-[#c4a7ff]" />
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-clay-lime/20">
+                    <LogIn className="h-5 w-5 text-clay-ink" />
                   </span>
                   <div>
                     <div className="font-bold">Welcome back, Coach</div>
@@ -295,7 +295,7 @@ export default function CoachCalvinGuide() {
                 <div className="mt-5 space-y-3">
                   <div className="rounded-xl border border-white/10 bg-black/20 p-3">
                     <div className="mb-2 flex gap-2">
-                      <span className="rounded-md bg-[#7c3aed] px-3 py-1.5 text-xs font-semibold">
+                      <span className="rounded-md bg-clay-lime px-3 py-1.5 text-xs font-semibold">
                         Magic link
                       </span>
                       <span className="rounded-md px-3 py-1.5 text-xs font-semibold text-zinc-500">
@@ -305,7 +305,7 @@ export default function CoachCalvinGuide() {
                     <div className="h-11 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-3 text-sm text-zinc-600">
                       Email
                     </div>
-                    <div className="mt-3 rounded-lg bg-[#7c3aed] py-3 text-center text-sm font-bold">
+                    <div className="mt-3 rounded-lg bg-clay-lime py-3 text-center text-sm font-bold">
                       Send magic link
                     </div>
                   </div>
@@ -419,13 +419,13 @@ export default function CoachCalvinGuide() {
               </div>
             </div>
 
-            <div className="mt-8 rounded-[1.75rem] border border-[#8b5cf6]/30 bg-gradient-to-br from-[#7c3aed]/20 to-[#111217] p-7 sm:p-10">
+            <div className="mt-8 rounded-[1.75rem] border border-clay-lime/30 bg-gradient-to-br from-clay-lime/20 to-[#111217] p-7 sm:p-10">
               <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-                <span className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl bg-[#8b5cf6]/25">
-                  <MessageCircle className="h-6 w-6 text-[#d5c3ff]" />
+                <span className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl bg-clay-lime/25">
+                  <MessageCircle className="h-6 w-6 text-clay-ink" />
                 </span>
                 <div>
-                  <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#c4a7ff]">
+                  <div className="text-xs font-bold uppercase tracking-[0.2em] text-clay-ink">
                     Why the check-in matters
                   </div>
                   <blockquote className="mt-3 text-2xl font-semibold leading-tight sm:text-3xl">
@@ -504,7 +504,7 @@ export default function CoachCalvinGuide() {
                 const Icon = item.icon;
                 return (
                   <div key={item.title} className="rounded-2xl border border-white/10 bg-white/[0.025] p-5">
-                    <Icon className="h-5 w-5 text-[#c4a7ff]" />
+                    <Icon className="h-5 w-5 text-clay-ink" />
                     <div className="mt-4 font-semibold">{item.title}</div>
                     <p className="mt-2 text-sm leading-6 text-zinc-500">{item.copy}</p>
                   </div>
@@ -561,8 +561,8 @@ export default function CoachCalvinGuide() {
                   copy: 'Use this for a coach who wants to bring a team to PulseCheck.',
                   amount: '20%',
                   detail: 'of athlete-paid subscriptions under that coach',
-                  accent: 'text-[#d5a6ff]',
-                  border: 'border-[#c084fc]/20',
+                  accent: 'text-clay-ink',
+                  border: 'border-clay-lime/20',
                 },
               ].map((item) => {
                 const Icon = item.icon;
