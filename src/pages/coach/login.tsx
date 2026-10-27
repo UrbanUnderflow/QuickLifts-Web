@@ -61,10 +61,9 @@ const withTimeout = async <T,>(
 const CoachLogin: NextPage = () => {
   const router = useRouter();
   const currentUser = useUser();
-  const [standardSignIn, setStandardSignIn] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [emailAuthMode, setEmailAuthMode] = useState<'magic' | 'password'>('magic');
+  const [emailAuthMode, setEmailAuthMode] = useState<'phone' | 'magic' | 'password'>('phone');
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState<Provider>(null);
   const [error, setError] = useState<string | null>(null);
@@ -428,21 +427,19 @@ const CoachLogin: NextPage = () => {
             </div>
           ) : (
             <>
-              {!forgotMode && <PhoneSignIn onPolicyChange={setStandardSignIn} disabled={isBusy} onBusyChange={(busy) => setPending(busy ? 'email' : null)} onSuccess={async (user) => {
-                await ensureFirestoreUser(user);
-                goToApp();
-              }} />}
-              {standardSignIn && <>
-              <form onSubmit={forgotMode ? handleForgotPassword : handleEmailSignIn} className="space-y-3">
                 {!forgotMode && (
-                  <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+                  <div role="tablist" aria-label="Sign-in method" className="mb-5 grid grid-cols-3 rounded-xl border border-white/10 bg-white/[0.04] p-1">
                     {[
+                      { mode: 'phone' as const, label: 'Phone' },
+                      { mode: 'password' as const, label: 'Email & password' },
                       { mode: 'magic' as const, label: 'Magic link' },
-                      { mode: 'password' as const, label: 'Password' },
                     ].map((item) => (
                       <button
                         key={item.mode}
                         type="button"
+                        role="tab"
+                        aria-selected={emailAuthMode === item.mode}
+                        disabled={isBusy}
                         onClick={() => {
                           setEmailAuthMode(item.mode);
                           setError(null);
@@ -450,7 +447,7 @@ const CoachLogin: NextPage = () => {
                         }}
                         className={`rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
                           emailAuthMode === item.mode
-                            ? 'text-white'
+                            ? 'text-black'
                             : 'text-zinc-500 hover:text-zinc-300'
                         }`}
                         style={emailAuthMode === item.mode ? { background: PC_PURPLE } : undefined}
@@ -460,6 +457,13 @@ const CoachLogin: NextPage = () => {
                     ))}
                   </div>
                 )}
+              {!forgotMode && emailAuthMode === 'phone' && <PhoneSignIn disabled={isBusy} onBusyChange={(busy) => setPending(busy ? 'email' : null)} onSuccess={async (user) => {
+                await ensureFirestoreUser(user);
+                goToApp();
+              }} />}
+              {(forgotMode || emailAuthMode !== 'phone') && <>
+              <form onSubmit={forgotMode ? handleForgotPassword : handleEmailSignIn} className="space-y-3">
+
                 <input
                   type="email"
                   value={email}
@@ -520,6 +524,7 @@ const CoachLogin: NextPage = () => {
                   {forgotMode ? 'Send reset link' : emailAuthMode === 'password' ? 'Sign in with password' : 'Send magic link'}
                 </button>
               </form>
+              </>}
 
               {(forgotMode || emailAuthMode === 'password') && (
                 <div className="mt-2 text-center">
@@ -586,7 +591,6 @@ const CoachLogin: NextPage = () => {
                   </p>
                 </>
               )}
-              </>}
             </>
           )}
         </div>

@@ -190,12 +190,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [hasAcceptedLegal, setHasAcceptedLegal] = useState(false);
   const [legalFlowContext, setLegalFlowContext] = useState<'signup' | 'signin'>('signup');
   const [isForgotPassword, setIsForgotPassword] = useState(false);
-  const [emailAuthMode, setEmailAuthMode] = useState<'magic' | 'password'>('magic');
+  const [emailAuthMode, setEmailAuthMode] = useState<'phone' | 'magic' | 'password'>('phone');
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [showError, setShowError] = useState(false);
   const [isUsernameAvailable, setIsUsernameAvailable] = useState(false);
-  const [standardSignIn, setStandardSignIn] = useState(false);
+  const standardSignIn = isSignUp || emailAuthMode !== 'phone';
   const [isLoading, setIsLoading] = useState(false);
   const authAttemptInProgress = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -486,7 +486,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setHasAcceptedLegal(false);
       setLegalFlowContext('signup');
       setIsForgotPassword(false); // Reset forgot password state
-      setEmailAuthMode('magic');
+      setEmailAuthMode('phone');
       setResetEmailSent(false);
       setMagicLinkSent(false);
     }
@@ -590,7 +590,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   };
 
   const handleSocialAuth = async (provider: "google" | "apple") => {
-    if (isLoading || authAttemptInProgress.current) return;
+    if (isLoading || authAttemptInProgress.current || (!isSignUp && signUpStep === 'initial' && emailAuthMode === 'phone' && !isForgotPassword)) return;
     authAttemptInProgress.current = true;
     try {
       if (isSignUp && !hasAcceptedLegal) {
@@ -1147,7 +1147,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading || authAttemptInProgress.current) return;
+    if (isLoading || authAttemptInProgress.current || (!isSignUp && signUpStep === 'initial' && emailAuthMode === 'phone' && !isForgotPassword)) return;
     authAttemptInProgress.current = true;
     try {
       await submitForm();
@@ -2888,21 +2888,24 @@ const SignInModal: React.FC<SignInModalProps> = ({
     </>
   );
   
-  const renderInitialStep = () => (
-    <>
-      <div className="text-center mb-8 pt-4 sm:pt-0">
-        <img src="/pulse-logo-white.svg" alt="Pulse Logo" className="h-8 mx-auto mb-8" />
-        <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
-          {isSignUp ? "Join the Collective" : "Welcome Back!"}
-        </h2>
-        <p className="text-zinc-400 font-['HK Grotesk'] text-sm">
-          Beat Your Best, Share Your Victory
-        </p>
-      </div>
+  const renderSignInTabs = () => !isSignUp && (
+    <div role="tablist" aria-label="Sign-in method" className="grid grid-cols-3 rounded-lg border border-zinc-700 bg-zinc-900/70 p-1">
+      {([
+        { mode: 'phone', label: 'Phone' },
+        { mode: 'password', label: 'Email & password' },
+        { mode: 'magic', label: 'Magic link' },
+      ] as const).map(item => (
+        <button key={item.mode} type="button" role="tab" aria-selected={emailAuthMode === item.mode}
+          disabled={isLoading} onClick={() => { setEmailAuthMode(item.mode); setMagicLinkSent(false); setError(null); }}
+          className={`rounded-md px-2 py-3 text-xs font-semibold transition-colors ${emailAuthMode === item.mode ? 'bg-[#E0FE10] text-black' : 'text-zinc-300 hover:text-white'}`}>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
 
-      <PhoneSignIn onPolicyChange={setStandardSignIn} disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />
-      {standardSignIn && <>
-      <div className="flex flex-col gap-4 mb-8">
+  const renderSocialButtons = () => (
+      <div className="mt-6 flex flex-col gap-4 mb-8">
         <button
           type="button"
           onClick={() => handleSocialAuth("apple")}
@@ -2950,32 +2953,24 @@ const SignInModal: React.FC<SignInModalProps> = ({
         </div>
       </div>
 
+  );
+
+  const renderInitialStep = () => (
+    <>
+      <div className="text-center mb-8 pt-4 sm:pt-0">
+        <img src="/pulse-logo-white.svg" alt="Pulse Logo" className="h-8 mx-auto mb-8" />
+        <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
+          {isSignUp ? "Join the Collective" : "Welcome Back!"}
+        </h2>
+        <p className="text-zinc-400 font-['HK Grotesk'] text-sm">
+          Beat Your Best, Share Your Victory
+        </p>
+      </div>
+
+      {renderSignInTabs()}
+      {!isSignUp && emailAuthMode === 'phone' && <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />}
+      {standardSignIn && <>
       <div className="space-y-6">
-        {!isSignUp && (
-          <div className="grid grid-cols-2 rounded-lg border border-zinc-700 bg-zinc-900/70 p-1">
-            {[
-              { mode: 'magic' as const, label: 'Magic link' },
-              { mode: 'password' as const, label: 'Password' },
-            ].map((item) => (
-              <button
-                key={item.mode}
-                type="button"
-                onClick={() => {
-                  setEmailAuthMode(item.mode);
-                  setMagicLinkSent(false);
-                  setError(null);
-                }}
-                className={`rounded-md px-3 py-2 text-sm font-semibold transition-colors ${
-                  emailAuthMode === item.mode
-                    ? 'bg-[#E0FE10] text-black'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        )}
 
         <div>
           <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
@@ -3210,7 +3205,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading || authAttemptInProgress.current) return;
+    if (isLoading || authAttemptInProgress.current || (!isSignUp && signUpStep === 'initial' && emailAuthMode === 'phone' && !isForgotPassword)) return;
     authAttemptInProgress.current = true;
     setIsLoading(true);
     setError(null);
@@ -3385,43 +3380,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
         </p>
       </div>
 
-      <PhoneSignIn onPolicyChange={setStandardSignIn} disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />
+      {renderSignInTabs()}
+      {!isSignUp && emailAuthMode === 'phone' && <PhoneSignIn disabled={isLoading} onBusyChange={setIsLoading} onSuccess={handleSignInSuccess} />}
       {standardSignIn && <>
-      <div className="amh-provider-row">
-        <button
-          type="button"
-          onClick={() => handleSocialAuth("apple")}
-          disabled={isLoading}
-          className="amh-provider-button dark"
-        >
-          {isLoading && activeProvider === "apple" ? (
-            <div className="loader border-t-transparent border-4 border-white rounded-full w-5 h-5 animate-spin"></div>
-          ) : (
-            <>
-              <img src="/apple-logo.svg" alt="Apple" />
-              {isSignUp ? "Sign up with Apple" : "Apple"}
-            </>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleSocialAuth("google")}
-          disabled={isLoading}
-          className="amh-provider-button light"
-        >
-          {isLoading && activeProvider === "google" ? (
-            <div className="loader border-t-transparent border-4 border-black rounded-full w-5 h-5 animate-spin"></div>
-          ) : (
-            <>
-              <img src="/google-logo.svg" alt="Google" />
-              {isSignUp ? "Sign up with Google" : "Google"}
-            </>
-          )}
-        </button>
-      </div>
-
-      <div className="amh-divider"><span>or use hub credentials</span></div>
-
       <div className="amh-fields">
         <label>
           Email
@@ -3449,7 +3410,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           </label>
         )}
 
-        {!isSignUp && (
+        {!isSignUp && emailAuthMode === 'password' && (
           <label>
             <div className="amh-label-row">
               <span>Password</span>
@@ -3483,11 +3444,45 @@ const SignInModal: React.FC<SignInModalProps> = ({
         {isLoading ? "Checking access..." : submitLabel}
       </button>
 
+      </>}
+      <div className="amh-provider-row">
+        <button
+          type="button"
+          onClick={() => handleSocialAuth("apple")}
+          disabled={isLoading}
+          className="amh-provider-button dark"
+        >
+          {isLoading && activeProvider === "apple" ? (
+            <div className="loader border-t-transparent border-4 border-white rounded-full w-5 h-5 animate-spin"></div>
+          ) : (
+            <>
+              <img src="/apple-logo.svg" alt="Apple" />
+              {isSignUp ? "Sign up with Apple" : "Apple"}
+            </>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSocialAuth("google")}
+          disabled={isLoading}
+          className="amh-provider-button light"
+        >
+          {isLoading && activeProvider === "google" ? (
+            <div className="loader border-t-transparent border-4 border-black rounded-full w-5 h-5 animate-spin"></div>
+          ) : (
+            <>
+              <img src="/google-logo.svg" alt="Google" />
+              {isSignUp ? "Sign up with Google" : "Google"}
+            </>
+          )}
+        </button>
+      </div>
+
+
       <p className="amh-switch">
         {isSignUp ? "Already have an account? " : "Need council access? "}
         <button type="button" onClick={toggleMode}>{isSignUp ? "Sign in" : "Create account"}</button>
       </p>
-      </>}
     </div>
   );
 
@@ -4351,9 +4346,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
           )}
         </form>
 
+        {signUpStep === "initial" && !isForgotPassword && renderSocialButtons()}
+
         {renderQuizNavigation()}
 
-        {standardSignIn && signUpStep === "initial" && !isForgotPassword && (
+        {signUpStep === "initial" && !isForgotPassword && (
           <>
             <div className="mt-6 text-center">
               <p className="text-zinc-500 text-sm font-['HK Grotesk']">

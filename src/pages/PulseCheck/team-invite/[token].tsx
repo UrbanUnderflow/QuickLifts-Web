@@ -1323,16 +1323,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 </p>
               </div>
 
-              <PhoneSignIn organizationId={invite.organizationId} initialEmail={invite.targetEmail} disabled={submitting} onBusyChange={setSubmitting} onPolicyChange={setStandardSignIn} onSuccess={async user => {
-                  const profile = await userService.fetchUserFromFirestore(user.uid);
-                  setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
-                  setAuthUser(user);
-                }} />
-              {standardSignIn && <>
+
               {/* Tabs */}
               <div className="flex gap-6 border-b border-zinc-800">
                 <button
                   type="button"
+                  disabled={submitting}
                   onClick={() => setMode('sign-in')}
                   className={`-mb-px border-b-2 pb-3 text-sm font-semibold transition ${
                     mode === 'sign-in'
@@ -1344,6 +1340,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 </button>
                 <button
                   type="button"
+                  disabled={submitting}
                   onClick={() => setMode('create-account')}
                   className={`-mb-px border-b-2 pb-3 text-sm font-semibold transition ${
                     mode === 'create-account'
@@ -1355,6 +1352,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 </button>
               </div>
 
+              <PhoneSignIn key={mode} mode={mode === 'sign-in' ? 'signin' : 'register'} organizationId={invite.organizationId} initialEmail={invite.targetEmail} disabled={submitting} onBusyChange={setSubmitting} onPolicyChange={setStandardSignIn} onSuccess={async user => {
+                  const profile = await userService.fetchUserFromFirestore(user.uid);
+                  setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
+                  setAuthUser(user);
+                }} />
+              {(mode === 'sign-in' || standardSignIn) && <>
               {mode === 'create-account' ? (
                 <form className="space-y-4" onSubmit={handleCreateAccount}>
                   <label className="block space-y-2">
@@ -1796,15 +1799,11 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   </p>
                 </div>
 
-                <PhoneSignIn organizationId={invite.organizationId} initialEmail={invite.targetEmail} disabled={submitting} onBusyChange={setSubmitting} onPolicyChange={setStandardSignIn} onSuccess={async user => {
-                  const profile = await userService.fetchUserFromFirestore(user.uid);
-                  setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
-                  setAuthUser(user);
-                }} />
-                {standardSignIn && <>
+
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
+                    disabled={submitting}
                     onClick={() => setMode('create-account')}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       mode === 'create-account'
@@ -1821,6 +1820,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
                   <button
                     type="button"
+                    disabled={submitting}
                     onClick={() => setMode('sign-in')}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       mode === 'sign-in'
@@ -1836,6 +1836,12 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   </button>
                 </div>
 
+                <PhoneSignIn key={mode} mode={mode === 'sign-in' ? 'signin' : 'register'} organizationId={invite.organizationId} initialEmail={invite.targetEmail} disabled={submitting} onBusyChange={setSubmitting} onPolicyChange={setStandardSignIn} onSuccess={async user => {
+                  const profile = await userService.fetchUserFromFirestore(user.uid);
+                  setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
+                  setAuthUser(user);
+                }} />
+                {(mode === 'sign-in' || standardSignIn) && <>
                 {requiresAthleteCheckout ? (
                   <div className="space-y-3">
                     <button

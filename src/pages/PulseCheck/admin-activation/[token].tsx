@@ -707,16 +707,12 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                   ) : null}
                 </div>
 
-                <PhoneSignIn organizationId={invite.organizationId} initialEmail={invite.targetEmail} disabled={submitting} onBusyChange={setSubmitting} onPolicyChange={setStandardSignIn} onSuccess={async user => {
-                  const profile = await userService.fetchUserFromFirestore(user.uid);
-                  setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
-                  setAuthUser(user);
-                }} />
-                {standardSignIn && <>
+
                 {/* Tabs */}
                 <div className="flex gap-6 border-b" style={{ borderColor: PC.cardBorder }}>
                   <button
                     type="button"
+                    disabled={submitting}
                     onClick={() => setMode('sign-in')}
                     className="-mb-px border-b-2 pb-3 text-sm font-semibold transition"
                     style={{
@@ -728,6 +724,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                   </button>
                   <button
                     type="button"
+                    disabled={submitting}
                     onClick={() => setMode('create-account')}
                     className="-mb-px border-b-2 pb-3 text-sm font-semibold transition"
                     style={{
@@ -739,6 +736,12 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                   </button>
                 </div>
 
+                <PhoneSignIn key={mode} mode={mode === 'sign-in' ? 'signin' : 'register'} organizationId={invite.organizationId} initialEmail={invite.targetEmail} disabled={submitting} onBusyChange={setSubmitting} onPolicyChange={setStandardSignIn} onSuccess={async user => {
+                  const profile = await userService.fetchUserFromFirestore(user.uid);
+                  setReferenceEmail((profile as unknown as { institutionalEmail?: string })?.institutionalEmail || profile?.email || '');
+                  setAuthUser(user);
+                }} />
+                {(mode === 'sign-in' || standardSignIn) && <>
                 {mode === 'create-account' ? (
                   <form className="space-y-4" onSubmit={handleCreateAccount}>
                     <label className="block space-y-2">

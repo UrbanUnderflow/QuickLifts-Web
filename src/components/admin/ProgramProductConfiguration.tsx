@@ -7,16 +7,16 @@ export function ProductConfigurationFields({ value, onChange, disabled = false }
 }) {
   return <fieldset disabled={disabled} style={{ border: 0, padding: 0, margin: 0 }}>
     <div className="pcp-fg">
-      <label className="pcp-fld"><span className="pcp-flbl">Program sign-in</span>
+      <label className="pcp-fld"><span className="pcp-flbl">Program registration</span>
         <select className="pcp-finp pcp-select" value={value.signInPolicy?.mode || 'standard'} onChange={event => onChange({ ...value, signInPolicy: { mode: event.target.value as 'standard' | 'institution-phone', emailDomains: value.signInPolicy?.emailDomains || [] } })}>
-          <option value="standard">Standard sign-in options</option><option value="institution-phone">Institutional email and phone only</option>
+          <option value="standard">Standard registration</option><option value="institution-phone">Institutional email and phone</option>
         </select>
       </label>
       <label className="pcp-fld"><span className="pcp-flbl">Institution email domains</span>
         <input className="pcp-finp" placeholder="umes.edu" value={(value.signInPolicy?.emailDomains || []).join(', ')} onChange={event => onChange({ ...value, signInPolicy: { mode: value.signInPolicy?.mode || 'standard', emailDomains: event.target.value.split(',').map(domain => domain.trim().replace(/^@/, '').toLowerCase()) } })} />
       </label>
     </div>
-    <p style={{ fontSize: 13 }}>Phone-only programs use an SMS code for athletes and coaches. Other sign-in methods cannot open program access. Separate multiple email domains with commas.</p>
+    <p style={{ fontSize: 13 }}>Institutional registration collects an approved email address and verifies a phone number for this organization. Returning users choose their sign-in method. Separate multiple email domains with commas.</p>
     <div className="pcp-fg">
       <label className="pcp-fld"><span className="pcp-flbl">Program product</span>
         <select className="pcp-finp pcp-select" value={value.productBrand || ''} onChange={event => onChange({ ...value, productBrand: event.target.value as PulseCheckProductBrand })}>

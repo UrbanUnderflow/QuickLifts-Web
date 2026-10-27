@@ -2,12 +2,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { completePhoneProfile } = require('../../../src/lib/server/auth/phone-profile');
 const now = Date.parse('2026-10-26T12:00:00Z');
-function setup({ existing = null, owner = null, matches = [], identity = {}, user = {} } = {}) {
+function setup({ existing = null, owner = null, matches = [], identity = {}, user = {}, organization = { status: 'active', signInPolicy: { mode: 'institution-phone', emailDomains: ['school.edu'] } } } = {}) {
   let saved = existing;
   let creates = 0;
   const ref = { get: async () => ({ exists: !!saved, data: () => saved }) };
   const db = {
-    collection: () => ({ doc: () => ref, where: () => ({ get: async () => ({ docs: [] }), limit: () => ({ get: async () => ({ docs: matches.map(id => ({ id })) }) }) }) }),
+    collection: name => ({ doc: () => name === 'pulsecheck-organizations' ? { get: async () => ({ data: () => organization }) } : ref, where: () => ({ get: async () => ({ docs: [] }), limit: () => ({ get: async () => ({ docs: matches.map(id => ({ id })) }) }) }) }),
     runTransaction: async fn => fn({ get: ref.get, create: (_, data) => { creates++; saved = data; } }),
   };
   const auth = {
@@ -15,7 +15,7 @@ function setup({ existing = null, owner = null, matches = [], identity = {}, use
     getUser: async uid => { assert.equal(uid, 'phone-owner'); return { uid, phoneNumber: '+12025550123', disabled: false, providerData: [{ providerId: 'phone' }], ...user }; },
     getUserByEmail: async () => { if (owner) return { uid: owner }; throw Object.assign(new Error(), { code: 'auth/user-not-found' }); },
   };
-  const body = { institutionalEmail: ' Athlete@School.edu ', acceptTerms: true, termsVersion: '2026-04-08', privacyVersion: '2026-04-08', platform: 'ios' };
+  const body = { organizationId: 'program', institutionalEmail: ' Athlete@School.edu ', acceptTerms: true, termsVersion: '2026-04-08', privacyVersion: '2026-04-08', platform: 'ios' };
   return { run: changes => completePhoneProfile({ auth, db, bearer: 'verified-token', body: { ...body, ...changes }, now }), saved: () => saved, creates: () => creates };
 }
 test('SMS creates one account; institutional email is reference data, never a credential or role', async () => {
@@ -27,7 +27,7 @@ test('SMS creates one account; institutional email is reference data, never a cr
 });
 test('existing phone account retains reference email, roles, consent and completed answers', async () => {
   const existing = { email: 'kept@school.edu', role: 'coach', completedBaseline: { score: 7 }, healthConsent: false };
-  const fixture = setup({ existing }); assert.deepEqual(await fixture.run({ institutionalEmail: 'changed@school.edu', acceptTerms: false }), { uid: 'phone-owner', created: false });
+  const fixture = setup({ existing }); assert.deepEqual(await fixture.run({ institutionalEmail: '', organizationId: undefined, acceptTerms: false }), { uid: 'phone-owner', created: false });
   assert.deepEqual(fixture.saved(), existing); assert.equal(fixture.creates(), 0);
 });
 test('retries return same UID without rewriting profile', async () => { const f = setup(); await f.run(); await f.run(); assert.equal(f.creates(), 1); });
@@ -46,3 +46,17 @@ for (const change of [{ acceptTerms: false }, { termsVersion: 'old' }, { privacy
 test('an email match never transfers account ownership', async () => { const f = setup({ owner: 'existing-email-owner' }); await assert.rejects(f.run(), e => e.status === 409); assert.equal(f.creates(), 0); });
 test('reference email on another phone account prevents duplicate enrollment', async () => { const f = setup({ matches: ['other-phone-owner'] }); await assert.rejects(f.run(), e => e.status === 409); assert.equal(f.creates(), 0); });
 test('Firebase UID, phone and roles cannot be supplied in body', async () => { const f = setup(); await f.run({ uid: 'victim', phoneNumber: '+12025550199', role: 'admin' }); assert.equal(f.saved().id, 'phone-owner'); assert.equal(f.saved().role, undefined); });
+
+test('general phone login cannot enroll an unknown phone or infer an institution from email', async () => {
+  const fixture = setup();
+  await assert.rejects(fixture.run({ organizationId: undefined }), error => error.reason === 'phone-auth/registration-required');
+  assert.equal(fixture.creates(), 0);
+});
+test('phone registration requires an active organization explicitly configured for institutional enrollment', async () => {
+  for (const organization of [undefined, { status: 'active' }, { status: 'archived', signInPolicy: { mode: 'institution-phone', emailDomains: ['school.edu'] } }]) {
+    const fixture = setup({ organization: organization || null });
+    await assert.rejects(fixture.run(), error => error.status === 400 || error.status === 403);
+    assert.equal(fixture.creates(), 0);
+  }
+  await assert.rejects(setup().run({ institutionalEmail: 'a@another.edu' }), error => error.code === 'program/institution-email-required');
+});

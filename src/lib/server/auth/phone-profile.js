@@ -6,10 +6,6 @@ const fail = (status, reason, message) => { throw Object.assign(new Error(messag
 
 /** Email is reference data. Only the SMS-verified Firebase UID owns the account. */
 async function completePhoneProfile({ auth, db, bearer, body, now = Date.now() }) {
-  const email = String(body.institutionalEmail || '').trim().toLowerCase();
-  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    fail(400, 'phone-auth/invalid-email', 'Enter your institutional email address.');
-  }
   const identity = await auth.verifyIdToken(bearer, true);
   if (identity.firebase?.sign_in_provider !== 'phone' || !identity.phone_number ||
       !Number.isFinite(identity.auth_time) || now / 1000 - identity.auth_time > 600 || identity.auth_time > now / 1000 + 60) {
@@ -23,11 +19,21 @@ async function completePhoneProfile({ auth, db, bearer, body, now = Date.now() }
   const existing = await ref.get();
   // Signing in must never replace an existing email, baseline, role, or consent.
   if (existing.exists) { await assertMemberSignIn(db, identity); return { uid: identity.uid, created: false }; }
-  if (typeof body.organizationId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(body.organizationId)) {
-    const organization = (await db.collection('pulsecheck-organizations').doc(body.organizationId).get()).data();
-    if (!organization || organization.deletedAt || organization.lifecycleState) fail(403, 'program/unavailable', 'This program is unavailable.');
-    assertOrganizationSignIn(organization, identity, email);
+  // Institutional enrollment is an explicit organization registration flow.
+  // The general login surface only opens existing, phone-linked profiles.
+  if (typeof body.organizationId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(body.organizationId)) {
+    fail(400, 'phone-auth/registration-required', 'Create your account first, then connect your phone to sign in.');
   }
+  const organization = (await db.collection('pulsecheck-organizations').doc(body.organizationId).get()).data();
+  if (!organization || organization.deletedAt || organization.archivedAt || organization.lifecycleState || (organization.status && organization.status !== 'active')) fail(403, 'program/unavailable', 'This program is unavailable.');
+  if (organization.signInPolicy?.mode !== 'institution-phone') {
+    fail(400, 'phone-auth/registration-required', 'Create your account first, then connect your phone to sign in.');
+  }
+  const email = String(body.institutionalEmail || '').trim().toLowerCase();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    fail(400, 'phone-auth/invalid-email', 'Enter your institutional email address.');
+  }
+  assertOrganizationSignIn(organization, identity, email);
   if (body.acceptTerms !== true || body.termsVersion !== TERMS_VERSION || body.privacyVersion !== PRIVACY_VERSION) {
     fail(400, 'phone-auth/legal-required', 'Agree to the Terms and Privacy Policy before creating an account.');
   }

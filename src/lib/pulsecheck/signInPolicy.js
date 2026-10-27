@@ -12,7 +12,7 @@ function phoneSession(identity) {
 function assertOrganizationSignIn(organization, identity, email) {
   if (organization?.signInPolicy?.mode !== PHONE_MODE) return;
   const policy = normalizeSignInPolicy(organization.signInPolicy);
-  if (!phoneSession(identity)) throw Object.assign(new Error('Use your institutional email and phone number to sign in to this program.'), { status: 403, code: 'program/phone-required' });
+  if (!phoneSession(identity)) throw Object.assign(new Error('Use your institutional email and phone number to register for this program.'), { status: 403, code: 'program/phone-required' });
   const domain = String(email || '').trim().toLowerCase().split('@')[1];
   if (!policy.emailDomains.includes(domain)) throw Object.assign(new Error('Use an email address from your institution.'), { status: 403, code: 'program/institution-email-required' });
 }

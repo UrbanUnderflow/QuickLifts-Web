@@ -15,7 +15,7 @@ test('configuration validates domains, normalizes case, and preserves legacy sta
   assert.deepEqual(normalizeSignInPolicy({ mode: 'institution-phone', emailDomains: [' @School.EDU ', 'school.edu'] }), organization.signInPolicy);
   for (const input of [{ mode: 'other', emailDomains: [] }, { mode: 'institution-phone', emailDomains: [] }, { mode: 'institution-phone', emailDomains: ['school.edu.evil/'] }]) assert.throws(() => normalizeSignInPolicy(input));
 });
-test('phone-only programs reject Google, Apple, password and unmarked custom-token sessions', () => {
+test('institutional enrollment requires a verified phone and matching reference email', () => {
   for (const provider of ['google.com', 'apple.com', 'password', 'custom']) assert.throws(() => assertOrganizationSignIn(organization, { firebase: { sign_in_provider: provider } }, 'a@school.edu'), e => e.code === 'program/phone-required');
   assert.doesNotThrow(() => assertOrganizationSignIn(organization, phone, 'a@school.edu'));
   assert.doesNotThrow(() => assertOrganizationSignIn(organization, { firebase: { sign_in_provider: 'custom' }, pulse_phone_auth: true }, 'a@school.edu'));
@@ -33,14 +33,14 @@ function database(orgs, membership = true) {
 }
 test('public policy uses admin configuration without leaking people or granting membership', async () => {
   const db = database({ program: organization });
-  assert.deepEqual(await resolvePublicSignInPolicy(db, { email: 'a@school.edu' }), organization.signInPolicy);
+  assert.deepEqual(await resolvePublicSignInPolicy(db, { email: 'a@school.edu' }), { mode: 'standard', emailDomains: [] });
   assert.deepEqual(await resolvePublicSignInPolicy(db, { organizationId: 'program' }), organization.signInPolicy);
-  assert.deepEqual(await resolvePublicSignInPolicy(db, { email: 'unknown@personal.example' }), { mode: 'institution-phone', emailDomains: [] });
+  assert.deepEqual(await resolvePublicSignInPolicy(db, { email: 'unknown@personal.example' }), { mode: 'standard', emailDomains: [] });
 });
-test('server membership validation cannot be bypassed with a different public lookup context', async () => {
+test('existing members may return with any linked authentication provider', async () => {
   const db = database({ program: organization, other: { status: 'active' } });
   assert.equal((await resolvePublicSignInPolicy(db, { organizationId: 'other' })).mode, 'standard');
-  await assert.rejects(assertMemberSignIn(db, { ...phone, firebase: { sign_in_provider: 'google.com' } }), e => e.status === 403);
+  for (const provider of ['google.com', 'apple.com', 'password', 'phone']) assert.equal((await assertMemberSignIn(db, { ...phone, firebase: { sign_in_provider: provider } })).completedBaseline, true);
   assert.equal((await assertMemberSignIn(db, phone)).completedBaseline, true);
 });
 
@@ -52,14 +52,14 @@ test('policy endpoint distinguishes malformed input and invalid identity without
   const malformed = await api.handler({ httpMethod: 'POST', headers: {}, body: '{' }); assert.equal(malformed.statusCode, 400);
   const invalid = await api.handler({ httpMethod: 'POST', headers: { authorization: 'Bearer invalid-test-token' }, body: '{}' }); assert.equal(invalid.statusCode, 401); assert.match(invalid.headers['Cache-Control'], /no-store/);
   const publicPolicy = await api.handler({ httpMethod: 'POST', headers: {}, body: JSON.stringify({ email: 'a@school.edu', uid: 'forged-user', pulse_phone_auth: true }) });
-  assert.equal(publicPolicy.statusCode, 200); assert.deepEqual(JSON.parse(publicPolicy.body), organization.signInPolicy);
+  assert.equal(publicPolicy.statusCode, 200); assert.deepEqual(JSON.parse(publicPolicy.body), { mode: 'standard', emailDomains: [] });
 });
 
-test('verified platform administrators retain provisioning access; reference email cannot bypass policy', async () => {
+test('platform sign-in does not impose organizational registration policy on existing profiles', async () => {
   const base = database({ program: organization });
   const db = { collection: name => name === 'admin' ? { doc: email => ({ get: async () => ({ exists: email === 'admin@example.test' }) }) } : base.collection(name) };
   const identity = { ...phone, firebase: { sign_in_provider: 'google.com' }, email: 'admin@example.test', email_verified: true };
   assert.equal((await assertMemberSignIn(db, identity)).completedBaseline, true);
-  await assert.rejects(assertMemberSignIn(db, { ...identity, email_verified: false }), error => error.status === 403);
-  await assert.rejects(assertMemberSignIn(db, { ...identity, email: 'coach@school.edu' }), error => error.status === 403);
+  assert.equal((await assertMemberSignIn(db, { ...identity, email_verified: false })).completedBaseline, true);
+  assert.equal((await assertMemberSignIn(db, { ...identity, email: 'coach@school.edu' })).completedBaseline, true);
 });
