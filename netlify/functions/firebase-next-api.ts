@@ -313,13 +313,14 @@ export function createFirebaseNextApiHandler(
       "/api/developer/docs/[slug]/unlock",
     ].includes(matchedEntry.pattern);
     const protectedJournalRoute = ["/api/evidence-journal", "/api/evidence-journal/sharing", "/api/evidence-journal/event"].includes(matchedEntry.pattern);
-    const protectedRoute = protectedPartnerRoute || protectedJournalRoute;
+    const protectedBackupRoute = matchedEntry.pattern === "/api/admin/pulsecheck/baseline-backups";
+    const protectedRoute = protectedPartnerRoute || protectedJournalRoute || protectedBackupRoute;
     let scopedBody: unknown;
     if (protectedRoute) {
       const raw = event.isBase64Encoded
         ? Buffer.from(event.body || "", "base64")
         : Buffer.from(event.body || "", "utf8");
-      if (raw.length > (protectedJournalRoute ? 65536 : 8192)) return {
+      if (raw.length > (protectedBackupRoute ? 2048 : protectedJournalRoute ? 65536 : 8192)) return {
         statusCode: 413,
         headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
         body: JSON.stringify({ error: "request_too_large" }),
@@ -349,7 +350,7 @@ export function createFirebaseNextApiHandler(
       if (protectedRoute) return {
         statusCode: 503,
         headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "private, no-store, max-age=0" },
-        body: JSON.stringify({ error: protectedJournalRoute ? "journal_route_unavailable" : "partner_route_unavailable" }),
+        body: JSON.stringify({ error: protectedBackupRoute ? "backup_route_unavailable" : protectedJournalRoute ? "journal_route_unavailable" : "partner_route_unavailable" }),
       };
       console.error("[firebase-next-api] Route execution failed:", {
         originalPath,
@@ -466,6 +467,11 @@ const ROUTE_ENTRIES: RouteEntry[] = [
     pattern: "/api/admin/pulsecheck/remove-athlete-from-team",
     loadHandler: () =>
       import("../../src/pages/api/admin/pulsecheck/remove-athlete-from-team.ts"),
+  },
+  {
+    pattern: "/api/admin/pulsecheck/baseline-backups",
+    loadHandler: () =>
+      import("../../src/pages/api/admin/pulsecheck/baseline-backups.ts"),
   },
   {
     pattern: "/api/admin/nora-guard/revoke",
