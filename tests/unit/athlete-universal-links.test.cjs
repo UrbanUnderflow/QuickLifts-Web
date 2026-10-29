@@ -3,6 +3,13 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const association=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../../public/apple-app-site-association'),'utf8'));
+test('Both association URLs declare JSON response headers',()=>{
+ const config=fs.readFileSync(path.resolve(__dirname,'../../netlify.toml'),'utf8');
+ for(const url of ['/apple-app-site-association','/.well-known/apple-app-site-association']) {
+  const block=config.split('[[headers]]').find(part=>part.includes('for = "'+url+'"'));
+  assert(block&&block.includes('Content-Type = "application/json; charset=utf-8"'));
+ }
+});
 const matches=(id,url)=>association.applinks.details.some(row=>row.appID===id&&row.paths.some(pattern=>new RegExp('^'+pattern.split('*').map(p=>p.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('.*')+'$').test(new URL(url).pathname)));
 test('Printed UMES team links match both native app identities',()=>{
  for(const code of ['UMESBOWL','UMESGOLF'])for(const id of ['ZG887P86D5.com.fitwithpulse.athleticmind','ZG887P86D5.com.fitwithpulse.pulsecheck'])

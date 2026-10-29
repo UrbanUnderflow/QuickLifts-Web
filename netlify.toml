@@ -439,6 +439,17 @@
     # Enable compression negotiation
     Vary = "Accept-Encoding"
 
+# Apple association files have no .json extension.
+[[headers]]
+  for = "/apple-app-site-association"
+  [headers.values]
+    Content-Type = "application/json; charset=utf-8"
+
+[[headers]]
+  for = "/.well-known/apple-app-site-association"
+  [headers.values]
+    Content-Type = "application/json; charset=utf-8"
+
 # Specific headers for static assets with compression
 [[headers]]
   for = "/static/*"
