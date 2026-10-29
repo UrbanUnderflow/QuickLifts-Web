@@ -12,7 +12,11 @@
       },
       {
         "appID": "ZG887P86D5.com.fitwithpulse.athleticmind",
-        "paths": ["/AthleticMind/team-invite/*"]
+        "paths": ["/AthleticMind/team-invite/*", "/PulseCheck/team-invite/*"]
+      },
+      {
+        "appID": "ZG887P86D5.com.fitwithpulse.pulsecheck",
+        "paths": ["/PulseCheck/team-invite/*"]
       }
     ]
   }
