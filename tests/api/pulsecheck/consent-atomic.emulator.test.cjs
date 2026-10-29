@@ -214,3 +214,32 @@ test('individual health has a real private decision flow and accepts decline wit
  const summary=(await db.doc('pulsecheck-private-users/athlete').get()).data();assert.equal(summary.baselineHealthConsentDecisions[document.id].signedName,'');
  assert.equal((await db.collection('pulsecheck-private-users/athlete/consent-events').get()).size,1);
 });
+
+test('school activation derives scope and sport from persisted team, skips intake without completing baseline', async () => {
+  await db.doc('pulsecheck-organizations/org').update({ productBrand: 'athleticmind' });
+  await db.doc('pulsecheck-teams/team').update({ sportOrProgram: 'Bowling' });
+  await db.doc('users/athlete').update({ sport: '' });
+  await db.doc(memberPath).update({ 'athleteOnboarding.baselinePathStatus': 'pending', 'athleteOnboarding.intakeResponses': { goal: 'Keep previous answer' } });
+  const request = structuredClone(input);
+  request.expectedContext.productBrand = 'athleticmind';
+  const team = (await db.doc('pulsecheck-teams/team').get()).data();
+  const pilot = (await db.doc('pulsecheck-pilots/pilot').get()).data();
+  const docs = resolveAtomicConsentDocuments(team, pilot, 'athleticmind');
+  request.expectedContext.documents = docs;
+  request.onboarding.consentDecisions = Object.fromEntries(docs.map(document => [document.id, { decision: document.category === 'health_authorization' ? 'declined' : 'accepted', version: document.version, signedName: 'Synthetic Athlete', document }]));
+  delete request.onboarding.intakeResponses;
+  await save(request);
+  const state = await snapshot();
+  assert.equal(state.member.athleteOnboarding.flowVersion, 'school-activation-v1');
+  assert.equal(state.member.athleteOnboarding.baselinePathStatus, 'ready');
+  assert.equal(state.member.athleteOnboarding.intakeCompletedAt, undefined);
+  assert.deepEqual(state.member.athleteOnboarding.intakeResponses, { goal: 'Keep previous answer' });
+  assert.equal(state.user.sport, 'Bowling');
+});
+
+test('caller school flow flag cannot bypass another organization intake', async () => {
+  const request = structuredClone(input);
+  request.onboarding.flowVersion = 'school-activation-v1';
+  request.onboarding.intakeResponses = {};
+  await assert.rejects(save(request), error => error.code === 'INTAKE_INCOMPLETE');
+});

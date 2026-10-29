@@ -1,3 +1,4 @@
+import { resolveSchoolActivationFlow, SCHOOL_ACTIVATION_FLOW_VERSION } from '../../../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
 import { baselineHealthContext, saveBaselineHealthDecision } from '../../../../lib/questionnaires/cau-health';
 import { resolveBaselineConnection } from '../../../../lib/questionnaires/auntedna-connection';
 import { baselineCompletionUrl } from '../../../../lib/questionnaires/baseline-completion-url';
@@ -91,6 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'GET') return res.json({ required: Boolean(active && !completed), completed, version: VERSION, questionnaireVersion: QUESTIONNAIRE_VERSION,
       reviewId: reviewId || null, teamName: teamReview?.teamName || null, prefill,
       productBrand: normalizeNativeProductBrand(health.organization?.productBrand),
+      ...(health.eligible && !health.individual && resolveSchoolActivationFlow({ productBrand: health.organization?.productBrand, role: health.member?.role }) ? { onboardingFlowVersion: SCHOOL_ACTIVATION_FLOW_VERSION } : {}),
       teamWorkspaceUrl: active && assignment?.teamId && health.organizationId ? `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(health.organizationId)}&teamId=${encodeURIComponent(assignment.teamId)}` : null,
       available: Boolean(active && enabled), draft: draft || null, skills, healthSharingAllowed, healthBaselineEnabled, healthAuthorizationRequired, healthAuthorizationUrl, healthAuthorizationDecision, healthDocuments: active ? health.healthDocuments : [], healthConsentDecisions: active ? Object.fromEntries(health.healthDocuments.filter(document => health.decisions[document.id]).map(document => [document.id, health.decisions[document.id]])) : {}, submissionSharing: typeof pendingAttempt?.shareHealth === 'boolean' ? pendingAttempt.shareHealth : null, healthCollectionAvailable: healthBackupAvailable, healthBackupAvailable, providerDeliveryAvailable: clinicalDeliveryAvailable, receipt: healthReceipt(priorBackup), sportName, questionnaireUrl: 'https://fitwithpulse.ai/PulseCheck/baseline' });
     if (!isCurrentQuestionnaire(req.body)) return res.status(409).json({error:'This questionnaire has changed. Reload the page to continue with the current version.'});

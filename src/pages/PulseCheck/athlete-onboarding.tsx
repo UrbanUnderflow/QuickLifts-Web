@@ -1,3 +1,5 @@
+import { auth } from '../../api/firebase/config';
+import { resolveSchoolActivationFlow } from '../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
 import ConsentChoices from '../../components/pulsecheck/consent/ConsentChoices';
 import { healthBaselineConsentDocuments, consentCategory, consentDecisionComplete, usesAthleticMindConsent, type ConsentDecisions } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
 import React, { useEffect, useRef, useState } from 'react';
@@ -327,7 +329,7 @@ export default function PulseCheckAthleteOnboardingPage() {
             || currentUser.displayName
             || ''
         );
-        setPhone((nextMembership as { phone?: string })?.phone || '');
+        setPhone((nextMembership as { phone?: string })?.phone || (auth.currentUser?.uid === currentUser.id ? auth.currentUser.phoneNumber : '') || '');
         setConsentAccepted(Boolean(nextMembership?.athleteOnboarding?.productConsentAccepted));
         const requiredConsents = nextMembership?.athleteOnboarding?.requiredConsents || [];
         const storedVersions = nextMembership?.athleteOnboarding?.completedConsentVersions || {};
@@ -398,6 +400,7 @@ export default function PulseCheckAthleteOnboardingPage() {
   const verifiedProductBrand = organization?.id === team?.organizationId
     && (previewMode || (membership?.teamId === team?.id && membership?.organizationId === organization?.id))
     ? organization?.configuredProductBrand : undefined;
+  const schoolActivation = resolveSchoolActivationFlow({ productBrand: verifiedProductBrand, role: membership?.role });
   const requiredConsents = healthBaselineConsentDocuments(sourceRequiredConsents, team, organization, verifiedProductBrand);
   const athleteConsents = requiredConsents.filter(doc => consentCategory(doc) !== 'staff');
   const requiredConsentsComplete = athleteConsents.every(doc => consentDecisionComplete(doc, consentDecisions, completedConsentIds, completedConsentVersions));
@@ -410,7 +413,7 @@ export default function PulseCheckAthleteOnboardingPage() {
     if (research.length) setResearchConsentStatus(research.every(doc => next[doc.id]?.decision === 'accepted') ? 'accepted' : research.every(doc => next[doc.id]) ? 'declined' : 'pending');
   };
 
-  const intakeQuestions = team?.intake?.athlete?.questions || [];
+  const intakeQuestions = schoolActivation ? [] : team?.intake?.athlete?.questions || [];
   const intakeFormVersion = team?.intake?.athlete?.version || PULSECHECK_INTAKE_FORM_VERSION;
   const isIntakeAnswerEmpty = (value: string | number | string[] | undefined) =>
     value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
@@ -559,8 +562,7 @@ export default function PulseCheckAthleteOnboardingPage() {
           requiresResearchConsent && (researchConsentStatus === 'accepted' || researchConsentStatus === 'declined')
             ? RESEARCH_CONSENT_VERSION
             : '',
-        intakeResponses: intakeAnswers,
-        intakeFormVersion,
+        ...(!schoolActivation ? { intakeResponses: intakeAnswers, intakeFormVersion } : {}),
         phone: normalizePhoneToE164(phone),
       });
 
@@ -762,7 +764,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                 transition={{ delay: 0.6 }}
                 className="flex items-center gap-3 pt-2"
               >
-                {['Name', 'Agreements', ...(requiresResearchConsent ? ['Research'] : []), 'Ready'].map((step, i, steps) => (
+                {[schoolActivation ? 'Your details' : 'Name', 'Agreements', ...(requiresResearchConsent ? ['Research'] : []), schoolActivation ? 'Baseline' : 'Ready'].map((step, i, steps) => (
                   <React.Fragment key={step}>
                     <div className="flex items-center gap-1.5">
                       <div
@@ -966,7 +968,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                   delay={0.55}
                 >
                   <p className="text-sm leading-7 text-zinc-400">
-                    After this, you will be ready for your first read. It helps Nora understand where you are right now before your team starts building from there.
+                    {schoolActivation ? 'Next, answer 28 questions about how you are doing.' : 'After this, you will be ready for your first read. It helps Nora understand where you are right now before your team starts building from there.'}
                   </p>
                 </SectionCard>
               </div>

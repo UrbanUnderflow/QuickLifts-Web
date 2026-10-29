@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { resolveSchoolActivationFlow, SCHOOL_ACTIVATION_FLOW_VERSION } from '../../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
 import type { Firestore } from 'firebase-admin/firestore';
 import { healthBaselineConsentDocuments, consentCategory, consentDecisionComplete, researchEligible, selectConsentDocumentsForProduct, type ConsentDecisions } from '../../../api/firebase/pulsecheckProvisioning/consentPolicy';
 import { mergePulseCheckRequiredConsents, type PulseCheckRequiredConsentDocument } from '../../../api/firebase/pulsecheckProvisioning/types';
@@ -69,6 +70,7 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
     const pilot = pilotSnap?.data() || {}, cohort = cohortSnap?.data() || {};
     if (pilotId && (!pilotSnap?.exists || !consentScopeEligible(pilot, pilotConsentStatuses) || pilot.organizationId !== organizationId || pilot.teamId !== teamId)) reject('PROGRAM_UNAVAILABLE', 'Your pilot could not be verified.', 403);
     if (cohortId && (!pilotId || !cohortSnap?.exists || !consentScopeEligible(cohort, pilotConsentStatuses) || cohort.pilotId !== pilotId || cohort.teamId !== teamId || cohort.organizationId !== organizationId)) reject('PROGRAM_UNAVAILABLE', 'Your cohort could not be verified.', 403);
+    const schoolActivation = resolveSchoolActivationFlow({ productBrand: organization.productBrand, role: member.role });
     const consentOnly = team.status !== 'active' || organization.status !== 'active' || Boolean(pilotId && pilot.status !== 'active') || Boolean(cohortId && cohort.status !== 'active');
     const enrollmentRef = pilotId ? db.collection('pulsecheck-pilot-enrollments').doc(`${pilotId}_${uid}`) : null;
     const enrollmentSnap = enrollmentRef ? await tx.get(enrollmentRef) : null;
@@ -102,13 +104,13 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
     if (complete && (!accepted || !documents.every(doc => consentDecisionComplete(doc, decisions, ids, versions)) || pilot.studyMode === 'research' && !['accepted', 'declined'].includes(researchStatus))) reject('CONSENT_INCOMPLETE', 'Review every current agreement and record your choices.');
     const intake = submitted.intakeResponses === undefined ? object(old.intakeResponses) : object(submitted.intakeResponses);
     const questions = Array.isArray(team.intake?.athlete?.questions) ? team.intake.athlete.questions : [];
-    if (!consentOnly && complete && questions.some((q: any) => q.required && (intake[q.id] == null || typeof intake[q.id] === 'string' && !intake[q.id].trim() || Array.isArray(intake[q.id]) && !intake[q.id].length))) reject('INTAKE_INCOMPLETE', 'Answer the required team questions before continuing.');
+    if (!consentOnly && !schoolActivation && complete && questions.some((q: any) => q.required && (intake[q.id] == null || typeof intake[q.id] === 'string' && !intake[q.id].trim() || Array.isArray(intake[q.id]) && !intake[q.id].length))) reject('INTAKE_INCOMPLETE', 'Answer the required team questions before continuing.');
     if (Object.keys(intake).length > 200 || Buffer.byteLength(JSON.stringify(intake)) > 100000) reject('INVALID_REQUEST', 'The answers exceed the supported size.');
     const changed = stable(decisions) !== stable(object(old.consentDecisions));
     const now = timestamp();
     const baselineComplete = getCompletedBaselineEvidence(progressSnap.data() as any).complete || old.baselinePathStatus === 'complete';
     const next = {
-      ...old, consentPersistenceVersion: 2, requiredConsents: documents, consentDecisions: decisions, completedConsentIds: ids, completedConsentVersions: versions,
+      ...old, ...(schoolActivation ? { flowVersion: SCHOOL_ACTIVATION_FLOW_VERSION } : {}), consentPersistenceVersion: 2, requiredConsents: documents, consentDecisions: decisions, completedConsentIds: ids, completedConsentVersions: versions,
       productConsentAccepted: accepted, researchConsentStatus: researchStatus,
       eligibleForResearchDataset: researchEligible(documents, decisions, researchStatus, ids, versions),
       enrollmentMode: researchStatus === 'accepted' ? 'research' : pilotId ? 'pilot' : 'product-only',
@@ -117,7 +119,7 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
       baselinePathStatus: baselineComplete ? 'complete' : ['ready', 'started'].includes(old.baselinePathStatus) ? old.baselinePathStatus : complete ? 'ready' : 'pending',
       baselinePathwayId: text(old.baselinePathwayId) || text(submitted.baselinePathwayId),
       ...(accepted && submitted.intakeResponses !== undefined ? { intakeResponses: intake, intakeFormVersion: text(submitted.intakeFormVersion) || text(old.intakeFormVersion) } : {}),
-      ...(complete ? { ...(questions.length ? { intakeCompletedAt: old.intakeCompletedAt || now } : {}), productConsentAcceptedAt: old.productConsentAcceptedAt || now, productConsentVersion: text(submitted.productConsentVersion) || text(old.productConsentVersion) } : {}),
+      ...(complete ? { ...(!schoolActivation && questions.length ? { intakeCompletedAt: old.intakeCompletedAt || now } : {}), productConsentAcceptedAt: old.productConsentAcceptedAt || now, productConsentVersion: text(submitted.productConsentVersion) || text(old.productConsentVersion) } : {}),
       ...(['accepted', 'declined'].includes(researchStatus) ? { researchConsentRespondedAt: researchStatus === old.researchConsentStatus ? old.researchConsentRespondedAt || now : now, researchConsentVersion: text(submitted.researchConsentVersion) || text(old.researchConsentVersion) } : {}),
     };
     const onboardingStatus = resolveTeamMembershipOnboardingStatus({ role: 'athlete', athleteOnboarding: next, studyMode: pilot.studyMode || 'operational' });
@@ -150,7 +152,7 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
     if (complete) tx.set(db.collection('users').doc(uid), {
       pulseCheckOnboardingComplete: true, updatedAt: now,
       ...(next.entryOnboardingName ? { displayName: next.entryOnboardingName, preferredName: next.entryOnboardingName } : {}),
-      ...(!user.sport && text(profile.sport) ? { sport: text(profile.sport) } : {}),
+      ...(!user.sport && text(schoolActivation ? team.sportOrProgram || team.sport || team.sportId : profile.sport) ? { sport: text(schoolActivation ? team.sportOrProgram || team.sport || team.sportId : profile.sport) } : {}),
       ...(!user.dailyReflectionPreferences ? { dailyReflectionPreferences: { enabled: true, time: '20:00', hour: 20, minute: 0, timezone: text(profile.timezone) || 'America/New_York', updatedAt: now } } : {}),
     }, { merge: true });
     if (!privateSnap.exists) tx.create(privateRef, { userId: uid, protected: true, createdAt: now });
