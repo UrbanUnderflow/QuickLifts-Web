@@ -526,7 +526,7 @@ export default function PulseCheckAthleteOnboardingPage() {
     event.preventDefault();
     if (scopeInvalid || !currentUser || !membership) return;
     if (!displayName.trim()) { setMessage({ type: 'error', text: 'Tell us what name you would like us to use.' }); return; }
-    if (!isValidE164(normalizePhoneToE164(phone))) {
+    if ((!schoolActivation || phone.trim()) && !isValidE164(normalizePhoneToE164(phone))) {
       setMessage({ type: 'error', text: 'Add a phone number where your team can reach you (e.g. (301) 555-1234).' });
       return;
     }
@@ -840,7 +840,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                   transition={{ delay: 0.4 }}
                   className="block space-y-2"
                 >
-                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Phone Number</span>
+                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Phone Number{schoolActivation ? ' (optional)' : ''}</span>
                   <input
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
