@@ -3,10 +3,11 @@ import type { PulseCheckRequiredConsentDocument } from '../../../api/firebase/pu
 import { consentCategory, type ConsentDecisions } from '../../../api/firebase/pulsecheckProvisioning/consentPolicy';
 
 const labels = { participation: 'Program participation', health_authorization: 'Health information authorization', research: 'Optional research', staff: 'Staff responsibilities' };
-export default function ConsentChoices({ documents, decisions, onChange, name, athleticMind = false }: {
-  documents: PulseCheckRequiredConsentDocument[]; decisions: ConsentDecisions; onChange: (next: ConsentDecisions) => void; name: string; athleticMind?: boolean;
+export default function ConsentChoices({ documents, decisions, onChange, name, athleticMind = false, signatureName, hideSignatureField = false }: {
+  documents: PulseCheckRequiredConsentDocument[]; decisions: ConsentDecisions; onChange: (next: ConsentDecisions) => void; name: string; athleticMind?: boolean; signatureName?: string; hideSignatureField?: boolean;
 }) {
-  const [signedName, setSignedName] = useState('');
+  const [localSignedName, setSignedName] = useState('');
+  const signedName = signatureName ?? localSignedName;
   const signatureHintId = useId();
   const needsName = !signedName.trim();
   const [opened, setOpened] = useState<Record<string, boolean>>({});
@@ -23,13 +24,13 @@ export default function ConsentChoices({ documents, decisions, onChange, name, a
   return <section className="space-y-5 rounded-2xl border border-white/15 p-5 text-white">
     <h2 className="text-xl font-semibold">Your agreements and choices</h2>
     <p className="text-sm text-zinc-300">{documents.every(doc => consentCategory(doc) === 'staff') ? 'Review your confidentiality, access, and support responsibilities before joining your team workspace.' : 'Review each set of terms and make a separate decision. Health sharing and research are optional. Your choices apply only to the purposes shown.'}</p>
-    <div className={`rounded-xl border-2 p-4 ${needsName ? 'border-red-400 bg-red-400/10' : 'border-white/20 bg-black/20'}`}>
+    {!hideSignatureField && <div className={`rounded-xl border-2 p-4 ${needsName ? 'border-red-400 bg-red-400/10' : 'border-white/20 bg-black/20'}`}>
       <label className="block text-sm font-semibold">Your full name for electronic signature
         <span className={`mt-1 block text-xs ${needsName ? 'text-red-300' : 'text-zinc-300'}`}>{needsName ? 'Signature required to agree' : 'Name entered. Review the terms, then sign below.'}</span>
         <input className={`mt-3 w-full rounded-xl border-2 bg-black/20 p-3 text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-clay-paper ${needsName ? 'border-red-400 focus:ring-red-300' : 'border-white/30 focus:ring-white/50'}`} aria-describedby={signatureHintId} autoComplete="name" placeholder="Type your full name here" value={signedName} onChange={e => setSignedName(e.target.value)} />
       </label>
       <p id={signatureHintId} className={`mt-2 text-sm ${needsName ? 'text-red-200' : 'text-zinc-300'}`}>{needsName ? (athleticMind ? 'Enter your name here, then review the terms below before signing.' : 'Enter your name here, then open Read terms to enable the signing button.') : 'Your name becomes your signature when you choose Agree and sign or Authorize and sign.'}</p>
-    </div>
+    </div>}
     <p className="text-xs text-zinc-300">Choosing “Agree and sign” or “Authorize and sign” applies your typed name as your electronic signature to that set of terms.</p>
     {documents.map(doc => {
       const category = consentCategory(doc);

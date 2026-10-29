@@ -821,7 +821,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                   transition={{ delay: 0.35 }}
                   className="block space-y-2"
                 >
-                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">What Should We Call You?</span>
+                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">{schoolActivation ? 'Your full name' : 'What Should We Call You?'}</span>
                   <input
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
@@ -831,6 +831,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                     onBlur={(e) => { e.target.style.boxShadow = 'none'; }}
                     placeholder="Your name"
                   />
+                  {schoolActivation && <span className="block text-xs leading-5 text-zinc-400">This is your electronic signature for the choices you make below.</span>}
                 </motion.label>
 
                 {/* Phone — so a team clinician can reach the athlete for a welfare check */}
@@ -876,7 +877,7 @@ export default function PulseCheckAthleteOnboardingPage() {
                   />
                 </SectionCard>
 
-                <ConsentChoices documents={athleteConsents} decisions={consentDecisions} onChange={recordChoices} name={displayName} athleticMind={usesAthleticMindConsent(organization, team, membership, previewMode)} />
+                <ConsentChoices signatureName={schoolActivation ? displayName : undefined} hideSignatureField={schoolActivation} documents={athleteConsents} decisions={consentDecisions} onChange={recordChoices} name={displayName} athleticMind={usesAthleticMindConsent(organization, team, membership, previewMode)} />
 
                 {consentAccepted && requiredConsentsComplete && intakeQuestions.length > 0 ? (
                   <SectionCard
