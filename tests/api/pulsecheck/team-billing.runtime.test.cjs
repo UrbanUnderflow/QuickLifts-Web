@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createFirestoreAdminMock, withModuleMocks } = require('../firebase-admin/_runtimeHarness.cjs');
+const { createFirestoreAdminMock, withModuleMocks, compileTypeScriptRuntime, loadCompiledModule } = require('../firebase-admin/_runtimeHarness.cjs');
 const { loadTeamBilling, loadMemberCheckout } = require('../../../netlify/functions/lib/pulsecheck-team-billing');
 const records = () => ({
   users: [{id:'athlete',data:{pulseCheckTeamId:'team'}}],
@@ -45,16 +45,16 @@ test('team managed access and out of date price never fall back to individual ch
 
 
 test('billing context endpoint hides payment URL for inactive or sponsored teams and requires auth', async () => {
-  const endpoint = require.resolve('../../../netlify/functions/get-pulsecheck-athlete-billing-context');
+  const compiled = compileTypeScriptRuntime({cacheKey:'billing-context',entryPaths:['netlify/functions/get-pulsecheck-athlete-billing-context.ts']});
   const load = (db, authError, appName = 'pulsecheck-prod-admin') => {
-    delete require.cache[endpoint];
-    return withModuleMocks({
+    return loadCompiledModule({compiled,fileName:"get-pulsecheck-athlete-billing-context.js",mocks:{
       './config/firebase': { headers: {} },
       './lib/pulsecheck-coach-services': { verifyFirebaseUser: async () => {
         if (authError) throw Object.assign(new Error('Sign in'), { statusCode: 401 });
         return { userId: 'athlete', app: { name: appName, firestore: () => db } };
       } },
-    }, () => require(endpoint));
+      './lib/pulsecheck-team-billing': {loadTeamBilling},
+    }});
   };
   for (const variant of ['team-inactive', 'org-inactive', 'sponsored', 'disabled']) {
     const rows = records();
