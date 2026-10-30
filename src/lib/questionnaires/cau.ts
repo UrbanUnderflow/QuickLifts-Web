@@ -11,9 +11,12 @@ export const questions = source.questions;
 export function isCurrentQuestionnaire(input: any) { return input?.questionnaireVersion === QUESTIONNAIRE_VERSION; }
 export function baselineRecordId(uid: string) { return `baseline_${uid}_${QUESTIONNAIRE_VERSION}`; }
 export function baselineComplete(record: any, uid: string) { return record?.status === 'complete' && record?.externalId === uid; }
-export function validateSubmission(input: any) {
+export type VerifiedBaselineIdentity = { verifiedPhone?: string };
+export function validateSubmission(input: any, identity: VerifiedBaselineIdentity = {}) {
   if (!input || typeof input.name !== 'string' || !input.name.trim() || input.name.length > 150) throw Error('Enter your name.');
-  if (typeof input.email !== 'string' || input.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw Error('Enter a valid email address.');
+  const verifiedPhone = typeof identity.verifiedPhone === 'string' && /^\+[1-9]\d{7,14}$/.test(identity.verifiedPhone) ? identity.verifiedPhone : '';
+  const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
+  if ((!email && !verifiedPhone) || email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw Error('Enter a valid email address.');
   if (!input.answers || typeof input.answers !== 'object' || Array.isArray(input.answers)) throw Error('Invalid answers.');
   const allowed = new Set(questions.map(q => q.id));
   if (Object.keys(input.answers).some(id => !allowed.has(id))) throw Error('Unknown question.');
@@ -31,10 +34,10 @@ export function validateSubmission(input: any) {
     }
     fields[q.id] = { questionId: q.id, state: 'local', value };
   }
-  return { version: QUESTIONNAIRE_VERSION, completedSections: { performance: input.completedSections?.performance === true, health: input.completedSections?.health === true }, identity: { name: input.name.trim(), email: input.email.trim().toLowerCase(), verification: 'self_reported' }, fields };
+  return { version: QUESTIONNAIRE_VERSION, completedSections: { performance: input.completedSections?.performance === true, health: input.completedSections?.health === true }, identity: { name: input.name.trim(), ...(email ? { email } : {}), ...(verifiedPhone ? { phone: verifiedPhone } : {}), verification: verifiedPhone ? 'phone_verified' : 'self_reported' }, fields };
 }
-export function splitSubmission(input: any) {
-  const validated = validateSubmission(input);
+export function splitSubmission(input: any, identity: VerifiedBaselineIdentity = {}) {
+  const validated = validateSubmission(input, identity);
   const auntEdnaFields: Record<string, any> = {};
   const pulseFields: Record<string, any> = {};
   const references: Record<string, any> = {};

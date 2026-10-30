@@ -1,0 +1,22 @@
+// Exercise the actual baseline page offline. No accounts, messages, or clinical writes.
+const assert=require('node:assert/strict'),http=require('node:http'),{build}=require('esbuild'),{chromium}=require('playwright');
+const version=require('../../src/content/questionnaires/athlete-starting-point.json').version;
+(async()=>{
+ const bundle=await build({stdin:{contents:`import React from 'react';import{createRoot}from'react-dom/client';import Page from './src/pages/PulseCheck/questionnaire/cau';createRoot(document.getElementById('root')).render(<Page collectionEnabled={true}/>);`,resolveDir:process.cwd(),loader:'tsx'},bundle:true,write:false,define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'offline',setup(b){b.onResolve({filter:/^(firebase\/auth|next\/head)$|api\/firebase\/config$/},a=>({path:a.path,namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:a.path==='next/head'?'export default function Head(){return null}':a.path==='firebase/auth'?`export function onAuthStateChanged(a,cb){queueMicrotask(()=>{const c=new URLSearchParams(location.search).get('case');cb({uid:'identity-test',displayName:null,email:c==='email'||c==='missing-name'?'auth@example.test':null,phoneNumber:c==='phone'?'+12025550123':null,getIdToken:async()=>'offline-only'})});return()=>{}}export async function signInWithEmailAndPassword(){}export async function signInWithCustomToken(){}export async function signOut(){}`:'export const auth={};export const isUsingDevFirebase=()=>true;'}));}}]});
+ const server=http.createServer((req,res)=>{res.setHeader('Content-Type',req.url==='/app.js'?'application/javascript':'text/html');res.end(req.url==='/app.js'?bundle.outputFiles[0].contents:'<html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0"><div id="root"></div><script src="/app.js"></script></body></html>')});await new Promise(r=>server.listen(0,'127.0.0.1',r));let browser;
+ try{browser=await chromium.launch({headless:true});for(const scenario of ['phone','server-phone','email','missing-name']){
+  const page=await browser.newPage({viewport:{width:390,height:844}});let drafts=[];
+  await page.route('**/*',async route=>{const url=new URL(route.request().url());if(url.pathname.includes('/api/')){
+   if(route.request().method()==='POST'){const body=route.request().postDataJSON();drafts.push(body);return route.fulfill({json:{saved:true,draft:{...body.draft,revision:1}}})}
+   return route.fulfill({json:{available:true,required:true,completed:false,questionnaireVersion:version,healthBaselineEnabled:false,healthSharingAllowed:false,healthAuthorizationDecision:'disabled',accountIdentity:{name:scenario==='missing-name'?'':'Saved Consent Name',email:scenario==='email'||scenario==='missing-name'?'auth@example.test':'',phone:scenario==='phone'||scenario==='server-phone'?'+12025550123':''}}});}
+   if(url.hostname==='127.0.0.1')return route.continue();return route.abort();});
+  await page.goto(`http://127.0.0.1:${server.address().port}/?case=${scenario}&embedded=1`);const start=page.getByRole('button',{name:'Start baseline',exact:true});await start.waitFor();
+  assert.equal(await page.locator('input[type=email]').count(),0,scenario+' repeats email');assert.equal(await page.locator('input[autocomplete=name]').count(),scenario==='missing-name'?1:0,scenario+' repeats known name');
+  if(scenario==='missing-name')await page.locator('input[autocomplete=name]').fill('Missing Name Supplied');
+  if(scenario==='phone')await page.screenshot({path:'/tmp/baseline-phone-identity-reused.png',fullPage:true});
+  await start.click();await page.getByRole('button',{name:/Performance baseline/}).click();await page.getByRole('heading',{name:'What do you want to get better at?'}).waitFor();
+  await page.getByRole('button',{name:'Focus',exact:true}).click();await page.getByRole('button',{name:'Continue',exact:true}).click();await page.getByRole('heading',{name:'How much have you used each skill?'}).waitFor();
+  assert.equal(drafts.find(x=>x.action==='savePerformanceDraft')?.draft.name,scenario==='missing-name'?'Missing Name Supplied':'Saved Consent Name');await page.close();
+ }console.log('PASS: phone, server-confirmed phone, email, and missing-name fallback reuse identity and save the correct name.');}
+ finally{await browser?.close();await new Promise(r=>server.close(r));}
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -297,7 +297,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
   const [saved, setSaved] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [status, setStatus] = useState<{available: boolean; completed: boolean; required?: boolean; healthSharingAllowed: boolean; healthBaselineEnabled?: boolean; healthAuthorizationRequired?: boolean; healthAuthorizationDecision?: string; healthDocuments?: PulseCheckRequiredConsentDocument[]; healthConsentDecisions?: ConsentDecisions; healthCollectionAvailable?: boolean; submissionSharing?: boolean | null; sportName?: string; productBrand?: string; reviewId?: string; teamName?: string; teamWorkspaceUrl?: string; prefill?: {answers: Record<string,string|string[]>; name: string; email?: string; prefilledQuestionCount: number; performanceQuestionsComplete?: boolean; unavailableHealthAnswers: boolean; hasPreviousBaseline: boolean; skillsDraft?: ConsolidatedSkillsDraft}} | null>(null);
+  const [status, setStatus] = useState<{available: boolean; completed: boolean; required?: boolean; healthSharingAllowed: boolean; healthBaselineEnabled?: boolean; healthAuthorizationRequired?: boolean; healthAuthorizationDecision?: string; healthDocuments?: PulseCheckRequiredConsentDocument[]; healthConsentDecisions?: ConsentDecisions; healthCollectionAvailable?: boolean; submissionSharing?: boolean | null; sportName?: string; productBrand?: string; accountIdentity?: {name: string; email: string; phone: string}; reviewId?: string; teamName?: string; teamWorkspaceUrl?: string; prefill?: {answers: Record<string,string|string[]>; name: string; email?: string; prefilledQuestionCount: number; performanceQuestionsComplete?: boolean; unavailableHealthAnswers: boolean; hasPreviousBaseline: boolean; skillsDraft?: ConsolidatedSkillsDraft}} | null>(null);
   const [healthChoices, setHealthChoices] = useState<ConsentDecisions>({});
   const [reviewHealthChoice, setReviewHealthChoice] = useState(false);
   const [consentSaving, setConsentSaving] = useState(false);
@@ -346,6 +346,9 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       headers: {...testHeaders(), Authorization: `Bearer ${token}`, 'X-PulseCheck-Firebase-Mode': isUsingDevFirebase() ? 'dev' : 'prod'},
     })).then(async response => { const result = await response.json(); if (!response.ok) throw Error(result.error || 'Could not check your questionnaire. Refresh to try again.'); if (!result.completed && result.questionnaireVersion !== QUESTIONNAIRE_VERSION) throw Error('The questionnaire has been updated. Refresh this page to continue.'); return result; })
       .then(result => { if (sessionUid.current === next.uid) {setStatus(result);setSaved(result.completed);
+        if (result.accountIdentity?.name) setName(result.accountIdentity.name);
+        if (result.accountIdentity?.email) setEmail(result.accountIdentity.email);
+        else if ((result.accountIdentity?.phone || next.phoneNumber) && !next.email) setEmail('');
         const sharing = typeof result.submissionSharing === 'boolean' ? result.submissionSharing : result.healthBaselineEnabled !== false && !['declined','revoked','disabled'].includes(result.healthAuthorizationDecision || '');
         setHealthChoices(result.healthConsentDecisions || {});setShareHealth(sharing); setSharingLocked(typeof result.submissionSharing === 'boolean');
         setCompleted(old=>({...old,health:!sharing}));setReceipt(result.receipt || null);
@@ -353,16 +356,16 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
         if (result.reviewId && result.prefill) {
           const prefill = result.prefill;
           setAnswers(prefill.answers || {});
-          if (prefill.name) setName(prefill.name);
-          if (!next.email && prefill.email) setEmail(prefill.email);
-          if ((prefill.prefilledQuestionCount > 0 || prefill.hasPreviousBaseline) && (prefill.name || next.displayName) && (next.email || prefill.email)) setStarted(true);
+          if (result.accountIdentity?.name || prefill.name) setName(result.accountIdentity?.name || prefill.name);
+          if (!next.email && !result.accountIdentity?.phone && !next.phoneNumber && prefill.email) setEmail(prefill.email);
+          if ((prefill.prefilledQuestionCount > 0 || prefill.hasPreviousBaseline) && (result.accountIdentity?.name || prefill.name || next.displayName) && (next.email || result.accountIdentity?.phone || next.phoneNumber || prefill.email)) setStarted(true);
           const performanceReady = prefill.performanceQuestionsComplete === true || Object.keys(prefill.answers || {}).length > 0;
           setPerformanceQuestionsComplete(performanceReady);
           setCompleted({performance:performanceReady && result.skills?.completed === true,health:!sharing});
         }
         if (result.draft?.version === QUESTIONNAIRE_VERSION && !result.completed) {
           const draft = result.draft; draftRevision.current = draft.revision;
-          setAnswers(draft.answers); setName(draft.name); setStarted(true); setDraftSaved(true);
+          setAnswers(draft.answers); setName(result.accountIdentity?.name || draft.name); setStarted(true); setDraftSaved(true);
           setPerformanceQuestionsComplete(draft.completed);
           setCompleted({performance:draft.completed && result.skills?.completed===true,health:result.questionnaireSubmitted === true || !sharing});
           const resume = Math.min(draft.position, performanceQuestionCount - 1);
@@ -856,15 +859,17 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
       </div>;
     }
     if (!started) {
+      const needsName = !Boolean(status.accountIdentity?.name || user.displayName || status.prefill?.name);
+      const needsEmail = !Boolean(status.accountIdentity?.email || user.email || status.accountIdentity?.phone || user.phoneNumber);
       const accountFields = <>
-          <label className="cau-field">
+          {needsName && <label className="cau-field">
             <span className="cau-field-label">Your name</span>
             <input required maxLength={150} autoComplete="name" value={name} onChange={e => setName(e.target.value)} className="cau-input" />
-          </label>
-          <label className="cau-field">
+          </label>}
+          {needsEmail && <label className="cau-field">
             <span className="cau-field-label">Email address</span>
             <input readOnly={sandboxTest || Boolean(user.email)} required type="email" maxLength={254} autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} className="cau-input" />
-          </label>
+          </label>}
       </>;
       return (
         <motion.form key="intro" {...fadeMotion} onSubmit={e => { e.preventDefault(); if (!name.trim()) {setError('Enter your name to begin.');return;} setError('');setStarted(true); }} className="cau-stage cau-form">
@@ -876,7 +881,7 @@ export default function CAUQuestionnaire({ collectionEnabled, sandboxTest = fals
           <h2 className="cau-h2">A few things to know</h2>
           <div className="cau-intro-facts"><p><Check size={21}/>Answer honestly. You can skip questions.</p><p><HeartPulse size={21}/>Your mental-health answers are not shared with coaches or teammates.</p><p><Target size={21}/>Health sharing is your choice.</p></div>
           <Disclosure summary="How your answers are used"><p className="cau-body-sm">{source.purpose}</p><p className="cau-body-sm">This questionnaire supports onboarding, service delivery, and internal pilot evaluation. It is not a diagnostic assessment or an IRB-approved research study.</p><p className="cau-body-sm">Health sharing follows your current authorization. This questionnaire is not monitored as an emergency service.</p></Disclosure>
-          {user.displayName && user.email ? <Disclosure summary="Your account details">{accountFields}</Disclosure> : accountFields}
+          {(needsName || needsEmail) && accountFields}
           <AnimatePresence>{error && <ErrorBanner>{error}</ErrorBanner>}</AnimatePresence>
           <button className="cau-btn cau-btn-primary">Start baseline</button>
         </motion.form>

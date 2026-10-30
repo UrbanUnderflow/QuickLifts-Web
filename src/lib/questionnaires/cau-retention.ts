@@ -13,9 +13,9 @@ export function retentionClass(id: string) {
   return externalOnly.has(n) ? 'external-only' : operational.has(n) ? 'operational' : 'private-wellness';
 }
 // Invoke only server-side after choosing the policy. The browser cannot enable it.
-export function retainedPrivateCopy(input: any, enabled: boolean) {
+export function retainedPrivateCopy(input: any, enabled: boolean, identity: { verifiedPhone?: string } = {}) {
   if (!enabled) return {};
-  const { fields } = validateSubmission(input);
+  const { fields } = validateSubmission(input, identity);
   const retained = Object.fromEntries(Object.entries(fields).filter(([id]) =>
     questionCustodian(id) === 'auntEDNA' && retentionClass(id) !== 'external-only'));
   return { privateBaseline: {

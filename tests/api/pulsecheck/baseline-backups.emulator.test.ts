@@ -17,7 +17,7 @@ after(() => app.delete());
 const HEALTH_CONSENT = healthBaselineConsentDocuments([],undefined,undefined,'pulsecheck').find(document=>document.category==='health_authorization')!;
 let sequence = 0;
 const fakeEnvironment = { AUNTEDNA_PARTNER_TEST_KEY:'ae_pk_test_fixture' };
-async function fixture() {
+async function fixture(verifiedPhone?: string) {
   const uid = `athlete-${++sequence}`;
   const decision = {document:HEALTH_CONSENT,decision:'accepted',signedName:'Synthetic Athlete',version:HEALTH_CONSENT.version,decidedAt:'2026-10-27T12:00:00Z'};
   await db.collection('users').doc(uid).set({id:uid,sport:'Golf'});
@@ -25,13 +25,13 @@ async function fixture() {
   await privateRef.set({baselineHealthConsentDecisions:{[HEALTH_CONSENT.id]:decision}});
   await privateRef.collection('consent-events').doc('first').set({actorUserId:uid,decisions:{[HEALTH_CONSENT.id]:decision},recordedAt:admin.firestore.Timestamp.now()});
   const assignment = {scope:'individual',environment:'test',universityCode:'SANDBOX'};
-  const input = {submissionId:`submission-${uid}`,name:'Synthetic Athlete',email:'athlete@example.test',answers:{'cau-starting-point-39':'Less than 5 hours'},completedSections:{performance:true,health:true}};
+  const input = {submissionId:`submission-${uid}`,name:'Synthetic Athlete',email:verifiedPhone ? '' : 'athlete@example.test',answers:{'cau-starting-point-39':'Less than 5 hours'},completedSections:{performance:true,health:true}};
   const id = healthBackupId(uid,input.submissionId), mirrorId = `baseline_${uid}_fixture`;
   async function save() {
     await db.runTransaction(async tx => {
-      const prepared = await prepareHealthBackup(db,tx,{uid,input,assignment,recordIds:[mirrorId]});
+      const prepared = await prepareHealthBackup(db,tx,{uid,input,assignment,verifiedPhone,recordIds:[mirrorId]});
       tx.create(prepared.reference,prepared.record);
-      tx.create(db.collection(COLLECTION).doc(mirrorId),{...splitSubmission(input).pulseCheck,externalId:uid,status:'complete',healthBackupId:id});
+      tx.create(db.collection(COLLECTION).doc(mirrorId),{...splitSubmission(input,{verifiedPhone}).pulseCheck,externalId:uid,status:'complete',healthBackupId:id});
     });
   }
   return {uid,id,input,assignment,mirrorId,privateRef,save};
@@ -172,4 +172,15 @@ test('admin listing is bounded and cursor pagination never returns raw payloads'
   const next=await listHealthBackups(db,1,first.nextCursor!);assert.equal(next.backups.length,1);assert.notEqual(next.backups[0].id,first.backups[0].id);
   assert.equal(JSON.stringify(next).includes('Less than 5 hours'),false);
   await assert.rejects(listHealthBackups(db,101),/valid page/);await assert.rejects(listHealthBackups(db,1,'../other'),/valid page/);
+});
+
+
+test('phone-only identity saves and replays private health backup without fabricated email',async()=>{
+ const f=await fixture('+12025550123');
+ await f.save();
+ const mirror=(await db.collection(COLLECTION).doc(f.mirrorId).get()).data();
+ assert.equal(mirror?.identity.phone,'+12025550123');
+ assert.equal('email' in mirror?.identity,false);
+ const delivered=await processHealthBackup(db,f.id,f.uid,{transport:receiptTransport(f),env:fakeEnvironment});
+ assert.equal(delivered.deliveryStatus,'verified');
 });

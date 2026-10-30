@@ -22,11 +22,11 @@ function validateConfig(config: PartnerConfig) {
 }
 export async function submitAuntEdnaBaseline(
   input: Parameters<typeof splitSubmission>[0], externalId: string,
-  config: PartnerConfig, transport: typeof fetch = fetch,
+  config: PartnerConfig, transport: typeof fetch = fetch, identity: { verifiedPhone?: string } = {},
 ): Promise<BaselineReceipt> {
   validateConfig(config);
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(externalId) || !/^[A-Za-z0-9_-]{1,128}$/.test(input.submissionId || '')) throw Error('Invalid submission identity.');
-  const { auntEdna } = splitSubmission(input);
+  const { auntEdna } = splitSubmission(input, identity);
   let response: Response;
   try {
     response = await transport(`${BASE_URL}/partner/athletes/${encodeURIComponent(externalId)}/baseline`, {

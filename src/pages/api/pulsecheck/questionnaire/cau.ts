@@ -1,3 +1,4 @@
+import { baselineAccountIdentity, bindBaselineAccountIdentity } from '../../../../lib/questionnaires/account-identity';
 import { resolveSchoolActivationFlow, SCHOOL_ACTIVATION_FLOW_VERSION } from '../../../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
 import { baselineHealthContext, saveBaselineHealthDecision } from '../../../../lib/questionnaires/cau-health';
 import { resolveBaselineConnection } from '../../../../lib/questionnaires/auntedna-connection';
@@ -54,6 +55,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     active = active && health.eligible;
     const { healthSharingAllowed, healthBaselineEnabled, healthAuthorizationRequired, healthAuthorizationUrl,
       healthAuthorizationDecision, sportName } = health;
+    const profile = (await db.collection('users').doc(user.uid).get()).data() || {};
+    const accountIdentity = baselineAccountIdentity(user, profile, health.eligible && !health.individual ? health.member : undefined);
     const draftRef = collection.doc(`performance_draft_${namespace}`);
     let draft = active && enabled && !completed ? (await draftRef.get()).data() : null;
     if (!reviewId && !draft && active && enabled && !completed) {
@@ -89,7 +92,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const selectedBackup = typeof priorBackupId === 'string' ? await readHealthBackup(db, priorBackupId).catch(() => null) : null;
     const priorBackup = selectedBackup?.athleteId===user.uid ? selectedBackup : null;
     const healthReceipt = (backup: any) => backup ? {backupId:backup.id,healthStorage:backup.deliveryStatus==='verified'?'auntedna_verified':'pulse_private_backup',providerVerified:backup.deliveryStatus==='verified'} : null;
-    if (req.method === 'GET') return res.json({ required: Boolean(active && !completed), completed, version: VERSION, questionnaireVersion: QUESTIONNAIRE_VERSION,
+    if (req.method === 'GET') return res.json({ accountIdentity, required: Boolean(active && !completed), completed, version: VERSION, questionnaireVersion: QUESTIONNAIRE_VERSION,
       reviewId: reviewId || null, teamName: teamReview?.teamName || null, prefill,
       productBrand: normalizeNativeProductBrand(health.organization?.productBrand),
       ...(health.eligible && !health.individual && resolveSchoolActivationFlow({ productBrand: health.organization?.productBrand, role: health.member?.role }) ? { onboardingFlowVersion: SCHOOL_ACTIVATION_FLOW_VERSION } : {}),
@@ -130,9 +133,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.body?.completedSections?.performance !== true || req.body?.completedSections?.health !== true || typeof req.body.shareHealth !== 'boolean') return res.status(400).json({ error: 'Finish both sections before submitting.' });
     // Stable assignment ID and authenticated UID bind retries across web and apps.
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(assignment.submissionId || '')) return res.status(503).json({ error: 'Your questionnaire setup needs review.' });
-    const input = applyAdministrativeAnswers({ ...req.body, submissionId: `sp2-${createHash('sha256').update(`${assignment.submissionId}:${QUESTIONNAIRE_VERSION}`).digest('hex')}`, email: user.email || req.body.email }, await deriveAdministrativeAnswers(db,user.uid));
+    const input = applyAdministrativeAnswers(bindBaselineAccountIdentity({ ...req.body, submissionId: `sp2-${createHash('sha256').update(`${assignment.submissionId}:${QUESTIONNAIRE_VERSION}`).digest('hex')}` }, accountIdentity), await deriveAdministrativeAnswers(db,user.uid));
     let split;
-    try { split = splitSubmission(input); } catch { return res.status(400).json({ error: 'Please check your answers before submitting.' }); }
+    try { split = splitSubmission(input, { verifiedPhone: accountIdentity.phone }); } catch { return res.status(400).json({ error: 'Please check your answers before submitting.' }); }
     if (req.body.shareHealth !== false && !healthSharingAllowed) return res.status(403).json({ error: 'Review your health-sharing authorization, or complete performance only.' });
     const attemptRef = collection.doc(`attempt_${namespace}`);
     const shareHealth = req.body.shareHealth !== false;
@@ -152,8 +155,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           || teamBaselineReviewId(user.uid, assignment.teamMembershipId, membership) !== reviewId) throw Error('Team join changed.');
       }
       const original = reviewId ? await tx.get(originalRecordRef) : null;
-      const backup = shareHealth ? await prepareHealthBackup(db, tx, {uid:user.uid,input,assignment,recordIds:[recordRef.id,...(reviewId && !original?.exists ? [originalRecordRef.id] : [])]}) : null;
-      const value = { ...mirror, ...retainedPrivateCopy(input, liveRetentionEnabled(assignment, process.env.CAU_PRIVATE_RETENTION_ENABLED)), administrativeMetadata:{...input.administrativeMetadata,firstPerformanceSaveAt:draft?.startedAt || null}, fields: attempt.pulseCheck.fields, identity: attempt.pulseCheck.identity, recordedAt: admin.firestore.FieldValue.serverTimestamp(),
+      const backup = shareHealth ? await prepareHealthBackup(db, tx, {uid:user.uid,input,assignment,verifiedPhone:accountIdentity.phone,recordIds:[recordRef.id,...(reviewId && !original?.exists ? [originalRecordRef.id] : [])]}) : null;
+      const value = { ...mirror, ...retainedPrivateCopy(input, liveRetentionEnabled(assignment, process.env.CAU_PRIVATE_RETENTION_ENABLED), { verifiedPhone: accountIdentity.phone }), administrativeMetadata:{...input.administrativeMetadata,firstPerformanceSaveAt:draft?.startedAt || null}, fields: attempt.pulseCheck.fields, identity: attempt.pulseCheck.identity, recordedAt: admin.firestore.FieldValue.serverTimestamp(),
         ...(reviewId ? {reviewId, teamId:assignment.teamId, teamMembershipId:assignment.teamMembershipId, reviewedAt:new Date().toISOString(), reviewedBy:user.uid, acceptedPrefilled:true, startingProfile:savedSkills?.result || canonical, prefillSourceSubmissionId:prefill?.sourceSubmissionId || null} : {}) };
       if (!reserved.exists) tx.create(attemptRef, attempt);
       if (backup?.create) tx.create(backup.reference, backup.record);

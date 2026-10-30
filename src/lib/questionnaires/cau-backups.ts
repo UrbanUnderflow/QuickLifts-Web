@@ -52,14 +52,14 @@ async function currentAuthorization(db: any, tx: any, uid: string, assignment: a
 
 /** Call before any transaction writes. The caller creates this document atomically with completion. */
 export async function prepareHealthBackup(db: any, tx: any, options: {
-  uid: string; input: any; assignment: any; recordIds: string[];
+  uid: string; input: any; assignment: any; recordIds: string[]; verifiedPhone?: string;
 }) {
   const { uid, input, assignment, recordIds } = options;
   const context = await currentAuthorization(db, tx, uid, assignment);
   const id = healthBackupId(uid, input.submissionId);
   const reference = db.collection(COLLECTION).doc(id);
   const previous = await tx.get(reference);
-  const payload = splitSubmission(input).auntEdna;
+  const payload = splitSubmission(input, { verifiedPhone: options.verifiedPhone }).auntEdna;
   if (previous.exists) {
     const record = previous.data();
     if (record.externalId !== uid || record.submissionId !== input.submissionId
@@ -112,7 +112,7 @@ function submissionFromPayload(record: any) {
     answers: Object.fromEntries(Object.entries(payload.fields || {}).filter(([, field]: any) => field.state === 'local')
       .map(([id, field]: any) => [id, field.value])) };
   // The original provider payload is immutable, including skipped/conditional fields.
-  if (JSON.stringify(splitSubmission(input).auntEdna) !== JSON.stringify(payload)) throw new BackupError('The saved backup needs review before sending.');
+  if (JSON.stringify(splitSubmission(input, { verifiedPhone: payload.identity?.verification === 'phone_verified' ? payload.identity?.phone : undefined }).auntEdna) !== JSON.stringify(payload)) throw new BackupError('The saved backup needs review before sending.');
   return input;
 }
 
@@ -160,7 +160,7 @@ export async function processHealthBackup(db: any, id: string, actorUid: string,
   });
   if (claim.metadata) return claim.metadata;
   let receipt: BaselineReceipt | null = null;
-  try { receipt = await submitAuntEdnaBaseline(claim.input, claim.record.externalId, claim.connection, dependencies.transport); }
+  try { receipt = await submitAuntEdnaBaseline(claim.input, claim.record.externalId, claim.connection, dependencies.transport, { verifiedPhone: claim.record.payload?.identity?.verification === 'phone_verified' ? claim.record.payload.identity.phone : undefined }); }
   catch { /* Provider/network bodies are deliberately never retained or logged. */ }
   return db.runTransaction(async (tx: any) => {
     const snapshot = await tx.get(reference), current = snapshot.data();
