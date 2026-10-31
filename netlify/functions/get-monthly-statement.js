@@ -3,6 +3,7 @@
 
 const Stripe = require('stripe');
 const { db, headers } = require('./config/firebase');
+const { requireUser } = require('./config/require-user');
 
 let stripe;
 try {
@@ -24,7 +25,7 @@ function startEndForMonth(monthKey) {
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'GET, OPTIONS' } };
+    return { statusCode: 200, headers, body: '' };
   }
 
   if (event.httpMethod !== 'GET') {
@@ -38,6 +39,8 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'Missing userId or month' }) };
     }
 
+    const access = await requireUser(event, userId);
+    if (access.error) return { statusCode: access.statusCode, headers, body: JSON.stringify({ success: false, error: access.error }) };
     const range = startEndForMonth(monthKey);
     if (!range) {
       return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'Invalid month format (YYYY-MM)' }) };

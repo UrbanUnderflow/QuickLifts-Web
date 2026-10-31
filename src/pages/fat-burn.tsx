@@ -1,3 +1,4 @@
+import { auth } from '../api/firebase/config';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { ArrowLeft, Play, Pause, Square, ChevronRight, Target, Clock, Flame, TrendingUp, CheckCircle } from 'lucide-react';
@@ -318,9 +319,11 @@ const FatBurnPage: React.FC = () => {
     });
 
     try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error('Authentication required');
       await fetch('/.netlify/functions/save-fatburn-summary', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(summary.toDictionary())
       });
     } catch (e) {

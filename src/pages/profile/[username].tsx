@@ -16,7 +16,8 @@ import { parseActivityType } from '../../utils/activityParser';
 import { UserActivity } from '../../types/Activity';
 import FullScreenExerciseView from '../FullscreenExerciseView';
 import UserProfileMeta from '../../components/UserProfileMeta';
-import { db } from '../../api/firebase/config';
+import { db, auth } from '../../api/firebase/config';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import FollowButton from '../../components/FollowButton';
 import SideNav from '../../components/Navigation/SideNav';
@@ -79,6 +80,8 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
 
   // Redux state for current authenticated user
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
+  const [viewer, setViewer] = useState<FirebaseUser | null | undefined>(undefined);
+  useEffect(() => onAuthStateChanged(auth, setViewer), []);
 
   // Determine if current user is viewing their own profile
   const isOwnProfile = currentUser && initialUserData && currentUser.id === initialUserData.id;
@@ -191,10 +194,11 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   // Update the fetchBodyWeight useEffect
   useEffect(() => {
     const fetchBodyWeight = async () => {
-      if (!user?.id) return;
+      if (!user?.id || viewer === undefined) return;
 
       try {
-        const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}`);
+        const token = await viewer?.getIdToken();
+        const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         if (!response.ok) throw new Error('Failed to fetch body weight data');
 
         const data = await response.json();
@@ -215,7 +219,7 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
     };
 
     fetchBodyWeight();
-  }, [user?.id, API_BASE_URL]);
+  }, [user?.id, API_BASE_URL, viewer]);
 
   // Fetch user's rounds (SweatlistCollections) - matching iOS
   useEffect(() => {
@@ -289,12 +293,17 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
 
   // Fetch check-ins if allowed
   useEffect(() => {
+    let cancelled = false;
+    setCheckins([]);
+    setCheckinsLoading(false);
+    setSelectedCheckin(null);
     const fetchCheckins = async () => {
-      if (!user?.id || !canViewCheckins) return;
+      if (!user?.id || !canViewCheckins || viewer === undefined) return;
 
       setCheckinsLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}&limit=50`);
+        const token = await viewer?.getIdToken();
+        const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}&limit=50`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
         if (!response.ok) throw new Error('Failed to fetch check-ins');
 
         const data = await response.json();
@@ -303,17 +312,18 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
           const sortedCheckins = (data.bodyWeight || []).sort(
             (a: BodyWeightCheckin, b: BodyWeightCheckin) => b.createdAt - a.createdAt
           );
-          setCheckins(sortedCheckins);
+          if (!cancelled) setCheckins(sortedCheckins);
         }
       } catch (error) {
         console.error('Error fetching check-ins:', error);
       } finally {
-        setCheckinsLoading(false);
+        if (!cancelled) setCheckinsLoading(false);
       }
     };
 
     fetchCheckins();
-  }, [user?.id, canViewCheckins, API_BASE_URL]);
+    return () => { cancelled = true; };
+  }, [user?.id, canViewCheckins, API_BASE_URL, viewer]);
 
   useEffect(() => {
     const fetchUserVideos = async () => {
