@@ -1,3 +1,4 @@
+import { nextPipeListsRevision, assertPipeListWriteSafe, pipeListWriteConflicts } from '../utils/pipelistsWriteProtocol';
 import { isArchived, mergeArchiveMarkers, visiblePipeLists, reconcilePipeLists, mergeMovedLead, removeListMember, type ArchivedPipeList } from '../utils/pipelistsIntegrity';
 import { APPLICABLE_COMPANIES, normalizeApplicableCompanies, matchesApplicableCompany } from '../utils/pipelistsCompanies';
 import PipeListsCompanies from '../components/pipelists/PipeListsCompanies';
@@ -387,6 +388,9 @@ type PipeList = {
 };
 
 type PipeListShare = {
+  writeProtocol?: number;
+  revision?: number;
+  retired?: boolean;
   id: string;
   ownerUid: string;
   ownerEmail: string;
@@ -408,6 +412,9 @@ type PipeListShare = {
 };
 
 type PipeListProtectedShare = {
+  writeProtocol?: number;
+  revision?: number;
+  retired?: boolean;
   id: string;
   ownerUid: string;
   ownerEmail: string;
@@ -2728,12 +2735,15 @@ const reconcilePipeListSnapshotsForWrite = (
   remoteList: PipeList,
   localList: PipeList,
   baseList?: PipeList,
+  ignoreTimestampOrder = false,
 ): PipeList => {
   if (remoteList.id !== localList.id) return localList;
   if (baseList?.id === localList.id) {
-    return mergePipeListSnapshotsThreeWay(baseList, remoteList, localList);
+    assertPipeListWriteSafe(baseList, remoteList, localList);
+    return mergePipeListSnapshotsThreeWay(baseList, remoteList, localList, ignoreTimestampOrder);
   }
 
+  assertPipeListWriteSafe(undefined, remoteList, localList);
   const mergedItems = new Map(remoteList.items.map((item) => [item.id, item]));
   localList.items.forEach((localItem) => {
     const remoteItem = mergedItems.get(localItem.id);
@@ -2741,11 +2751,8 @@ const reconcilePipeListSnapshotsForWrite = (
       mergedItems.set(localItem.id, localItem);
       return;
     }
-    const remoteUpdatedAt = new Date(remoteItem.updatedAt || remoteItem.createdAt).getTime();
-    const localUpdatedAt = new Date(localItem.updatedAt || localItem.createdAt).getTime();
-    if (!Number.isFinite(remoteUpdatedAt) || localUpdatedAt > remoteUpdatedAt) {
-      mergedItems.set(localItem.id, localItem);
-    }
+    // Without a baseline, retain the saved copy for equivalent records.
+    // Wall-clock metadata never selects a conflicting version.
   });
 
   const itemOrder = Array.from(new Set([...localList.items.map((item) => item.id), ...remoteList.items.map((item) => item.id)]));
@@ -2796,6 +2803,8 @@ const persistCollaborativePipeList = async ({
   await runPipeListSaveWithRetry(() => runTransaction(simpBudgetDb, async (transaction) => {
     if (!isCurrent()) return;
     const snapshot = await transaction.get(canonicalRef);
+    const publicSnapshot = isProtected && actor.uid === ownerUid ? await transaction.get(publicShareRef) : snapshot;
+    if (snapshot.data()?.retired || publicSnapshot.data()?.retired) throw new Error('This list has been transferred or retired. Reload your workspace.');
     if (!isCurrent()) return;
     if (!snapshot.exists() && !isProtected) throw new Error('This shared PipeList is no longer available.');
 
@@ -2804,7 +2813,7 @@ const persistCollaborativePipeList = async ({
       if (!data.list) throw new Error('This shared PipeList is no longer available.');
       const remoteList = collaboratorSafePipeListSnapshot(purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0]);
       mergedList = collaboratorSafePipeListSnapshot(normalizeList(
-        reconcilePipeListSnapshotsForWrite(remoteList, localSnapshot, baseList ? normalizeList(baseList, 0) : undefined), 0,
+        reconcilePipeListSnapshotsForWrite(remoteList, localSnapshot, baseList ? normalizeList(baseList, 0) : undefined, snapshot.data()?.writeProtocol === 2), 0,
       ));
       if (pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch && data.protectedDetails === protectedDetails && !isProtected) return;
       if (isProtected && pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch) return;
@@ -2819,12 +2828,14 @@ const persistCollaborativePipeList = async ({
               ownerUid,
               ownerEmail,
               listId: mergedList.id,
+              ...nextPipeListsRevision(snapshot.data()),
               list: mergedList,
               lastEditedBy: actor,
               ...(!snapshot.exists() ? { createdAt: serverTimestamp() } : {}),
               updatedAt: serverTimestamp(),
             }
           : {
+              ...nextPipeListsRevision(snapshot.data()),
               list: mergedList,
               lastEditedBy: actor,
               updatedAt: serverTimestamp(),
@@ -2837,6 +2848,7 @@ const persistCollaborativePipeList = async ({
         publicShareRef,
         {
           ...publicSharePatch,
+          ...nextPipeListsRevision(publicSnapshot.data()),
           list: publicSafePipeListSnapshot(mergedList),
           protectedDetails: true,
           lastEditedBy: deleteField(),
@@ -2881,6 +2893,7 @@ const persistPipeListMemberAccessAddition = async ({
   await runTransaction(simpBudgetDb, async (transaction) => {
     const publicSnapshot = await transaction.get(publicShareRef);
     const publicData = publicSnapshot.exists() ? publicSnapshot.data() as Partial<PipeListShare> : {};
+    if (publicData.retired) throw new Error('This list has been transferred or retired.');
 
     if (publicSnapshot.exists() && publicData.ownerUid && publicData.ownerUid !== ownerUid) {
       throw new Error('This PipeList belongs to a different workspace owner.');
@@ -2907,7 +2920,7 @@ const persistPipeListMemberAccessAddition = async ({
     if (canonicalData.list) {
       const remoteList = collaboratorSafePipeListSnapshot(purgeExpiredDeletedItems([normalizeList(canonicalData.list, 0)])[0]);
       mergedList = collaboratorSafePipeListSnapshot(
-        reconcilePipeListSnapshotsForWrite(remoteList, mergedList, baseList),
+        reconcilePipeListSnapshotsForWrite(remoteList, mergedList, baseList, canonicalData.writeProtocol === 2),
       );
       mergedList = preserveStoredUniversityList(canonicalData.list as PipeList, remoteList, mergedList);
     } else if (publicSnapshot.exists()) {
@@ -2953,6 +2966,7 @@ const persistPipeListMemberAccessAddition = async ({
       publicShareRef,
       stripUndefined({
         ...nextShare,
+        ...nextPipeListsRevision(publicData),
         list: publicSafePipeListSnapshot(mergedList),
         lastEditedBy: protectedDetails ? deleteField() : actor,
       }),
@@ -2963,6 +2977,7 @@ const persistPipeListMemberAccessAddition = async ({
       transaction.set(
         protectedShareRef,
         stripUndefined({
+          ...nextPipeListsRevision(protectedSnapshot?.data()),
           ownerUid: nextShare.ownerUid,
           ownerEmail: nextShare.ownerEmail,
           listId: mergedList.id,
@@ -3443,6 +3458,7 @@ const PipelinePage: NextPage = () => {
   const liveListsRef = useRef<PipeList[]>(initialLists);
   const personalListsRef = useRef<PipeList[]>(initialLists);
   const personalSnapshotBaselineRef = useRef<PipeList[]>([]);
+  const personalRevisionRef = useRef<number | null>(null);
   const personalSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [pendingPersonalSaves, setPendingPersonalSaves] = useState(0);
   const [personalSaveError, setPersonalSaveError] = useState(false);
@@ -3450,6 +3466,7 @@ const PipelinePage: NextPage = () => {
   const [personalSyncConflict, setPersonalSyncConflict] = useState(false);
   const directShareBaselineRef = useRef('');
   const protectedShareBaselinesRef = useRef<Record<string, PipeList>>({});
+  const protectedShareRevisionsRef = useRef<Record<string, number>>({});
   const [activeListId, setActiveListId] = useState(initialLists[0].id);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [viewMode, setViewModeState] = useState<ViewMode>('pipeline');
@@ -3814,9 +3831,11 @@ const PipelinePage: NextPage = () => {
         archivedListsRef.current = {};
         setArchivedLists({});
         personalSnapshotBaselineRef.current = [];
+        personalRevisionRef.current = null;
         setAccessibleShareDocs([]);
         setProtectedShareLists({});
         protectedShareBaselinesRef.current = {};
+        protectedShareRevisionsRef.current = {};
         return;
       }
 
@@ -3876,12 +3895,14 @@ const PipelinePage: NextPage = () => {
         let nextLists = privateLists;
 
         personalListsRef.current = nextLists;
+        personalRevisionRef.current = snapshot.data()?.writeProtocol === 2 ? snapshot.data()?.revision : null;
         personalSnapshotBaselineRef.current = snapshot.exists() && Array.isArray(snapshot.data().lists)
           ? purgeExpiredDeletedItems(snapshot.data().lists.map(normalizeList))
           : [];
         setAccessibleShareDocs([]);
         setProtectedShareLists({});
         protectedShareBaselinesRef.current = {};
+        protectedShareRevisionsRef.current = {};
         setLists(nextLists);
         setActiveListId(nextLists[0]?.id || initialLists[0].id);
         setDraft(defaultDraft(nextLists[0]?.stages[0]?.id || initialLists[0].stages[0].id));
@@ -3896,9 +3917,11 @@ const PipelinePage: NextPage = () => {
         setPersonalStateReady(false);
         personalListsRef.current = fallbackLists;
         personalSnapshotBaselineRef.current = [];
+        personalRevisionRef.current = null;
         setAccessibleShareDocs([]);
         setProtectedShareLists({});
         protectedShareBaselinesRef.current = {};
+        protectedShareRevisionsRef.current = {};
         setLists(fallbackLists);
         setActiveListId(initialLists[0].id);
         setDataReady(true);
@@ -4016,12 +4039,18 @@ const PipelinePage: NextPage = () => {
             }
             const data = snapshot.data() as Partial<PipeListProtectedShare>;
             if (!data.list) return current;
+            if (data.writeProtocol === 2 && (data.revision || 0) < (protectedShareRevisionsRef.current[share.id] || 0)) return current;
             const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
             const localList = liveListsRef.current.find((list) => list.id === remoteList.id);
             const previousBase = protectedShareBaselinesRef.current[share.id];
+            if (localList && pipeListWriteConflicts(previousBase, remoteList, localList).length) {
+              setAppMessage({ type: 'error', text: 'Shared edits conflict with another session. Export your changes and reload before editing again.' });
+              return current;
+            }
             const nextList = localList
-              ? reconcilePipeListSnapshotsForWrite(remoteList, localList, previousBase)
+              ? reconcilePipeListSnapshotsForWrite(remoteList, localList, previousBase, data.writeProtocol === 2)
               : remoteList;
+            if (data.writeProtocol === 2) protectedShareRevisionsRef.current[share.id] = data.revision || 0;
             protectedShareBaselinesRef.current[share.id] = remoteList;
             if (JSON.stringify(current[share.id]) === JSON.stringify(nextList)) return current;
             return { ...current, [share.id]: nextList };
@@ -4073,6 +4102,8 @@ const PipelinePage: NextPage = () => {
         const data = snapshot.data() as { lists?: Partial<PipeList>[] };
         if (!Array.isArray(data.lists)) return;
 
+        const incomingRevision = snapshot.data().writeProtocol === 2 ? snapshot.data().revision as number : null;
+        if (incomingRevision !== null && personalRevisionRef.current !== null && incomingRevision < personalRevisionRef.current) return;
         archivedListsRef.current = mergeArchiveMarkers(archivedListsRef.current, snapshot.data().archivedLists || {});
         setArchivedLists(archivedListsRef.current);
         const nextPersonalLists = visiblePipeLists(purgeExpiredDeletedItems(data.lists.map(normalizeList)), archivedListsRef.current);
@@ -4084,7 +4115,13 @@ const PipelinePage: NextPage = () => {
         ];
 
         const previousPersonalSnapshot = personalSnapshotBaselineRef.current;
-        const hasOlderLeadRevision = nextPersonalLists.some((list) => {
+        const livePersonal = liveListsRef.current.filter(list => personalListsRef.current.some(personal => personal.id === list.id));
+        if (pipeListWriteConflicts(previousPersonalSnapshot, nextPersonalLists, livePersonal).length) {
+          setPersonalSyncConflict(true);
+          setAppMessage({ type: 'error', text: 'Another session changed fields you are editing. Your edits remain open. Export a full backup, then reload the saved version before editing again.' });
+          return;
+        }
+        const hasOlderLeadRevision = snapshot.data().writeProtocol !== 2 && nextPersonalLists.some((list) => {
           const previousItems = new Map(previousPersonalSnapshot.find((previous) => previous.id === list.id)?.items.map((item) => [item.id, item]) || []);
           return list.items.some((item) => {
             const previous = previousItems.get(item.id);
@@ -4098,13 +4135,14 @@ const PipelinePage: NextPage = () => {
           isOwner || personalListsRef.current.some(personal => personal.id === list.id) || !accessibleShareDocs.some((share) => share.list.id === list.id)))) {
           setPersonalSyncConflict(false);
         }
+        personalRevisionRef.current = incomingRevision;
         personalSnapshotBaselineRef.current = nextPersonalLists;
         setLists((currentLists) => {
           const currentPersonalLists = currentLists.filter((list) =>
             isOwner || personalListsRef.current.some(personal => personal.id === list.id) || !accessibleShareDocs.some((share) => share.list.id === list.id),
           );
           const mergedPersonalLists = reconcilePipeLists(
-            previousPersonalSnapshot, nextPersonalLists, currentPersonalLists, archivedListsRef.current,
+            previousPersonalSnapshot, nextPersonalLists, currentPersonalLists, archivedListsRef.current, snapshot.data().writeProtocol === 2,
           );
           personalListsRef.current = mergedPersonalLists;
           const mergedLists = [
@@ -4432,7 +4470,8 @@ const PipelinePage: NextPage = () => {
           const remoteLists = Array.isArray(storedLists)
             ? purgeExpiredDeletedItems(storedLists.map(normalizeList))
             : [];
-          const mergedLists = reconcilePipeLists(baseLists, remoteLists, listsToPersist, mergeArchiveMarkers(archivedListsRef.current, snapshot.data()?.archivedLists || {})).map(normalizeList);
+          assertPipeListWriteSafe(baseLists, remoteLists, listsToPersist);
+          const mergedLists = reconcilePipeLists(baseLists, remoteLists, listsToPersist, mergeArchiveMarkers(archivedListsRef.current, snapshot.data()?.archivedLists || {}), snapshot.data()?.writeProtocol === 2).map(normalizeList);
           if (pipeListSnapshotsEqual(remoteLists, mergedLists)) { savedLists = Array.isArray(storedLists) ? storedLists : []; return; }
           const persistedLists = mergedLists.map(list => {
             const raw = Array.isArray(storedLists) ? storedLists.find((stored: PipeList) => stored.id === list.id) : undefined;
@@ -4442,6 +4481,7 @@ const PipelinePage: NextPage = () => {
           savedLists = persistedLists;
           transaction.set(stateRef, stripUndefined({
             ownerEmail: user.email || '',
+            ...nextPipeListsRevision(snapshot.data()),
             lists: persistedLists,
             updatedAt: serverTimestamp(),
           }), { merge: true });
@@ -4713,6 +4753,7 @@ const PipelinePage: NextPage = () => {
         const data = snapshot.data() as Partial<PipeListProtectedShare>;
         if (!data.list) return;
         const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
+        if (data.writeProtocol === 2 && (data.revision || 0) < (protectedShareRevisionsRef.current[protectedShareId] || 0)) return;
         const currentList = liveListsRef.current.find((list) => list.id === remoteList.id);
         const storedBase = protectedShareBaselinesRef.current[protectedShareId];
         const directBase =
@@ -4720,11 +4761,16 @@ const PipelinePage: NextPage = () => {
             ? normalizeList(JSON.parse(directShareBaselineRef.current) as Partial<PipeList>, 0)
             : undefined;
         const baseList = storedBase || directBase;
+        if (currentList && pipeListWriteConflicts(baseList, remoteList, currentList).length) {
+          setAppMessage({ type: 'error', text: 'Shared edits conflict with another session. Export your changes and reload before editing again.' });
+          return;
+        }
         const nextList = currentList
           ? baseList
-            ? reconcilePipeListSnapshotsForWrite(remoteList, currentList, baseList)
+            ? reconcilePipeListSnapshotsForWrite(remoteList, currentList, baseList, data.writeProtocol === 2)
             : mergeCollaboratorListSnapshot(currentList, remoteList)
           : remoteList;
+        if (data.writeProtocol === 2) protectedShareRevisionsRef.current[protectedShareId] = data.revision || 0;
         protectedShareBaselinesRef.current[protectedShareId] = remoteList;
         setProtectedShareLists((current) => ({ ...current, [protectedShareId]: nextList }));
 
@@ -7435,7 +7481,7 @@ Rules:
         const leadRef = doc(simpBudgetDb, PIPELEAD_SHARES_COLLECTION, nextShareId);
         const existing = await transaction.get(leadRef);
         if (existing.exists() && existing.data().publicRead === false) throw new Error('This public link has been revoked.');
-        transaction.set(leadRef, stripUndefined({ ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }), { merge: true });
+        transaction.set(leadRef, stripUndefined({ ...payload, ...nextPipeListsRevision(existing.data()), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }), { merge: true });
       });
 
       setLeadShareUrl(nextShareUrl);
@@ -8583,8 +8629,10 @@ Rules:
         const remote = snapshot.data();
         const current = (remote.lists || []).find((list: PipeList) => list.id === listId);
         if (!current) throw new Error('This list is no longer available. Refresh before archiving.');
-        const preserved = mergePipeListSnapshotsThreeWay(personalSnapshotBaselineRef.current.find(list => list.id === listId), current, activeList);
+        assertPipeListWriteSafe(personalSnapshotBaselineRef.current.find(list => list.id === listId), current, activeList);
+        const preserved = mergePipeListSnapshotsThreeWay(personalSnapshotBaselineRef.current.find(list => list.id === listId), current, activeList, remote.writeProtocol === 2);
         transaction.update(stateRef, {
+          ...nextPipeListsRevision(remote),
           lists: (remote.lists || []).filter((list: PipeList) => list.id !== listId),
           archivedLists: { ...(remote.archivedLists || {}), [listId]: { list: preserved, archivedAt: new Date().toISOString() } },
           updatedAt: serverTimestamp(),
@@ -8607,7 +8655,7 @@ Rules:
         if (!archived?.list || !isArchived(archived) || archived.transferredToUid) throw new Error('This list cannot be restored here.');
         const nextArchive = { ...state?.archivedLists };
         nextArchive[listId] = { ...archived, restoredAt: new Date().toISOString() };
-        transaction.update(stateRef, { lists: [...(state?.lists || []).filter((list: PipeList) => list.id !== listId), archived.list], archivedLists: nextArchive, updatedAt: serverTimestamp() });
+        transaction.update(stateRef, { ...nextPipeListsRevision(state), lists: [...(state?.lists || []).filter((list: PipeList) => list.id !== listId), archived.list], archivedLists: nextArchive, updatedAt: serverTimestamp() });
       });
       closeLeadDetails(); setActiveListId(listId);
     } catch (error) { setAppMessage({ type: 'error', text: readFirestoreError(error, 'Unable to restore this list.') }); }
@@ -9253,10 +9301,10 @@ Rules:
         const privateShare = publicShare.exists() ? await transaction.get(privateRef) : null;
         const leadSnapshots = await Promise.all(links.docs.map(link => transaction.get(link.ref)));
         if (!state.exists() || !(state.data().lists || []).some((list: PipeList) => list.id === listId)) throw new Error('Refresh this list before changing access.');
-        transaction.update(stateRef, { lists: state.data().lists.map((list: PipeList) => list.id === listId ? { ...list, publicLinksDisabled: true } : list), updatedAt: serverTimestamp() });
-        if (publicShare.exists()) transaction.update(publicRef, { publicRead: false, 'list.publicLinksDisabled': true, updatedAt: serverTimestamp() });
-        if (privateShare?.exists()) transaction.update(privateRef, { 'list.publicLinksDisabled': true, lastEditedBy: { uid: user.uid, email: user.email || '' }, updatedAt: serverTimestamp() });
-        for (const link of leadSnapshots) if (link.exists()) transaction.update(link.ref, { publicRead: false, updatedAt: serverTimestamp() });
+        transaction.update(stateRef, { ...nextPipeListsRevision(state.data()), lists: state.data().lists.map((list: PipeList) => list.id === listId ? { ...list, publicLinksDisabled: true } : list), updatedAt: serverTimestamp() });
+        if (publicShare.exists()) transaction.update(publicRef, { ...nextPipeListsRevision(publicShare.data()), publicRead: false, 'list.publicLinksDisabled': true, updatedAt: serverTimestamp() });
+        if (privateShare?.exists()) transaction.update(privateRef, { ...nextPipeListsRevision(privateShare.data()), 'list.publicLinksDisabled': true, lastEditedBy: { uid: user.uid, email: user.email || '' }, updatedAt: serverTimestamp() });
+        for (const link of leadSnapshots) if (link.exists()) transaction.update(link.ref, { ...nextPipeListsRevision(link.data()), publicRead: false, updatedAt: serverTimestamp() });
       });
       setShareMessage({ type: 'success', text: `Public links disabled for ${activeList.name}. Invited access is unchanged.` });
     } catch (error) { setShareMessage({ type: 'error', text: readFirestoreError(error, 'Unable to disable public links.') }); }
@@ -9682,11 +9730,14 @@ Rules:
             createdAt: existingShare?.createdAt || serverTimestamp(),
           });
           if (!payload.protectedDetails) {
-            await setDoc(
-              doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, payload.id),
-              { ...publicSharePatch, updatedAt: serverTimestamp() },
-              { merge: true },
-            );
+            await runTransaction(simpBudgetDb, async transaction => {
+              const ref = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, payload.id);
+              const current = await transaction.get(ref);
+              if (current.data()?.retired) throw new Error('This list has been transferred or retired.');
+              const savedList = current.data()?.list;
+              const merged = savedList ? reconcilePipeListSnapshotsForWrite(normalizeList(savedList, 0), sourceList, existingShare?.list, current.data()?.writeProtocol === 2) : sourceList;
+              transaction.set(ref, { ...publicSharePatch, ...nextPipeListsRevision(current.data()), list: publicSafePipeListSnapshot(merged), updatedAt: serverTimestamp() }, { merge: true });
+            });
             return null;
           }
           const mergedList = await persistCollaborativePipeList({

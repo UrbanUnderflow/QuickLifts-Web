@@ -18,7 +18,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isKeyedRecordArray = (value: unknown[]): value is Array<Record<string, unknown> & { id: string }> =>
   value.every((entry) => isRecord(entry) && typeof entry.id === 'string' && entry.id.length > 0);
 
-function mergeKeyedArrays(base: unknown[], remote: unknown[], local: unknown[]): unknown[] {
+function mergeKeyedArrays(base: unknown[], remote: unknown[], local: unknown[], retainMissing = false, ignoreTimestampOrder = false): unknown[] {
   const baseEntries = new Map(
     (isKeyedRecordArray(base) ? base : []).map((entry) => [entry.id, entry] as const),
   );
@@ -39,15 +39,21 @@ function mergeKeyedArrays(base: unknown[], remote: unknown[], local: unknown[]):
       baseEntries.get(id),
       remoteEntries.get(id),
       localEntries.get(id),
+      retainMissing,
+      ignoreTimestampOrder,
     );
     return merged === undefined ? [] : [merged];
   });
 }
 
-function mergeCollaborativeValue(base: unknown, remote: unknown, local: unknown): unknown {
+function mergeCollaborativeValue(base: unknown, remote: unknown, local: unknown, retainMissing = false, ignoreTimestampOrder = false): unknown {
+  if (retainMissing && (remote === undefined || local === undefined)) return local ?? remote ?? base;
+  if (retainMissing && Array.isArray(remote) && Array.isArray(local) && isKeyedRecordArray(remote) && isKeyedRecordArray(local)) {
+    return mergeKeyedArrays(Array.isArray(base) ? base : [], remote, local, true, ignoreTimestampOrder);
+  }
   // An older snapshot can arrive after a write acknowledgment or listener restart.
   // It is not a new edit, even when local already matches the acknowledged base.
-  if (isRecord(base) && isRecord(remote) && isRecord(local) &&
+  if (!ignoreTimestampOrder && isRecord(base) && isRecord(remote) && isRecord(local) &&
       typeof base.id === 'string' && base.id === remote.id && base.id === local.id) {
     const baseTime = typeof base.updatedAt === 'string' ? Date.parse(base.updatedAt) : NaN;
     const remoteTime = typeof remote.updatedAt === 'string' ? Date.parse(remote.updatedAt) : NaN;
@@ -58,8 +64,8 @@ function mergeCollaborativeValue(base: unknown, remote: unknown, local: unknown)
   const containsRecords = (Array.isArray(remote) && Array.isArray(local) &&
     isKeyedRecordArray(remote) && isKeyedRecordArray(local)) || (isRecord(remote) && isRecord(local));
   if (valuesEqual(local, base) && !containsRecords) return remote;
-  if (valuesEqual(remote, base)) return local;
-  if (valuesEqual(remote, local)) return local;
+  if (valuesEqual(remote, base) && !containsRecords) return local;
+  if (valuesEqual(remote, local) && !containsRecords) return local;
 
   if (local === undefined) {
     return base === undefined || !valuesEqual(remote, base) ? remote : undefined;
@@ -71,7 +77,7 @@ function mergeCollaborativeValue(base: unknown, remote: unknown, local: unknown)
   if (Array.isArray(remote) && Array.isArray(local)) {
     const baseArray = Array.isArray(base) ? base : [];
     if (isKeyedRecordArray(remote) && isKeyedRecordArray(local) && isKeyedRecordArray(baseArray)) {
-      return mergeKeyedArrays(baseArray, remote, local);
+      return mergeKeyedArrays(baseArray, remote, local, retainMissing, ignoreTimestampOrder);
     }
     return local;
   }
@@ -81,7 +87,7 @@ function mergeCollaborativeValue(base: unknown, remote: unknown, local: unknown)
     const keys = new Set([...Object.keys(baseRecord), ...Object.keys(remote), ...Object.keys(local)]);
     return Object.fromEntries(
       Array.from(keys).flatMap((key) => {
-        const merged = mergeCollaborativeValue(baseRecord[key], remote[key], local[key]);
+        const merged = mergeCollaborativeValue(baseRecord[key], remote[key], local[key], key === 'items', ignoreTimestampOrder);
         return merged === undefined ? [] : [[key, merged]];
       }),
     );
@@ -90,8 +96,8 @@ function mergeCollaborativeValue(base: unknown, remote: unknown, local: unknown)
   return local;
 }
 
-export const mergePipeListSnapshotsThreeWay = <T,>(base: T, remote: T, local: T): T =>
-  mergeCollaborativeValue(base, remote, local) as T;
+export const mergePipeListSnapshotsThreeWay = <T,>(base: T, remote: T, local: T, ignoreTimestampOrder = false): T =>
+  mergeCollaborativeValue(base, remote, local, false, ignoreTimestampOrder) as T;
 
 export type PipeListAccessAdditionPlan = {
   addListIds: string[];

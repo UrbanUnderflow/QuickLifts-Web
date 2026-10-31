@@ -22,8 +22,11 @@ export function visiblePipeLists<T extends { id: string }>(lists: T[], archived:
   return lists.filter(list => !isArchived(archived[list.id]));
 }
 
-export function reconcilePipeLists<T extends { id: string }>(base: T[], remote: T[], local: T[], archived: Record<string, unknown> = {}): T[] {
-  return visiblePipeLists(mergePipeListSnapshotsThreeWay(base, remote, local), archived);
+export function reconcilePipeLists<T extends { id: string }>(base: T[], remote: T[], local: T[], archived: Record<string, unknown> = {}, ignoreTimestampOrder = false): T[] {
+  // List disappearance also requires a durable archive marker. A partial
+  // workspace snapshot is not an explicit delete operation.
+  const complete = (side: T[]) => [...side, ...[...local, ...remote, ...base].filter((list, index, all) => !side.some(existing => existing.id === list.id) && all.findIndex(candidate => candidate.id === list.id) === index)];
+  return visiblePipeLists(mergePipeListSnapshotsThreeWay(base, complete(remote), complete(local), ignoreTimestampOrder), archived);
 }
 
 type MergeableLead = { id: string; deletedAt?: string; movedToListId?: string; [key: string]: unknown };

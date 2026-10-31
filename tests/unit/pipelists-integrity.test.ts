@@ -1,3 +1,4 @@
+import { nextPipeListsRevision, assertPipeListWriteSafe } from '../../src/utils/pipelistsWriteProtocol';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -68,7 +69,7 @@ test('actual archive handler saves a full copy and a durable marker without dele
   const code = source.slice(source.indexOf('  const handleDeleteList ='), source.indexOf('  const restoreArchivedList ='));
   let write: any;
   const state = { lists: [grants, pitch], unrelated: 'preserve' };
-  const deps = {
+  const deps = { nextPipeListsRevision, assertPipeListWriteSafe,
     canManageActiveList: true, user: { uid: 'owner' }, personalStateReady: true, activeList: pitch,
     simpBudgetDb: {}, SIMPBUDGET_USERS_COLLECTION: '', PIPELISTS_SUBCOLLECTION: '', PIPELISTS_STATE_DOCUMENT_ID: '',
     doc: () => ({}), runTransaction: async (_: any, callback: any) => callback({ get: async () => ({ exists: () => true, data: () => state }), update: (_: any, value: any) => { write = value; } }),
@@ -111,7 +112,7 @@ test('actual public-link revocation touches only the active list and its lead li
     'protected/owner-grants': { ownerUid: 'owner', list: grants },
     'leads/owner-grants-one': { ownerUid: 'owner', listId: 'grants', publicRead: true },
   };
-  const deps = {
+  const deps = { nextPipeListsRevision, assertPipeListWriteSafe,
     user: { uid: 'owner', email: 'owner@example.com' }, canManageActiveList: true, activeList: grants,
     window: { confirm: () => true }, simpBudgetDb: {}, PIPELIST_SHARES_COLLECTION: 'shares', PIPELIST_PROTECTED_SHARES_COLLECTION: 'protected', SIMPBUDGET_USERS_COLLECTION: 'users', PIPELISTS_SUBCOLLECTION: 'lists', PIPELISTS_STATE_DOCUMENT_ID: 'state', PIPELEAD_SHARES_COLLECTION: 'leads',
     doc: (_: any, ...segments: string[]) => ({ path: segments.join('/'), id: segments.at(-1) }),
@@ -153,7 +154,7 @@ test('a stale tab cannot recreate a revoked lead link', async () => {
   const code = source.slice(source.indexOf('  const createOrUpdateLeadShareLink ='), source.indexOf('  const handleManualLeadSave ='));
   for (const scenario of ['disabled-list', 'revoked-link', 'archived-list']) {
     let writes = 0; let errorMessage = '';
-    const deps = {
+    const deps = { nextPipeListsRevision, assertPipeListWriteSafe,
       canModify: true, user: { uid: 'owner', email: 'owner@example.com' }, isLeadSharedView: false, activeList: grants,
       shareDoc: null, TREMAINE_OWNER_EMAIL: '', shareDocumentIdForLead: () => 'lead',
       window: { location: { origin: 'https://example.com' } }, publicSafePipeListSnapshot: (value: any) => value,

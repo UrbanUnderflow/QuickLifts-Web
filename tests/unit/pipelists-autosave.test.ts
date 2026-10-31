@@ -1,3 +1,4 @@
+import { nextPipeListsRevision, assertPipeListWriteSafe } from '../../src/utils/pipelistsWriteProtocol';
 import { reconcilePipeLists, mergeArchiveMarkers } from '../../src/utils/pipelistsIntegrity';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -32,7 +33,7 @@ function harness() {
     personalSnapshotBaselineRef: { current: board('outreach-queued') }, personalListsRef: { current: board('outreach-queued') },
     personalSaveQueueRef: { current: Promise.resolve() }, simpBudgetAuth: { currentUser: { uid: 'owner' } },
     purgeExpiredDeletedItems: (value: any) => value, normalizeList: (value: any) => value,
-    pipeListSnapshotsEqual, mergePipeListSnapshotsThreeWay, preserveStoredUniversityList, reconcilePipeLists, mergeArchiveMarkers, archivedListsRef: { current: {} },
+    nextPipeListsRevision, assertPipeListWriteSafe, pipeListSnapshotsEqual, mergePipeListSnapshotsThreeWay, preserveStoredUniversityList, reconcilePipeLists, mergeArchiveMarkers, archivedListsRef: { current: {} },
     stripUndefined: (value: any) => value, serverTimestamp: () => 'server-time', doc: (...args: any[]) => args,
     simpBudgetDb: {}, SIMPBUDGET_USERS_COLLECTION: 'users', PIPELISTS_SUBCOLLECTION: 'pipeLists', PIPELISTS_STATE_DOCUMENT_ID: 'state', STORAGE_KEY: 'cache',
     personalSaveFailureRef: { current: null }, saveFailureDetails: (error: any) => ({ message: error.message, code: error.code }),
@@ -211,4 +212,17 @@ test('owner load and unrelated autosave preserve raw university stage/history re
   assert.equal(h.state.writes.length, 1);
   assert.deepEqual(h.state.remote[0], university);
   assert.equal((h.state.remote[1] as any).name, 'Explicit unrelated edit');
+});
+
+
+test('actual autosave rejects conflicting status edits even with a newer local timestamp', async () => {
+  const h = harness();
+  h.scope.personalSnapshotBaselineRef.current = board('identified');
+  h.scope.lists = board('declined');
+  h.scope.lists[0].items[0].updatedAt = '2099-01-01';
+  h.state.remote = board('submitted');
+  h.start(); await h.tick();
+  assert.equal(h.state.writes.length, 0);
+  assert.equal(h.state.remote[0].items[0].stage, 'submitted');
+  assert.ok(h.state.errors.includes(true));
 });
