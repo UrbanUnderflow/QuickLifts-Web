@@ -22,7 +22,6 @@ import {
   sendSignInLinkToEmail,
   signInWithEmailLink,
   signInWithPopup,
-  signInWithRedirect,
   signOut,
   browserPopupRedirectResolver,
 } from 'firebase/auth';
@@ -1387,27 +1386,6 @@ const makeId = () => {
 const shareDocumentIdForList = (ownerUid: string, listId: string) => `${ownerUid}-${listId}`;
 const shareDocumentIdForLead = (ownerUid: string, listId: string, itemId: string) =>
   `${ownerUid}-${listId}-${itemId}`;
-
-const shouldUseRedirectSignIn = () => {
-  if (typeof window === 'undefined') return false;
-
-  const userAgent = window.navigator.userAgent || '';
-  const isMobileUserAgent = /Android|iPhone|iPad|iPod|CriOS|FxiOS|Mobile/i.test(userAgent);
-  const isTouchFirst = window.matchMedia?.('(pointer: coarse)').matches || false;
-
-  return isMobileUserAgent || isTouchFirst;
-};
-
-const shouldRetryGoogleSignInWithRedirect = (error: unknown) => {
-  const code =
-    error && typeof error === 'object' && 'code' in error
-      ? String((error as { code?: unknown }).code || '')
-      : '';
-
-  return (
-    code === 'auth/popup-blocked'
-  );
-};
 
 const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   title: '',
@@ -9827,12 +9805,9 @@ Rules:
     provider.setCustomParameters({ prompt: 'select_account' });
 
     try {
-      if (shouldUseRedirectSignIn()) {
-        setAuthMessage({ type: 'info', text: 'Opening Google sign-in...' });
-        await withTimeout(signInWithRedirect(simpBudgetAuth, provider, browserPopupRedirectResolver), 15000, 'Google sign-in did not open. Try again or use an email magic link.');
-        return;
-      }
-
+      // Keep the original route and first-party session on mobile too. Redirect
+      // auth uses cross-origin storage that Safari and other browsers partition.
+      // Invoke the popup directly from the tap, before awaiting other work.
       setAuthMessage({ type: 'info', text: 'Complete sign-in in the Google window.' });
       const result = await withTimeout(signInWithPopup(simpBudgetAuth, provider, browserPopupRedirectResolver), 45000, 'Google sign-in took too long. Close any unfinished Google sign-in window, then try again or use an email magic link.');
       const email = result.user.email?.toLowerCase() || '';
@@ -9848,19 +9823,17 @@ Rules:
         });
       }
     } catch (error) {
-      if (shouldRetryGoogleSignInWithRedirect(error)) {
-        try {
-          setAuthMessage({ type: 'info', text: 'Opening Google sign-in...' });
-          await withTimeout(signInWithRedirect(simpBudgetAuth, provider, browserPopupRedirectResolver), 15000, 'Google sign-in did not open. Try again or use an email magic link.');
-          return;
-        } catch (redirectError) {
-          console.error('PipeLists Google redirect fallback failed:', redirectError);
-          setAuthMessage({
-            type: 'error',
-            text: readAuthError(redirectError, 'Unable to open Google sign-in.'),
-          });
-          return;
-        }
+      const code = error && typeof error === 'object' && 'code' in error ? error.code : '';
+      if (code === 'auth/popup-blocked') {
+        setAuthMessage({
+          type: 'error',
+          text: 'Allow pop-ups for this site and tap Google sign-in again, or use an email magic link below.',
+        });
+        return;
+      }
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setAuthMessage({ type: 'info', text: 'Google sign-in was cancelled. Tap Google sign-in to try again.' });
+        return;
       }
 
       console.error('PipeLists Google sign-in failed:', error);
