@@ -1,3 +1,4 @@
+import { reconcilePipeLists, mergeArchiveMarkers } from '../../src/utils/pipelistsIntegrity';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -31,7 +32,7 @@ function harness() {
     personalSnapshotBaselineRef: { current: board('outreach-queued') }, personalListsRef: { current: board('outreach-queued') },
     personalSaveQueueRef: { current: Promise.resolve() }, simpBudgetAuth: { currentUser: { uid: 'owner' } },
     purgeExpiredDeletedItems: (value: any) => value, normalizeList: (value: any) => value,
-    pipeListSnapshotsEqual, mergePipeListSnapshotsThreeWay, preserveStoredUniversityList,
+    pipeListSnapshotsEqual, mergePipeListSnapshotsThreeWay, preserveStoredUniversityList, reconcilePipeLists, mergeArchiveMarkers, archivedListsRef: { current: {} },
     stripUndefined: (value: any) => value, serverTimestamp: () => 'server-time', doc: (...args: any[]) => args,
     simpBudgetDb: {}, SIMPBUDGET_USERS_COLLECTION: 'users', PIPELISTS_SUBCOLLECTION: 'pipeLists', PIPELISTS_STATE_DOCUMENT_ID: 'state', STORAGE_KEY: 'cache',
     personalSaveFailureRef: { current: null }, saveFailureDetails: (error: any) => ({ message: error.message, code: error.code }),

@@ -17,7 +17,7 @@ async function update(current, access, overrides = {}) {
   let message;
   const states = [];
   const context = {
-    user: { uid: 'owner' }, isOwner: true, isSharedView: false, ownerSharesReady: true, savingListAccess: '',
+    user: { uid: 'owner' }, isOwner: true, canManageWorkspace: true, isSharedView: false, ownerSharesReady: true, savingListAccess: '',
     simpBudgetDb: {}, PIPELIST_SHARES_COLLECTION: 'shares',
     doc: (_db, _collection, id) => id,
     setSavingListAccess: (value) => states.push(value), setShareMessage: (value) => { message = value; },

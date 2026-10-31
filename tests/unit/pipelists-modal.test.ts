@@ -15,11 +15,12 @@ test('an open lead survives its temporary absence from a synchronized list', () 
   const updated = { ...item, title: 'Updated Penn State' };
   assert.deepEqual(resolve({ id: 'universities', items: [updated] }, 'penn', cache), updated);
   assert.equal(resolve({ items: [] }, '', { current: null }), null);
+  assert.equal(resolve({ id: 'different-list', items: [] }, 'penn', cache), null, 'cached record must not cross list identity');
 });
 
-test('only the X handler dismisses lead details', () => {
+test('only explicit close or archive/restore dismisses lead details', () => {
   assert.equal(source.match(/setSelectedDetailItemId\(''\)/g)?.length, 1);
-  assert.equal(source.match(/closeLeadDetails\(\)/g)?.length, 1);
+  assert.equal(source.match(/closeLeadDetails\(\)/g)?.length, 3);
   assert.doesNotMatch(source, /const closeOnEscape/);
   const backdrop = source.slice(source.indexOf('{selectedDetailItem && selectedDetailStage && ('), source.indexOf('aria-labelledby="pipe-detail-title"'));
   assert.doesNotMatch(backdrop, /onClick=/);

@@ -1,3 +1,4 @@
+import { isArchived, mergeArchiveMarkers, visiblePipeLists, reconcilePipeLists, mergeMovedLead, removeListMember, type ArchivedPipeList } from '../utils/pipelistsIntegrity';
 import { APPLICABLE_COMPANIES, normalizeApplicableCompanies, matchesApplicableCompany } from '../utils/pipelistsCompanies';
 import PipeListsCompanies from '../components/pipelists/PipeListsCompanies';
 import { matchesLeadTagFilters, normalizeLeadTags } from '../utils/pipelistsTags';
@@ -363,6 +364,7 @@ type PipelineItem = {
   customerSuccess?: UniversityCustomerSuccess;
   createdAt: string;
   updatedAt: string;
+  mergeRevisions?: Record<string, unknown>[];
   deletedAt?: string;
   deletedByLogId?: string;
   restorableUntil?: string;
@@ -370,6 +372,7 @@ type PipelineItem = {
 };
 
 type PipeList = {
+  publicLinksDisabled?: boolean;
   id: string;
   name: string;
   description: string;
@@ -2073,38 +2076,6 @@ const getLeadSearchBridgeUrl = () => {
   return isLocalHost ? `${PIPELISTS_REMOTE_BRIDGE_ORIGIN}/api/openai/v1/responses` : '/api/openai/v1/responses';
 };
 
-const isPitchCompetitionList = (list: PipeList) =>
-  list.id === PITCH_COMPETITIONS_LIST_ID ||
-  list.templateKey === 'pitch' ||
-  normalizeOpportunityKey(list.name) === PITCH_COMPETITIONS_LIST_ID;
-
-const mergeRecommendedPitchCompetitions = (lists: PipeList[]) => {
-  const recommendedItems = createPitchCompetitionRecommendationItems();
-  let mergedIntoPitchList = false;
-
-  return lists.map((list) => {
-    if (mergedIntoPitchList || !isPitchCompetitionList(list)) return list;
-    mergedIntoPitchList = true;
-
-    const existingKeys = new Set(
-      list.items.flatMap((item) => [
-        item.id,
-        normalizeOpportunityKey(item.title),
-        item.sourceUrl ? normalizeOpportunityKey(item.sourceUrl) : '',
-      ]),
-    );
-    const missingItems = recommendedItems.filter(
-      (item) =>
-        !existingKeys.has(item.id) &&
-        !existingKeys.has(normalizeOpportunityKey(item.title)) &&
-        (!item.sourceUrl || !existingKeys.has(normalizeOpportunityKey(item.sourceUrl))),
-    );
-
-    if (missingItems.length === 0) return list;
-    return { ...list, items: [...missingItems, ...list.items] };
-  });
-};
-
 const addDays = (date: Date, days: number) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 const isItemDeleted = (item: Pick<PipelineItem, 'deletedAt'>) => Boolean(item.deletedAt);
 const canRestoreDeletedItem = (item: Pick<PipelineItem, 'deletedAt' | 'restorableUntil' | 'movedToListId'>) =>
@@ -2137,13 +2108,9 @@ const createSystemLog = (
   };
 };
 
-const purgeExpiredDeletedItems = (lists: PipeList[]) =>
-  lists.map((list) => ({
-    ...list,
-    items: list.items.filter(
-      (item) => !item.deletedAt || !item.restorableUntil || new Date(item.restorableUntil).getTime() >= Date.now(),
-    ),
-  }));
+// Retain deletion/move tombstones after the UI restore window closes. Removing
+// them on reads lets stale devices resurrect records and destroys audit history.
+const purgeExpiredDeletedItems = (lists: PipeList[]) => lists;
 
 const stripUndefined = <T,>(value: T): T => {
   if (Array.isArray(value)) {
@@ -2188,8 +2155,9 @@ const publicSafePipeListSnapshot = (list: PipeList): PipeList => {
   return {
     ...snapshot,
     items: snapshot.items.map((item) => {
-      if (list.templateKey !== 'university-pilot' && !item.customerSuccess) return item;
       const publicItem = { ...item };
+      delete publicItem.mergeRevisions;
+      if (list.templateKey !== 'university-pilot' && !item.customerSuccess) return publicItem;
       delete publicItem.customerSuccess;
       if (Array.isArray(publicItem.weeklyLogs)) publicItem.weeklyLogs = publicItem.weeklyLogs.filter((log) => log.type !== 'metrics');
       return publicItem;
@@ -3577,6 +3545,8 @@ const PipelinePage: NextPage = () => {
   const [moveTargetListId, setMoveTargetListId] = useState('');
   const [contactEmailInput, setContactEmailInput] = useState('');
   const [contactEmailError, setContactEmailError] = useState('');
+  const archivedListsRef = useRef<Record<string, ArchivedPipeList<PipeList>>>({});
+  const [archivedLists, setArchivedLists] = useState<Record<string, ArchivedPipeList<PipeList>>>({});
   const [selectedDetailItemId, setSelectedDetailItemId] = useState<string>('');
   const detailSnapshotRef = useRef<{ item: PipelineItem; list: PipeList } | null>(null);
   const closeLeadDetails = () => {
@@ -3689,12 +3659,11 @@ const PipelinePage: NextPage = () => {
   const isLeadSharedView = Boolean(leadShareId);
   const isSharedView = Boolean(shareId || leadShareId);
   const isOwner = normalizedUserEmail === TREMAINE_OWNER_EMAIL;
+  // Item IDs are only unique within a list. Never let a duplicate or moved
+  // tombstone in another list change the selected record's identity.
   const activeList = useMemo(
-    () => (selectedDetailItemId
-      ? lists.find((list) => list.items.some((item) => item.id === selectedDetailItemId)) ||
-        (detailSnapshotRef.current?.item.id === selectedDetailItemId ? detailSnapshotRef.current.list : null)
-      : null) || lists.find((list) => list.id === activeListId) || lists[0] || initialLists[0],
-    [activeListId, lists, selectedDetailItemId],
+    () => lists.find((list) => list.id === activeListId) || lists[0] || { ...initialLists[0], id: '', name: 'No PipeLists', items: [] },
+    [activeListId, lists],
   );
   const accessibleShareDocs = useMemo(
     () =>
@@ -3712,10 +3681,10 @@ const PipelinePage: NextPage = () => {
     );
   }, [accessibleShareDocs, normalizedUserEmail]);
   const sharedListIds = useMemo(
-    () => new Set(accessibleShareDocs.map((share) => share.list.id)),
-    [accessibleShareDocs],
+    () => new Set(accessibleShareDocs.filter(share => !personalListsRef.current.some(list => list.id === share.list.id)).map((share) => share.list.id)),
+    [accessibleShareDocs, lists],
   );
-  const activeDashboardShare = !isSharedView && !isOwner
+  const activeDashboardShare = !isSharedView && sharedListIds.has(activeList.id)
     ? accessibleShareDocs.find((share) => share.list.id === activeList.id) || null
     : null;
   const canEditShared =
@@ -3733,10 +3702,10 @@ const PipelinePage: NextPage = () => {
       shareDoc.ownerEmail.toLowerCase() === normalizedUserEmail ||
       shareDoc.viewerEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail) ||
       shareDoc.editorEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail));
-  const canModify = isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id);
+  const canModify = Boolean(user) && lists.some(list => list.id === activeList.id) && (isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id));
   const canManageWorkspace = !isSharedView && Boolean(user);
   const runbookAvailable = !isSharedView && Boolean(user) && (isOwner || editableListIds.size > 0);
-  const canManageActiveList = canManageWorkspace && !sharedListIds.has(activeList.id);
+  const canManageActiveList = canManageWorkspace && lists.some(list => list.id === activeList.id) && !sharedListIds.has(activeList.id);
   const isContactListActive = isContactList(activeList);
   const isInvestorUpdateContactsList = isInvestorUpdateContactList(activeList);
   const isTaskListActive = isTaskList(activeList);
@@ -3842,6 +3811,8 @@ const PipelinePage: NextPage = () => {
         setDataReady(false);
         setPersonalStateReady(false);
         personalListsRef.current = [];
+        archivedListsRef.current = {};
+        setArchivedLists({});
         personalSnapshotBaselineRef.current = [];
         setAccessibleShareDocs([]);
         setProtectedShareLists({});
@@ -3849,8 +3820,6 @@ const PipelinePage: NextPage = () => {
         return;
       }
 
-      const email = currentUser.email?.toLowerCase() || '';
-      const currentUserIsOwner = email === TREMAINE_OWNER_EMAIL;
       setDataReady(false);
       setPersonalStateReady(false);
 
@@ -3891,35 +3860,20 @@ const PipelinePage: NextPage = () => {
           PIPELISTS_INITIAL_LOAD_TIMEOUT_MS,
           'PipeLists took too long to connect. Your workspace will refresh automatically.',
         );
-        let privateLists: PipeList[] = currentUserIsOwner ? initialLists : [];
+        let privateLists: PipeList[] = [];
+        archivedListsRef.current = snapshot.data()?.archivedLists || {};
+        setArchivedLists(archivedListsRef.current);
 
         if (snapshot.exists()) {
           const data = snapshot.data() as { lists?: Partial<PipeList>[] };
           if (Array.isArray(data.lists)) {
             privateLists = purgeExpiredDeletedItems(data.lists.map(normalizeList));
           }
-        } else if (currentUserIsOwner && typeof window !== 'undefined') {
-          const stored = window.localStorage.getItem(STORAGE_KEY);
-          if (stored) {
-            try {
-              const parsed = JSON.parse(stored) as Partial<PipeList>[];
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                privateLists = purgeExpiredDeletedItems(parsed.map(normalizeList));
-              }
-            } catch (error) {
-              console.warn('[PipeLists] Unable to parse stored local pipeline data:', error);
-            }
-          }
         }
-
-        if (currentUserIsOwner) {
-          privateLists = mergeRecommendedPitchCompetitions(privateLists);
-        }
+        // Existing cloud state is authoritative. Never seed or import stale
+        // browser defaults on login, refresh, an empty workspace, or read errors.
+        privateLists = visiblePipeLists(privateLists, archivedListsRef.current);
         let nextLists = privateLists;
-
-        if (nextLists.length === 0 && currentUserIsOwner) {
-          nextLists = [{ ...createList('vc', 'My PipeList', 0), items: [] }];
-        }
 
         personalListsRef.current = nextLists;
         personalSnapshotBaselineRef.current = snapshot.exists() && Array.isArray(snapshot.data().lists)
@@ -3938,7 +3892,8 @@ const PipelinePage: NextPage = () => {
         setAppMessage(null);
       } catch (error) {
         console.error('Unable to initialize PipeLists:', error);
-        const fallbackLists = currentUserIsOwner ? initialLists : [];
+        const fallbackLists: PipeList[] = [];
+        setPersonalStateReady(false);
         personalListsRef.current = fallbackLists;
         personalSnapshotBaselineRef.current = [];
         setAccessibleShareDocs([]);
@@ -4090,7 +4045,7 @@ const PipelinePage: NextPage = () => {
     const nextLists = [
       ...personalListsRef.current,
       ...accessibleShareDocs
-        .filter((share) => !personalListsRef.current.some((personalList) => personalList.id === share.list.id))
+        .filter((share) => !isArchived(archivedListsRef.current[share.list.id]) && !personalListsRef.current.some((personalList) => personalList.id === share.list.id))
         .map((share) => share.list),
     ];
     setLists((current) => (JSON.stringify(current) === JSON.stringify(nextLists) ? current : nextLists));
@@ -4118,13 +4073,13 @@ const PipelinePage: NextPage = () => {
         const data = snapshot.data() as { lists?: Partial<PipeList>[] };
         if (!Array.isArray(data.lists)) return;
 
-        const nextPersonalLists = isOwner
-          ? mergeRecommendedPitchCompetitions(purgeExpiredDeletedItems(data.lists.map(normalizeList)))
-          : purgeExpiredDeletedItems(data.lists.map(normalizeList));
+        archivedListsRef.current = mergeArchiveMarkers(archivedListsRef.current, snapshot.data().archivedLists || {});
+        setArchivedLists(archivedListsRef.current);
+        const nextPersonalLists = visiblePipeLists(purgeExpiredDeletedItems(data.lists.map(normalizeList)), archivedListsRef.current);
         const nextLists = [
           ...nextPersonalLists,
           ...accessibleShareDocs
-            .filter((share) => !nextPersonalLists.some((personalList) => personalList.id === share.list.id))
+            .filter((share) => !isArchived(archivedListsRef.current[share.list.id]) && !nextPersonalLists.some((personalList) => personalList.id === share.list.id))
             .map((share) => share.list),
         ];
 
@@ -4140,18 +4095,16 @@ const PipelinePage: NextPage = () => {
           setPersonalSyncConflict(true);
           setAppMessage({ type: 'error', text: 'Another PipeLists session replaced newer saved edits. Your newer edits remain open here. Close older PipeLists tabs, then save your changes again before reloading.' });
         } else if (pipeListSnapshotsEqual(nextPersonalLists, liveListsRef.current.filter((list) =>
-          isOwner || !accessibleShareDocs.some((share) => share.list.id === list.id)))) {
+          isOwner || personalListsRef.current.some(personal => personal.id === list.id) || !accessibleShareDocs.some((share) => share.list.id === list.id)))) {
           setPersonalSyncConflict(false);
         }
         personalSnapshotBaselineRef.current = nextPersonalLists;
         setLists((currentLists) => {
           const currentPersonalLists = currentLists.filter((list) =>
-            isOwner || !accessibleShareDocs.some((share) => share.list.id === list.id),
+            isOwner || personalListsRef.current.some(personal => personal.id === list.id) || !accessibleShareDocs.some((share) => share.list.id === list.id),
           );
-          const mergedPersonalLists = mergePipeListSnapshotsThreeWay(
-            previousPersonalSnapshot,
-            nextPersonalLists,
-            currentPersonalLists,
+          const mergedPersonalLists = reconcilePipeLists(
+            previousPersonalSnapshot, nextPersonalLists, currentPersonalLists, archivedListsRef.current,
           );
           personalListsRef.current = mergedPersonalLists;
           const mergedLists = [
@@ -4479,7 +4432,7 @@ const PipelinePage: NextPage = () => {
           const remoteLists = Array.isArray(storedLists)
             ? purgeExpiredDeletedItems(storedLists.map(normalizeList))
             : [];
-          const mergedLists = mergePipeListSnapshotsThreeWay(baseLists, remoteLists, listsToPersist).map(normalizeList);
+          const mergedLists = reconcilePipeLists(baseLists, remoteLists, listsToPersist, mergeArchiveMarkers(archivedListsRef.current, snapshot.data()?.archivedLists || {})).map(normalizeList);
           if (pipeListSnapshotsEqual(remoteLists, mergedLists)) { savedLists = Array.isArray(storedLists) ? storedLists : []; return; }
           const persistedLists = mergedLists.map(list => {
             const raw = Array.isArray(storedLists) ? storedLists.find((stored: PipeList) => stored.id === list.id) : undefined;
@@ -4600,7 +4553,7 @@ const PipelinePage: NextPage = () => {
   useEffect(() => {
     if (isSharedView || isOwner || !user || !dataReady || accessibleShareDocs.length === 0) return;
 
-    const editableShares = accessibleShareDocs.filter((share) => share.editorEmails.includes(normalizedUserEmail));
+    const editableShares = accessibleShareDocs.filter((share) => !personalListsRef.current.some(list => list.id === share.list.id) && share.editorEmails.includes(normalizedUserEmail));
     if (editableShares.length === 0) return;
     const changedShares = editableShares.filter((share) => {
       const nextList = lists.find((list) => list.id === share.list.id);
@@ -4677,7 +4630,7 @@ const PipelinePage: NextPage = () => {
   const ownerShareId = !isSharedView && user ? shareDocumentIdForList(user.uid, activeList.id) : '';
 
   useEffect(() => {
-    if (isSharedView || !user || !isOwner || !dataReady || !activeList?.id) return;
+    if (isSharedView || !user || !canManageActiveList || !dataReady || !activeList?.id) return;
 
     const nextShareId = shareDocumentIdForList(user.uid, activeList.id);
     setShareMessage(null);
@@ -4738,7 +4691,7 @@ const PipelinePage: NextPage = () => {
         });
       },
     );
-  }, [activeList.id, dataReady, isOwner, isSharedView, user]);
+  }, [activeList.id, dataReady, canManageActiveList, isSharedView, user]);
 
   useEffect(() => {
     if (!user || !dataReady || !shareDoc || !pipeListShareRequiresAccountAccess(shareDoc) || isLeadSharedView) {
@@ -4748,7 +4701,7 @@ const PipelinePage: NextPage = () => {
       ? canReadShared
         ? shareId
         : ''
-      : isOwner && shareDoc?.id === ownerShareId
+      : canManageActiveList && shareDoc?.id === ownerShareId
         ? ownerShareId
         : '';
     if (!protectedShareId) return undefined;
@@ -4797,10 +4750,10 @@ const PipelinePage: NextPage = () => {
         });
       },
     );
-  }, [canReadShared, dataReady, isLeadSharedView, isOwner, isSharedView, ownerShareId, shareDoc?.id, shareDoc?.protectedDetails, shareId, user]);
+  }, [canReadShared, dataReady, isLeadSharedView, canManageActiveList, isSharedView, ownerShareId, shareDoc?.id, shareDoc?.protectedDetails, shareId, user]);
 
   useEffect(() => {
-    if (isSharedView || !user || !isOwner || !dataReady || !shareDoc || shareDoc.id !== ownerShareId) return;
+    if (isSharedView || !user || !canManageActiveList || !dataReady || !shareDoc || shareDoc.id !== ownerShareId) return;
     const sharedBaseline = protectedShareBaselinesRef.current[shareDoc.id];
     if (sharedBaseline && pipeListSnapshotsEqual(
       collaboratorSafePipeListSnapshot(normalizeList(activeList, 0)),
@@ -4854,10 +4807,10 @@ const PipelinePage: NextPage = () => {
       cancelled = true;
       clearTimeout(saveTimer);
     };
-  }, [activeList, dataReady, isOwner, isSharedView, ownerShareId, profile, shareDoc?.id, user]);
+  }, [activeList, dataReady, canManageActiveList, isSharedView, ownerShareId, profile, shareDoc?.id, user]);
 
   useEffect(() => {
-    if (isSharedView || !user || !isOwner || !isSharePanelOpen) return;
+    if (isSharedView || !user || !canManageWorkspace || !isSharePanelOpen) return;
 
     setOwnerSharesReady(false);
     setLoadingOwnerShares(true);
@@ -4889,7 +4842,7 @@ const PipelinePage: NextPage = () => {
         setLoadingOwnerShares(false);
       },
     );
-  }, [isOwner, isSharePanelOpen, isSharedView, user]);
+  }, [canManageWorkspace, isSharePanelOpen, isSharedView, user]);
 
   const allItemRows = useMemo(
     () => lists.flatMap((list) => list.items.map((item) => ({ list, item }))),
@@ -5240,7 +5193,7 @@ const PipelinePage: NextPage = () => {
   const liveDetailItem = activeList.items.find((item) => item.id === selectedDetailItemId);
   if (liveDetailItem) detailSnapshotRef.current = { item: liveDetailItem, list: activeList };
   const selectedDetailItem = liveDetailItem ||
-    (detailSnapshotRef.current?.item.id === selectedDetailItemId ? detailSnapshotRef.current.item : null);
+    (detailSnapshotRef.current && detailSnapshotRef.current.list.id === activeList.id && detailSnapshotRef.current.item.id === selectedDetailItemId ? detailSnapshotRef.current.item : null);
 
 
   useEffect(() => {
@@ -7451,6 +7404,7 @@ Rules:
 
   const createOrUpdateLeadShareLink = async (item: PipelineItem) => {
     if (!canModify || !user || isLeadSharedView) return;
+    if (activeList.publicLinksDisabled) { setLeadShareMessage({ type: 'error', text: 'Public links are disabled for this list.' }); return; }
     setLeadShareMessage(null);
 
     try {
@@ -7471,15 +7425,18 @@ Rules:
         publicRead: true,
       };
 
-      await setDoc(
-        doc(simpBudgetDb, PIPELEAD_SHARES_COLLECTION, nextShareId),
-        stripUndefined({
-          ...payload,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }),
-        { merge: true },
-      );
+      await runTransaction(simpBudgetDb, async transaction => {
+        const stateRef = doc(simpBudgetDb, SIMPBUDGET_USERS_COLLECTION, ownerUid, PIPELISTS_SUBCOLLECTION, PIPELISTS_STATE_DOCUMENT_ID);
+        const state = await transaction.get(stateRef);
+        const currentList = state.data()?.lists?.find((list: PipeList) => list.id === activeList.id);
+        if (ownerUid !== user.uid || !currentList || currentList.publicLinksDisabled || isArchived(state.data()?.archivedLists?.[activeList.id])) {
+          throw new Error('Public links are unavailable for this list.');
+        }
+        const leadRef = doc(simpBudgetDb, PIPELEAD_SHARES_COLLECTION, nextShareId);
+        const existing = await transaction.get(leadRef);
+        if (existing.exists() && existing.data().publicRead === false) throw new Error('This public link has been revoked.');
+        transaction.set(leadRef, stripUndefined({ ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }), { merge: true });
+      });
 
       setLeadShareUrl(nextShareUrl);
       setLeadShareMessage({ type: 'success', text: 'Read-only lead share link created and copied.' });
@@ -8408,9 +8365,12 @@ Rules:
     const now = new Date().toISOString();
     const movedTombstoneUntil = addDays(new Date(now), SOFT_DELETE_RESTORE_DAYS).toISOString();
     const targetStage = normalizeStageId(itemToMove.stage, targetList.stages);
+    let mergedItem: PipelineItem;
+    try { mergedItem = mergeMovedLead(itemToMove, targetList.items.find(item => item.id === itemId)); }
+    catch (error) { setLeadMoveMessage({ type: 'error', text: readFirestoreError(error, 'Review the destination record before moving.') }); return; }
     const movedItem: PipelineItem = {
-      ...itemToMove,
-      stage: targetStage,
+      ...mergedItem,
+      stage: targetList.items.some(item => item.id === itemId) ? mergedItem.stage : targetStage,
       deletedAt: '',
       deletedByLogId: '',
       restorableUntil: '',
@@ -8422,7 +8382,7 @@ Rules:
           'item-moved',
           `Moved ${itemToMove.title} from ${sourceList.name} to ${targetList.name}.`,
         ),
-        ...itemToMove.weeklyLogs,
+        ...mergedItem.weeklyLogs,
       ],
     };
 
@@ -8542,9 +8502,14 @@ Rules:
     const selectedIds = new Set(selectedBulkItems.map((item) => item.id));
     const now = new Date().toISOString();
     const movedTombstoneUntil = addDays(new Date(now), SOFT_DELETE_RESTORE_DAYS).toISOString();
-    const movedItems = selectedBulkItems.map((item) => ({
+    let movedItems: PipelineItem[];
+    try {
+      movedItems = selectedBulkItems.map((sourceItem) => {
+        const existing = targetList.items.find(item => item.id === sourceItem.id);
+        const item = mergeMovedLead(sourceItem, existing);
+        return ({
       ...item,
-      stage: normalizeStageId(item.stage, targetList.stages),
+      stage: existing ? item.stage : normalizeStageId(item.stage, targetList.stages),
       deletedAt: '',
       deletedByLogId: '',
       restorableUntil: '',
@@ -8558,7 +8523,11 @@ Rules:
         ),
         ...item.weeklyLogs,
       ],
-    }));
+      }); });
+    } catch (error) {
+      setBulkActionMessage({ type: 'error', text: readFirestoreError(error, 'Review destination records before moving.') });
+      return;
+    }
 
     setLists((currentLists) =>
       currentLists.map((list) => {
@@ -8603,22 +8572,45 @@ Rules:
     }
   };
 
-  const handleDeleteList = () => {
-    if (!canManageActiveList) return;
-    if (lists.length <= 1) return;
+  const handleDeleteList = async () => {
+    if (!canManageActiveList || !user || !personalStateReady) return;
+    const listId = activeList.id;
+    try {
+      const stateRef = doc(simpBudgetDb, SIMPBUDGET_USERS_COLLECTION, user.uid, PIPELISTS_SUBCOLLECTION, PIPELISTS_STATE_DOCUMENT_ID);
+      await runTransaction(simpBudgetDb, async transaction => {
+        const snapshot = await transaction.get(stateRef);
+        if (!snapshot.exists()) throw new Error('Wait for this list to finish saving before archiving.');
+        const remote = snapshot.data();
+        const current = (remote.lists || []).find((list: PipeList) => list.id === listId);
+        if (!current) throw new Error('This list is no longer available. Refresh before archiving.');
+        const preserved = mergePipeListSnapshotsThreeWay(personalSnapshotBaselineRef.current.find(list => list.id === listId), current, activeList);
+        transaction.update(stateRef, {
+          lists: (remote.lists || []).filter((list: PipeList) => list.id !== listId),
+          archivedLists: { ...(remote.archivedLists || {}), [listId]: { list: preserved, archivedAt: new Date().toISOString() } },
+          updatedAt: serverTimestamp(),
+        });
+      });
+      closeLeadDetails();
+      setIsDeleteListModalOpen(false);
+      setAppMessage({ type: 'success', text: `${activeList.name} archived. You can restore it from Archived lists. Shared links must be revoked separately.` });
+    } catch (error) { setAppMessage({ type: 'error', text: readFirestoreError(error, 'Unable to archive this list.') }); }
+  };
 
-    const nextLists = lists.filter((list) => list.id !== activeList.id);
-    setLists(nextLists);
-    setActiveListId(nextLists[0].id);
-    setStageFilters([]);
-    setPriorityFilters([]);
-    setTagFilters([]);
-    setCompanyFilter('');
-    setSelectedLogItemId('');
-    setLogDraft(defaultLogDraft(nextLists[0].templateKey));
-    setDetailModalMode('details');
-    setIsDeleteListModalOpen(false);
-    resetEditor();
+  const restoreArchivedList = async (listId: string) => {
+    if (!user || isSharedView) return;
+    try {
+      const stateRef = doc(simpBudgetDb, SIMPBUDGET_USERS_COLLECTION, user.uid, PIPELISTS_SUBCOLLECTION, PIPELISTS_STATE_DOCUMENT_ID);
+      await runTransaction(simpBudgetDb, async transaction => {
+        const snapshot = await transaction.get(stateRef);
+        const state = snapshot.data();
+        const archived = state?.archivedLists?.[listId];
+        if (!archived?.list || !isArchived(archived) || archived.transferredToUid) throw new Error('This list cannot be restored here.');
+        const nextArchive = { ...state?.archivedLists };
+        nextArchive[listId] = { ...archived, restoredAt: new Date().toISOString() };
+        transaction.update(stateRef, { lists: [...(state?.lists || []).filter((list: PipeList) => list.id !== listId), archived.list], archivedLists: nextArchive, updatedAt: serverTimestamp() });
+      });
+      closeLeadDetails(); setActiveListId(listId);
+    } catch (error) { setAppMessage({ type: 'error', text: readFirestoreError(error, 'Unable to restore this list.') }); }
   };
 
   const handleSaveLog = (
@@ -8775,6 +8767,12 @@ Rules:
     );
   };
 
+  const downloadListBackup = () => {
+    const blob = new Blob([JSON.stringify(activeList, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a'); link.href = url; link.download = `${activeList.id}-backup.json`; link.click(); URL.revokeObjectURL(url);
+  };
+
   const handleExport = () => {
     if (typeof window === 'undefined') return;
 
@@ -8907,7 +8905,7 @@ Rules:
       ),
     );
 
-  const selectedShareLists = lists.filter((list) => shareSelectedListIds.includes(list.id));
+  const selectedShareLists = lists.filter((list) => !sharedListIds.has(list.id) && shareSelectedListIds.includes(list.id));
   const inviteHistory = useMemo(() => {
     const currentListsById = new Map(lists.map((list) => [list.id, list]));
     const shareDocsById = new Map<string, PipeListShare>();
@@ -9142,7 +9140,7 @@ Rules:
   };
 
   const resendInviteEmail = async (invite: InviteHistoryEntry) => {
-    if (!user || !isOwner) return;
+    if (!user || !canManageWorkspace) return;
 
     setShareMessage(null);
     setResendingInviteEmails((currentEmails) => Array.from(new Set([...currentEmails, invite.email])));
@@ -9239,12 +9237,37 @@ Rules:
     }
   };
 
+  const revokeActiveListPublicLinks = async () => {
+    if (!user || !canManageActiveList) return;
+    if (!window.confirm(`Disable public list and lead links for ${activeList.name}? Invited people keep their access.`)) return;
+    try {
+      const listId = activeList.id;
+      const publicRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareDocumentIdForList(user.uid, listId));
+      const privateRef = doc(simpBudgetDb, PIPELIST_PROTECTED_SHARES_COLLECTION, publicRef.id);
+      const stateRef = doc(simpBudgetDb, SIMPBUDGET_USERS_COLLECTION, user.uid, PIPELISTS_SUBCOLLECTION, PIPELISTS_STATE_DOCUMENT_ID);
+      const links = await getDocs(firestoreQuery(collection(simpBudgetDb, PIPELEAD_SHARES_COLLECTION), where('ownerUid', '==', user.uid), where('listId', '==', listId)));
+      if (links.size > 450) throw new Error('This list has too many links for one safe update. Contact support.');
+      await runTransaction(simpBudgetDb, async transaction => {
+        const state = await transaction.get(stateRef);
+        const publicShare = await transaction.get(publicRef);
+        const privateShare = publicShare.exists() ? await transaction.get(privateRef) : null;
+        const leadSnapshots = await Promise.all(links.docs.map(link => transaction.get(link.ref)));
+        if (!state.exists() || !(state.data().lists || []).some((list: PipeList) => list.id === listId)) throw new Error('Refresh this list before changing access.');
+        transaction.update(stateRef, { lists: state.data().lists.map((list: PipeList) => list.id === listId ? { ...list, publicLinksDisabled: true } : list), updatedAt: serverTimestamp() });
+        if (publicShare.exists()) transaction.update(publicRef, { publicRead: false, 'list.publicLinksDisabled': true, updatedAt: serverTimestamp() });
+        if (privateShare?.exists()) transaction.update(privateRef, { 'list.publicLinksDisabled': true, lastEditedBy: { uid: user.uid, email: user.email || '' }, updatedAt: serverTimestamp() });
+        for (const link of leadSnapshots) if (link.exists()) transaction.update(link.ref, { publicRead: false, updatedAt: serverTimestamp() });
+      });
+      setShareMessage({ type: 'success', text: `Public links disabled for ${activeList.name}. Invited access is unchanged.` });
+    } catch (error) { setShareMessage({ type: 'error', text: readFirestoreError(error, 'Unable to disable public links.') }); }
+  };
+
   const updateCollaboratorListAccess = async (
     invite: InviteHistoryEntry,
     entry: InviteHistoryEntry['listAccess'][number],
-    access: ShareAccess,
+    access: ShareAccess | 'none',
   ) => {
-    if (!user || !isOwner || isSharedView || !ownerSharesReady || savingListAccess) return;
+    if (!user || !canManageWorkspace || isSharedView || !ownerSharesReady || savingListAccess) return;
     if (access === entry.access) return;
     setSavingListAccess(`${invite.email}:${entry.shareId}`);
     setShareMessage(null);
@@ -9255,6 +9278,10 @@ Rules:
         if (!snapshot.exists()) throw new Error('This shared PipeList is no longer available.');
         const current = snapshot.data();
         if (current.ownerUid !== user.uid) throw new Error('Only the owner can change access.');
+        if (access === 'none') {
+          transaction.update(shareRef, { ...removeListMember(current, invite.email), updatedAt: serverTimestamp() });
+          return;
+        }
         const viewers = Array.isArray(current.viewerEmails) ? current.viewerEmails : [];
         const editors = Array.isArray(current.editorEmails) ? current.editorEmails : [];
         if (![...viewers, ...editors].includes(invite.email)) {
@@ -9278,7 +9305,7 @@ Rules:
           updatedAt: serverTimestamp(),
         });
       });
-      setShareMessage({ type: 'success', text: `${entry.listName}: ${invite.displayName || invite.email} ${access === 'edit' ? 'can now edit' : 'now has read-only access'}.` });
+      setShareMessage({ type: 'success', text: `${entry.listName}: ${invite.displayName || invite.email} ${access === 'none' ? 'no longer has access' : access === 'edit' ? 'can now edit' : 'now has read-only access'}.` });
     } catch (error) {
       setShareMessage({ type: 'error', text: readFirestoreError(error, 'Unable to update list access.') });
     } finally {
@@ -9287,7 +9314,7 @@ Rules:
   };
 
   const removeCollaboratorAccess = async (invite: InviteHistoryEntry) => {
-    if (!user || !isOwner) return;
+    if (!user || !canManageWorkspace) return;
     if (
       typeof window !== 'undefined' &&
       !window.confirm(`Remove ${invite.email} from ${formatCount(invite.listAccess.length, 'PipeList')}?`)
@@ -9357,7 +9384,7 @@ Rules:
   };
 
   useEffect(() => {
-    if (!isSharePanelOpen || !isOwner || !user) return;
+    if (!isSharePanelOpen || !canManageWorkspace || !user) return;
 
     let cancelled = false;
 
@@ -9401,14 +9428,14 @@ Rules:
     return () => {
       cancelled = true;
     };
-  }, [isOwner, isSharePanelOpen, normalizedUserEmail, user]);
+  }, [canManageWorkspace, isSharePanelOpen, normalizedUserEmail, user]);
 
   const createOrUpdateShareLink = async (addition?: {
     existingMember: InviteHistoryEntry;
     selectedListIds: string[];
     access: ShareAccess;
   }) => {
-    if (!user || !isOwner || isSharedView) return;
+    if (!user || !canManageWorkspace || isSharedView) return;
 
     setShareMessage(null);
 
@@ -9608,7 +9635,7 @@ Rules:
           ownerEmail: user.email || TREMAINE_OWNER_EMAIL,
           list: publicSafePipeListSnapshot(list),
           access: editorEmails.length > 0 ? 'edit' : 'read',
-          publicRead: existingShare?.publicRead ?? true,
+          publicRead: list.publicLinksDisabled ? false : existingShare?.publicRead ?? true,
           protectedDetails:
             existingShare?.protectedDetails === true ||
             editorEmails.length > 0 ||
@@ -10731,6 +10758,7 @@ Rules:
                   </>
                 )}
               </div>
+              {canManageActiveList && <button type="button" onClick={downloadListBackup} className="rounded-full border px-3 py-2 text-xs">Full list backup</button>}
               {viewMode !== 'runbook' && (
                 <button
                   type="button"
@@ -10741,7 +10769,7 @@ Rules:
                   <Download className="h-4 w-4" />
                 </button>
               )}
-              {isOwner && !isSharedView && (
+              {canManageWorkspace && (
                 <button
                   type="button"
                   onClick={openSharePanel}
@@ -10750,6 +10778,14 @@ Rules:
                   <Users className="h-4 w-4" />
                   <span className="hidden sm:inline">Invite</span>
                 </button>
+              )}
+              {canManageWorkspace && Object.values(archivedLists).some(isArchived) && (
+                <details className="relative text-sm">
+                  <summary className="cursor-pointer rounded-full border px-3 py-2">Archived lists</summary>
+                  <div className="absolute right-0 z-50 w-64 rounded-lg border bg-white p-3 shadow-lg">
+                    {Object.entries(archivedLists).filter(([, archive]) => isArchived(archive) && !archive.transferredToUid).map(([id, archive]) => <button key={id} type="button" onClick={() => void restoreArchivedList(id)} className="block w-full p-2 text-left">Restore {archive.list?.name || id}</button>)}
+                  </div>
+                </details>
               )}
               {canManageWorkspace && (
                 <button
@@ -10936,12 +10972,11 @@ Rules:
                     <button
                       type="button"
                       onClick={() => setIsDeleteListModalOpen(true)}
-                      disabled={lists.length <= 1}
-                      title={lists.length <= 1 ? 'Create another PipeList before deleting this one' : 'Delete this PipeList'}
+                      title="Archive this PipeList"
                       className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-stone-200 bg-white px-4 text-sm font-medium text-stone-500 shadow-sm transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <Trash2 className="h-4 w-4" />
-                      Delete List
+                      Archive List
                     </button>
                   )}
                 </div>
@@ -12430,7 +12465,7 @@ Rules:
         </div>
       )}
 
-      {isSharePanelOpen && !isSharedView && isOwner && (
+      {isSharePanelOpen && canManageWorkspace && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-950/30 px-4 py-10 backdrop-blur-sm sm:py-12"
           onClick={(event) => {
@@ -12496,7 +12531,7 @@ Rules:
                   <div className="divide-y divide-stone-100">
                     {inviteHistory.map((invite) => {
                       const assignedListIds = new Set(invite.listAccess.map((entry) => entry.listId));
-                      const availableAdditionalLists = lists.filter((list) => !assignedListIds.has(list.id));
+                      const availableAdditionalLists = lists.filter((list) => !sharedListIds.has(list.id) && !assignedListIds.has(list.id));
                       const memberLabel = invite.displayName || invite.email;
                       const memberControlId = invite.email.replace(/[^a-z0-9]+/gi, '-');
                       const additionalListsPanelId = `add-lists-panel-${memberControlId}`;
@@ -12545,11 +12580,12 @@ Rules:
                                     title={`${entry.listName}: change access`}
                                     value={entry.access}
                                     disabled={!ownerSharesReady || Boolean(savingListAccess) || removingAccessEmails.includes(invite.email) || savingAdditionalListsForEmail === invite.email}
-                                    onChange={(event) => void updateCollaboratorListAccess(invite, entry, event.target.value as ShareAccess)}
+                                    onChange={(event) => void updateCollaboratorListAccess(invite, entry, event.target.value as ShareAccess | 'none')}
                                     className="cursor-pointer rounded-full border border-stone-200 bg-white px-2 py-1 text-[11px] font-semibold text-stone-700 focus:outline-none focus:ring-2 focus:ring-stone-400 disabled:cursor-wait disabled:opacity-50"
                                   >
                                     <option value="edit">Can edit</option>
                                     <option value="read">Read only</option>
+                                    <option value="none">Remove from this list</option>
                                   </select>
                                   {entry.status === 'sent' ? (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
@@ -12721,7 +12757,7 @@ Rules:
                             className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-red-200 px-3 text-xs font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
-                            {removingAccessEmails.includes(invite.email) ? 'Removing...' : 'Remove access'}
+                            {removingAccessEmails.includes(invite.email) ? 'Removing...' : `Remove from all ${invite.listAccess.length} lists`}
                           </button>
                         </div>
                         </div>
@@ -12735,6 +12771,7 @@ Rules:
                 )}
               </div>
 
+              {canManageActiveList && <button type="button" onClick={() => void revokeActiveListPublicLinks()} className="rounded-full border border-stone-300 px-4 py-2 text-sm">Disable public links for {activeList.name}</button>}
               <MessageBanner message={shareMessage} />
 
               {isInviteFormOpen && (
@@ -13363,10 +13400,10 @@ Rules:
                   <Trash2 className="h-4 w-4" />
                 </div>
                 <h3 id="delete-list-title" className="text-xl font-bold text-stone-950">
-                  Delete PipeList
+                  Archive PipeList
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-stone-500">
-                  Delete {activeList.name} and its {formatCount(activeListItems.length, `active ${listItemNoun(activeList)}`)}. This removes the full list from your workspace.
+                  Archive {activeList.name} and its {formatCount(activeListItems.length, `active ${listItemNoun(activeList)}`)}. This hides the full list from your workspace and keeps a recoverable copy. Shared links keep their current access until revoked.
                 </p>
               </div>
               <button
@@ -13379,15 +13416,9 @@ Rules:
               </button>
             </div>
 
-            {lists.length <= 1 ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-                You need at least one PipeList. Create another list before deleting this one.
-              </div>
-            ) : (
-              <div className="rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm leading-6 text-rose-700">
-                This cannot be undone from the Logs restore flow because it deletes the whole PipeList.
-              </div>
-            )}
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+              Restore this list from Archived lists whenever you need it. This does not permanently delete any records.
+            </div>
 
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -13400,11 +13431,10 @@ Rules:
               <button
                 type="button"
                 onClick={handleDeleteList}
-                disabled={lists.length <= 1}
                 className="inline-flex h-10 items-center gap-2 rounded-full bg-rose-600 px-4 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Trash2 className="h-4 w-4" />
-                Delete List
+                Archive List
               </button>
             </div>
           </section>
