@@ -10,6 +10,29 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // Protocol activation and retirement are administrative migration steps.
+    // Clients cannot opt out, reset a revision, or revive retired share payloads.
+    function pipeListsProtocolWrite(contentFields) {
+      return resource.data.get('retired', false) == false
+        && request.resource.data.get('retired', false) == false
+        && request.resource.data.get('writeProtocol', 0) == resource.data.get('writeProtocol', 0)
+        && (resource.data.get('writeProtocol', 0) != 2
+          || (!request.resource.data.diff(resource.data).affectedKeys().hasAny(contentFields)
+            && request.resource.data.get('revision', 0) == resource.data.get('revision', 0))
+          || (request.resource.data.revision is int
+            && request.resource.data.revision == resource.data.get('revision', 0) + 1));
+    }
+
+    function pipeListsClientCreate() {
+      return request.resource.data.get('retired', false) == false
+        && request.resource.data.get('writeProtocol', 0) == 0;
+    }
+
+    function pipeListsClientDelete() {
+      return resource.data.get('retired', false) == false
+        && resource.data.get('writeProtocol', 0) != 2;
+    }
+
     match /simpbudget-users/{userId} {
       allow read, write: if isOwner(userId);
 
@@ -21,8 +44,14 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
 
-      match /{document=**} {
-        allow read, write: if isOwner(userId);
+      match /pipeLists/{stateId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && (stateId != 'state' || pipeListsClientCreate());
+        allow update: if isOwner(userId) && (stateId != 'state' || pipeListsProtocolWrite(['lists', 'archivedLists']));
+        allow delete: if isOwner(userId) && (stateId != 'state' || pipeListsClientDelete());
+      }
+      match /{collectionId}/{document=**} {
+        allow read, write: if collectionId != 'pipeLists' && isOwner(userId);
       }
     }
 
@@ -94,8 +123,8 @@ service cloud.firestore {
         || resource.data.publicRead == true
         || isShareOwner()
         || isInvitedViewer();
-      allow create: if isCreateOwner();
-      allow update: if (isShareOwner() && hasStableOwnerEnvelope())
+      allow create: if isCreateOwner() && pipeListsClientCreate();
+      allow update: if pipeListsProtocolWrite(['list']) && ((isShareOwner() && hasStableOwnerEnvelope())
         || isAcceptingOwnInvite()
         || (
           isInvitedEditor()
@@ -103,10 +132,12 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'list',
             'updatedAt',
-            'lastEditedBy'
+            'lastEditedBy',
+            'revision',
+            'writeProtocol'
           ])
-        );
-      allow delete: if isShareOwner();
+        ));
+      allow delete: if isShareOwner() && pipeListsClientDelete();
     }
 
     match /pipeListProtectedShares/{shareId} {
@@ -152,15 +183,17 @@ service cloud.firestore {
 
       allow read: if isProtectedShareOwner() || isProtectedShareViewer();
       allow create: if (isProtectedShareOwnerAfterWrite() || isProtectedShareEditor())
-        && hasValidProtectedEnvelope();
-      allow update: if (isProtectedShareOwner() || isProtectedShareEditor())
+        && hasValidProtectedEnvelope() && pipeListsClientCreate();
+      allow update: if pipeListsProtocolWrite(['list']) && (isProtectedShareOwner() || isProtectedShareEditor())
         && hasValidProtectedEnvelope()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'list',
           'lastEditedBy',
-          'updatedAt'
+          'updatedAt',
+          'revision',
+          'writeProtocol'
         ]);
-      allow delete: if isProtectedShareOwner();
+      allow delete: if isProtectedShareOwner() && pipeListsClientDelete();
     }
 
     match /pipeLeadShares/{shareId} {
@@ -177,8 +210,9 @@ service cloud.firestore {
       }
 
       allow read: if isLeadSharePathOwner() || resource.data.publicRead == true || isLeadShareOwner();
-      allow create: if isLeadShareCreateOwner();
-      allow update, delete: if isLeadShareOwner();
+      allow create: if isLeadShareCreateOwner() && pipeListsClientCreate();
+      allow update: if isLeadShareOwner() && pipeListsProtocolWrite(['list', 'publicRead']);
+      allow delete: if isLeadShareOwner() && pipeListsClientDelete();
     }
 
     match /pipeListProfiles/{userId} {
