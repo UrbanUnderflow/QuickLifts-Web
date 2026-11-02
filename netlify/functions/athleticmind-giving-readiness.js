@@ -18,7 +18,13 @@ function createReadinessHandler({ env, stripe }) {
       const configured = endpoints.data.some(endpoint => endpoint.livemode === true && endpoint.status === 'enabled'
         && WEBHOOK_URLS.has(endpoint.url)
         && ['payment_intent.succeeded', 'charge.refunded'].every(name => endpoint.enabled_events?.includes('*') || endpoint.enabled_events?.includes(name)));
-      return reply(200, { oneTimeReady: configured, monthlyReady: false, reason: configured ? 'existing_payment_setup_verified' : 'existing_webhook_unverified' });
+      let monthlyPrice = null;
+      try { monthlyPrice = await require('./lib/athleticmind-giving-deployment').findDonationMonthlyPrice(client); } catch { /* No access expansion; keep monthly closed. */ }
+      const invoiceDelivery = endpoints.data.some(endpoint => endpoint.livemode === true && endpoint.status === 'enabled' && WEBHOOK_URLS.has(endpoint.url)
+        && (endpoint.enabled_events?.includes('*') || endpoint.enabled_events?.includes('invoice.paid')));
+      const monthlyReady = !!(configured && invoiceDelivery && monthlyPrice);
+      return reply(200, { oneTimeReady: configured, monthlyReady, monthlyAmountIncrement: monthlyReady ? monthlyPrice.unit_amount : null,
+        reason: configured ? 'existing_payment_setup_verified' : 'existing_webhook_unverified' });
     } catch { return reply(200, { oneTimeReady: false, monthlyReady: false, reason: 'payment_access_unavailable' }); }
   };
 }

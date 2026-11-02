@@ -476,3 +476,36 @@ test('stripe-deposit-webhook records a prize deposit and updates challenge fundi
     }
   );
 });
+
+test('general webhook verifies signature then dispatches donations without membership processing', async () => {
+  const firebaseMock = createFirestoreAdminMock({ collections: {} });
+  let verified = 0; let donationCalls = 0;
+  let invalid = false;
+  let eventType = 'checkout.session.completed';
+  let object = { metadata: { source: 'athleticmind-sponsorship-v1' } };
+  const Stripe = createStripeFactory(() => ({
+    webhooks: { constructEvent() {
+      verified += 1;
+      if (invalid) throw new Error('Invalid signature');
+      return { livemode:true, type: eventType, data: { object } };
+    } },
+    invoices: { retrieve: async () => ({ subscription_details: { metadata: { source: 'athleticmind-sponsorship-v1' } } }) },
+    checkout: { sessions: { async listLineItems() { throw new Error('Sponsorship must never enter purchase processing'); } } },
+  }));
+  await withPatchedEnv({ STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock' }, async () => {
+    const { handler } = loadJsModule('netlify/functions/stripe-webhook.js', { './config/firebase': { admin: firebaseMock.admin }, stripe: Stripe, './lib/athleticmind-sponsorship': { processVerifiedEvent: async () => { donationCalls += 1; } } });
+    const request = { httpMethod: 'POST', headers: { 'stripe-signature': 'mock' }, body: '{}' };
+    assert.equal((await handler(request)).statusCode, 200);
+    assert.equal(verified, 1);
+    object = { subscription_details: { metadata: { source: 'athleticmind-sponsorship-v1' } } };
+    assert.equal((await handler(request)).statusCode, 200);
+    object = { parent: { subscription_details: { metadata: { source: 'athleticmind-sponsorship-v1' } } } };
+    assert.equal((await handler(request)).statusCode, 200);
+    eventType = 'charge.refunded'; object = {invoice:'in_synthetic'};
+    assert.equal((await handler(request)).statusCode, 200);
+    assert.equal(donationCalls,4);
+    invalid = true;
+    assert.equal((await handler(request)).statusCode, 400);
+    assert.equal(donationCalls,4);
+  });
+});

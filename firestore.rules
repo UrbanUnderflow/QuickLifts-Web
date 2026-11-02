@@ -159,6 +159,8 @@ service cloud.firestore {
       // Staff reports are accessible only through role-checked server APIs.
 
       return collectionName in ['pulsecheck-daily-assignments', 'pulsecheck-training-plans', 'sim-assignments', 'mental-exercise-assignments', 'conversations', 'conversationSummaries', 'user-mental-notes', 'state-snapshots', 'conversation-derived-signal-events'] || collectionName in ['pulsecheck-oura-connections', 'pulsecheck-whoop-connections', 'pulsecheck-polar-connections', 'health-provider-connections', 'pulsecheck-oauth-states'] || collectionName in ['pulsecheck-private-users', 'account-closure-jobs', 'pulsecheck-invite-accepted-outbox', 'pulsecheck-clinical-escalations', 'pulsecheck-athlete-safety-state', 'pulsecheck-push-installations', 'pulsecheck-pilot-enrollments'] || collectionName == 'coach-team-insight-reports' || collectionName in ['groupMeetBookingSettings', 'groupMeetBookings', 'groupMeetBookingLimits'] || collectionName == 'pulsecheck-restricted-questionnaire-submissions' || collectionName.matches('nora-red-team-.*') || collectionName in [
+        'athleticmind-sponsorship-test',
+        'athleticmind-sponsorship-live',
         'admin-settings',
         'conversations',
         'conversationSummaries',
@@ -3540,6 +3542,10 @@ service cloud.firestore {
     match /pulsecheck-polar-connections/{document=**} { allow read, write: if false; }
     match /health-provider-connections/{document=**} { allow read, write: if false; }
     match /pulsecheck-oauth-states/{document=**} { allow read, write: if false; }
+
+    // Donation ledgers are server-only, including all nested records.
+    match /athleticmind-sponsorship-test/{document=**} { allow read, write: if false; }
+    match /athleticmind-sponsorship-live/{document=**} { allow read, write: if false; }
 
   }
 }
