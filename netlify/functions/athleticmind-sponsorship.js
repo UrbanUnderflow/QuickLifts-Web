@@ -5,10 +5,10 @@ exports.handler = async event => {
   let client;
   try {
     const config = configuration(env);
-    client = require('stripe')(env[config.keyName], { apiVersion: '2023-10-16' });
+    client = require('stripe')(env[config.keyName], { apiVersion: '2023-10-16', timeout: 4000, maxNetworkRetries: 0 });
     const action = event.queryStringParameters?.action;
     if (event.httpMethod === 'POST' && ['payment-intent', 'checkout'].includes(action)) {
-      const readiness = await require('./athleticmind-giving-readiness').createReadinessHandler({ env, stripe: () => client })({ httpMethod: 'GET' });
+      const readiness = await require('./athleticmind-giving-readiness').handler({ httpMethod: 'GET' });
       const available = JSON.parse(readiness.body);
       if (!available.oneTimeReady || (action === 'checkout' && !available.monthlyReady)) throw new Error('Giving unavailable');
     }

@@ -161,7 +161,7 @@ test('live and test webhooks cannot cross ledgers; live payments/refunds remain 
  assert.equal(db.values.get('athleticmind-sponsorship-live/totals').gross,2500);assert.equal(db.values.has('athleticmind-sponsorship-test/totals'),false);
  client.paymentIntents.retrieve=async()=>({id:'pi_live_fixture',livemode:true,currency:'usd',metadata:{source:SOURCE,campaign:'general'},latest_charge:{livemode:true,paid:true,currency:'usd',amount:2500,amount_refunded:2500}});
  await send({...payload,id:'evt_live_refund',type:'charge.refunded'});assert.equal(db.values.get('athleticmind-sponsorship-live/totals').refunded,2500);
- const totals=await handler({...liveRequest('totals'),httpMethod:'GET'});assert.deepEqual(JSON.parse(totals.body),{mode:'live',currency:'usd',net:0});
+ const totals=await handler({...liveRequest('totals'),httpMethod:'GET'});const result=JSON.parse(totals.body);assert.equal(result.net,0);assert.equal(result.mode,'live');assert.equal(result.stale,false);assert.ok(Number.isSafeInteger(result.verifiedAt));
 });
 test('live handler rejects test Checkout responses and request attempts to grant launch approval',async()=>{
  const {handler,client}=liveSetup();client.checkout.sessions.create=async()=>({livemode:false,url:'https://checkout.stripe.com/test'});
@@ -256,4 +256,12 @@ test('renewal invoice and refund retrieve subscription metadata when invoice met
  const send=(id,type,object)=>processVerifiedEvent({signed:{id,type,livemode:false,data:{object}},client,database:db,config:{live:false,collection:'athleticmind-sponsorship-test'}});
  await send('evt_paid','invoice.paid',{id:'in_renew'});await send('evt_paid','invoice.paid',{id:'in_renew'});assert.equal(db.values.get('athleticmind-sponsorship-test/totals').gross,2550);
  refunded=2550;await send('evt_refund','charge.refunded',{invoice:'in_renew'});assert.equal(db.values.get('athleticmind-sponsorship-test/totals').refunded,2550);
+});
+
+test('live payment creation cannot disclose a client secret when durable tracking fails',async()=>{
+ const {client}=liveSetup();client.paymentIntents.create=async p=>({id:'pi_fixture',client_secret:'pi_fixture_secret_private',amount:p.amount,currency:'usd',livemode:true});
+ const db=memory();db.runTransaction=async()=>{throw Error('Synthetic storage failure')};
+ const handler=createHandler({env:liveEnv,stripe:()=>client,database:()=>db,publishableKey:()=> 'pk_live_fixture'});
+ const result=await handler(liveRequest('payment-intent',{...input,termsAccepted:true,termsVersion:'synthetic-v1'}));
+ assert.equal(result.statusCode,500);assert.equal(result.body.includes('clientSecret'),false);assert.equal(result.body.includes('secret_private'),false);
 });

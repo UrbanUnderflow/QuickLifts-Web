@@ -147,18 +147,20 @@ function createHandler({ env, stripe, database, publishableKey }) {
         const body = JSON.parse(event.body || '{}');
         const input = validate(body);
         if (config.live && (body.termsAccepted !== true || body.termsVersion !== config.termsVersion)) throw fail('Please review and accept the current payment terms.');
-        const metadata = { ...(config.live ? { terms_version: config.termsVersion, terms_accepted: 'yes', recipient: config.recipient } : {}), source: SOURCE, campaign: input.campaign, public_display: input.profile ? 'yes' : '', public_name: input.profile?.name || '', public_school: input.profile?.school || '', public_message: input.profile?.message || '', recurring_consent: input.frequency === 'monthly' ? 'monthly-v1' : '' };
+        const metadata = { ...(config.live ? { terms_version: config.termsVersion, terms_accepted: 'yes', recipient: config.recipient } : {}), source: SOURCE, request_id: input.requestId, campaign: input.campaign, public_display: input.profile ? 'yes' : '', public_name: input.profile?.name || '', public_school: input.profile?.school || '', public_message: input.profile?.message || '', recurring_consent: input.frequency === 'monthly' ? 'monthly-v1' : '' };
         if (action === 'payment-intent') {
           if (input.frequency !== 'once') throw fail('Monthly giving is not available through one-time checkout. No payment has been created.', 409);
           const publicKey = typeof publishableKey === 'function' ? publishableKey(config.mode) : '';
           if (!(config.live ? /^pk_live_/ : /^pk_test_/).test(publicKey)) throw fail('Payment form is unavailable.', 503);
           // A direct platform charge: no connected account, transfer, product, price, customer or saved payment method.
-          const intent = await client.paymentIntents.create({
+          const registered = config.live ? await require('./athleticmind-reconciliation').findRegisteredIntent({ db: database(), config, client, input }) : null;
+          const intent = registered || await client.paymentIntents.create({
             amount: input.amount, currency: 'usd', payment_method_types: ['card'],
             description: 'AthleticMind program contribution to Pulse Intelligence Labs, Inc.', metadata,
           }, { idempotencyKey: `${SOURCE}:intent:${config.mode}:${input.requestId}` });
           if (intent.livemode !== config.live || intent.amount !== input.amount || intent.currency !== 'usd'
             || !/^pi_[A-Za-z0-9]+$/.test(intent.id) || !intent.client_secret?.startsWith(`${intent.id}_secret_`)) throw fail('Payment form is unavailable.', 502);
+          if (config.live) await require('./athleticmind-reconciliation').registerIntent({ db: database(), config, intent, input });
           return reply(200, { clientSecret: intent.client_secret, publishableKey: publicKey, amount: intent.amount, mode: config.mode }, cors);
         }
         if (config.live && input.frequency !== 'monthly') throw fail('Use the secure one-time payment form.', 503);
@@ -166,6 +168,11 @@ function createHandler({ env, stripe, database, publishableKey }) {
         const session = await client.checkout.sessions.create({ mode: input.frequency === 'monthly' ? 'subscription' : 'payment', payment_method_types: ['card'], line_items: [recurringItem || { quantity: 1, price_data: { currency: 'usd', unit_amount: input.amount, product_data: { name: `${config.live ? '' : 'TEST: '}${CAMPAIGNS[input.campaign].title}` } } }], metadata, ...(input.frequency === 'monthly' ? { subscription_data: { metadata } } : { payment_intent_data: { metadata } }), success_url: `${config.origin}/sponsor?result=success&session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${config.origin}/sponsor?result=cancel`, ...(config.live ? { custom_text: { submit: { message: `Recipient: ${config.recipient}. Terms: ${config.termsURL}. Refund policy: ${config.refundURL}. Support: ${config.supportEmail}.` } } } : {}), ...(input.frequency === 'once' ? { submit_type: 'pay' } : {}) }, { idempotencyKey: `${SOURCE}:${config.mode}:${input.requestId}` });
         if (session.livemode !== config.live || !session.url?.startsWith('https://checkout.stripe.com/')) throw fail('Checkout unavailable.', 502);
         return reply(200, { url: session.url }, cors);
+      }
+      if (config.live && ['board', 'totals'].includes(action) && event.httpMethod === 'GET') {
+        const snapshot = await require('./athleticmind-reconciliation').readSnapshot({ db: database(), client, config });
+        if (snapshot.pending) return reply(202, snapshot, cors);
+        return reply(200, action === 'totals' ? { mode: config.mode, currency: 'usd', net: snapshot.net, stale: snapshot.stale, verifiedAt: snapshot.verifiedAt, refreshing: snapshot.refreshing } : snapshot, cors);
       }
       if (action === 'board' && event.httpMethod === 'GET') {
         const root = database().collection(config.collection);

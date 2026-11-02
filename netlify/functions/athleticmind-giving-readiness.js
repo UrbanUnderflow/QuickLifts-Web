@@ -32,20 +32,30 @@ function createReadinessHandler({ env, stripe }) {
       });
       const delivers = name => existing.some(endpoint => endpoint.enabled_events?.includes('*') || endpoint.enabled_events?.includes(name));
       const missingEvents = ['payment_intent.succeeded', 'charge.refunded'].filter(name => !delivers(name));
-      const configured = missingEvents.length === 0;
+      const configured = webhookCoverage.filter(item => ['stripe-webhook', 'stripe-deposit-webhook'].includes(item.handler)).some(item => item.subscribedEvents.includes('*') || item.subscribedEvents.includes('payment_intent.succeeded'));
+      // Refunds are verified by bounded request-driven reads; no new webhook subscription is required.
       let monthlyPrice = null;
       let catalogReadable = true;
       try { monthlyPrice = await require('./lib/athleticmind-giving-deployment').findDonationMonthlyPrice(client); } catch { catalogReadable = false; /* No access expansion; keep monthly closed. */ }
       const invoiceDelivery = endpoints.data.some(endpoint => endpoint.livemode === true && endpoint.status === 'enabled' && WEBHOOK_URLS.has(endpoint.url)
         && (endpoint.enabled_events?.includes('*') || endpoint.enabled_events?.includes('invoice.paid')));
-      const monthlyReady = !!(configured && invoiceDelivery && monthlyPrice);
+      const monthlyReady = false; // This release enables one-time giving only; recurring reconciliation is not enabled.
       return reply(200, { oneTimeReady: configured, monthlyReady, monthlyAmountIncrement: monthlyReady ? monthlyPrice.unit_amount : null,
-        reason: configured ? 'existing_payment_setup_verified' : existing.length ? 'existing_webhook_missing_events' : 'existing_webhook_route_not_registered',
+        reason: configured ? 'existing_success_event_and_readthrough_refunds' : existing.length ? 'existing_webhook_missing_events' : 'existing_webhook_route_not_registered',
         webhookCoverage,
         subscribedEvents: [...new Set(existing.flatMap(endpoint => endpoint.enabled_events || []))].sort(),
-        missingEvents, monthlyReason: !catalogReadable ? 'catalog_read_unavailable' : !monthlyPrice ? 'no_existing_donation_price' : !invoiceDelivery ? 'invoice_paid_not_enabled' : !configured ? 'one_time_prerequisites_unmet' : 'ready' });
+        missingEvents, refundVerification: 'bounded_readthrough',
+        monthlyReason: !catalogReadable ? 'catalog_read_unavailable' : !monthlyPrice ? 'no_existing_donation_price' : !invoiceDelivery ? 'invoice_paid_not_enabled' : !configured ? 'one_time_prerequisites_unmet' : 'monthly_release_not_enabled' });
     } catch { return reply(200, { oneTimeReady: false, monthlyReady: false, reason: 'payment_access_unavailable' }); }
   };
 }
 exports.createReadinessHandler = createReadinessHandler;
-exports.handler = createReadinessHandler({ env: process.env, stripe: () => require('stripe')(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' }) });
+const productionHandler = createReadinessHandler({ env: process.env, stripe: () => require('stripe')(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16', timeout: 4000, maxNetworkRetries: 0 }) });
+let cached, pending, expiresAt = 0;
+exports.handler = async event => {
+  if (event.httpMethod !== 'GET') return productionHandler(event);
+  if (cached && Date.now() < expiresAt) return cached;
+  if (pending) return pending;
+  pending = productionHandler(event).then(result => { cached = result; expiresAt = Date.now()+60000; return result; }).finally(() => { pending = null; });
+  return pending;
+};
