@@ -4,7 +4,7 @@ test('readiness uses existing live access and returns only availability, never c
  const endpoint={livemode:true,status:'enabled',url:'https://fitwithpulse.ai/.netlify/functions/stripe-webhook',enabled_events:['payment_intent.succeeded','charge.refunded']};
  const client={accounts:{retrieve:async()=>({id:'acct_1Sd8YLIkArZc741W',charges_enabled:true})},webhookEndpoints:{list:async()=>({data:[endpoint]})}};
  const handler=createReadinessHandler({env:{STRIPE_SECRET_KEY:'sk_live_fixture'},stripe:()=>client});
- const result=JSON.parse((await handler({httpMethod:'GET'})).body);assert.deepEqual(result,{oneTimeReady:true,monthlyReady:false,monthlyAmountIncrement:null,reason:'existing_payment_setup_verified'});
+ const result=JSON.parse((await handler({httpMethod:'GET'})).body);assert.deepEqual(result,{oneTimeReady:true,monthlyReady:false,monthlyAmountIncrement:null,reason:'existing_payment_setup_verified',missingEvents:[],monthlyReason:'no_existing_donation_price'});
  assert.equal(JSON.stringify(result).includes('acct_'),false);assert.equal(JSON.stringify(result).includes('stripe-webhook'),false);
  endpoint.enabled_events=['payment_intent.succeeded'];assert.equal(JSON.parse((await handler({httpMethod:'GET'})).body).oneTimeReady,false);
  endpoint.enabled_events=['*'];endpoint.url='https://other.example/webhook';assert.equal(JSON.parse((await handler({httpMethod:'GET'})).body).oneTimeReady,false);

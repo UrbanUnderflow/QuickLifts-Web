@@ -15,16 +15,19 @@ function createReadinessHandler({ env, stripe }) {
       const account = await client.accounts.retrieve();
       if (account.id !== PIL_ACCOUNT || account.charges_enabled !== true) return reply(200, { oneTimeReady: false, monthlyReady: false, reason: 'account_not_ready' });
       const endpoints = await client.webhookEndpoints.list({ limit: 100 });
-      const configured = endpoints.data.some(endpoint => endpoint.livemode === true && endpoint.status === 'enabled'
-        && WEBHOOK_URLS.has(endpoint.url)
-        && ['payment_intent.succeeded', 'charge.refunded'].every(name => endpoint.enabled_events?.includes('*') || endpoint.enabled_events?.includes(name)));
+      const existing = endpoints.data.filter(endpoint => endpoint.livemode === true && endpoint.status === 'enabled' && WEBHOOK_URLS.has(endpoint.url));
+      const delivers = name => existing.some(endpoint => endpoint.enabled_events?.includes('*') || endpoint.enabled_events?.includes(name));
+      const missingEvents = ['payment_intent.succeeded', 'charge.refunded'].filter(name => !delivers(name));
+      const configured = missingEvents.length === 0;
       let monthlyPrice = null;
-      try { monthlyPrice = await require('./lib/athleticmind-giving-deployment').findDonationMonthlyPrice(client); } catch { /* No access expansion; keep monthly closed. */ }
+      let catalogReadable = true;
+      try { monthlyPrice = await require('./lib/athleticmind-giving-deployment').findDonationMonthlyPrice(client); } catch { catalogReadable = false; /* No access expansion; keep monthly closed. */ }
       const invoiceDelivery = endpoints.data.some(endpoint => endpoint.livemode === true && endpoint.status === 'enabled' && WEBHOOK_URLS.has(endpoint.url)
         && (endpoint.enabled_events?.includes('*') || endpoint.enabled_events?.includes('invoice.paid')));
       const monthlyReady = !!(configured && invoiceDelivery && monthlyPrice);
       return reply(200, { oneTimeReady: configured, monthlyReady, monthlyAmountIncrement: monthlyReady ? monthlyPrice.unit_amount : null,
-        reason: configured ? 'existing_payment_setup_verified' : 'existing_webhook_unverified' });
+        reason: configured ? 'existing_payment_setup_verified' : existing.length ? 'existing_webhook_missing_events' : 'existing_webhook_route_not_registered',
+        missingEvents, monthlyReason: !catalogReadable ? 'catalog_read_unavailable' : !monthlyPrice ? 'no_existing_donation_price' : !invoiceDelivery ? 'invoice_paid_not_enabled' : !configured ? 'one_time_prerequisites_unmet' : 'ready' });
     } catch { return reply(200, { oneTimeReady: false, monthlyReady: false, reason: 'payment_access_unavailable' }); }
   };
 }
