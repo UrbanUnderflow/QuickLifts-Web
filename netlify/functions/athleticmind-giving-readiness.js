@@ -26,6 +26,10 @@ function createReadinessHandler({ env, stripe }) {
         starting_after = batch.data.at(-1).id;
       }
       const existing = endpoints.data.filter(endpoint => endpoint.livemode === true && endpoint.status === 'enabled' && WEBHOOK_URLS.has(endpoint.url));
+      const webhookCoverage = ['stripe-webhook', 'stripe-coach-webhook', 'stripe-deposit-webhook'].map(handler => {
+        const urls = new Set([...WEBHOOK_URLS].map(url => url.replace(/stripe-webhook$/, handler)));
+        return { handler, subscribedEvents: [...new Set(endpoints.data.filter(endpoint => endpoint.livemode === true && endpoint.status === 'enabled' && urls.has(endpoint.url)).flatMap(endpoint => endpoint.enabled_events || []))].sort() };
+      });
       const delivers = name => existing.some(endpoint => endpoint.enabled_events?.includes('*') || endpoint.enabled_events?.includes(name));
       const missingEvents = ['payment_intent.succeeded', 'charge.refunded'].filter(name => !delivers(name));
       const configured = missingEvents.length === 0;
@@ -37,6 +41,7 @@ function createReadinessHandler({ env, stripe }) {
       const monthlyReady = !!(configured && invoiceDelivery && monthlyPrice);
       return reply(200, { oneTimeReady: configured, monthlyReady, monthlyAmountIncrement: monthlyReady ? monthlyPrice.unit_amount : null,
         reason: configured ? 'existing_payment_setup_verified' : existing.length ? 'existing_webhook_missing_events' : 'existing_webhook_route_not_registered',
+        webhookCoverage,
         subscribedEvents: [...new Set(existing.flatMap(endpoint => endpoint.enabled_events || []))].sort(),
         missingEvents, monthlyReason: !catalogReadable ? 'catalog_read_unavailable' : !monthlyPrice ? 'no_existing_donation_price' : !invoiceDelivery ? 'invoice_paid_not_enabled' : !configured ? 'one_time_prerequisites_unmet' : 'ready' });
     } catch { return reply(200, { oneTimeReady: false, monthlyReady: false, reason: 'payment_access_unavailable' }); }
