@@ -4,6 +4,8 @@ const PIL_ACCOUNT = 'acct_1Sd8YLIkArZc741W';
 const WEBHOOK_URLS = new Set([
   'https://fitwithpulse.ai/.netlify/functions/stripe-webhook',
   'https://quickliftsapp.netlify.app/.netlify/functions/stripe-webhook',
+  // Existing aliases verified on the same Netlify backend; all serve this exact signed handler.
+  ...['www.fitwithpulse.ai', 'eatwithmacra.ai', 'www.eatwithmacra.ai', 'pulsecheckmind.ai', 'www.pulsecheckmind.ai', 'pulseintelligencelabs.com', 'www.pulseintelligencelabs.com'].map(host => `https://${host}/.netlify/functions/stripe-webhook`),
 ]);
 function createReadinessHandler({ env, stripe }) {
   return async event => {

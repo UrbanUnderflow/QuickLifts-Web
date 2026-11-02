@@ -1,5 +1,7 @@
 # Monthly giving reuses Pulse billing
 
+Historical investigation below. Superseded release status: the user explicitly approved the full scoped backend/frontend release on 2026-11-02, and backend pushes succeeded. See athleticmind-live-launch.md for the current implementation and protected-rules release. Prior denial paragraphs below describe the earlier approval state, not a current release blocker.
+
 Local application candidate only. No Stripe account, credentials, products, prices, webhook settings or payment settings were changed in this follow-up. No provider mutations or backend push retry occurred. PIL remains recipient.
 
 ## Actual production implementation traced
