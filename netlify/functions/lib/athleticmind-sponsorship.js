@@ -57,9 +57,9 @@ async function monthlyLineItem({ env, client, config, amount }) {
     return { price: price.id, quantity };
   }
   // Pulse coach-service checkout uses inline price_data for custom amounts. Live use creates catalog records,
-  // so it remains gated under the user's no-new-products/prices instruction until specifically authorized.
+  // authorized only for separate donation records; existing Pulse catalog entries remain unchanged.
   if (config.live && env.ATHLETICMIND_SPONSOR_ALLOW_NEW_PRICE_RECORDS !== 'true') throw fail('Monthly giving is awaiting activation. No payment has been created.', 503);
-  return { quantity: 1, price_data: { currency: 'usd', unit_amount: amount, recurring: { interval: 'month' }, product_data: { name: `${config.live ? '' : 'TEST: '}AthleticMind monthly program contribution` } } };
+  return { quantity: 1, price_data: { currency: 'usd', unit_amount: amount, recurring: { interval: 'month' }, product_data: { name: `${config.live ? '' : 'TEST: '}AthleticMind monthly program contribution`, metadata: { source: SOURCE, recipient: config.account, purpose: 'monthly-donation' } } } };
 }
 // Cumulative snapshots, not additive event amounts: duplicates and out-of-order refunds cannot inflate totals.
 async function record(db, eventId, payment, collection = 'athleticmind-sponsorship-test') {
@@ -164,9 +164,11 @@ function createHandler({ env, stripe, database, publishableKey }) {
           return reply(200, { clientSecret: intent.client_secret, publishableKey: publicKey, amount: intent.amount, mode: config.mode }, cors);
         }
         if (config.live && input.frequency !== 'monthly') throw fail('Use the secure one-time payment form.', 503);
+        const registeredSession = config.live ? await require('./athleticmind-reconciliation').findRegisteredSession({ db: database(), config, client, input }) : null;
         const recurringItem = input.frequency === 'monthly' ? await monthlyLineItem({ env, client, config, amount: input.amount }) : null;
-        const session = await client.checkout.sessions.create({ mode: input.frequency === 'monthly' ? 'subscription' : 'payment', payment_method_types: ['card'], line_items: [recurringItem || { quantity: 1, price_data: { currency: 'usd', unit_amount: input.amount, product_data: { name: `${config.live ? '' : 'TEST: '}${CAMPAIGNS[input.campaign].title}` } } }], metadata, ...(input.frequency === 'monthly' ? { subscription_data: { metadata } } : { payment_intent_data: { metadata } }), success_url: `${config.origin}/sponsor?result=success&session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${config.origin}/sponsor?result=cancel`, ...(config.live ? { custom_text: { submit: { message: `Recipient: ${config.recipient}. Terms: ${config.termsURL}. Refund policy: ${config.refundURL}. Support: ${config.supportEmail}.` } } } : {}), ...(input.frequency === 'once' ? { submit_type: 'pay' } : {}) }, { idempotencyKey: `${SOURCE}:${config.mode}:${input.requestId}` });
+        const session = registeredSession || await client.checkout.sessions.create({ mode: input.frequency === 'monthly' ? 'subscription' : 'payment', payment_method_types: ['card'], line_items: [recurringItem || { quantity: 1, price_data: { currency: 'usd', unit_amount: input.amount, product_data: { name: `${config.live ? '' : 'TEST: '}${CAMPAIGNS[input.campaign].title}` } } }], metadata, ...(input.frequency === 'monthly' ? { subscription_data: { metadata } } : { payment_intent_data: { metadata } }), success_url: `${config.origin}/sponsor?result=success&session_id={CHECKOUT_SESSION_ID}`, cancel_url: `${config.origin}/sponsor?result=cancel`, ...(config.live ? { custom_text: { submit: { message: `Recipient: ${config.recipient}. Terms: ${config.termsURL}. Refund policy: ${config.refundURL}. Support: ${config.supportEmail}.` } } } : {}), ...(input.frequency === 'once' ? { submit_type: 'pay' } : {}) }, { idempotencyKey: `${SOURCE}:${config.mode}:${input.requestId}` });
         if (session.livemode !== config.live || !session.url?.startsWith('https://checkout.stripe.com/')) throw fail('Checkout unavailable.', 502);
+        if (config.live) await require('./athleticmind-reconciliation').registerSession({ db: database(), config, session, input });
         return reply(200, { url: session.url }, cors);
       }
       if (config.live && ['board', 'totals'].includes(action) && event.httpMethod === 'GET') {

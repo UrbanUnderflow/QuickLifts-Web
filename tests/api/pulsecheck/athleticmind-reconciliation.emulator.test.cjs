@@ -12,3 +12,32 @@ test('failed verification fails closed initially and labels existing cached tota
 test('durable request idempotency survives provider idempotency expiry and rejects changed input',()=>fixture(async f=>{const {intent,input}=await f.add(1,false);f.advance(3*86400000);assert.equal((await findRegisteredIntent({db:f.db,config:f.config,client:f.client,input})).id,intent.id);await assert.rejects(findRegisteredIntent({db:f.db,config:f.config,client:f.client,input:{...input,amount:1000}}),e=>e.status===409);await registerIntent({db:f.db,config:f.config,intent,input});const result=await f.read();assert.equal(result.net,500);assert.deepEqual(result.supporters,[]);assert.deepEqual(result.schools,[]);assert.equal(JSON.stringify(result).includes('pi_'),false)}));
 test('pending payments are excluded, late success is discovered without webhook, and partial refunds reduce net',()=>fixture(async f=>{const {intent}=await f.add(1);intent.status='processing';assert.equal((await f.read()).net,0);intent.status='succeeded';f.advance(CACHE_MS+1);assert.equal((await f.read()).net,500);intent.latest_charge.amount_refunded=200;f.advance(CACHE_MS+1);const result=await f.read();assert.equal(result.net,300);assert.equal(result.schools[0].count,1)}));
 test('expired refresh lease recovers without publishing an incomplete page or double counting',()=>fixture(async f=>{await f.add(1);await f.db.collection(f.config.collection).doc('reconciliation').set({mode:'live',lease:'expired',leaseUntil:1,nextRunAt:0,cycle:{cursor:null,startedAt:1000000,net:0,supporters:[],schools:[]}});assert.equal((await f.read()).net,500);assert.equal((await f.read()).net,500);assert.equal(f.calls(),1)}));
+
+test('monthly pages reconcile renewals and refunds with one plan vote, no webhook dependency, and durable checkout ownership',()=>fixture(async f=>{
+ const {registerSession,findRegisteredSession}=require('../../../netlify/functions/lib/athleticmind-reconciliation');
+ const input={amount:500,requestId:'monthly-fixture',campaign:'general',profile:{name:'Synthetic monthly',school:'Example School',schoolKey:'example school',message:'Synthetic'}};
+ const metadata={source:'athleticmind-sponsorship-v1',request_id:input.requestId,campaign:'general',recurring_consent:'monthly-v1'};
+ const session={id:'cs_live_fixture',livemode:true,mode:'subscription',metadata,status:'open',subscription:'sub_fixture'};
+ const plan={id:'sub_fixture',livemode:true,metadata,items:{data:[{quantity:1,price:{unit_amount:500,currency:'usd',recurring:{interval:'month',interval_count:1}}}]}};
+ f.client.checkout={sessions:{retrieve:async()=>session}};f.client.subscriptions={retrieve:async()=>plan};
+ let invoices=Array.from({length:23},(_,i)=>({id:`in_${i}`,paid:true,livemode:true,currency:'usd',subscription:plan.id,payment_intent:`pi_monthly${i}`,amount_paid:500}));
+ let largestPage=0;f.client.invoices={list:async({starting_after,limit,subscription})=>{assert.equal(subscription,plan.id);largestPage=Math.max(largestPage,limit);const start=starting_after?invoices.findIndex(i=>i.id===starting_after)+1:0;return{data:invoices.slice(start,start+limit),has_more:start+limit<invoices.length}}};
+ for(let i=0;i<23;i++)f.intents.set(`pi_monthly${i}`,{id:`pi_monthly${i}`,livemode:true,status:'succeeded',currency:'usd',amount:500,amount_received:500,latest_charge:{invoice:`in_${i}`,livemode:true,currency:'usd',status:'succeeded',paid:true,captured:true,amount_captured:500,amount_refunded:0,created:i}});
+ await registerSession({db:f.db,config:f.config,session,input});await registerSession({db:f.db,config:f.config,session,input});
+ assert.equal((await findRegisteredSession({db:f.db,config:f.config,client:f.client,input})).id,session.id);
+ await assert.rejects(findRegisteredSession({db:f.db,config:f.config,client:f.client,input:{...input,amount:600}}),e=>e.status===409);
+ let r=await f.read();assert.equal(r.pending,true);f.advance(COOLDOWN_MS+1);r=await f.read();assert.equal(r.pending,true);assert.equal(r.net,undefined);f.advance(COOLDOWN_MS+1);r=await f.read();assert.equal(r.net,11500);assert.equal(r.schools[0].count,1);assert.equal(r.supporters.length,1);assert.equal(r.supporters[0].net,11500);assert.equal(largestPage,20);
+ for(const pi of f.intents.values())pi.latest_charge.amount_refunded=500;
+ f.advance(CACHE_MS+1);assert.equal((await f.read()).stale,true);f.advance(COOLDOWN_MS+1);await f.read();f.advance(COOLDOWN_MS+1);r=await f.read();assert.equal(r.net,0);assert.deepEqual(r.schools,[]);
+ // Failed renewals and unpaid future invoices never count as collected.
+ invoices=invoices.map(i=>({...i,paid:false,payment_intent:null}));f.advance(CACHE_MS+1);await f.read();f.advance(COOLDOWN_MS+1);await f.read();f.advance(COOLDOWN_MS+1);assert.equal((await f.read()).net,0);
+ session.status='complete';await assert.rejects(findRegisteredSession({db:f.db,config:f.config,client:f.client,input}),e=>e.status===409);
+}));
+
+test('monthly reconciliation rejects a membership or connected-account substitution and leaks no private profile',()=>fixture(async f=>{
+ const {registerSession}=require('../../../netlify/functions/lib/athleticmind-reconciliation');
+ const input={amount:500,requestId:'private-monthly',campaign:'general',profile:null};const metadata={source:'athleticmind-sponsorship-v1',request_id:input.requestId,campaign:'general',recurring_consent:'monthly-v1'};
+ const session={id:'cs_live_private',livemode:true,mode:'subscription',metadata,subscription:'sub_private'};
+ await registerSession({db:f.db,config:f.config,session,input});f.client.checkout={sessions:{retrieve:async()=>session}};f.client.subscriptions={retrieve:async()=>({livemode:true,metadata:{...metadata,source:'membership'}})};
+ await f.read();f.advance(COOLDOWN_MS+1);await assert.rejects(f.read,e=>e.status===503);
+}));

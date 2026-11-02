@@ -1,5 +1,5 @@
 const { createHandler, configuration } = require('./lib/athleticmind-sponsorship');
-const { deploymentEnv, findDonationMonthlyPrice } = require('./lib/athleticmind-giving-deployment');
+const { deploymentEnv } = require('./lib/athleticmind-giving-deployment');
 exports.handler = async event => {
   const env = deploymentEnv(process.env);
   let client;
@@ -12,10 +12,8 @@ exports.handler = async event => {
       const available = JSON.parse(readiness.body);
       if (!available.oneTimeReady || (action === 'checkout' && !available.monthlyReady)) throw new Error('Giving unavailable');
     }
-    if (action === 'checkout') {
-      const price = await findDonationMonthlyPrice(client);
-      env.ATHLETICMIND_SPONSOR_MONTHLY_PRICE_ID = price?.id || '';
-    }
+    // Approved inline donation prices preserve the donor's exact amount; never reuse Pulse plans.
+    env.ATHLETICMIND_SPONSOR_MONTHLY_PRICE_ID = '';
   } catch { return { statusCode: 503, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify({ error: 'Giving is temporarily unavailable.' }) }; }
   return createHandler({
   env,

@@ -133,7 +133,7 @@ test('public board projects only opted-in display fields and excludes refunded e
  assert.equal(response.body.includes('PRIVATE'),false);
 });
 const liveEnv={...env,ATHLETICMIND_SPONSOR_MODE:'live',STRIPE_SECRET_KEY:'sk_live_synthetic_fixture',ATHLETICMIND_STRIPE_ACCOUNT_ID:'acct_synthetic',ATHLETICMIND_SPONSOR_ORIGIN:'https://giving.example',ATHLETICMIND_SPONSOR_LIVE_APPROVED:'true',ATHLETICMIND_SPONSOR_RECIPIENT_NAME:'Synthetic Approved Recipient',ATHLETICMIND_SPONSOR_TERMS_VERSION:'synthetic-v1',ATHLETICMIND_SPONSOR_TERMS_URL:'https://giving.example/terms',ATHLETICMIND_SPONSOR_REFUND_URL:'https://giving.example/refunds',ATHLETICMIND_SPONSOR_SUPPORT_EMAIL:'support@giving.example'};
-function liveSetup(){const fixture=setup();fixture.client.accounts.retrieve=async()=>({id:'acct_synthetic'});fixture.client.checkout.sessions.create=async(...args)=>{fixture.calls.push(args);return {url:'https://checkout.stripe.com/synthetic',livemode:true};};return {...fixture,handler:createHandler({env:liveEnv,stripe:()=>fixture.client,database:()=>fixture.db})};}
+function liveSetup(){const fixture=setup();fixture.client.accounts.retrieve=async()=>({id:'acct_synthetic'});fixture.client.checkout.sessions.create=async(...args)=>{fixture.calls.push(args);return {id:'cs_live_synthetic',mode:args[0].mode,metadata:args[0].metadata,url:'https://checkout.stripe.com/synthetic',livemode:true};};return {...fixture,handler:createHandler({env:liveEnv,stripe:()=>fixture.client,database:()=>fixture.db})};}
 const liveRequest=(action,body={...input,termsAccepted:true,termsVersion:'synthetic-v1'})=>({...event(action,body),headers:{origin:liveEnv.ATHLETICMIND_SPONSOR_ORIGIN}});
 test('live launch configuration fails closed without every explicit approval and disclosure',()=>{
  for(const key of ['ATHLETICMIND_SPONSOR_LIVE_APPROVED','STRIPE_SECRET_KEY','ATHLETICMIND_SPONSOR_RECIPIENT_NAME','ATHLETICMIND_SPONSOR_TERMS_VERSION','ATHLETICMIND_SPONSOR_TERMS_URL','ATHLETICMIND_SPONSOR_REFUND_URL','ATHLETICMIND_SPONSOR_SUPPORT_EMAIL'])assert.throws(()=>configuration({...liveEnv,[key]:''}),key);
@@ -264,4 +264,19 @@ test('live payment creation cannot disclose a client secret when durable trackin
  const handler=createHandler({env:liveEnv,stripe:()=>client,database:()=>db,publishableKey:()=> 'pk_live_fixture'});
  const result=await handler(liveRequest('payment-intent',{...input,termsAccepted:true,termsVersion:'synthetic-v1'}));
  assert.equal(result.statusCode,500);assert.equal(result.body.includes('clientSecret'),false);assert.equal(result.body.includes('secret_private'),false);
+});
+
+test('approved monthly inline record is donation-only, exact cents, durable and private by default',async()=>{
+ const {client,db,calls}=liveSetup();const handler=createHandler({env:{...liveEnv,ATHLETICMIND_SPONSOR_ALLOW_NEW_PRICE_RECORDS:'true'},stripe:()=>client,database:()=>db});
+ const body={...input,amount:537,termsAccepted:true,termsVersion:'synthetic-v1',frequency:'monthly',recurringConsent:true,name:'PRIVATE',school:'PRIVATE',message:'PRIVATE'};
+ assert.equal((await handler(liveRequest('checkout',body))).statusCode,200);
+ const params=calls[0][0];const item=params.line_items[0];assert.equal(item.quantity,1);assert.equal(item.price_data.unit_amount,537);assert.deepEqual(item.price_data.recurring,{interval:'month'});assert.equal(item.price_data.product_data.metadata.source,SOURCE);assert.equal(params.metadata.public_name,'');assert.equal(params.subscription_data.metadata.recurring_consent,'monthly-v1');assert.equal(params.subscription_data.transfer_data,undefined);
+ assert.equal(JSON.stringify([...db.values.values()]).includes('PRIVATE'),false);
+ client.checkout.sessions.retrieve=async()=>({id:'cs_live_synthetic',status:'open',mode:'subscription',metadata:params.metadata,livemode:true,url:'https://checkout.stripe.com/synthetic'});
+ assert.equal((await handler(liveRequest('checkout',body))).statusCode,200);assert.equal(calls.length,1);
+ assert.equal((await handler(liveRequest('checkout',{...body,amount:538}))).statusCode,409);
+});
+test('monthly storage failure withholds Checkout URL',async()=>{
+ const {client,db}=liveSetup();db.runTransaction=async()=>{throw Error('storage failure')};const handler=createHandler({env:{...liveEnv,ATHLETICMIND_SPONSOR_ALLOW_NEW_PRICE_RECORDS:'true'},stripe:()=>client,database:()=>db});
+ const result=await handler(liveRequest('checkout',{...input,termsAccepted:true,termsVersion:'synthetic-v1',frequency:'monthly',recurringConsent:true}));assert.equal(result.statusCode,500);assert.equal(JSON.parse(result.body).url,undefined);
 });

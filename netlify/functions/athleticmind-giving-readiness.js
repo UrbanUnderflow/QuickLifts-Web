@@ -34,18 +34,16 @@ function createReadinessHandler({ env, stripe }) {
       const missingEvents = ['payment_intent.succeeded', 'charge.refunded'].filter(name => !delivers(name));
       const configured = webhookCoverage.filter(item => ['stripe-webhook', 'stripe-deposit-webhook'].includes(item.handler)).some(item => item.subscribedEvents.includes('*') || item.subscribedEvents.includes('payment_intent.succeeded'));
       // Refunds are verified by bounded request-driven reads; no new webhook subscription is required.
-      let monthlyPrice = null;
-      let catalogReadable = true;
-      try { monthlyPrice = await require('./lib/athleticmind-giving-deployment').findDonationMonthlyPrice(client); } catch { catalogReadable = false; /* No access expansion; keep monthly closed. */ }
       const invoiceDelivery = endpoints.data.some(endpoint => endpoint.livemode === true && endpoint.status === 'enabled' && WEBHOOK_URLS.has(endpoint.url)
         && (endpoint.enabled_events?.includes('*') || endpoint.enabled_events?.includes('invoice.paid')));
-      const monthlyReady = false; // This release enables one-time giving only; recurring reconciliation is not enabled.
-      return reply(200, { oneTimeReady: configured, monthlyReady, monthlyAmountIncrement: monthlyReady ? monthlyPrice.unit_amount : null,
+      const checkoutDelivery = delivers('checkout.session.completed');
+      const monthlyReady = configured && invoiceDelivery && checkoutDelivery;
+      return reply(200, { oneTimeReady: configured, monthlyReady, monthlyAmountIncrement: monthlyReady ? 1 : null,
         reason: configured ? 'existing_success_event_and_readthrough_refunds' : existing.length ? 'existing_webhook_missing_events' : 'existing_webhook_route_not_registered',
         webhookCoverage,
         subscribedEvents: [...new Set(existing.flatMap(endpoint => endpoint.enabled_events || []))].sort(),
         missingEvents, refundVerification: 'bounded_readthrough',
-        monthlyReason: !catalogReadable ? 'catalog_read_unavailable' : !monthlyPrice ? 'no_existing_donation_price' : !invoiceDelivery ? 'invoice_paid_not_enabled' : !configured ? 'one_time_prerequisites_unmet' : 'monthly_release_not_enabled' });
+        monthlyReason: monthlyReady ? 'approved_donation_inline_prices' : !invoiceDelivery ? 'invoice_paid_not_enabled' : !checkoutDelivery ? 'checkout_completion_not_enabled' : 'one_time_prerequisites_unmet' });
     } catch { return reply(200, { oneTimeReady: false, monthlyReady: false, reason: 'payment_access_unavailable' }); }
   };
 }

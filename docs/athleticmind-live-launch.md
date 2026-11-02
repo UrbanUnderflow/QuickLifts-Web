@@ -1,5 +1,7 @@
 # PIL donation release — 2026-11-02
 
+Historical one-time release notes. The later approved monthly release is documented in [athleticmind-monthly-release.md](athleticmind-monthly-release.md), which supersedes the no-new-records restriction for donation-only runtime price creation.
+
 The user explicitly approved the donation backend/frontend release, shared webhook adapter and protected ledger. Stripe account configuration, credentials, webhook registrations, products and prices remain unchanged. No live payment is used for verification.
 
 ## Release scope

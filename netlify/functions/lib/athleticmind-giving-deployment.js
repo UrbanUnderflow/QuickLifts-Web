@@ -6,7 +6,7 @@ function deploymentEnv(env) {
     ATHLETICMIND_SPONSOR_ORIGIN: 'https://theathleticmind.ai', ATHLETICMIND_SPONSOR_LIVE_APPROVED: 'true',
     ATHLETICMIND_SPONSOR_RECIPIENT_NAME: 'Pulse Intelligence Labs, Inc.', ATHLETICMIND_SPONSOR_TERMS_VERSION: 'pil-existing-terms-2026-11-02',
     ATHLETICMIND_SPONSOR_TERMS_URL: 'https://fitwithpulse.ai/terms', ATHLETICMIND_SPONSOR_REFUND_URL: 'https://fitwithpulse.ai/terms',
-    ATHLETICMIND_SPONSOR_SUPPORT_EMAIL: 'info@fitwithpulse.ai', ATHLETICMIND_SPONSOR_ALLOW_NEW_PRICE_RECORDS: 'false' };
+    ATHLETICMIND_SPONSOR_SUPPORT_EMAIL: 'info@fitwithpulse.ai', ATHLETICMIND_SPONSOR_ALLOW_NEW_PRICE_RECORDS: 'true' };
 }
 function isDonationMonthlyPrice(price) {
   const product = price?.product;
