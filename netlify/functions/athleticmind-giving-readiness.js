@@ -16,7 +16,15 @@ function createReadinessHandler({ env, stripe }) {
       const client = stripe();
       const account = await client.accounts.retrieve();
       if (account.id !== PIL_ACCOUNT || account.charges_enabled !== true) return reply(200, { oneTimeReady: false, monthlyReady: false, reason: 'account_not_ready' });
-      const endpoints = await client.webhookEndpoints.list({ limit: 100 });
+      const endpoints = { data: [] };
+      let starting_after;
+      for (let page = 0; page < 10; page++) {
+        const batch = await client.webhookEndpoints.list({ limit: 100, ...(starting_after ? { starting_after } : {}) });
+        endpoints.data.push(...batch.data);
+        if (!batch.has_more) break;
+        if (!batch.data.length || page === 9) throw new Error('Incomplete webhook inventory');
+        starting_after = batch.data.at(-1).id;
+      }
       const existing = endpoints.data.filter(endpoint => endpoint.livemode === true && endpoint.status === 'enabled' && WEBHOOK_URLS.has(endpoint.url));
       const delivers = name => existing.some(endpoint => endpoint.enabled_events?.includes('*') || endpoint.enabled_events?.includes(name));
       const missingEvents = ['payment_intent.succeeded', 'charge.refunded'].filter(name => !delivers(name));
@@ -29,6 +37,7 @@ function createReadinessHandler({ env, stripe }) {
       const monthlyReady = !!(configured && invoiceDelivery && monthlyPrice);
       return reply(200, { oneTimeReady: configured, monthlyReady, monthlyAmountIncrement: monthlyReady ? monthlyPrice.unit_amount : null,
         reason: configured ? 'existing_payment_setup_verified' : existing.length ? 'existing_webhook_missing_events' : 'existing_webhook_route_not_registered',
+        subscribedEvents: [...new Set(existing.flatMap(endpoint => endpoint.enabled_events || []))].sort(),
         missingEvents, monthlyReason: !catalogReadable ? 'catalog_read_unavailable' : !monthlyPrice ? 'no_existing_donation_price' : !invoiceDelivery ? 'invoice_paid_not_enabled' : !configured ? 'one_time_prerequisites_unmet' : 'ready' });
     } catch { return reply(200, { oneTimeReady: false, monthlyReady: false, reason: 'payment_access_unavailable' }); }
   };
