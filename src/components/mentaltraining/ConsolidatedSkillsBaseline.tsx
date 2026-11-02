@@ -70,7 +70,7 @@ const STYLES = `
 .consolidated-skills .skills-review p { padding: 10px 0; border-top: 1px solid var(--line); color: var(--ink-2); }
 .consolidated-skills .skills-review strong { color: var(--ink); font-weight: 600; }
 .skills-sheet-backdrop { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-end; justify-content: center; background: rgba(8,10,10,0.6); }
-.skills-sheet { width: 100%; max-width: 680px; max-height: 90svh; overflow-y: auto; display: grid; gap: 8px; padding: 10px 16px max(20px, env(safe-area-inset-bottom)); border-radius: 26px 26px 0 0; background: var(--surface); border-top: 1px solid var(--line); }
+.skills-sheet { width: 100%; max-width: 680px; max-height: 90%; overflow-y: auto; display: grid; gap: 8px; padding: 10px 16px max(20px, env(safe-area-inset-bottom)); border-radius: 26px 26px 0 0; background: var(--surface); border-top: 1px solid var(--line); }
 .skills-sheet-handle { justify-self: center; width: 40px; height: 4px; margin-bottom: 6px; border-radius: 4px; background: var(--line-strong); }
 .skills-sheet-title { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
 .skills-sheet-title svg { width: 18px; height: 18px; flex-shrink: 0; }
