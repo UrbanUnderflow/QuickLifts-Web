@@ -1,3 +1,4 @@
+import { smsSender, smsProvider } from './provider';
 import type { firestore } from 'firebase-admin';
 import { DashboardAccessError, validTeamId } from '../coach-dashboard/access';
 import { digest, eligible, loadInbox, rootFor, scope, transactionReads, transportReady } from './service';
@@ -78,7 +79,7 @@ export async function sendUnifiedMessage(db: firestore.Firestore, uid: string, t
       const appData = payload.channels.includes('app') ? (await tx.get(conversation)).data() : null;
       if (appData && !validConversation(appData, uid, teamId, fresh.team.organizationId, athleteId)) throw new DashboardAccessError(409, 'The App conversation changed. Refresh before sending.');
       const smsAvailable = payload.channels.includes('sms') && !availability.reason;
-      const sender = process.env.TWILIO_FROM_NUMBER || '';
+      const sender = smsSender();
       if (smsAvailable) {
         if (phones.has(availability.contact.phone)) throw new DashboardAccessError(409, 'Athletes share a phone number. Review their identities before texting.');
         phones.add(availability.contact.phone);
@@ -112,7 +113,7 @@ function createTextJob(db: firestore.Firestore, tx: firestore.Transaction, value
   const { uid, teamId, athleteId, id, jobId, text, phone, sender, atMs } = value;
   const batchId = `inbox_${jobId}`, body = `${text}\nReply STOP to opt out.`;
   tx.create(teams(db, teamId).collection('batches').doc(batchId), { uid, athleteIds: [athleteId], states: { [jobId]: 'queued' }, atMs });
-  tx.create(rootFor(db).collection('jobs').doc(jobId), { uid, teamId, athleteId, batchId, text: body, phoneHash: digest(phone), sender, state: 'queued', atMs, unifiedMessageId: id });
+  tx.create(rootFor(db).collection('jobs').doc(jobId), { uid, teamId, athleteId, batchId, text: body, phoneHash: digest(phone), sender, provider: smsProvider(), state: 'queued', atMs, unifiedMessageId: id });
   tx.create(teams(db, teamId).collection('messages').doc(jobId), { senderId: uid, athleteId, batchId, text: body, direction: 'outgoing', status: 'queued', atMs, unifiedMessageId: id });
 }
 
@@ -127,7 +128,7 @@ export async function retryUnifiedText(db: firestore.Firestore, uid: string, tea
     const status = job?.state || current.sms.status;
     if (!retryableTextStates.has(status)) throw new DashboardAccessError(409, 'This text is queued, sent, or uncertain. Refresh to check its status.');
     if (availability.reason) throw new DashboardAccessError(409, availability.reason);
-    const sender = process.env.TWILIO_FROM_NUMBER || '';
+    const sender = smsSender();
     const route = (await tx.get(rootFor(db).collection('routes').doc(digest([sender, availability.contact.phone])))).data();
     if (route && (route.teamId !== teamId || route.athleteId !== athleteId)) throw new DashboardAccessError(409, 'This phone belongs to another team conversation.');
     const limit = rootFor(db).collection('send-limits').doc(digest([uid, Math.floor(now / 60000)]));

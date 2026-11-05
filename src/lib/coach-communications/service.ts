@@ -1,3 +1,4 @@
+import { providerConfigured } from './provider';
 import { createHash } from 'crypto';
 import type { firestore } from 'firebase-admin';
 import { activeRecord, DashboardAccessError, loadTeamAccess, validTeamId, visibleAthlete } from '../coach-dashboard/access';
@@ -83,9 +84,7 @@ export function transportReady(mode: unknown) {
     process.env.COACH_COMMUNICATIONS_SMS_WEBHOOK_ENABLED === 'true' &&
     process.env.COACH_COMMUNICATIONS_FIREBASE_MODE === (mode === 'dev' ? 'dev' : 'prod') &&
     process.env.COACH_COMMUNICATIONS_WORKER_ENABLED === 'true' &&
-    /^https:\/\/[^?#]+$/.test(process.env.COACH_COMMUNICATIONS_STATUS_WEBHOOK_URL || '') &&
-    !!process.env.TWILIO_ACCOUNT_SID && !!process.env.TWILIO_AUTH_TOKEN && !!process.env.TWILIO_FROM_NUMBER &&
-    /^https:\/\//.test(process.env.COACH_COMMUNICATIONS_SMS_WEBHOOK_URL || '');
+    providerConfigured();
 }
 export async function loadInbox(db: firestore.Firestore, uid: string, teamId: string, mode: unknown, cursor?: string) {
   const { membership } = await scope(db, uid, teamId), root = rootFor(db);

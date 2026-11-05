@@ -1,3 +1,4 @@
+import { smsSender, smsProvider, sendTelnyxSms } from './provider';
 import type { firestore } from 'firebase-admin';
 import { validateRequest } from 'twilio';
 import { DashboardAccessError, validTeamId } from '../coach-dashboard/access';
@@ -23,7 +24,7 @@ export async function enqueueBatch(db: firestore.Firestore, uid: string, teamId:
     if (!entry.eligible) throw new DashboardAccessError(409, 'A recipient has no valid phone number, has paused texts, or has opted out.');
     if (phones.has(entry.contact.phone)) throw new DashboardAccessError(409, 'Recipients share a phone number. Review their identities first.');
     phones.add(entry.contact.phone);
-    const from = process.env.TWILIO_FROM_NUMBER || '';
+    const from = smsSender();
     const route = await root.collection('routes').doc(digest([from, entry.contact.phone])).get();
     if (route.exists && (route.data()?.teamId !== teamId || route.data()?.athleteId !== athleteId)) throw new DashboardAccessError(409, 'This phone belongs to another team conversation.');
     contacts.push({ athleteId, phoneHash: digest(entry.contact.phone), sender: from });
@@ -54,7 +55,7 @@ export async function enqueueBatch(db: firestore.Firestore, uid: string, teamId:
     tx.set(intent, { batchId, atMs: now });
     tx.create(batch, { uid, fingerprint, atMs: now, athleteIds: payload.athleteIds, states: Object.fromEntries(jobs.map(j => [j.id, 'queued'])) });
     for (const job of jobs) {
-      const data = { ...job, teamId, uid, batchId, text: payload.text, state: 'queued', atMs: now };
+      const data = { ...job, teamId, uid, batchId, text: payload.text, provider: smsProvider(), state: 'queued', atMs: now };
       tx.create(root.collection('jobs').doc(job.id), data);
       tx.create(messageRef(db, data, job.id), { athleteId: job.athleteId, batchId, text: payload.text, direction: 'outgoing', status: 'queued', atMs: now, senderId: uid });
     }
@@ -100,7 +101,7 @@ export async function processJob(db: firestore.Firestore, id: string, send: Tran
   let entry;
   try {
     entry = await eligible(db, job.uid, job.teamId, job.athleteId);
-    if (!entry.eligible || digest(entry.contact.phone) !== job.phoneHash || job.sender !== process.env.TWILIO_FROM_NUMBER) throw new DashboardAccessError(409, 'Contact changed.');
+    if (!entry.eligible || digest(entry.contact.phone) !== job.phoneHash || job.sender !== smsSender() || (job.provider || 'twilio') !== smsProvider()) throw new DashboardAccessError(409, 'Contact changed.');
   } catch (e) {
     if (e instanceof DashboardAccessError) { await transition(db, id, 'blocked'); return; }
     throw e; // Transient DB errors leave the unclaimed job queued.
@@ -149,13 +150,15 @@ export async function processQueue(db: firestore.Firestore, send: Transport, now
 
 /** Bounded call. Any uncertain network result stays unknown and is never resent automatically. */
 export const sendQueuedSms: Transport = async ({ to, body, jobId }) => {
+  if (smsProvider() === 'telnyx') return sendTelnyxSms({ to, body, jobId });
+  if (smsProvider() !== 'twilio') return { state: 'failed' };
   const sid = process.env.TWILIO_ACCOUNT_SID || '', token = process.env.TWILIO_AUTH_TOKEN || '';
   const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 5000);
   try {
     const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
       method: 'POST', signal: controller.signal,
       headers: { Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString('base64')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ To: to, From: process.env.TWILIO_FROM_NUMBER || '', Body: body, StatusCallback: `${process.env.COACH_COMMUNICATIONS_STATUS_WEBHOOK_URL}?job=${jobId}` }),
+      body: new URLSearchParams({ To: to, From: smsSender(), Body: body, StatusCallback: `${process.env.COACH_COMMUNICATIONS_STATUS_WEBHOOK_URL}?job=${jobId}` }),
     });
     const result = await response.json().catch(() => ({}));
     if (response.ok && /^SM[a-fA-F0-9]{32}$/.test(result.sid || '')) return { state: 'accepted', providerId: result.sid };
@@ -170,9 +173,9 @@ export function verifyStatusWebhook(jobId: unknown, form: any, signature: unknow
   if (!/^https:\/\/[^?#]+$/.test(url) || !token || form.AccountSid !== process.env.TWILIO_ACCOUNT_SID || form.From !== process.env.TWILIO_FROM_NUMBER || !/^SM[a-fA-F0-9]{32}$/.test(form.MessageSid || '') || !['accepted', 'queued', 'sending', 'sent', 'delivered', 'undelivered', 'failed', 'canceled'].includes(form.MessageStatus)) return false;
   return validateRequest(token, signature, `${url}?job=${jobId}`, form);
 }
-export async function recordDelivery(db: firestore.Firestore, id: string, form: Record<string, string>) {
+export async function recordDelivery(db: firestore.Firestore, id: string, form: Record<string, string>, provider = 'twilio') {
   const job = (await rootFor(db).collection('jobs').doc(id).get()).data();
-  if (!job || job.state === 'queued' || digest(form.To) !== job.phoneHash || job.sender !== form.From || job.providerId && job.providerId !== form.MessageSid) return;
+  if (!job || (job.provider || 'twilio') !== provider || job.state === 'queued' || digest(form.To) !== job.phoneHash || job.sender !== form.From || job.providerId && job.providerId !== form.MessageSid) return;
   // Twilio's queued/sending statuses indicate provider acceptance, not our local queue.
   await transition(db, id, ['queued', 'sending'].includes(form.MessageStatus) ? 'accepted' : form.MessageStatus, form.MessageSid);
 }
