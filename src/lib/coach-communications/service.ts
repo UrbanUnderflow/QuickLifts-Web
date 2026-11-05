@@ -110,7 +110,7 @@ export async function loadInbox(db: firestore.Firestore, uid: string, teamId: st
   }
   const snapshot = await query.get();
   const messages = snapshot.docs.filter(d => allowedIds.has(d.data().athleteId)).map(d => {
-    const m = d.data(); return { id: d.id, athleteId: m.athleteId, text: m.text, direction: m.direction, status: m.status, atMs: m.atMs };
+    const m = d.data(); return { id: d.id, athleteId: m.athleteId, text: m.text, direction: m.direction, status: m.status, atMs: m.atMs, ...(typeof m.unifiedMessageId === 'string' ? { unifiedMessageId: m.unifiedMessageId } : {}), ...(typeof m.senderId === 'string' ? { senderId: m.senderId } : {}) };
   }).reverse();
   const batchDocs = await root.collection('teams').doc(teamId).collection('batches').orderBy('atMs', 'desc').limit(20).get();
   const batches = batchDocs.docs.filter(d => Array.isArray(d.data().athleteIds) && d.data().athleteIds.every((id: string) => allowedIds.has(id))).map(d => {

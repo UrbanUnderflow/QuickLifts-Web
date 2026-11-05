@@ -62,7 +62,7 @@ export async function stagePendingAthlete(db: firestore.Firestore, uid: string, 
   });
 }
 export async function listPendingAthletes(db: firestore.Firestore, uid: string, teamId: string) {
-  const {membership}=await staffScope(db,uid,teamId);
+  const {membership,team}=await staffScope(db,uid,teamId);
   // No assignment exists yet: an assigned/none roster scope cannot see new identities.
   if(!fullRoster(membership))return{athletes:[],claimsEnabled:pendingClaimsEnabled()};
   const snapshot=await records(db).where('teamId','==',teamId).limit(200).get();
@@ -75,7 +75,7 @@ export async function listPendingAthletes(db: firestore.Firestore, uid: string, 
     const unique=index?.recordIds?.length===1 && index.recordIds[0]===doc.id;
     athletes.push({id:doc.id,displayName:d.displayName,status:unique?d.status:'review-required'});
   }
-  return{athletes,claimsEnabled:pendingClaimsEnabled()};
+  return{athletes,claimsEnabled:pendingClaimsEnabled(),canPrepare:canStagePendingAthlete(membership,team)};
 }
 /** phoneProof must be derived server-side from recent verified phone authentication.
  * Claim binds the OTP-authenticated UID; known existing candidates must match. Enrollment/participation remain independent. */

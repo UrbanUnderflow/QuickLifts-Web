@@ -64,7 +64,7 @@ const CoachLayout: React.FC<Props> = ({
       ? [{ href: '/coach/dashboard?view=earnings', label: 'Earnings', dashboardView: 'earnings' }]
       : []),
     { href: '/coach/dashboard?view=staff', label: 'Staff', dashboardView: 'staff' },
-    { href: '/coach/dashboard?view=inbox', label: 'Inbox', dashboardView: 'inbox' },
+    { href: '/coach/dashboard?view=inbox', label: 'Messages', dashboardView: 'inbox' },
     { href: '/coach/notifications', label: 'Notifications', badgeCount: unreadNotificationCount },
     { href: '/coach/dashboard?view=settings', label: 'Profile', dashboardView: 'settings' }
   ];
