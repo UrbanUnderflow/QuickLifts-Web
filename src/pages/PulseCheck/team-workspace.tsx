@@ -1,3 +1,5 @@
+import {readAdministrativeEntry} from '../../lib/administrative-onboarding/client';
+import {mayReuseAdministrativeEntry} from '../../lib/administrative-onboarding/policy';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
@@ -333,6 +335,9 @@ export default function PulseCheckTeamWorkspacePage() {
   const isLaunchDayMode = router.query.mode === 'launch-day';
 
   const [membership, setMembership] = useState<PulseCheckTeamMembership | null>(null);
+  const [administrativeEntryComplete,setAdministrativeEntryComplete]=useState(false);
+  useEffect(()=>{let active=true;setAdministrativeEntryComplete(false);if(membership?.role==='athlete'&&membership.rosterRelocation?.operationId&&currentUser?.id){void readAdministrativeEntry(membership.teamId).then(value=>{if(active)setAdministrativeEntryComplete(mayReuseAdministrativeEntry(value,currentUser.id,membership.id,membership.athleteOnboarding?.requiredConsents||[]));}).catch(()=>{if(active)setAdministrativeEntryComplete(false);});}return()=>{active=false;};},[membership,currentUser?.id]);
+
   const [organization, setOrganization] = useState<PulseCheckOrganization | null>(null);
   const [team, setTeam] = useState<PulseCheckTeam | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberView[]>([]);
@@ -603,10 +608,10 @@ export default function PulseCheckTeamWorkspacePage() {
     athleteOnboarding: membership?.athleteOnboarding,
     progress: athleteProgress,
   });
-  const consentComplete = athleteTaskState.consentComplete;
+  const consentComplete = athleteTaskState.consentComplete || administrativeEntryComplete;
   const baselineComplete = athleteTaskState.baselineComplete;
   const baselineStarted = athleteTaskState.baselineStatus === 'started';
-  const requiredTasksComplete = athleteTaskState.requiredTasksComplete;
+  const requiredTasksComplete = athleteTaskState.requiredTasksComplete || (administrativeEntryComplete && baselineComplete);
   const showAthleteVisionProSummary = visionProTaskState === 'queued' || visionProTaskState === 'completed';
   const nextProgramName = athleteProgress?.activeProgram?.recommendedSimId
     ? athleteProgress.activeProgram.recommendedSimId.split('_').join(' ')
@@ -631,7 +636,7 @@ export default function PulseCheckTeamWorkspacePage() {
     await router.push('/PulseCheck/baseline');
   }, [currentUser?.id, membership, router]);
 
-  const athleteHeroSummary = !consentComplete
+  const athleteHeroSummary = administrativeEntryComplete ? 'Your previous setup carries forward. Your saved baseline stays with your account. Health sharing has not been expanded.' : !consentComplete
     ? `You are in the right place. We have added you to ${team?.displayName || 'your team'}. First, finish setup so we can get you ready to begin.`
     : !baselineComplete
     ? `You are in the right place. We have added you to ${team?.displayName || 'your team'}. Your next step is to complete your Mental Skills Starting Point so we can choose the right skills for you.`

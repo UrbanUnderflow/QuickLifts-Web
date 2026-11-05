@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {validatePendingAthlete,assertPendingClaimsEnabled} from '../../src/lib/pending-athletes/service';
+const base={sourceReference:'synthetic-row',displayName:'Synthetic Athlete',phoneNumber:'+12025550100',role:'athlete',rosterVerified:true,identityReview:'reviewed',accountMatch:'none-found'};
+test('claims remain closed for absent and malformed gate values',()=>{for(const v of [undefined,'false','1','TRUE',' true ']){if(v===undefined)delete process.env.PENDING_ATHLETE_CLAIMS_ENABLED;else process.env.PENDING_ATHLETE_CLAIMS_ENABLED=v;assert.throws(()=>assertPendingClaimsEnabled(),/not open/);}delete process.env.PENDING_ATHLETE_CLAIMS_ENABLED;});
+test('preparation strips raw contact and accepts only roster metadata',()=>{const p=validatePendingAthlete(base);assert.equal(p.displayName,base.displayName);assert.equal(p.phoneSupported,true);assert.equal('phoneNumber' in p,false);assert.equal(p.phoneHash.length,64);});
+test('staff, private answers, ambiguous binding and malformed contact are rejected',()=>{for(const change of [{role:'coach'},{baselineAnswers:{private:true}},{phoneNumber:'2025550100'},{accountMatch:'existing',expectedUserId:null},{displayName:'<script>'}])assert.throws(()=>validatePendingAthlete({...base,...change}));});

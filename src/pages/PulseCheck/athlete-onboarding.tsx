@@ -1,3 +1,5 @@
+import {readAdministrativeEntry} from '../../lib/administrative-onboarding/client';
+import {mayReuseAdministrativeEntry} from '../../lib/administrative-onboarding/policy';
 import { auth } from '../../api/firebase/config';
 import { resolveSchoolActivationFlow } from '../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
 import ConsentChoices from '../../components/pulsecheck/consent/ConsentChoices';
@@ -319,6 +321,13 @@ export default function PulseCheckAthleteOnboardingPage() {
         }
 
         if (!active) return;
+        if(nextMembership?.rosterRelocation?.operationId){
+          const prior=await readAdministrativeEntry(teamId);
+          if(!active)return;
+          if(mayReuseAdministrativeEntry(prior,currentUser.id,nextMembership.id,nextMembership.athleteOnboarding?.requiredConsents||[])){
+            await router.replace('/PulseCheck/team-workspace?organizationId='+encodeURIComponent(nextMembership.organizationId)+'&teamId='+encodeURIComponent(teamId));return;
+          }
+        }
         setMembership(nextMembership);
         setConsentDecisions(nextMembership?.athleteOnboarding?.consentDecisions || {});
         setOrganization(nextOrganization);

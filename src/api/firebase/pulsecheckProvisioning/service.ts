@@ -1182,6 +1182,7 @@ const toInviteActivity = (id: string, data: Record<string, any>): PulseCheckInvi
 });
 
 const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeamMembership => ({
+  ...(data.rosterRelocation?.operationId ? {rosterRelocation:{operationId:data.rosterRelocation.operationId,phase:data.rosterRelocation.phase}} : {}),
   id,
   organizationId: data.organizationId || '',
   teamId: data.teamId || '',

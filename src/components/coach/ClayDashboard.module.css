@@ -95,3 +95,14 @@
 .root[data-dashboard-theme="dark"] :global(:focus-visible) {outline-color:#b8df9c;}
 .root[data-dashboard-theme="dark"] :global([data-nora-chat-fab])::before {color:#a7d7c2;}
 .root[data-dashboard-theme="dark"] .reminders :global([class*="bg-cyan-"]),.root[data-dashboard-theme="dark"] .reminders :global([class*="bg-black/20"]),.root[data-dashboard-theme="dark"] .reminders :global([class*="border-dashed"]) {background:var(--dashboard-raised);color:var(--dashboard-muted);border-color:var(--dashboard-border);}
+
+/* Communication controls follow the dashboard theme. */
+.outlineButton {border:1px solid #aebbb3;border-radius:10px;padding:9px 14px;color:inherit;background:transparent;font-weight:600;}
+.outlineButton:hover:not(:disabled),.outlineButton[aria-pressed="true"] {background:#e7efdc;color:#23473d;}
+.outlineButton:disabled {opacity:.5;cursor:not-allowed;}
+.smsSurface {color:inherit;}
+.smsCard {background:#fff;}
+.root[data-dashboard-theme="dark"] .smsCard {background:var(--dashboard-surface);color:var(--dashboard-text);border-color:var(--dashboard-border);}
+.root[data-dashboard-theme="dark"] .smsSurface :global([class*="bg-stone-"]) {background:var(--dashboard-raised);}
+.root[data-dashboard-theme="dark"] .smsSurface :global([class*="border-stone-"]) {border-color:var(--dashboard-border);}
+.root[data-dashboard-theme="dark"] .smsSurface :global([role="alert"]) {color:#fca5a5;}

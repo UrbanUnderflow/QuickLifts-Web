@@ -955,6 +955,7 @@ export interface PulseCheckOrganizationMembership {
 }
 
 export interface PulseCheckTeamMembership {
+  rosterRelocation?: { operationId: string; phase?: string };
   staffConsentDecisions?: ConsentDecisions;
   id: string;
   organizationId: string;
