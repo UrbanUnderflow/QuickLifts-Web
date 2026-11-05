@@ -5,13 +5,13 @@ const MAX_AGE = 10 * 60 * 1000;
 const fs = require('node:fs');
 const path = require('node:path');
 const sharp = require('sharp');
-const STYLE_VERSION = 'clay-self-v2';
+const STYLE_VERSION = 'clay-self-v3';
 // esbuild relocates this module into the function entrypoint directory.
 const STYLE_DIRECTORY = [path.join(__dirname, 'clay-self-style'), path.join(__dirname, 'lib/clay-self-style')]
-  .find(directory => fs.existsSync(path.join(directory, 'SCHEMATICS-v2.md')));
+  .find(directory => fs.existsSync(path.join(directory, 'SCHEMATICS-v3.md')));
 if (!STYLE_DIRECTORY) throw new Error('Clay Self style bundle is unavailable.');
-const PROMPT = fs.readFileSync(path.join(STYLE_DIRECTORY, 'SCHEMATICS-v2.md'), 'utf8');
-const STYLE_REFERENCES = ['basketball.png', 'athlete.png'].map(name => ({ name, bytes: fs.readFileSync(path.join(STYLE_DIRECTORY, name)) }));
+const PROMPT = fs.readFileSync(path.join(STYLE_DIRECTORY, 'SCHEMATICS-v3.md'), 'utf8');
+const STYLE_REFERENCES = ['M01-material-and-color.png', 'S06-support.png'].map(name => ({ name, bytes: fs.readFileSync(path.join(STYLE_DIRECTORY, name)) }));
 // Only approved settings are used. A model change needs its own compatibility evaluation.
 const GENERATION_SETTINGS = Object.freeze({ model: 'gpt-image-1.5', size: '1024x1536', quality: 'high' });
 
@@ -201,4 +201,4 @@ async function removeExpiredInputs(bucket, now = Date.now()) {
   return removed;
 }
 
-module.exports = { successfulQuota, testingQuotaOverride, completedQuota, framePortrait, failureDetails, logFailure, publicFailure, STYLE_VERSION, GENERATION_SETTINGS, validatePortrait, removeExpiredInputs, crypto, ROLES, MAX_AGE, parseImages, jobID, gate, paths, stateRef, bucketFor, authenticate, remove, signedURL, parseBody, providerKey, editImages, fail };
+module.exports = { STYLE_REFERENCES, successfulQuota, testingQuotaOverride, completedQuota, framePortrait, failureDetails, logFailure, publicFailure, STYLE_VERSION, GENERATION_SETTINGS, validatePortrait, removeExpiredInputs, crypto, ROLES, MAX_AGE, parseImages, jobID, gate, paths, stateRef, bucketFor, authenticate, remove, signedURL, parseBody, providerKey, editImages, fail };

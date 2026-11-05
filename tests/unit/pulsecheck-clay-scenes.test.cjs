@@ -67,7 +67,7 @@ test('scene success bound and UTC rollover preserve active-job guard',()=>{
 test('provider request sends approvedavatar only with fixed landscape template and validates result',async()=>{
  const png=await sharp({create:{width:1536,height:1024,channels:3,background:'#efeade'}}).png().toBuffer();
  const result=await s.renderScene(Buffer.from('approved'),'breathing','synthetic',async(url,options)=>{
-  assert.equal(options.body.getAll('image[]').length,1);assert.equal(options.body.get('size'),'1536x1024');assert.equal(options.body.get('background'),'opaque');
+  assert.equal(options.body.getAll('image[]').length,3);assert.equal(options.body.get('size'),'1536x1024');assert.equal(options.body.get('background'),'opaque');
   assert.equal(options.body.get('quality'),'high');assert.match(options.body.get('prompt'),/sits on a simple teal clay bench/);
   return{ok:true,json:async()=>({data:[{b64_json:png.toString('base64')}]})};
  });assert.deepEqual(result,png);
@@ -173,7 +173,7 @@ test('every allowlisted skill has its own approved panel; request sends identity
  for(const id of Object.keys(manifest.skills))assert.equal(s.referenceReady(id),true,id);
  const png=await sharp({create:{width:1536,height:1024,channels:3,background:'white'}}).png().toBuffer();
  await s.renderScene(Buffer.from('approved-owner-figure'),'breathing-box','test',async(url,request)=>{
-  const images=request.body.getAll('image[]');assert.equal(images.length,2);
+  const images=request.body.getAll('image[]');assert.equal(images.length,4);assert.deepEqual(images.slice(2).map(x=>x.name),['style-only-M01-material-and-color.png','style-only-S06-support.png']);
   assert.equal(images[0].name,'approved-clay-self.png');assert.equal(await images[0].text(),'approved-owner-figure');
   assert.equal(images[1].name,'approved-scene-reference.png');assert.ok(images[1].size>1000);
   assert.match(request.body.get('prompt'),/SECOND image is the approved scene reference/);

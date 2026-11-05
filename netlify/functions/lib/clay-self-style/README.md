@@ -1,11 +1,6 @@
 # Clay Self style bundle
 
-`SCHEMATICS-v2.md` is loaded into the image-edit prompt at runtime. Both PNG files
-are appended after the three identity photos, in basketball/athlete order.
-These are approved illustration references copied from PulseCheck assets
-`ClayIntroBasketball` and `ClayDemoAthlete`. They establish material and sculptural
-treatment only. They are examples, not user uploads. Netlify's existing
-`included_files = ["netlify/functions/**"]` packages this directory.
+The generator loads SCHEMATICS-v3.md. After the three user photos, it sends the AthleticMind guide’s material-and-color plate and support scene, in that order. The same two references guide skill scenes. Body proportions come from the full-body photo for portraits and from the approved Clay Self for scenes.
 
 The generator uses GPT Image 1.5, high quality, portrait 1024x1536, high input
 fidelity, transparent PNG. Changes to model or reference artwork require another
