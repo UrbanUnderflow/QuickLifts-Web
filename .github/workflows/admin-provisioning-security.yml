@@ -1,0 +1,29 @@
+name: Administrator provisioning security
+
+on:
+  pull_request:
+    paths:
+      - 'netlify/functions/add-admin.js'
+      - 'netlify/functions/config/firebase.js'
+      - 'tests/api/firebase-admin/add-admin.runtime.test.cjs'
+      - '.github/workflows/admin-provisioning-security.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'netlify/functions/add-admin.js'
+      - 'netlify/functions/config/firebase.js'
+      - 'tests/api/firebase-admin/add-admin.runtime.test.cjs'
+      - '.github/workflows/admin-provisioning-security.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  administrator-authorization:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test tests/api/firebase-admin/add-admin.runtime.test.cjs

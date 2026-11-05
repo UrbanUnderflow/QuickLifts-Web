@@ -359,6 +359,28 @@ test('scheduled suite identity uses deploy metadata and a same-minute idempotent
   );
 });
 
+test('scheduled suites prefer the chat runtime commit over a Netlify deployment ID', () => {
+  const candidate = 'a'.repeat(40);
+  const deploymentId = '6a93ce3458169f0008196c46';
+  const otherCommit = 'b'.repeat(40);
+  assert.equal(
+    resolveNoraRedTeamScheduledBuild({ publicCommitSha: ` ${candidate} `, deployId: deploymentId }),
+    candidate,
+  );
+  assert.equal(
+    resolveNoraRedTeamScheduledBuild({ commitRef: ` ${otherCommit} `, publicCommitSha: candidate, deployId: deploymentId }),
+    otherCommit,
+  );
+  assert.equal(
+    resolveNoraRedTeamScheduledBuild({ commitRef: ' ', publicCommitSha: ` ${candidate} `, deployId: deploymentId }),
+    candidate,
+  );
+  assert.equal(
+    resolveNoraRedTeamScheduledBuild({ publicCommitSha: ' ', deployId: deploymentId }),
+    deploymentId,
+  );
+});
+
 test('protected history keeps reviewer identity, promoted regressions, and blocker resolution durable', async () => {
   const { db, collections } = createHistoryTestFirestore();
   const store = new NoraRedTeamHistoryStore(db as never);

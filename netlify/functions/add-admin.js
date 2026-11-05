@@ -1,85 +1,56 @@
-// add-admin.js
-// Function to add an admin user to the admin collection
+// Administrator provisioning requires a verified, existing administrator session.
+// No shared or hard-coded bootstrap credential is accepted.
+const { admin, db, headers } = require('./config/firebase');
 
-const { db, headers } = require('./config/firebase');
+const response = (statusCode, message) => ({
+  statusCode,
+  headers: { ...headers, 'Cache-Control': 'no-store' },
+  body: JSON.stringify({ success: statusCode === 200, message }),
+});
 
 exports.handler = async (event) => {
-  // CORS preflight
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS'
-      },
-      body: ''
-    };
+    return { statusCode: 200, headers, body: '' };
   }
+  if (event.httpMethod !== 'POST') return response(405, 'Method not allowed');
 
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ success: false, error: 'Method not allowed' })
-    };
-  }
+  const authorization = event.headers?.authorization || event.headers?.Authorization || '';
+  const match = /^Bearer (\S+)$/i.exec(authorization);
+  if (!match) return response(401, 'Authentication required');
 
   try {
-    const { email, adminKey } = JSON.parse(event.body);
-
-    if (!email || !adminKey) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ 
-          success: false, 
-          error: 'Missing email or adminKey' 
-        })
-      };
+    const decoded = await admin.auth().verifyIdToken(match[1], true);
+    if (!decoded.email || !decoded.email_verified) {
+      return response(403, 'Verified administrator email required');
+    }
+    const existingAdmin = await db.collection('admin').doc(decoded.email.toLowerCase()).get();
+    const permissions = existingAdmin.exists ? existingAdmin.data()?.permissions : null;
+    if (!Array.isArray(permissions) || !permissions.includes('all')) {
+      return response(403, 'Administrator permission required');
     }
 
-    // Simple admin key check (you can change this)
-    const expectedAdminKey = process.env.ADMIN_KEY || 'pulse-admin-2024';
-    if (adminKey !== expectedAdminKey) {
-      return {
-        statusCode: 403,
-        headers,
-        body: JSON.stringify({ 
-          success: false, 
-          error: 'Invalid admin key' 
-        })
-      };
+    let payload;
+    try { payload = JSON.parse(event.body || '{}'); }
+    catch { return response(400, 'Invalid JSON'); }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return response(400, 'Invalid request body');
     }
 
-    // Create admin document
-    await db.collection('admin').doc(email.toLowerCase()).set({
-      email: email.toLowerCase(),
-      createdAt: new Date(),
-      addedBy: 'admin-function',
-      permissions: ['all']
+    const email = String(payload.email || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return response(400, 'Valid email is required');
+    }
+
+    await db.collection('admin').doc(email).set({
+      email,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      addedBy: decoded.email.toLowerCase(),
+      permissions: ['all'],
     });
-
-    console.log(`[AddAdmin] Added admin: ${email}`);
-
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        message: `Successfully added ${email} as admin`
-      })
-    };
-
+    return response(200, 'Administrator added successfully');
   } catch (error) {
-    console.error('[AddAdmin] Error:', error);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        success: false,
-        error: error.message
-      })
-    };
+    if (error?.code?.startsWith('auth/')) return response(401, 'Invalid session');
+    console.error('[AddAdmin] Provisioning failed:', error);
+    return response(500, 'Administrator provisioning failed');
   }
 };

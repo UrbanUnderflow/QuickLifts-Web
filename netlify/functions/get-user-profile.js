@@ -1,4 +1,5 @@
-const { db, headers } = require('./config/firebase');
+const { db, headers: sharedHeaders } = require('./config/firebase');
+const headers = { ...sharedHeaders, 'Cache-Control': 'no-store' };
 const { resolveFirebaseAdminCredential } = require('../../src/lib/server/firebase/credential-source');
 
 // Check if we're in development mode (based on NODE_ENV)
@@ -83,8 +84,12 @@ async function getUserByUsername(username) {
       throw new Error('User not found');
     }
 
+    const userId = snapshot.docs[0].id;
+    // Match the private-account boundary in Firestore rules. This route is a
+    // public projection, not a signed-in account/profile API.
+    const privateAccount = await db.collection('pulsecheck-private-users').doc(userId).get();
+    if (privateAccount.exists) throw new Error('User not found');
     const userData = snapshot.docs[0].data();
-    console.log('User data:', userData);
     
     // Return only necessary profile data
     return {
@@ -95,7 +100,8 @@ async function getUserByUsername(username) {
       profileImage: userData.profileImage || {},
       creator: userData.creator || {},
       workoutCount: userData.workoutCount || 0,
-      bodyWeight: userData.bodyWeight || [],
+      // Weight history is served only through the privacy-aware check-in route.
+      bodyWeight: [],
       following: userData.following || [],
       followers: userData.followers || [],
       // New fields for public profile features

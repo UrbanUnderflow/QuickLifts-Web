@@ -1,0 +1,23 @@
+name: User data security
+on:
+  pull_request:
+    paths:
+      - 'netlify/functions/config/**'
+      - 'netlify/functions/get-body-weight.js'
+      - 'netlify/functions/get-user-workouts.js'
+      - 'netlify/functions/get-user-profile.js'
+      - 'netlify/functions/get-monthly-statement.js'
+      - 'netlify/functions/save-fatburn-summary.js'
+      - 'tests/api/security/user-data*.cjs'
+      - '.github/workflows/user-data-security.yml'
+permissions:
+  contents: read
+jobs:
+  authorization:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test tests/api/security/user-data.runtime.test.cjs
