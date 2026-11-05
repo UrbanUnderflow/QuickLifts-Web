@@ -110,3 +110,48 @@ test('lost commit response, later auth rejection and reload preserve the origina
     assert.deepEqual(errors, []); assert.deepEqual(external, []);
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); fs.rmSync(output, { recursive: true, force: true }); }
 });
+
+
+test('whole-team selection uses the full authorized roster, clears fully, and never silently selects a partial oversized team', async () => {
+  const output = fs.mkdtempSync(path.join(os.tmpdir(), 'coach-messages-whole-team-test-'));
+  await esbuild.build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Inbox from './src/components/coach/CoachMessagesInbox';createRoot(document.getElementById('root')).render(<Inbox teamId="team" coachId="coach"/>);`, resolveDir: process.cwd(), loader: 'tsx' }, bundle: true, outfile: path.join(output, 'app.js'), plugins: [{ name: 'synthetic-auth', setup(build) { build.onResolve({ filter: /api\/firebase\/config$/ }, () => ({ path: 'synthetic-auth', namespace: 'test' })); build.onLoad({ filter: /.*/, namespace: 'test' }, () => ({ contents: `export const auth={currentUser:{getIdToken:async()=>"synthetic-token"}};export const getFirebaseModeRequestHeaders=()=>({'x-pulsecheck-firebase-mode':'dev'});` })); } }] });
+  const server = http.createServer((request, response) => {
+    const asset = request.url === '/app.js' ? 'app.js' : request.url === '/app.css' ? 'app.css' : null;
+    response.setHeader('Content-Type', asset === 'app.js' ? 'application/javascript' : asset === 'app.css' ? 'text/css' : 'text/html');
+    response.end(asset ? fs.readFileSync(path.join(output, asset)) : '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><div id="root"></div><script src="/app.js"></script>');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const browser = await chromium.launch({ headless: true }), page = await browser.newPage();
+  const errors = [], external = [], sends = [];
+  let count = 8;
+  await isolate(page, errors, external);
+  await page.route('**/api/coach/communications/inbox**', route => {
+    if (route.request().method() === 'POST') { sends.push(route.request().postDataJSON()); return route.fulfill({ status: 400, json: { notSaved: true, error: 'Sending is disabled in this offline test.' } }); }
+    return route.fulfill({ json: { recipients: Array.from({ length: count }, (_, index) => ({ id: `athlete-${index + 1}`, name: `Sample athlete ${index + 1}`, unread: false, lastMessage: '', lastAtMs: 0, textAvailable: !(count === 8 && index === 7), textReason: count === 8 && index === 7 ? 'Texting is paused. App messages are available.' : null })), messages: [], hasOlder: false, smsNextCursor: null } });
+  });
+  try {
+    for (const size of [8, 25, 26]) {
+      count = size;
+      await page.goto(`http://127.0.0.1:${server.address().port}`);
+      await page.getByRole('button', { name: 'New message', exact: true }).click();
+      await page.getByRole('textbox', { name: 'Find recipients' }).fill(`Sample athlete ${size}`);
+      const wholeTeam = page.getByRole('button', { name: 'Select whole team', exact: true });
+      assert.equal(await wholeTeam.isDisabled(), size > 25);
+      if (size <= 25) {
+        await wholeTeam.click();
+        await page.getByText(`${size}/25 selected`, { exact: true }).waitFor();
+        await page.getByRole('textbox', { name: 'Find recipients' }).fill('');
+        for (let index = 1; index <= size; index++) assert.equal(await page.getByRole('checkbox', { name: `Sample athlete ${index}`, exact: true }).isChecked(), true);
+        assert.equal(await page.getByRole('checkbox', { name: 'App', exact: true }).isChecked(), true);
+        if (size === 8) assert.equal(await page.getByRole('checkbox', { name: 'Text', exact: true }).isDisabled(), true);
+        await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
+      } else await page.getByText('26 active athletes. Select up to 25 per message. Whole-team selection is unavailable for larger teams.', { exact: true }).waitFor();
+      await page.getByText('0/25 selected', { exact: true }).waitFor();
+      await page.getByRole('textbox', { name: 'Find recipients' }).fill('');
+      for (let index = 1; index <= size; index++) assert.equal(await page.getByRole('checkbox', { name: `Sample athlete ${index}`, exact: true }).isChecked(), false);
+      assert.equal(await page.getByRole('button', { name: 'Clear selection', exact: true }).isDisabled(), true);
+      await page.getByRole('textbox', { name: 'Find recipients' }).fill('');
+    }
+    assert.deepEqual(sends, []); assert.deepEqual(errors, []); assert.deepEqual(external, []);
+  } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); fs.rmSync(output, { recursive: true, force: true }); }
+});
