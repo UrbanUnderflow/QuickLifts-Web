@@ -1,17 +1,16 @@
 import { NoraScenarioLibrary } from '../../src/lib/nora-red-team/library';
-import {
-  catalogFingerprint,
-  scenarioFingerprint,
-} from '../../src/lib/nora-red-team/catalogIdentity';
+import { catalogFingerprint } from '../../src/lib/nora-red-team/catalogIdentity';
 import { buildNoraRedTeamSuiteScenarios } from '../../src/lib/nora-red-team/suiteRunner';
 import type {
   NoraRedTeamSuiteRecord,
   NoraRedTeamHistoryRecord,
+  NoraRedTeamTarget,
 } from '../../src/lib/nora-red-team/types';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getFirebaseAdminApp } from '../../src/lib/firebase-admin';
 import { NoraRedTeamHistoryStore } from '../../src/lib/nora-red-team/historyStore';
 import { evaluateNoraRedTeamReleaseGate } from '../../src/lib/nora-red-team/releaseGate';
+import { validateNoraRedTeamSuiteEvidence } from '../../src/lib/nora-red-team/releaseEvidence';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -59,10 +58,16 @@ export default async function handler(request: Request): Promise<Response> {
     await historyStore.listEnabledRegressions(),
     await new NoraScenarioLibrary(firestore).approved(),
   );
+  const expected = {
+    build: candidate,
+    catalogFingerprint: catalogFingerprint(scenarios.map((s) => s.scenario)),
+    targetModel: process.env.NORA_RED_TEAM_TARGET_MODEL || 'gpt-4o-mini',
+    agentModel: process.env.NORA_RED_TEAM_AGENT_MODEL || 'gpt-4o',
+  };
   // Read the evidence by candidate and target; never substitute the newest unrelated build.
   async function evidence(
     db: typeof firestore,
-    target: string,
+    target: NoraRedTeamTarget,
   ): Promise<NoraRedTeamSuiteRecord | null> {
     const snapshots = await db
       .collection('nora-red-team-suite-history')
@@ -73,59 +78,27 @@ export default async function handler(request: Request): Promise<Response> {
       .map((d) => d.data() as NoraRedTeamSuiteRecord)
       .filter((s) => s.target === target)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    if (!suite) return null;
     if (
-      !suite ||
-      !suite.runIds?.length ||
+      !Array.isArray(suite.runIds) ||
+      !suite.runIds.length ||
+      !Array.isArray(suite.scenarioIds) ||
       suite.runIds.length !== suite.scenarioIds.length ||
-      new Set(suite.runIds).size !== suite.runIds.length
-    )
-      return suite
-        ? { ...suite, review: suite.scenarioIds.length || 1, passed: 0 }
-        : null;
+      new Set(suite.runIds).size !== suite.runIds.length ||
+      suite.runIds.some((id) => typeof id !== 'string' || !id || id.includes('/'))
+    ) return validateNoraRedTeamSuiteEvidence({ suite, target, expected, scenarios, records: [] });
     const rows = await Promise.all(
       suite.runIds.map((id) =>
         db.collection('nora-red-team-run-history').doc(id).get(),
       ),
     );
-    let passed = 0;
-    let review = 0;
-    let failed = 0;
-    const seen = new Set<string>();
-    for (const row of rows) {
-      const h = row.data() as NoraRedTeamHistoryRecord | undefined;
-      if (
-        !h ||
-        seen.has(h.scenarioId) ||
-        h.run.build !== candidate ||
-        h.run.targetModel !==
-          (process.env.NORA_RED_TEAM_TARGET_MODEL || 'gpt-4o-mini') ||
-        h.run.agentModel !==
-          (process.env.NORA_RED_TEAM_AGENT_MODEL || 'gpt-4o') ||
-        h.run.scenarioFingerprint !==
-          scenarioFingerprint(
-            scenarios.find((s) => s.scenario.id === h.scenarioId)?.scenario ||
-              ({} as never),
-          ) ||
-        !h.run.usefulness
-      ) {
-        failed++;
-        continue;
-      }
-      seen.add(h.scenarioId);
-      if (h.verdict === 'fail' || h.review?.state === 'needs_fix') {
-        failed++;
-        continue;
-      }
-      if (
-        (h.run.humanReviewRequired || h.verdict === 'review' || h.review?.state === 'needs_owner') &&
-        h.review?.state !== 'complete'
-      ) {
-        review++;
-        continue;
-      }
-      passed++;
-    }
-    return { ...suite, passed, review, failed };
+    return validateNoraRedTeamSuiteEvidence({
+      suite, target, expected, scenarios,
+      records: rows.map((row, index) => ({
+        id: suite.runIds![index],
+        record: row.data() as NoraRedTeamHistoryRecord | undefined,
+      })),
+    });
   }
   const [
     latestSuite,
@@ -157,12 +130,7 @@ export default async function handler(request: Request): Promise<Response> {
     latestSuite,
     stagingSuite,
     openCriticalBlockers: productionBlockers + developmentBlockers,
-    expected: {
-      build: candidate,
-      catalogFingerprint: catalogFingerprint(scenarios.map((s) => s.scenario)),
-      targetModel: process.env.NORA_RED_TEAM_TARGET_MODEL || 'gpt-4o-mini',
-      agentModel: process.env.NORA_RED_TEAM_AGENT_MODEL || 'gpt-4o',
-    },
+    expected,
     pendingHumanReviews:
       (latestSuite?.review || 0) + (stagingSuite?.review || 0),
     deviceEvidenceComplete,
