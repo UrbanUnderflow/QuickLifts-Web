@@ -993,6 +993,7 @@ export interface PulseCheckTeamMembership {
   // E.164 phone (e.g. +13015551234) used for SMS escalation alerts. Captured
   // during onboarding only when the member opts into SMS notifications.
   phone?: string;
+  institutionalEmail?: string;
   smsConsentAt?: Timestamp | null;
   athleteOnboarding?: PulseCheckAthleteOnboardingState;
   athleteAge?: number;
@@ -1159,6 +1160,7 @@ export interface CompletePulseCheckAthleteOnboardingInput {
   // E.164 contact phone captured at intake so a team clinician can reach the
   // athlete for a welfare check. Written to membership.phone.
   phone?: string;
+  institutionalEmail?: string;
 }
 
 export interface SavePulseCheckAthleteOnboardingProgressInput {
@@ -1175,6 +1177,7 @@ export interface SavePulseCheckAthleteOnboardingProgressInput {
   intakeFormVersion?: string;
   // E.164 contact phone (auto-saved as the athlete types it during intake).
   phone?: string;
+  institutionalEmail?: string;
 }
 
 export interface UpdatePulseCheckTeamMembershipAccessInput {

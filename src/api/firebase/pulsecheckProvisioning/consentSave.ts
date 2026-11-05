@@ -5,7 +5,7 @@ import type { CompletePulseCheckAthleteOnboardingInput, SavePulseCheckAthleteOnb
 export async function saveAthleteConsentAtomically(action: 'progress' | 'complete', input: CompletePulseCheckAthleteOnboardingInput | SavePulseCheckAthleteOnboardingProgressInput) {
   const user = auth.currentUser;
   if (!user) throw new Error('Sign in to save your choices.');
-  const { teamMembershipId, expectedContext, phone, ...onboarding } = input;
+  const { teamMembershipId, expectedContext, phone, institutionalEmail, ...onboarding } = input;
   const completed = input as CompletePulseCheckAthleteOnboardingInput;
   const progress = input as SavePulseCheckAthleteOnboardingProgressInput;
   const response = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-consent-save'), {
@@ -13,7 +13,7 @@ export async function saveAthleteConsentAtomically(action: 'progress' | 'complet
     headers: { 'Content-Type': 'application/json', ...getFirebaseModeRequestHeaders(), Authorization: `Bearer ${await user.getIdToken()}` },
     body: JSON.stringify({ teamMembershipId, expectedContext, action,
       onboarding: { ...onboarding, ...(action === 'complete' ? { productConsentAccepted: true, productConsentVersion: completed.consentVersion } : {}) },
-      profile: { name: completed.name || progress.entryOnboardingName, phone, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+      profile: { name: completed.name || progress.entryOnboardingName, phone, institutionalEmail, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     }),
   });
   const result = await response.json().catch(() => ({}));

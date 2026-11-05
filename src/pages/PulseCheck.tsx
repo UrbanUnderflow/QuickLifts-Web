@@ -1,3 +1,4 @@
+import { resolveSchoolActivationFlow, schoolContactComplete } from '../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
 import type { GetStaticProps, NextPage } from 'next';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
@@ -451,7 +452,8 @@ const PulseCheckPage: NextPage = () => {
                             membership.athleteOnboarding,
                             team?.intake?.athlete?.questions || []
                         );
-                        const setupPending = membership.onboardingStatus === 'pending-consent';
+                        const schoolContactMissing = resolveSchoolActivationFlow({ productBrand: organization?.configuredProductBrand, role: membership.role }) && !schoolContactComplete(membership);
+                        const setupPending = membership.onboardingStatus === 'pending-consent' || schoolContactMissing;
 
                         if (!setupPending && consentComplete && intakeComplete) {
                             return null;

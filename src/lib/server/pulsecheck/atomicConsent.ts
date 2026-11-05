@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { resolveSchoolActivationFlow, SCHOOL_ACTIVATION_FLOW_VERSION } from '../../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
+import { resolveSchoolActivationFlow, SCHOOL_ACTIVATION_FLOW_VERSION, schoolContactComplete } from '../../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
 import type { Firestore } from 'firebase-admin/firestore';
 import { healthBaselineConsentDocuments, consentCategory, consentDecisionComplete, researchEligible, selectConsentDocumentsForProduct, type ConsentDecisions } from '../../../api/firebase/pulsecheckProvisioning/consentPolicy';
 import { mergePulseCheckRequiredConsents, type PulseCheckRequiredConsentDocument } from '../../../api/firebase/pulsecheckProvisioning/types';
@@ -71,6 +71,8 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
     if (pilotId && (!pilotSnap?.exists || !consentScopeEligible(pilot, pilotConsentStatuses) || pilot.organizationId !== organizationId || pilot.teamId !== teamId)) reject('PROGRAM_UNAVAILABLE', 'Your pilot could not be verified.', 403);
     if (cohortId && (!pilotId || !cohortSnap?.exists || !consentScopeEligible(cohort, pilotConsentStatuses) || cohort.pilotId !== pilotId || cohort.teamId !== teamId || cohort.organizationId !== organizationId)) reject('PROGRAM_UNAVAILABLE', 'Your cohort could not be verified.', 403);
     const schoolActivation = resolveSchoolActivationFlow({ productBrand: organization.productBrand, role: member.role });
+    const institutionalEmail = text(profile.institutionalEmail ?? member.institutionalEmail ?? user.institutionalEmail).toLowerCase();
+    const contactPhone = text(profile.phone ?? member.phone ?? user.phoneNumber ?? user.phone);
     const consentOnly = team.status !== 'active' || organization.status !== 'active' || Boolean(pilotId && pilot.status !== 'active') || Boolean(cohortId && cohort.status !== 'active');
     const enrollmentRef = pilotId ? db.collection('pulsecheck-pilot-enrollments').doc(`${pilotId}_${uid}`) : null;
     const enrollmentSnap = enrollmentRef ? await tx.get(enrollmentRef) : null;
@@ -106,6 +108,7 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
     const questions = Array.isArray(team.intake?.athlete?.questions) ? team.intake.athlete.questions : [];
     if (!consentOnly && !schoolActivation && complete && questions.some((q: any) => q.required && (intake[q.id] == null || typeof intake[q.id] === 'string' && !intake[q.id].trim() || Array.isArray(intake[q.id]) && !intake[q.id].length))) reject('INTAKE_INCOMPLETE', 'Answer the required team questions before continuing.');
     if (Object.keys(intake).length > 200 || Buffer.byteLength(JSON.stringify(intake)) > 100000) reject('INVALID_REQUEST', 'The answers exceed the supported size.');
+    if (!consentOnly && schoolActivation && complete && !schoolContactComplete({ institutionalEmail, phone: contactPhone })) reject('CONTACT_INCOMPLETE', 'Add your institutional email and mobile number before continuing.');
     const changed = stable(decisions) !== stable(object(old.consentDecisions));
     const now = timestamp();
     const baselineComplete = getCompletedBaselineEvidence(progressSnap.data() as any).complete || old.baselinePathStatus === 'complete';
@@ -138,7 +141,7 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
       if (enrollmentRef && enrollmentSnap?.exists) tx.set(enrollmentRef, { ...consentFields, updatedAt: now }, { merge: true });
       return { success: true, teamMembershipId: membershipId, onboardingStatus: member.onboardingStatus || 'pending', eventId, consentOnly: true };
     }
-    tx.update(memberRef, { athleteOnboarding: { ...next, ...(eventId ? { lastConsentEventId: eventId } : {}) }, onboardingStatus, ...(text(profile.phone) ? { phone: text(profile.phone) } : {}), updatedAt: now });
+    tx.update(memberRef, { athleteOnboarding: { ...next, ...(eventId ? { lastConsentEventId: eventId } : {}) }, onboardingStatus, ...(text(profile.phone) ? { phone: text(profile.phone) } : {}), ...(schoolActivation && complete ? { institutionalEmail, phone: contactPhone } : {}), updatedAt: now });
     if (enrollmentRef) tx.set(enrollmentRef, {
       consentPersistenceVersion: 2, organizationId, teamId, pilotId, cohortId, userId: uid, teamMembershipId: membershipId, studyMode: pilot.studyMode || 'operational',
       enrollmentMode: next.enrollmentMode, status: resolvePilotEnrollmentStatus({ athleteOnboarding: next, studyMode: pilot.studyMode || 'operational' }),
@@ -151,6 +154,7 @@ export async function saveAtomicConsent(db: Firestore, uid: string, request: any
     }, { merge: true });
     if (complete) tx.set(db.collection('users').doc(uid), {
       pulseCheckOnboardingComplete: true, updatedAt: now,
+      ...(schoolActivation ? { institutionalEmail, phone: contactPhone, phoneNumber: contactPhone } : {}),
       ...(next.entryOnboardingName ? { displayName: next.entryOnboardingName, preferredName: next.entryOnboardingName } : {}),
       ...(!user.sport && text(schoolActivation ? team.sportOrProgram || team.sport || team.sportId : profile.sport) ? { sport: text(schoolActivation ? team.sportOrProgram || team.sport || team.sportId : profile.sport) } : {}),
       ...(!user.dailyReflectionPreferences ? { dailyReflectionPreferences: { enabled: true, time: '20:00', hour: 20, minute: 0, timezone: text(profile.timezone) || 'America/New_York', updatedAt: now } } : {}),

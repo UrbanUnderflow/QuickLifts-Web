@@ -221,6 +221,7 @@ test('school activation derives scope and sport from persisted team, skips intak
   await db.doc('users/athlete').update({ sport: '' });
   await db.doc(memberPath).update({ 'athleteOnboarding.baselinePathStatus': 'pending', 'athleteOnboarding.intakeResponses': { goal: 'Keep previous answer' } });
   const request = structuredClone(input);
+  request.profile.institutionalEmail = ' Athlete@School.edu ';
   request.expectedContext.productBrand = 'athleticmind';
   const team = (await db.doc('pulsecheck-teams/team').get()).data();
   const pilot = (await db.doc('pulsecheck-pilots/pilot').get()).data();
@@ -228,8 +229,16 @@ test('school activation derives scope and sport from persisted team, skips intak
   request.expectedContext.documents = docs;
   request.onboarding.consentDecisions = Object.fromEntries(docs.map(document => [document.id, { decision: document.category === 'health_authorization' ? 'declined' : 'accepted', version: document.version, signedName: 'Synthetic Athlete', document }]));
   delete request.onboarding.intakeResponses;
+  for (const profile of [{ name: 'Synthetic Athlete' }, { ...request.profile, institutionalEmail: 'apple@privaterelay.appleid.com' }, { ...request.profile, phone: '' }]) {
+    const beforeState = await snapshot();
+    await assert.rejects(save({ ...request, profile }), error => error.code === 'CONTACT_INCOMPLETE');
+    assert.deepEqual(await snapshot(), beforeState);
+  }
   await save(request);
   const state = await snapshot();
+  assert.equal(state.member.institutionalEmail, 'athlete@school.edu');
+  assert.equal(state.user.institutionalEmail, 'athlete@school.edu');
+  assert.equal(state.user.phoneNumber, '+12025550123');
   assert.equal(state.member.athleteOnboarding.flowVersion, 'school-activation-v1');
   assert.equal(state.member.athleteOnboarding.baselinePathStatus, 'ready');
   assert.equal(state.member.athleteOnboarding.intakeCompletedAt, undefined);

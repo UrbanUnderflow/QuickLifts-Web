@@ -47,7 +47,7 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
  const more=async name=>{await click('More options');await click(name);};
  const skillPick=label=>page.getByRole('button',{name:new RegExp(`^${label} experience:`)});
  const pickSkill=async(label,answer)=>{await skillPick(label).click();await page.getByRole('radio',{name:answer,exact:true}).click();};
- const open=async next=>{scenario=next;completed=false;await page.goto(`http://127.0.0.1:${server.address().port}/${next==='team-no-details'?'?noDetails=1':next==='signed-out'?'?signedOut=1':''}`);};
+ const open=async next=>{console.log(JSON.stringify({scenario:next,at:new Date().toISOString()}));scenario=next;completed=false;await page.goto(`http://127.0.0.1:${server.address().port}/${next==='team-no-details'?'?noDetails=1':next==='signed-out'?'?signedOut=1':''}`);};
  const layout=async()=>{for(const width of [320,390,430]){
   await page.setViewportSize({width,height:844});
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`Horizontal overflow at ${width}px`);
@@ -74,9 +74,9 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   await page.getByRole('button',{name:/Well-being and support/}).click();
   assert.match(await page.locator('.cau-step-label').innerText(),/1 of 19/);
   const health=source.questions.filter(q=>q.id!=='cau-starting-point-46');
-  for(const q of health){
-   await page.locator('.cau-question-title').filter({hasText:q.question}).waitFor();
-   await page.locator('.cau-choice-btn').first().click();if(q.type==='multi_select')await click('Continue');
+  for(const q of health){console.log(JSON.stringify({scenario,questionId:q.id,at:new Date().toISOString()}));
+   const currentQuestion=page.locator('.cau-question-content').filter({has:page.getByRole('heading',{name:q.question,exact:true})});await currentQuestion.waitFor({timeout:30000});
+   await currentQuestion.locator('.cau-choice-btn').first().click();if(q.type==='multi_select')await click('Continue');
   }
   await click('Submit answers');await page.getByText('Temporary save interruption. Please retry.').waitFor();
   await click('Submit answers');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
@@ -100,9 +100,9 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   await page.getByRole('heading',{name:'Your baseline',exact:true}).waitFor();
   assert.equal(await page.getByText('Your program’s health connection is not ready.',{exact:false}).count(),0);
   await page.getByRole('button',{name:/Well-being and support/}).click();
-  for(const q of health){
-   await page.locator('.cau-question-title').filter({hasText:q.question}).waitFor({timeout:10000});
-   await page.locator('.cau-choice-btn').first().click();if(q.type==='multi_select')await click('Continue');
+  for(const q of health){console.log(JSON.stringify({scenario,questionId:q.id,at:new Date().toISOString()}));
+   const currentQuestion=page.locator('.cau-question-content').filter({has:page.getByRole('heading',{name:q.question,exact:true})});await currentQuestion.waitFor({timeout:30000});
+   await currentQuestion.locator('.cau-choice-btn').first().click();if(q.type==='multi_select')await click('Continue');
   }
   await click('Submit answers');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
   await page.getByText('Saved privately in Pulse.',{exact:true}).waitFor();
@@ -138,9 +138,9 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   assert.equal(await page.getByRole('alert').evaluate(el=>el.scrollHeight<=el.clientHeight+1),true,'completion message is fully visible');
   await page.screenshot({path:'/tmp/team-baseline-incomplete-health.png',fullPage:true});
   await page.getByRole('button',{name:/Well-being and support/}).click();
-  for(const q of health){
-   await page.locator('.cau-question-title').filter({hasText:q.question}).waitFor({timeout:10000});
-   await page.locator('.cau-choice-btn').first().click();if(q.type==='multi_select')await click('Continue');
+  for(const q of health){console.log(JSON.stringify({scenario,questionId:q.id,at:new Date().toISOString()}));
+   const currentQuestion=page.locator('.cau-question-content').filter({has:page.getByRole('heading',{name:q.question,exact:true})});await currentQuestion.waitFor({timeout:30000});
+   await currentQuestion.locator('.cau-choice-btn').first().click();if(q.type==='multi_select')await click('Continue');
   }
   await click('Accept answers for this team');await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();
   assert.equal(posts.at(-1).shareHealth,true);assert.equal(Object.keys(posts.at(-1).answers).length,20);
@@ -182,5 +182,5 @@ const healthTerms=require('../../src/content/consents/pulsecheck-only.json').hea
   await page.reload();await page.getByRole('heading',{name:'Your answers are saved.'}).waitFor();await page.waitForFunction(()=>window.__baselineNativeEvents.includes('completed'));
   assert.deepEqual(await page.evaluate(()=>window.__baselineNativeEvents),['signIn','completed']);assert.deepEqual(errors,[]);
   console.log(JSON.stringify({success:true,questionnaireItems:20,familiarityItems:8,total:28,scenarios:14,version}));
- }catch(error){console.error(await page.locator('body').innerText());throw error;}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+ }catch(error){console.error(error.stack||error);console.error(await page.locator('body').innerText());throw error;}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});

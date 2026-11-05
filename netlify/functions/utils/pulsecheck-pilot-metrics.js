@@ -26,7 +26,7 @@ const ESCALATION_RECLASSIFICATION_MIGRATION_KEY = 'pilot_outcome_escalation_recl
 const FRESHNESS_WINDOW_DAYS = 14;
 const FRESHNESS_WINDOW_MS = FRESHNESS_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 const SURVEY_MINIMUM_RESPONSE_THRESHOLD = 5;
-const SURVEY_PROMPT_COOLDOWN_DAYS = 14;
+const { evaluateAthleteSurveyCadence, SURVEY_CADENCE_VERSION, SURVEY_PROMPT_COOLDOWN_DAYS } = require('./athlete-survey-cadence');
 const ACTIVATION_DAY_CUTOFF_HOUR = 12;
 const ROLLUP_REPAIR_LOOKBACK_DAYS = 30;
 const OUTCOME_BACKFILL_LOOKBACK_DAYS = 14;
@@ -1045,6 +1045,13 @@ function normalizeSurveyMetricPayload(rawPayload, surveyKind, comment) {
   }
 
   const payload = {};
+  const promptStage = normalizeString(rawPayload.promptStage);
+  if (['initial', 'midpoint', 'endpoint', 'quarterly'].includes(promptStage)) {
+    payload.promptStage = promptStage;
+    if (rawPayload.cadenceVersion === SURVEY_CADENCE_VERSION) {
+      payload.cadenceVersion = SURVEY_CADENCE_VERSION;
+    }
+  }
   const normalizedComment = sanitizeSurveyComment(rawPayload.comment ?? comment);
   if (normalizedComment) {
     payload.comment = normalizedComment;
@@ -5129,12 +5136,6 @@ async function repairRecentPilotMetricRollups({
   };
 }
 
-function findMostRecentSurveyResponse(responses = [], surveyKind) {
-  return [...responses]
-    .filter((entry) => normalizeString(entry.surveyKind) === surveyKind)
-    .sort((left, right) => (coerceMillis(right.submittedAt) || right.submittedAtMs || 0) - (coerceMillis(left.submittedAt) || left.submittedAtMs || 0))[0] || null;
-}
-
 function buildCompletedSessionEventKey(entry = {}) {
   const assignmentId = normalizeString(entry.metricPayload?.assignmentId)
     || normalizeString(entry.assignmentId)
@@ -5145,6 +5146,9 @@ function buildCompletedSessionEventKey(entry = {}) {
 
   const sourceCollection = normalizeString(entry.sourceCollection) || 'pilot_metric_event';
   const sourceDocumentId = normalizeString(entry.sourceDocumentId) || normalizeString(entry.id) || 'unknown';
+  if (sourceCollection === DAILY_ASSIGNMENTS_COLLECTION && sourceDocumentId !== 'unknown') {
+    return `assignment:${sourceDocumentId}`;
+  }
   const sourceDate = normalizeString(entry.sourceDate) || 'undated';
   return `${sourceCollection}:${sourceDocumentId}:${sourceDate}`;
 }
@@ -5195,7 +5199,11 @@ async function getAthletePilotSurveyPromptState({
   ));
   const surveySuppressedByOperationalRestriction = isSurveyPromptSuppressedByOperationalRestriction(operationalRestriction);
   const operationalRestrictionSummary = operationalRestriction || null;
-  const athleteResponses = responses.filter((entry) => normalizeString(entry.respondentUserId) === normalizeString(context.athleteId));
+  const athleteResponses = responses.filter((entry) => (
+    normalizeString(entry.respondentUserId) === normalizeString(context.athleteId)
+    && (!entry.respondentRole || entry.respondentRole === 'athlete')
+    && (!entry.pilotEnrollmentId || entry.pilotEnrollmentId === context.pilotEnrollmentId)
+  ));
   const nowMs = Date.now();
   const pilotStartMs = coerceMillis(pilot?.startAt);
   const pilotEndMs = coerceMillis(pilot?.endAt);
@@ -5204,8 +5212,7 @@ async function getAthletePilotSurveyPromptState({
     || coerceMillis(pilotEnrollment?.outcomeBackfillStartAt)
     || coerceMillis(pilotEnrollment?.createdAt)
     || nowMs;
-  const effectiveSurveyWindowEndMs =
-    pilotEndMs && pilotEndMs < nowMs ? pilotEndMs : nowMs;
+  const effectiveSurveyWindowEndMs = nowMs;
   const historicalAssignments = await loadAthleteHistoricalAssignments({
     db,
     athleteId: context.athleteId,
@@ -5234,12 +5241,6 @@ async function getAthletePilotSurveyPromptState({
       completedSessionKeys.add(`historical_assignment:${sourceDate}:${actionType}`);
     });
   const completedSessions = completedSessionKeys.size;
-  const trustResponses = athleteResponses.filter((entry) => normalizeString(entry.surveyKind) === 'trust');
-  const npsResponses = athleteResponses.filter((entry) => normalizeString(entry.surveyKind) === 'nps');
-  const lastTrustResponse = findMostRecentSurveyResponse(trustResponses, 'trust');
-  const lastNpsResponse = findMostRecentSurveyResponse(npsResponses, 'nps');
-  const trustCoolingDown = Boolean(lastTrustResponse) && ((Date.now() - (coerceMillis(lastTrustResponse.submittedAt) || lastTrustResponse.submittedAtMs || 0)) < (SURVEY_PROMPT_COOLDOWN_DAYS * 24 * 60 * 60 * 1000));
-  const npsCoolingDown = Boolean(lastNpsResponse) && ((Date.now() - (coerceMillis(lastNpsResponse.submittedAt) || lastNpsResponse.submittedAtMs || 0)) < (SURVEY_PROMPT_COOLDOWN_DAYS * 24 * 60 * 60 * 1000));
 
   if (!enrollmentComplete) {
     return {
@@ -5267,64 +5268,50 @@ async function getAthletePilotSurveyPromptState({
     };
   }
 
-  const progressRatio =
-    pilotStartMs && pilotEndMs && pilotEndMs > pilotStartMs
-      ? Math.max(0, Math.min(1, (nowMs - pilotStartMs) / (pilotEndMs - pilotStartMs)))
-      : null;
   const endpointFrozen = Boolean(snapshots.endpoint?.endpointFreeze?.frozen);
-  const endpointEligible = endpointFrozen || Boolean(pilotEndMs && nowMs >= pilotEndMs);
-  const midpointEligible = progressRatio !== null && progressRatio >= 0.5 && !endpointEligible;
-
-  const pendingPrompts = [];
-  if (completedSessions >= 3 && !lastTrustResponse && !trustCoolingDown) {
-    pendingPrompts.push({
-      surveyKind: 'trust',
-      promptReason: 'completed_session_threshold',
-      promptStage: 'initial',
-    });
-  }
-  if (midpointEligible && !trustCoolingDown) {
-    pendingPrompts.push({
-      surveyKind: 'trust',
-      promptReason: 'pilot_midpoint',
-      promptStage: 'midpoint',
-    });
-  }
-  if (midpointEligible && !npsCoolingDown) {
-    pendingPrompts.push({
-      surveyKind: 'nps',
-      promptReason: 'pilot_midpoint',
-      promptStage: 'midpoint',
-    });
-  }
-  if (endpointEligible && !trustCoolingDown) {
-    pendingPrompts.push({
-      surveyKind: 'trust',
-      promptReason: 'pilot_endpoint',
-      promptStage: 'endpoint',
-    });
-  }
-  if (endpointEligible && !npsCoolingDown) {
-    pendingPrompts.push({
-      surveyKind: 'nps',
-      promptReason: 'pilot_endpoint',
-      promptStage: 'endpoint',
-    });
-  }
+  const activityDateMillis = (entry) => {
+    const completedAt = coerceMillis(entry.completedAt);
+    if (completedAt) return completedAt;
+    const sourceDate = normalizeString(entry.sourceDate);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(sourceDate)) {
+      const parsed = Date.parse(`${sourceDate}T00:00:00.000Z`);
+      if (Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === sourceDate) return parsed;
+    }
+    return coerceMillis(entry.updatedAt) || coerceMillis(entry.createdAt);
+  };
+  const recentlyActive = historicalAssignments.some((assignment) => {
+    const activityAtMs = activityDateMillis(assignment);
+    return normalizeString(assignment.status) === 'completed'
+      && activityAtMs && activityAtMs <= nowMs && activityAtMs >= nowMs - 30 * 24 * 60 * 60 * 1000;
+  }) || events.some((entry) => {
+    const activityAtMs = activityDateMillis(entry);
+    return normalizeString(entry.athleteId) === context.athleteId
+      && entry.eventType === 'daily_assignment_completed'
+      && activityAtMs && activityAtMs <= nowMs && activityAtMs >= nowMs - 30 * 24 * 60 * 60 * 1000;
+  });
+  const cadence = evaluateAthleteSurveyCadence({
+    nowMs, startMs: pilotStartMs, endMs: pilotEndMs, endpointFrozen,
+    frozenAtMs: coerceMillis(snapshots.endpoint?.endpointFreeze?.frozenAt)
+      || coerceMillis(snapshots.endpoint?.capturedAt),
+    completedSessions,
+    ongoingActive: normalizeString(pilotEnrollment?.status) === 'active'
+      && !['inactive', 'removed', 'withdrawn', 'paused'].includes(normalizeString(teamMembership?.status)),
+    recentlyActive,
+    responses: athleteResponses.map((entry) => ({
+      ...entry,
+      submittedAtMs: coerceMillis(entry.submittedAt) || coerceMillis(entry.submittedAtMs),
+    })),
+  });
 
   return {
     athleteId: context.athleteId,
     pilotId: context.pilotId,
     pilotEnrollmentId: context.pilotEnrollmentId,
-    pendingPrompts,
+    ...cadence,
     suppressionReason: null,
     completedSessions,
     activeEscalation,
     operationalRestriction: operationalRestrictionSummary,
-    progressRatio,
-    endpointEligible,
-    midpointEligible,
-    promptCooldownDays: SURVEY_PROMPT_COOLDOWN_DAYS,
   };
 }
 

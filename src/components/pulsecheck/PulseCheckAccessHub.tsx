@@ -1,3 +1,4 @@
+import { resolveSchoolActivationFlow, schoolContactComplete } from '../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
 import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Building2, Loader2, ShieldCheck, Users } from 'lucide-react';
@@ -56,7 +57,7 @@ const organizationRoleLabel = (role?: PulseCheckOrganizationMembership['role']) 
     .join(' ');
 };
 
-export const teamDestinationForMembership = (membership: PulseCheckTeamMembership, team?: PulseCheckTeam | null) => {
+export const teamDestinationForMembership = (membership: PulseCheckTeamMembership, team?: PulseCheckTeam | null, organization?: PulseCheckOrganization | null) => {
   const baseQuery = `organizationId=${encodeURIComponent(membership.organizationId)}&teamId=${encodeURIComponent(membership.teamId)}`;
 
   if (membership.role === 'team-admin') {
@@ -81,7 +82,8 @@ export const teamDestinationForMembership = (membership: PulseCheckTeamMembershi
     const assignedIntakeQuestions = team?.intake?.athlete?.questions || [];
     const accessRequirementsComplete = athleteHasSatisfiedAccessRequirements(membership.athleteOnboarding, null);
     const intakeComplete = hasCompletedAssignedIntake(membership.athleteOnboarding, assignedIntakeQuestions);
-    const onboardingIncomplete = membership.onboardingStatus === 'pending-consent' || !accessRequirementsComplete || !intakeComplete;
+    const contactMissing = resolveSchoolActivationFlow({ productBrand: organization?.configuredProductBrand, role: membership.role }) && !schoolContactComplete(membership);
+    const onboardingIncomplete = contactMissing || membership.onboardingStatus === 'pending-consent' || !accessRequirementsComplete || !intakeComplete;
 
     return onboardingIncomplete
       ? {
@@ -190,7 +192,7 @@ export default function PulseCheckAccessHub() {
                 membership,
                 organization,
                 team: teamMap.get(membership.teamId) || null,
-                ...teamDestinationForMembership(membership, teamMap.get(membership.teamId) || null),
+                ...teamDestinationForMembership(membership, teamMap.get(membership.teamId) || null, organization),
               }))
               .sort((left, right) =>
                 String(left.team?.displayName || left.membership.teamId).localeCompare(

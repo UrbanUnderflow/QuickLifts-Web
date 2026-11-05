@@ -1187,6 +1187,8 @@ const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeam
   teamId: data.teamId || '',
   userId: data.userId || '',
   email: data.email || '',
+  institutionalEmail: data.institutionalEmail || '',
+  phone: data.phone || '',
   legacySource: data.legacySource || undefined,
   legacyCoachId: data.legacyCoachId || '',
   legacyConnectionId: data.legacyConnectionId || '',

@@ -1,0 +1,67 @@
+name: Athlete baseline UI
+on:
+  pull_request:
+    paths:
+      - 'src/pages/PulseCheck/baseline*'
+      - 'src/pages/PulseCheck/questionnaire/**'
+      - 'src/components/**'
+      - 'src/lib/questionnaires/**'
+      - 'src/content/questionnaires/**'
+      - 'scripts/test-lab/**'
+      - 'tests/e2e/athlete-test-lab*'
+      - 'firestore.rules'
+      - '.github/workflows/athlete-baseline-ui.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GCLOUD_PROJECT: demo-pulsecheck-ui
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: npm ci --legacy-peer-deps
+      - run: npx playwright install --with-deps chromium
+      - name: Guard isolated fixtures
+        run: node --test tests/e2e/athlete-test-lab-safety.test.cjs
+      - name: Start isolated services and exercise saved baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/athlete-ui"
+          node scripts/test-lab/prepare-emulators.cjs > "$RUNNER_TEMP/athlete-ui/config.json"
+          config=$(node -p "require(process.env.RUNNER_TEMP+'/athlete-ui/config.json').configPath")
+          root="$PWD"
+          (cd "$RUNNER_TEMP" && "$root/node_modules/.bin/firebase" emulators:start --only auth,firestore --project demo-pulsecheck-ui --config "$config") > "$RUNNER_TEMP/athlete-ui/emulators.log" 2>&1 &
+          emulator_pid=$!
+          trap 'kill ${web_pid:-} "$emulator_pid" 2>/dev/null || true' EXIT
+          for i in {1..60}; do
+            if curl -s http://127.0.0.1:9099/ >/dev/null && curl -s http://127.0.0.1:8080/ >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-lab/web-server.cjs --port 8787 --output-dir "$RUNNER_TEMP/athlete-ui/service" > "$RUNNER_TEMP/athlete-ui/server.log" 2>&1 &
+          web_pid=$!
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8787/__testlab/health > "$RUNNER_TEMP/athlete-ui/health.json"; then break; fi
+            sleep 1
+          done
+          ATHLETE_TEST_LAB_OUTPUT="$RUNNER_TEMP/athlete-ui/runtime-contract" node tests/e2e/athlete-test-lab-runtime-contract.cjs
+          node tests/e2e/athlete-test-lab-web.cjs --origin http://127.0.0.1:8787 --output-dir "$RUNNER_TEMP/athlete-ui/results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: athlete-baseline-ui-evidence
+          path: ${{ runner.temp }}/athlete-ui
+          retention-days: 7

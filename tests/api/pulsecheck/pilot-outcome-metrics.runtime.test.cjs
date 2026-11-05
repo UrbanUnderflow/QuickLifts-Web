@@ -2060,9 +2060,9 @@ test('getAthletePilotSurveyPromptState does not suppress prompts when an active 
   assert.equal(promptState.suppressionReason, null);
   assert.ok(promptState.completedSessions >= 3);
   assert.equal(promptState.endpointEligible, false);
-  assert.equal(promptState.midpointEligible, true);
+  assert.equal(promptState.midpointEligible, false);
   assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
-  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+  assert.equal(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'), false);
 
   const rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
     db,
@@ -2159,7 +2159,7 @@ test('getAthletePilotSurveyPromptState leaves prompts available when watch list 
   }));
   assert.equal(promptState.suppressionReason, null);
   assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
-  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+  assert.equal(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'), false);
 
   const rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
     db,
@@ -2318,7 +2318,7 @@ test('requested watch list does not suppress prompts until it is applied', async
 
   assert.equal(promptState.suppressionReason, null);
   assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
-  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+  assert.equal(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'), false);
   assert.equal(promptState.operationalRestriction.watchListRequested, true);
   assert.equal(promptState.operationalRestriction.watchListActive, false);
   assert.equal(promptState.operationalRestriction.effectiveRestrictionFlags.suppressSurveys, false);
@@ -2396,9 +2396,9 @@ test('clearing watch list restores prompt eligibility and adherence counts', asy
   }));
   assert.equal(promptStateAfter.suppressionReason, null);
   assert.equal(promptStateAfter.endpointEligible, false);
-  assert.equal(promptStateAfter.midpointEligible, true);
+  assert.equal(promptStateAfter.midpointEligible, false);
   assert.ok(promptStateAfter.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
-  assert.ok(promptStateAfter.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+  assert.equal(promptStateAfter.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'), false);
 
   const rollupAfter = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
     db,
@@ -2450,7 +2450,7 @@ test('assignment-only watch list restriction is tracked without suppressing surv
 
   assert.equal(promptState.suppressionReason, null);
   assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
-  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+  assert.equal(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'), false);
   assert.equal(promptState.operationalRestriction.effectiveRestrictionFlags.suppressAssignments, true);
   assert.equal(promptState.operationalRestriction.effectiveRestrictionFlags.suppressNudges, false);
 
@@ -2510,7 +2510,7 @@ test('nudge-only watch list restriction is tracked without suppressing survey pr
 
   assert.equal(promptState.suppressionReason, null);
   assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
-  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+  assert.equal(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'), false);
   assert.equal(promptState.operationalRestriction.effectiveRestrictionFlags.suppressAssignments, false);
   assert.equal(promptState.operationalRestriction.effectiveRestrictionFlags.suppressNudges, true);
 
@@ -2577,9 +2577,9 @@ test('getAthletePilotSurveyPromptState and adherence ignore migrated false-posit
   assert.equal(promptState.suppressionReason, null);
   assert.ok(promptState.completedSessions >= 3);
   assert.equal(promptState.endpointEligible, false);
-  assert.equal(promptState.midpointEligible, true);
+  assert.equal(promptState.midpointEligible, false);
   assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'trust'));
-  assert.ok(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'));
+  assert.equal(promptState.pendingPrompts.some((prompt) => prompt.surveyKind === 'nps'), false);
 
   const rollup = await runWithNow(NOW_MS, () => computePilotOutcomeRollup({
     db,
@@ -2864,4 +2864,136 @@ test('backfillPilotAthleteOutcomeHistory seeds the last 14 days of late-added at
   assert.equal(second.explicitDateKeys.length, 14);
   assert.equal(db.getCollectionDocs('pulsecheck-pilot-metric-events').length, eventCountAfterFirstRun);
   assert.equal(db.getCollectionDocs(`pulsecheck-pilot-metric-rollups/${context.pilotId}/daily`).length, 14);
+});
+
+test('survey cadence uses once-only midpoint and preserves historical untagged responses', async () => {
+  const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, { pilotStartAt: NOW_MS - 42 * DAY_MS, pilotEndAt: NOW_MS + 42 * DAY_MS });
+  const read = () => getAthletePilotSurveyPromptState({ db, athleteId: context.athleteId, preferredPilotEnrollmentId: context.pilotEnrollmentId });
+  let state = await runWithNow(NOW_MS, read);
+  assert.deepEqual(state.pendingPrompts.map(p => p.promptStage), ['midpoint', 'midpoint']);
+  for (const surveyKind of ['trust', 'nps']) {
+    db.seedDoc('pulsecheck-pilot-survey-responses', surveyKind, {
+      id: surveyKind, pilotId: context.pilotId, pilotEnrollmentId: context.pilotEnrollmentId,
+      respondentUserId: context.athleteId, respondentRole: 'athlete', surveyKind, submittedAtMs: NOW_MS,
+    });
+  }
+  state = await runWithNow(NOW_MS + 30 * DAY_MS, read);
+  assert.deepEqual(state.pendingPrompts, []);
+  assert.equal(state.cadenceVersion, 'trust_milestones_v2');
+  assert.equal(state.promptCooldownDays, 28);
+});
+
+test('endpoint recent coverage is permanent and exposes its actual timestamp without writes', async () => {
+  const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, { pilotStartAt: NOW_MS - 84 * DAY_MS, pilotEndAt: NOW_MS });
+  db.seedDoc('pulsecheck-pilot-survey-responses', 'recent', {
+    id: 'recent', pilotId: context.pilotId, respondentUserId: context.athleteId,
+    surveyKind: 'trust', submittedAtMs: NOW_MS - 10 * DAY_MS,
+  });
+  const state = await runWithNow(NOW_MS + 25 * DAY_MS, () => getAthletePilotSurveyPromptState({ db, athleteId: context.athleteId }));
+  assert.equal(state.pendingPrompts.some(p => p.surveyKind === 'trust'), false);
+  assert.equal(state.surveyCoverage.trust.endpointResponseSubmittedAtMs, NOW_MS - 10 * DAY_MS);
+  assert.equal(state.surveyCoverage.trust.endpointUsesEarlierResponse, true);
+  assert.equal(db.getDoc('pulsecheck-pilot-survey-responses', 'recent').submittedAtMs, NOW_MS - 10 * DAY_MS);
+});
+
+test('quarterly evaluates post-pilot activity and excludes inactive enrollment', async () => {
+  const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, { pilotStartAt: NOW_MS - 174 * DAY_MS, pilotEndAt: NOW_MS - 90 * DAY_MS });
+  db.seedDoc('pulsecheck-pilot-survey-responses', 'endpoint', {
+    id: 'endpoint', pilotId: context.pilotId, respondentUserId: context.athleteId,
+    surveyKind: 'trust', submittedAtMs: NOW_MS - 90 * DAY_MS,
+  });
+  const read = () => getAthletePilotSurveyPromptState({ db, athleteId: context.athleteId });
+  assert.deepEqual((await runWithNow(NOW_MS, read)).pendingPrompts, []);
+  seedAdherenceDay(db, context);
+  assert.deepEqual((await runWithNow(NOW_MS, read)).pendingPrompts, [
+    { surveyKind: 'trust', promptStage: 'quarterly', promptReason: 'active_use_quarterly' },
+  ]);
+  await db.collection('pulsecheck-pilot-enrollments').doc(context.pilotEnrollmentId).set({ status: 'completed' }, { merge: true });
+  assert.deepEqual((await runWithNow(NOW_MS, read)).pendingPrompts, []);
+});
+
+test('responses from a different enrollment or respondent role do not suppress trust', async () => {
+  const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db);
+  seedPromptThresholdSessions(db, context);
+  for (const [id, role, enrollment] of [['other', 'athlete', 'different'], ['coach', 'coach', context.pilotEnrollmentId]]) {
+    db.seedDoc('pulsecheck-pilot-survey-responses', id, {
+      id, pilotId: context.pilotId, respondentUserId: context.athleteId, respondentRole: role,
+      pilotEnrollmentId: enrollment, surveyKind: 'trust', submittedAtMs: NOW_MS,
+    });
+  }
+  const state = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({ db, athleteId: context.athleteId }));
+  assert.deepEqual(state.pendingPrompts, [{ surveyKind: 'trust', promptStage: 'initial', promptReason: 'completed_session_threshold' }]);
+});
+
+test('survey saves retain cadence metadata for both trust and NPS', async () => {
+  const { savePilotSurveyResponse } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db);
+  for (const surveyKind of ['trust', 'nps']) {
+    const saved = await runWithNow(NOW_MS, () => savePilotSurveyResponse({
+      db, authUserId: context.athleteId, ...context, surveyKind, score: 8,
+      respondentRole: 'athlete', source: 'ios',
+      metricPayload: { promptStage: 'midpoint', cadenceVersion: 'trust_milestones_v2' },
+    }));
+    assert.equal(saved.metricPayload.promptStage, 'midpoint');
+    assert.equal(saved.metricPayload.cadenceVersion, 'trust_milestones_v2');
+  }
+});
+
+test('quarterly activity uses completion dates rather than backfill write time', async () => {
+  const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, { pilotStartAt: NOW_MS - 174 * DAY_MS, pilotEndAt: NOW_MS - 90 * DAY_MS });
+  const read = () => runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({ db, athleteId: context.athleteId }));
+  db.seedDoc('pulsecheck-pilot-metric-events', 'old-backfill', {
+    pilotId: context.pilotId, athleteId: context.athleteId, eventType: 'daily_assignment_completed',
+    sourceDate: '2026-01-01', createdAt: NOW_MS,
+  });
+  assert.deepEqual((await read()).pendingPrompts, []);
+  db.seedDoc('pulsecheck-daily-assignments', 'date-only', {
+    athleteId: context.athleteId, sourceDate: '2026-03-29', status: 'completed',
+  });
+  assert.equal((await read()).pendingPrompts[0]?.promptStage, 'quarterly');
+  await db.collection('pulsecheck-team-memberships').doc(context.teamMembershipId).set({ status: 'removed' }, { merge: true });
+  assert.deepEqual((await read()).pendingPrompts, []);
+});
+
+test('early endpoint freeze uses its fixed date for recent-response coverage', async () => {
+  const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db, { pilotStartAt: NOW_MS - 42 * DAY_MS, pilotEndAt: NOW_MS + 42 * DAY_MS });
+  db.seedDoc(`pulsecheck-pilot-enrollments/${context.pilotEnrollmentId}/mental-performance-snapshots`, 'endpoint', {
+    endpointFreeze: { frozen: true, frozenAt: NOW_MS },
+  });
+  db.seedDoc('pulsecheck-pilot-survey-responses', 'recent-freeze', {
+    id: 'recent-freeze', pilotId: context.pilotId, respondentUserId: context.athleteId,
+    surveyKind: 'trust', submittedAtMs: NOW_MS - 7 * DAY_MS,
+  });
+  const state = await runWithNow(NOW_MS + 25 * DAY_MS, () => getAthletePilotSurveyPromptState({ db, athleteId: context.athleteId }));
+  assert.equal(state.endpointAtMs, NOW_MS);
+  assert.equal(state.pendingPrompts.some(p => p.surveyKind === 'trust'), false);
+});
+
+test('initial threshold counts a completion event and its assignment only once', async () => {
+  const { getAthletePilotSurveyPromptState } = loadPulsecheckMetrics();
+  const { db } = createPulsecheckFirestore();
+  const context = seedBasePilotContext(db);
+  for (const id of ['assignment-1', 'assignment-2']) {
+    db.seedDoc('pulsecheck-daily-assignments', id, { id, athleteId: context.athleteId, sourceDate: '2026-03-30', status: 'completed' });
+    db.seedDoc('pulsecheck-pilot-metric-events', id, {
+      pilotId: context.pilotId, athleteId: context.athleteId, eventType: 'daily_assignment_completed',
+      sourceCollection: 'pulsecheck-daily-assignments', sourceDocumentId: id, sourceDate: '2026-03-30', createdAt: NOW_MS,
+    });
+  }
+  const state = await runWithNow(NOW_MS, () => getAthletePilotSurveyPromptState({ db, athleteId: context.athleteId }));
+  assert.equal(state.completedSessions, 2);
+  assert.deepEqual(state.pendingPrompts, []);
 });

@@ -1,5 +1,5 @@
 import { auth } from '../../api/firebase/config';
-import { resolveSchoolActivationFlow } from '../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
+import { resolveSchoolActivationFlow, validInstitutionalEmail } from '../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
 import ConsentChoices from '../../components/pulsecheck/consent/ConsentChoices';
 import { healthBaselineConsentDocuments, consentCategory, consentDecisionComplete, usesAthleticMindConsent, type ConsentDecisions } from '../../api/firebase/pulsecheckProvisioning/consentPolicy';
 import React, { useEffect, useRef, useState } from 'react';
@@ -252,6 +252,7 @@ export default function PulseCheckAthleteOnboardingPage() {
   // E.164 contact phone so a team clinician can reach the athlete for a welfare
   // check. Required to finish intake; authorized under the pilot crisis consent.
   const [phone, setPhone] = useState('');
+  const [institutionalEmail, setInstitutionalEmail] = useState('');
   const [consentDecisions, setConsentDecisions] = useState<ConsentDecisions>({});
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [completedConsentIds, setCompletedConsentIds] = useState<string[]>([]);
@@ -330,6 +331,7 @@ export default function PulseCheckAthleteOnboardingPage() {
             || ''
         );
         setPhone((nextMembership as { phone?: string })?.phone || (auth.currentUser?.uid === currentUser.id ? auth.currentUser.phoneNumber : '') || '');
+        setInstitutionalEmail(nextMembership?.institutionalEmail || (currentUser as unknown as { institutionalEmail?: string }).institutionalEmail || '');
         setConsentAccepted(Boolean(nextMembership?.athleteOnboarding?.productConsentAccepted));
         const requiredConsents = nextMembership?.athleteOnboarding?.requiredConsents || [];
         const storedVersions = nextMembership?.athleteOnboarding?.completedConsentVersions || {};
@@ -526,7 +528,8 @@ export default function PulseCheckAthleteOnboardingPage() {
     event.preventDefault();
     if (scopeInvalid || !currentUser || !membership) return;
     if (!displayName.trim()) { setMessage({ type: 'error', text: 'Tell us what name you would like us to use.' }); return; }
-    if ((!schoolActivation || phone.trim()) && !isValidE164(normalizePhoneToE164(phone))) {
+    if (schoolActivation && !validInstitutionalEmail(institutionalEmail)) { setMessage({ type: 'error', text: 'Add your institutional email before continuing.' }); return; }
+    if (!isValidE164(normalizePhoneToE164(phone))) {
       setMessage({ type: 'error', text: 'Add a phone number where your team can reach you (e.g. (301) 555-1234).' });
       return;
     }
@@ -564,6 +567,7 @@ export default function PulseCheckAthleteOnboardingPage() {
             : '',
         ...(!schoolActivation ? { intakeResponses: intakeAnswers, intakeFormVersion } : {}),
         phone: normalizePhoneToE164(phone),
+        ...(schoolActivation ? { institutionalEmail: institutionalEmail.trim().toLowerCase() } : {}),
       });
 
       const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
@@ -834,6 +838,13 @@ export default function PulseCheckAthleteOnboardingPage() {
                   {schoolActivation && <span className="block text-xs leading-5 text-zinc-400">This is your electronic signature for the choices you make below.</span>}
                 </motion.label>
 
+                {schoolActivation && <label className="block space-y-2">
+                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Institutional email</span>
+                  <input type="email" required autoComplete="email" autoCapitalize="none" maxLength={254}
+                    value={institutionalEmail} onChange={event => setInstitutionalEmail(event.target.value)}
+                    placeholder="you@school.edu"
+                    className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none focus:border-[#E0FE10]/50" />
+                </label>}
                 {/* Phone — so a team clinician can reach the athlete for a welfare check */}
                 <motion.label
                   initial={{ opacity: 0, y: 10 }}
@@ -841,11 +852,12 @@ export default function PulseCheckAthleteOnboardingPage() {
                   transition={{ delay: 0.4 }}
                   className="block space-y-2"
                 >
-                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Phone Number{schoolActivation ? ' (optional)' : ''}</span>
+                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Mobile number</span>
                   <input
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     type="tel"
+                    required
                     inputMode="tel"
                     autoComplete="tel"
                     className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none transition-all duration-300 focus:border-[#E0FE10]/50 focus:bg-[#E0FE10]/[0.04] placeholder:text-zinc-600 backdrop-blur-sm"
