@@ -121,7 +121,7 @@ test('owner and collaborator list snapshots reconcile without a remote-write ech
 });
 
 test('public links keep their setting while private links recover after invited-account sign-in', () => {
-  assert.match(pageSource, /publicRead: existingShare\?\.publicRead \?\? true,[\s\S]*viewerEmails,[\s\S]*editorEmails/);
+  assert.match(pageSource, /publicRead: list\.publicLinksDisabled \? false : existingShare\?\.publicRead \?\? true,[\s\S]*viewerEmails,[\s\S]*editorEmails/);
   assert.match(pageSource, /if \(!shareId \|\| !authReady\) return/);
   assert.match(pageSource, /data\.publicRead !== true && !accountCanRead/);
   assert.match(pageSource, /Sign in with an invited account to open this PipeLists share/);
@@ -145,7 +145,7 @@ test('protected success updates remain canonical for reminders and across accoun
 
 test('a viewer stays read-only when another collaborator has edit access', () => {
   assert.match(pageSource, /const shouldBlockEditShare = Boolean\(shareId && shareDoc && !shareDoc\.publicRead && !canReadShared\)/);
-  assert.match(pageSource, /const canModify = isSharedView \? canEditShared/);
+  assert.match(pageSource, /const canModify = Boolean\(user\) && lists\.some\(list => list\.id === activeList\.id\) && \(isSharedView \? canEditShared/);
 });
 
 test('share management cannot overwrite access before the complete owner envelope is loaded', () => {

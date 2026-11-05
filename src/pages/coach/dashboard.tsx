@@ -1,3 +1,5 @@
+import PendingAthleteRoster from '../../components/coach/PendingAthleteRoster';
+import CoachSmsInbox from '../../components/coach/CoachSmsInbox';
 import TeamInsightReport from '../../components/coach/TeamInsightReport';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
@@ -825,7 +827,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ElementType }[] = [
   { key: 'home', label: 'Overview', icon: Home },
   { key: 'roster', label: 'Athletes', icon: Users },
   { key: 'skills', label: 'Skill training', icon: Wind },
-  { key: 'inbox', label: 'Messages', icon: Inbox },
+  { key: 'inbox', label: 'Communication', icon: Inbox },
   { key: 'reports', label: 'Reports', icon: BarChart3 },
   { key: 'wellbeing', label: 'Wellbeing & recovery', icon: HeartPulse },
   { key: 'nora', label: 'Train Nora', icon: Brain },
@@ -1457,6 +1459,7 @@ export const CoachDashboardShell: React.FC<CoachDashboardShellProps> = ({
                         canInvite={canManageAthleteInvites}
                       />
                       </details>}
+                      {!isDemo && teamContext?.teamId && <PendingAthleteRoster teamId={teamContext.teamId} />}
                       <ClayParticipationViews view="athletes" participation={isDemo ? demoTeamParticipation : participation}
                         loading={loadingAthletes} error={participationError} onRetry={onReloadParticipation}
                         onOpenSkills={() => selectView('skills')} onSelectAthlete={setSelectedAthleteId} />
@@ -2780,6 +2783,7 @@ const InboxSection: React.FC<{
   isDemo,
 }) => {
   const [search, setSearch] = useState('');
+  const [channel, setChannel] = useState<'sms' | 'app'>('sms');
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [liveRows, setLiveRows] = useState<any[]>([]);
   const [loadingLiveThreads, setLoadingLiveThreads] = useState(false);
@@ -2849,7 +2853,13 @@ const InboxSection: React.FC<{
 
   const filteredThreads = threads.filter(t => `${t.name} ${t.lastMessage}`.toLowerCase().includes(search.toLowerCase()));
   return <section>
-    <header className={clay.pageHeader}><div><h1>Messages</h1><p>Conversations with your team.</p></div></header>
+    <header className={clay.pageHeader}><div><h1>Communication</h1><p>Stay in touch with your team.</p></div></header>
+    <div className="flex gap-3 mb-5" role="group" aria-label="Message channel">
+      <button type="button" className={clay.outlineButton} aria-pressed={channel === 'sms'} onClick={() => setChannel('sms')}>Text messages</button>
+      <button type="button" className={clay.outlineButton} aria-pressed={channel === 'app'} onClick={() => setChannel('app')}>In-app messages</button>
+    </div>
+    {channel === 'sms' ? <CoachSmsInbox key={teamId || 'demo'} teamId={teamId} isDemo={isDemo} /> : <>
+
     {inboxError && <p role="alert">{inboxError}</p>}
     {loading || loadingLiveThreads ? <LoadingBlock label="Loading messages…" /> :
     <div className={clay.inbox}>
@@ -2863,7 +2873,7 @@ const InboxSection: React.FC<{
       {selectedThread && coachId && !isDemo ? <CoachInboxConversationThread key={selectedThread.id} thread={selectedThread} coachId={coachId} onBack={() => setSelectedThreadId(null)} /> :
         <div className={clay.inboxEmpty}><div><MessageSquare className="mx-auto mb-3 h-7 w-7" /><p>{selectedThread && isDemo ? selectedThread.lastMessage : 'Choose a conversation to read and reply.'}</p>{isDemo && <small>Sample conversations. No messages are sent.</small>}</div></div>}
     </div>}
-    <p className={clay.notice}>Direct team messages. Private Nora conversations stay private.</p>
+    <p className={clay.notice}>Direct team messages. Private Nora conversations stay private.</p></> }
   </section>;
 };
 

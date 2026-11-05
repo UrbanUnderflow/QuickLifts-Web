@@ -276,7 +276,7 @@ async function createOrUpdateLeadShare(args: {
   item: Record<string, any>;
 }): Promise<string> {
   const itemId = String(args.item.id || '').trim();
-  if (!itemId) return APP_URL;
+  if (!itemId || args.list.publicLinksDisabled === true) return APP_URL;
 
   const shareId = `${args.ownerUid}-${args.list.id}-${itemId}`;
   const origin = (process.env.NEXT_PUBLIC_SITE_URL || process.env.URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
@@ -285,6 +285,7 @@ async function createOrUpdateLeadShare(args: {
   const admin = initAdmin();
   const publicItem = { ...args.item };
   delete publicItem.customerSuccess;
+  delete publicItem.mergeRevisions;
   publicItem.weeklyLogs = Array.isArray(publicItem.weeklyLogs)
     ? publicItem.weeklyLogs.filter((log: Record<string, any>) => log?.type !== 'metrics')
     : [];
@@ -295,7 +296,16 @@ async function createOrUpdateLeadShare(args: {
     items: [publicItem],
   };
 
-  await args.db.collection(PIPELEAD_SHARES_COLLECTION).doc(shareId).set(
+  const created = await args.db.runTransaction(async transaction => {
+    const state = await transaction.get(args.db.doc(`simpbudget-users/${args.ownerUid}/pipeLists/state`));
+    const data = state.data();
+    const currentList = data?.lists?.find((list: Record<string, any>) => list.id === args.list.id);
+    const archive = data?.archivedLists?.[args.list.id];
+    if (!currentList || currentList.publicLinksDisabled || (archive && (!archive.restoredAt || archive.archivedAt > archive.restoredAt))) return false;
+    const leadRef = args.db.collection(PIPELEAD_SHARES_COLLECTION).doc(shareId);
+    const existing = await transaction.get(leadRef);
+    if (existing.exists && existing.data()?.publicRead === false) return false;
+    transaction.set(leadRef,
     {
       id: shareId,
       ownerUid: args.ownerUid,
@@ -306,11 +316,11 @@ async function createOrUpdateLeadShare(args: {
       publicRead: true,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true },
-  );
+    }, { merge: true });
+    return true;
+  });
 
-  return leadUrl;
+  return created ? leadUrl : APP_URL;
 }
 
 function latestOpenActionLogForToday(item: Record<string, any>, today: string): Record<string, any> | null {
@@ -355,6 +365,8 @@ export const handler: Handler = async () => {
 
       for (const storedList of lists) {
         if (!storedList?.id || !storedList?.name) continue;
+        const archive = stateData.archivedLists?.[storedList.id];
+        if (archive && (!archive.restoredAt || archive.archivedAt > archive.restoredAt)) continue;
 
         const shareId = `${ownerUid}-${storedList.id}`;
         const shareSnapshot = await db.collection('pipeListShares').doc(shareId).get();

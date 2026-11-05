@@ -1,3 +1,4 @@
+const { processVerifiedEvent } = require('./lib/athleticmind-sponsorship');
 const { admin, getFirebaseAdminApp } = require('./config/firebase');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { getSecretWithEnvFallback } = require('./google-secret-manager-utils');
@@ -214,6 +215,34 @@ exports.handler = async (event) => {
   console.log(`Processing webhook event type: ${stripeEvent.type}`);
 
   try {
+    const object = stripeEvent.data?.object;
+    const donationSource = 'athleticmind-sponsorship-v1';
+    const donationMetadata = [object?.metadata, object?.subscription_details?.metadata, object?.parent?.subscription_details?.metadata];
+    if (stripeEvent.type === 'charge.refunded' && object?.invoice && !donationMetadata.some(metadata => metadata?.source === donationSource)) {
+      const invoiceId = typeof object.invoice === 'string' ? object.invoice : object.invoice.id;
+      const invoice = await stripeClientForLivemode(stripeEvent.livemode).invoices.retrieve(invoiceId);
+      donationMetadata.push(invoice.subscription_details?.metadata, invoice.parent?.subscription_details?.metadata);
+      if (invoice.subscription && !donationMetadata.some(metadata => metadata?.source === donationSource)) {
+        const subscription = await stripeClientForLivemode(stripeEvent.livemode).subscriptions.retrieve(getStripeObjectId(invoice.subscription));
+        donationMetadata.push(subscription.metadata);
+      }
+    }
+    if (stripeEvent.type === 'invoice.paid' && !donationMetadata.some(metadata => metadata?.source === donationSource)) {
+      const subscriptionId = getStripeObjectId(object?.subscription || object?.parent?.subscription_details?.subscription);
+      if (subscriptionId) {
+        const subscription = await stripeClientForLivemode(stripeEvent.livemode).subscriptions.retrieve(subscriptionId);
+        donationMetadata.push(subscription.metadata);
+      }
+    }
+    if (donationMetadata.some(metadata => metadata?.source === donationSource)) {
+      await processVerifiedEvent({
+        signed: stripeEvent,
+        client: stripeClientForLivemode(stripeEvent.livemode),
+        database: db,
+        config: { live: true, collection: 'athleticmind-sponsorship-live' },
+      });
+      return { statusCode: 200, body: JSON.stringify({ received: true }) };
+    }
     switch (stripeEvent.type) {
       case 'checkout.session.completed':
         await handleCheckoutSessionCompleted(stripeEvent.data.object);

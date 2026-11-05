@@ -1,8 +1,9 @@
+const {erasePendingAthletes, ROOT: COMMUNICATION_ROOT, collection: communicationCollection, teamCollection: communicationTeamCollection} = require('./communication-retention');
 const { randomUUID } = require('node:crypto');
 const ORGANIZATIONS = 'pulsecheck-organizations';
 const RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 const LEASE_MS = 120000;
-const RETENTION_MANIFEST = { removed: ['organization and team configuration', 'invitation and activation links, native handoffs and invitation outbox', 'coach report configuration and snapshots'], retained: ['personal accounts and athlete history', 'membership and consent evidence', 'pilot definitions, cohorts and research enrollment evidence', 'clinical and incident records', 'minimal organization and team tombstones'] };
+const RETENTION_MANIFEST = { removed: ['organization and team configuration', 'invitation and activation links, native handoffs and invitation outbox', 'coach report configuration and snapshots', 'team SMS operational contacts, routes, jobs, messages and group history'], retained: ['personal accounts and athlete history', 'membership and consent evidence', 'pilot definitions, cohorts and research enrollment evidence', 'clinical and incident records', 'minimal organization and team tombstones', 'SMS consent evidence and shared opt-out suppressions'] };
 const validId = id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id);
 const isUnavailable = org => !org || ['deleted','purging','purged'].includes(org.lifecycleState) || ['decommissioned','deleted'].includes(org.status);
 async function changeOrganizationLifecycle({ db, organizationId, action, confirmationName, actorUid, now = Date.now() }) {
@@ -47,7 +48,7 @@ async function purgeOrganizationBatch({ db, organizationId, now = Date.now(), ba
     tx.set(job,{ leaseId, leaseUntil:now+LEASE_MS, updatedAt:now },{merge:true}); return true;
   });
   if (!acquired) return { processed:false };
-  const commit = async (documents, scopeTeamRef, complete = false) => db.runTransaction(async tx => {
+  const commit = async (documents, scopeTeamRef, complete = false, pathScoped = false) => db.runTransaction(async tx => {
     const [state,org] = await Promise.all([tx.get(job),tx.get(ref)]);
     if (state.data()?.leaseId !== leaseId || org.data()?.lifecycleState !== 'purging') throw new Error('Purge lease changed.');
     if (scopeTeamRef) { const team = await tx.get(scopeTeamRef); if (team.data()?.organizationId !== organizationId) throw new Error('Team ownership changed.'); }
@@ -57,7 +58,7 @@ async function purgeOrganizationBatch({ db, organizationId, now = Date.now(), ba
     const expectedTeamId = scopeTeamRef ? scopeTeamRef.path.split('/').pop() : null;
     for (const doc of currentDocuments) {
       const data = doc.data();
-      if (doc.exists && (expectedTeamId ? data.teamId === expectedTeamId : data.organizationId === organizationId)) tx.delete(doc.ref);
+      if (doc.exists && (expectedTeamId ? (data.teamId === expectedTeamId || pathScoped && doc.ref.path.startsWith(`${COMMUNICATION_ROOT}/teams/${expectedTeamId}/`)) : data.organizationId === organizationId)) tx.delete(doc.ref);
     }
     if (complete) tx.set(ref,{ status:'deleted', lifecycleState:'purged', purgedAt:now, deletedAt:org.data().deletedAt, retentionDeadline:org.data().purgeAfter, retentionManifest:RETENTION_MANIFEST });
     tx.set(job,{leaseId:null,leaseUntil:0,updatedAt:now,status:complete?'completed':'pending'},{merge:true});
@@ -79,6 +80,15 @@ async function purgeOrganizationBatch({ db, organizationId, now = Date.now(), ba
     const team = teams.docs[0];
     const scopes = [...operational.map(name=>db.collection(name)), db.collection('coach-team-insight-reports').doc('delivery').collection('reports')];
     for (const scope of scopes) { const docs=await scope.where('teamId','==',team.id).limit(batchSize).get(); if(!docs.empty) return await commit(docs.docs,team.ref); }
+    if(await erasePendingAthletes({db,field:'teamId',value:team.id,limit:Math.min(batchSize,25),organizationId}))return await commit([],team.ref);
+    for (const name of ['jobs','contacts','routes']) {
+      const docs=await communicationCollection(db,name).where('teamId','==',team.id).limit(batchSize).get();
+      if(!docs.empty) return await commit(docs.docs,team.ref);
+    }
+    for (const name of ['messages','batches','send-intents']) {
+      const docs=await communicationTeamCollection(db,team.id,name).limit(batchSize).get();
+      if(!docs.empty) return await commit(docs.docs,team.ref,false,true);
+    }
     const config=await db.collection('coach-team-insight-reports').doc('delivery').collection('configs').doc(team.id).get();
     // Team tombstone and cursor must commit together, otherwise retries can skip work.
     return await db.runTransaction(async tx => {

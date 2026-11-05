@@ -1,3 +1,4 @@
+import { hasAdministrativeBaselineCarry } from './relocation-baseline-carry';
 import { createHash } from 'crypto';
 import { hasCompletedEntryOnboarding, hasCompletedRequiredConsents } from '../../api/firebase/pulsecheckProvisioning/accessState';
 import { MENTAL_SKILL_FAMILIES } from '../../api/firebase/mentaltraining/mentalSkillsBaseline';
@@ -30,6 +31,9 @@ export async function resolveTeamBaselineReview(db: any, uid: string, existing: 
         requiredConsents: (member.athleteOnboarding.requiredConsents || []).filter((d: any) => d.category !== 'health_authorization') }))
     .sort((a: any, b: any) => a.id.localeCompare(b.id));
   for (const { id, member } of members) {
+    // A verified administrative relocation retains account completion. This does
+    // not copy a health response or consent into the destination program.
+    if (await hasAdministrativeBaselineCarry(db, uid, id, member, canonical)) continue;
     // Preserve historical completion for that team. New joins/reactivations
     // carry a separate marker and must be reviewed even for the same account.
     if (legacyCompleted && !member.baselineJoinedAt && existing?.teamId === member.teamId

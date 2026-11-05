@@ -97,15 +97,13 @@ test('three-way collaboration keeps distinct teammate edits and keyed log additi
   ]);
 });
 
-test('a one-sided deletion is retained unless the other side changed the deleted entry', () => {
+test('record omission is not an explicit deletion operation', () => {
   const base = { items: [{ id: 'one', value: 'original' }, { id: 'two', value: 'keep' }] };
   const remote = { items: [{ id: 'two', value: 'keep' }] };
   const unchangedLocal = { items: [...base.items] };
   const changedLocal = { items: [{ id: 'one', value: 'edited locally' }, { id: 'two', value: 'keep' }] };
 
-  assert.deepEqual(mergePipeListSnapshotsThreeWay(base, remote, unchangedLocal), {
-    items: [{ id: 'two', value: 'keep' }],
-  });
+  assert.deepEqual(mergePipeListSnapshotsThreeWay(base, remote, unchangedLocal), unchangedLocal);
   assert.deepEqual(mergePipeListSnapshotsThreeWay(base, remote, changedLocal), changedLocal);
 });
 

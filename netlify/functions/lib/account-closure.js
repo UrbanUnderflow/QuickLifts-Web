@@ -1,6 +1,7 @@
+const {eraseAccountCommunicationBatch} = require('./communication-retention');
 const JOBS = 'account-closure-jobs';
 // Evidence and shared clinical records are retained pending a documented disposition.
-const RETAINED = ['pulsecheck-team-memberships (consent evidence)', 'pulsecheck-pilot-enrollments (research evidence)', 'clinical and incident records', 'provider-held records and backups'];
+const RETAINED = ['pulsecheck-team-memberships (consent evidence)', 'pulsecheck-pilot-enrollments (research evidence)', 'clinical and incident records', 'provider-held records and backups', 'team SMS consent events and shared opt-out suppressions'];
 const QUERY_TARGETS = [
   ['conversations','userId'], ['mentalNotes','userId'], ['subscriptions','userId'],
   ['fitWithPulse-workoutSessions','userId'], ['mealLogs','userId'], ['userInteractions','userId'],
@@ -43,6 +44,10 @@ async function runClosureJob({db,auth,storage,uid,now,maxPages=20}) {
       const membership=await db.collection(collection).where('userId','==',uid).get();
       for(const doc of membership.docs) await doc.ref.set({status:'revoked',revokedAt:now,accountClosureRequestedAt:now}, {merge:true});
     }
+    if ((await eraseAccountCommunicationBatch({db,uid})).pending) {
+      await ref.set({status:'processing',updatedAt:now,communicationCleanup:'pending'},{merge:true});
+      return {pending:true,communicationCleanup:true};
+    }
     let step=job.step||0,pages=0;
     while(step<QUERY_TARGETS.length && pages++<maxPages){
       const [collection,field]=QUERY_TARGETS[step];
@@ -59,7 +64,7 @@ async function runClosureJob({db,auth,storage,uid,now,maxPages=20}) {
     await db.recursiveDelete(db.collection('pulsecheck-private-users').doc(uid).collection('clay-self').doc('current'));
     if(storage) for(const prefix of [`profile-images/${uid}/`,`profile-avatars/${uid}/`,`pulsecheck-clay-self-private/${uid}/`,`pulsecheck-clay-self-inputs/${uid}/`]) await storage.deleteFiles({prefix,force:true});
     try {await auth.deleteUser(uid);}catch(error){if(error.code!=='auth/user-not-found')throw error;}
-    await ref.set({status:'retention_review',coreClosureCompletedAt:now,updatedAt:now,retentionReview:RETAINED},{merge:true});
+    await ref.set({status:'retention_review',communicationCleanup:'completed',coreClosureCompletedAt:now,updatedAt:now,retentionReview:RETAINED},{merge:true});
     return {coreClosed:true,retentionReviewRequired:true};
   } catch(error) {
     await ref.set({status:'retry',updatedAt:now,lastErrorCode:error.code||'closure_failed'},{merge:true});

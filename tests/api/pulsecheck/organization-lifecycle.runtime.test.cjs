@@ -56,3 +56,18 @@ test('restore preserves absent original status rather than activating an unconfi
  assert.equal(Object.hasOwn(records.get(org),'status'),false);
  assert.deepEqual(records.get(org).configuration,{x:1});
 });
+
+test('organization purge drains SMS operational records while retaining consent and shared STOP evidence',async()=>{
+ const root='pulsecheck-restricted-questionnaire-submissions/coach-communications-v1';
+ const seed={[org]:{lifecycleState:'deleted',deletedAt:now,purgeAfter:now},'pulsecheck-teams/a':{organizationId:'org'},'pulsecheck-teams/other':{organizationId:'other'}};
+ for(const name of ['jobs','contacts','routes']){seed[`${root}/${name}/owned`]={teamId:'a'};seed[`${root}/${name}/other`]={teamId:'other'};}
+ for(const name of ['messages','batches','send-intents']){seed[`${root}/teams/a/${name}/owned`]={synthetic:true};seed[`${root}/teams/other/${name}/other`]={synthetic:true};}
+ seed[`${root}/consent-events/evidence`]={teamId:'a'};
+ const suppression='pulsecheck-restricted-questionnaire-submissions/coach-surveys-v1/sms-suppressions/hash';seed[suppression]={suppressed:true};
+ const {db,records}=mock(seed);
+ for(let i=0;i<20&&records.get(org).lifecycleState!=='purged';i++)await purgeOrganizationBatch({db,organizationId:'org',now,batchSize:1});
+ assert.equal(records.get(org).lifecycleState,'purged');
+ for(const name of ['jobs','contacts','routes']){assert.equal(records.has(`${root}/${name}/owned`),false);assert.equal(records.has(`${root}/${name}/other`),true);}
+ for(const name of ['messages','batches','send-intents']){assert.equal(records.has(`${root}/teams/a/${name}/owned`),false);assert.equal(records.has(`${root}/teams/other/${name}/other`),true);}
+ assert.equal(records.has(`${root}/consent-events/evidence`),true);assert.equal(records.has(suppression),true);
+});

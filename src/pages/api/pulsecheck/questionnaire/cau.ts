@@ -1,3 +1,4 @@
+import { hasAccountAdministrativeBaselineCarry } from '../../../../lib/questionnaires/relocation-baseline-carry';
 import { baselineAccountIdentity, bindBaselineAccountIdentity } from '../../../../lib/questionnaires/account-identity';
 import { resolveSchoolActivationFlow, SCHOOL_ACTIVATION_FLOW_VERSION } from '../../../../api/firebase/pulsecheckProvisioning/schoolActivationFlow';
 import { baselineHealthContext, saveBaselineHealthDecision } from '../../../../lib/questionnaires/cau-health';
@@ -44,11 +45,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const historicalSnapshots = [existing, legacy, ...previous];
     const previouslyCompleted = historicalSnapshots.some(snapshot => baselineComplete(snapshot.data(), user.uid));
     const canonical = enabled ? (await db.collection('athlete-mental-progress').doc(user.uid).get()).data()?.mentalSkillsBaseline : null;
+    const administrativeCompletion = await hasAccountAdministrativeBaselineCarry(db, user.uid, canonical);
     const teamReview = await resolveTeamBaselineReview(db, user.uid, existingAssignment, previouslyCompleted, canonical);
     if (teamReview) { assignment = teamReview; active = true; }
     const reviewId = teamReview?.reviewId || '';
     const recordRef = reviewId ? collection.doc(teamBaselineRecordId(reviewId)) : originalRecordRef;
-    const completed = !reviewId && previouslyCompleted;
+    const completed = !reviewId && (previouslyCompleted || administrativeCompletion);
     if (req.method === 'POST' && String(req.body?.reviewId || '') !== reviewId) return res.status(409).json({ error: 'Your team baseline has changed. Reopen the baseline to review the current team.' });
     const namespace = `${user.uid}_${QUESTIONNAIRE_VERSION}${reviewId ? `_${reviewId}` : ''}`;
     const health = await baselineHealthContext(db, user.uid, assignment);

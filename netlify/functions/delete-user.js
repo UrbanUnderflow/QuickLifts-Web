@@ -8,6 +8,7 @@ const {
   writeDeletedAccountEmailSuppression,
 } = require('./utils/emailSuppression');
 
+const { stageCommunicationDeletion, confirmCommunicationDeletion } = require('./lib/communication-admin-deletion');
 const auth = admin.auth();
 
 function json(statusCode, payload, extraHeaders = {}) {
@@ -220,6 +221,9 @@ exports.handler = async (event) => {
 
   let authDeleted = false;
   try {
+    // Persist recovery before the irreversible Auth call. If this write fails,
+    // the existing failure response/suppression-release path still applies.
+    await stageCommunicationDeletion({db,uid:userId});
     await auth.deleteUser(userId);
     authDeleted = true;
   } catch (error) {
@@ -246,6 +250,11 @@ exports.handler = async (event) => {
       });
     }
   }
+
+  // A crash or failure here is recoverable: the staged job checks Auth absence.
+  await confirmCommunicationDeletion({db,uid:userId}).catch(() => {
+    console.warn('[delete-user] SMS cleanup confirmation pending; staged recovery remains.');
+  });
 
   try {
     const usernameDocsDeleted = await deleteUsernameDocs(userId, userData);

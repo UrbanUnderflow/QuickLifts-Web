@@ -45,6 +45,16 @@ exports.handler = async (event, context) => {
 
     console.log(`[StripeDepositWebhook] Received event: ${stripeEvent.type}`);
 
+    // Donation events share this already-registered success route only after signature verification.
+    // This branch cannot enter prize escrow, trainer routing, or membership provisioning.
+    if (stripeEvent.livemode === true && stripeEvent.data?.object?.metadata?.source === 'athleticmind-sponsorship-v1') {
+      const { processVerifiedEvent } = require('./lib/athleticmind-sponsorship');
+      const donationStripe = require('stripe')(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
+      await processVerifiedEvent({ signed: stripeEvent, client: donationStripe, database: db,
+        config: { live: true, collection: 'athleticmind-sponsorship-live' } });
+      return { statusCode: 200, headers, body: JSON.stringify({ received: true }) };
+    }
+
     // Handle successful payment intent (like round purchases)
     if (stripeEvent.type === 'payment_intent.succeeded') {
       const paymentIntent = stripeEvent.data.object;
