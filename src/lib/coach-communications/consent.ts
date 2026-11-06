@@ -4,6 +4,7 @@ import { activeRecord, DashboardAccessError, loadTeamAccess, validTeamId, visibl
 import { COLLECTION, ROOT, tokenDigest } from '../coachSurveys/service';
 import { assertCommunicationAccountOpen, rootFor, scope, transactionReads, resolveTextContact, consentAllows, eligible } from './service';
 import { SMS_CONSENT_TEXT, SMS_CONSENT_VERSION } from './consent-copy';
+import { hasRecordedTextConsent, recordedConsentRequired } from './consent-evidence';
 export { SMS_CONSENT_TEXT, SMS_CONSENT_VERSION } from './consent-copy';
 
 export async function ownTextTeams(db: firestore.Firestore, uid: string) {
@@ -34,15 +35,8 @@ export async function ownPreferences(db: firestore.Firestore, uid: string, teamI
   const [saved, profile] = await Promise.all([rootFor(db).collection('contacts').doc(`${teamId}_${uid}`).get(), db.collection('users').doc(uid).get()]);
   const contact = resolveTextContact(saved.data(), profile.data() || {}, teamId, uid);
   const stop = contact?.phone ? (await db.collection(COLLECTION).doc(ROOT).collection('sms-suppressions').doc(tokenDigest(contact.phone)).get()).data()?.suppressed === true : false;
-  // Delivery permission may come from an external process. Only the matching
-  // current-version acceptance event establishes this page's explicit opt-in.
-  const grant = saved.data()?.consent;
-  let explicitConsentRecorded = false;
-  if (contact.teamId === teamId && contact.athleteId === uid && grant?.purpose === 'team-communications' && grant.status === 'granted' && grant.withdrawnAtMs == null && grant.version === SMS_CONSENT_VERSION && validTeamId(grant.evidenceId) && typeof contact.phone === 'string') {
-    const event = (await rootFor(db).collection('consent-events').doc(grant.evidenceId).get()).data();
-    explicitConsentRecorded = event?.uid === uid && event?.teamId === teamId && event?.accepted === true && event?.version === SMS_CONSENT_VERSION && event?.text === SMS_CONSENT_TEXT && event?.phoneHash === tokenDigest(contact.phone);
-  }
-  return { enabled: consentAllows(contact, teamId, uid) && !stop, explicitConsentRecorded, suppressed: stop, phoneLast4: contact?.phone?.slice(-4) || null, version: SMS_CONSENT_VERSION, text: SMS_CONSENT_TEXT };
+  const explicitConsentRecorded = await hasRecordedTextConsent(db, saved.data(), teamId, uid);
+  return { enabled: consentAllows(contact, teamId, uid) && !stop && (!recordedConsentRequired() || explicitConsentRecorded), explicitConsentRecorded, suppressed: stop, phoneLast4: contact?.phone?.slice(-4) || null, version: SMS_CONSENT_VERSION, text: SMS_CONSENT_TEXT };
 }
 /** phoneProof is server-verified recent Firebase phone authentication, never a submitted contact number. */
 export async function setOwnConsent(db: firestore.Firestore, uid: string, teamId: string, accepted: boolean, phoneProof?: string) {

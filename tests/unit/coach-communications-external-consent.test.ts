@@ -115,3 +115,61 @@ test('text preferences route authenticates team listing, returns only team label
  assert.equal((await request('GET',{}, {},signedOut)).statusCode,401);
  assert.equal((await request('GET')).headers['Cache-Control'],'private, no-store');
 });
+
+function requireRecordedConsent(t: any) {
+ const key='COACH_COMMUNICATIONS_REQUIRE_RECORDED_CONSENT', prior=process.env[key];
+ process.env[key]='true';
+ t.after(()=>{if(prior===undefined)delete process.env[key];else process.env[key]=prior;});
+}
+
+test('recorded rollout blocks roster phones and stale or mismatched evidence before enqueue',async t=>{
+ requireRecordedConsent(t);
+ const db=fixture();db.data.delete(contactPath());db.data.set('users/a',{phoneNumber:'+12025550100'});
+ assert.equal((await eligible(db as any,'coach','team','a')).eligible,false);
+ assert.equal((await ownPreferences(db as any,'a','team')).enabled,false);
+ await assert.rejects(enqueueBatch(db as any,'coach','team',{requestId:'no-evidence',athleteIds:['a'],text:'Synthetic'}));
+ assert.equal([...db.data.keys()].some(p=>p.includes('/jobs/')),false);
+ await setOwnConsent(db as any,'a','team',true,'+12025550100');
+ assert.equal((await eligible(db as any,'coach','team','a')).eligible,true);
+ assert.equal((await ownPreferences(db as any,'a','team')).enabled,true);
+ const contact=db.data.get(contactPath()), eventPath=`${COLLECTION}/coach-communications-v1/consent-events/${contact.consent.evidenceId}`;
+ const event={...db.data.get(eventPath)};
+ for(const patch of [{version:'team-texts-v1'},{uid:'b'},{teamId:'foreign'},{phoneHash:tokenDigest('+12025550101')},{accepted:false},{text:'Changed disclosure'}]){
+  db.data.set(eventPath,{...event,...patch});
+  assert.equal((await eligible(db as any,'coach','team','a')).eligible,false);
+  assert.equal((await ownPreferences(db as any,'a','team')).enabled,false);
+ }
+ db.data.delete(eventPath);assert.equal((await eligible(db as any,'coach','team','a')).eligible,false);
+});
+
+test('recorded rollout blocks old queued work and rechecks evidence inside the claim transaction',async t=>{
+ requireRecordedConsent(t);
+ for(const scenario of ['legacy-queue','evidence-removed-before-claim','withdrawn']){
+  const db=fixture();
+  if(scenario==='legacy-queue')process.env.COACH_COMMUNICATIONS_REQUIRE_RECORDED_CONSENT='false';
+  else await setOwnConsent(db as any,'a','team',true,'+12025550100');
+  await enqueueBatch(db as any,'coach','team',{requestId:scenario,athleteIds:['a'],text:'Synthetic'});
+  process.env.COACH_COMMUNICATIONS_REQUIRE_RECORDED_CONSENT='true';
+  if(scenario==='withdrawn')await setOwnConsent(db as any,'a','team',false);
+  if(scenario==='evidence-removed-before-claim'){
+   const eventPath=`${COLLECTION}/coach-communications-v1/consent-events/${db.data.get(contactPath()).consent.evidenceId}`;
+   const transact=db.runTransaction.bind(db);let first=true;
+   db.runTransaction=async(fn:any)=>{if(first){first=false;db.data.delete(eventPath);}return transact(fn);};
+  }
+  let sends=0;await processQueue(db as any,async()=>{sends++;return {state:'accepted',providerId:'SM'+'a'.repeat(32)};});
+  assert.equal(sends,0,scenario);
+  assert.equal([...db.data.entries()].find(([p])=>p.includes('/jobs/'))?.[1].state,'blocked',scenario);
+ }
+});
+
+test('recorded rollout allows valid opt-in while STOP still blocks and START never resumes',async t=>{
+ requireRecordedConsent(t);const db=fixture();
+ await setOwnConsent(db as any,'a','team',true,'+12025550100');
+ await enqueueBatch(db as any,'coach','team',{requestId:'accepted-evidence',athleteIds:['a'],text:'Synthetic'});
+ let sends=0;await processQueue(db as any,async()=>{sends++;return {state:'accepted',providerId:'SM'+'a'.repeat(32)};});assert.equal(sends,1);
+ for(const [i,body]of ['STOP','START'].entries()){
+  await receiveSms(db as any,{From:'+12025550100',To:process.env.TWILIO_FROM_NUMBER!,Body:body,MessageSid:'SM'+String(i).repeat(32)});
+  assert.equal((await eligible(db as any,'coach','team','a')).eligible,false);
+  const prefs=await ownPreferences(db as any,'a','team');assert.equal(prefs.explicitConsentRecorded,true);assert.equal(prefs.suppressed,true);assert.equal(prefs.enabled,false);
+ }
+});

@@ -14,6 +14,7 @@ Set these in Netlify **production Functions/runtime scope**, never client-public
 - `COACH_COMMUNICATIONS_TELNYX_WEBHOOK_URL=https://fitwithpulse.ai/api/coach/communications/telnyx-webhook`
 - `COACH_COMMUNICATIONS_FIREBASE_MODE=prod`
 - `COACH_COMMUNICATIONS_SMS_WEBHOOK_ENABLED=true`
+- `COACH_COMMUNICATIONS_REQUIRE_RECORDED_CONSENT=true` for the rollout registered with the optional Team texts opt-in flow.
 - `COACH_COMMUNICATIONS_SMS_ENABLED=true`
 - `COACH_COMMUNICATIONS_WORKER_ENABLED=true`
 
@@ -34,12 +35,13 @@ replaced legacy variables only when deploying code that supports compact setting
 | `s` | `COACH_COMMUNICATIONS_SMS_ENABLED` |
 | `w` | `COACH_COMMUNICATIONS_WORKER_ENABLED` |
 | `h` | `COACH_COMMUNICATIONS_SMS_WEBHOOK_ENABLED` |
+| `c` | `COACH_COMMUNICATIONS_REQUIRE_RECORDED_CONSENT` |
 | `u` | `COACH_COMMUNICATIONS_TELNYX_WEBHOOK_URL` |
 | `n` | `TELNYX_FROM_NUMBER` |
 | `id` | `TELNYX_MESSAGING_PROFILE_ID` |
 | `k` | `TELNYX_PUBLIC_KEY` |
 
-`s`, `w`, and `h` accept JSON booleans only; other fields accept strings. Omitted
+`s`, `w`, `h`, and `c` accept JSON booleans only; other fields accept strings. Omitted
 or malformed gates stay disabled. A paused configuration omits `s` and `w` and
 keeps `h: true`. Do not include the API key in this JSON or in source control.
 Netlify captures function environment values at deploy time; existing published
@@ -56,6 +58,25 @@ selection alone never supplies provider, database environment, or activation gat
 An unknown profile name supplies no account defaults. Verify any public-key change
 against Telnyx before revising the profile; API credentials remain in Netlify.
 
+### Recorded opt-in rollout
+
+For the campaign describing the optional Team texts web/native flow, set `c: true`
+in `COACH_SMS_CONFIG` (or the explicit legacy variable above) before enabling
+outbound delivery. The requirement checks the saved contact and its current
+`team-texts-v2` acceptance event, including athlete, team, exact disclosure and
+verified phone hash. It is enforced at enqueue and again inside the queue claim
+transaction. The athlete's `enabled` preference and coach recipient eligibility
+reflect the same requirement. Previously queued recipients without qualifying
+evidence become blocked rather than being sent.
+
+When the flag is absent or false, the prior externally managed consent behavior
+is preserved. Compact string values such as `"c":"true"` do not enable this
+requirement; use the JSON boolean `true`. Neither the policy flag nor recorded
+acceptance enables delivery by itself. STOP processing and incoming replies are
+unchanged, and START never clears an existing opt-out. Inspect the queue before
+activation and verify the deployed flag; this document does not change runtime
+configuration.
+
 ## Telnyx portal
 
 1. Complete account verification and billing through the owner's authorized flow. Obtain explicit approval for purchases, credential creation, and agreements as applicable.
@@ -69,6 +90,7 @@ against Telnyx before revising the profile; API credentials remain in Netlify.
 - Verify account status, sender ownership, messaging capability, registration state and profile association.
 - Confirm the deployed endpoint rejects missing/invalid signatures without database effects; use only synthetic local tests until a real message is separately authorized.
 - Inspect pending queue jobs before switching providers. New jobs persist their provider; old jobs default to Twilio. A job from a different provider is blocked, never silently sent through the replacement provider.
+- For the registered Team texts opt-in flow, verify the deployed recorded-consent requirement is enabled before turning on sending/worker.
 - Enable sending/worker only after configuration is complete and explicitly approved. This causes scheduled processing of queued messages, so inspect for queued work first.
 - A successful API response means provider acceptance, not handset delivery. Only authenticated delivery callbacks produce delivered status. Lost responses, 408/409, malformed success and 5xx remain unknown and are not automatically resent.
 - Physical delivery and inbound-reply testing require separate permission to send actual texts. Local mocked tests do not establish carrier delivery.

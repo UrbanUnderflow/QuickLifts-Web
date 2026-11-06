@@ -86,3 +86,18 @@ test('named public profile never supplies activation gates and supports explicit
   assert.equal(smsSender(), '');
   assert.equal(providerConfigured(), false);
 });
+
+test('recorded-consent rollout uses compact boolean c and explicit legacy precedence', t => {
+  environment(t);
+  const key = 'COACH_COMMUNICATIONS_REQUIRE_RECORDED_CONSENT';
+  assert.equal(communicationSetting(key), undefined);
+  for (const value of [true, false, 'true', 1, null]) {
+    process.env.COACH_SMS_CONFIG = JSON.stringify({ ...config, c: value });
+    assert.equal(communicationSetting(key), value === true ? 'true' : value === false ? 'false' : undefined);
+  }
+  process.env.COACH_SMS_CONFIG = JSON.stringify({ ...config, c: true });
+  process.env[key] = 'false'; assert.equal(communicationSetting(key), 'false');
+  process.env[key] = ''; assert.equal(communicationSetting(key), '');
+  process.env[key] = 'true'; assert.equal(communicationSetting(key), 'true');
+  assert.equal(transportReady('prod'), false); // This policy never activates delivery.
+});

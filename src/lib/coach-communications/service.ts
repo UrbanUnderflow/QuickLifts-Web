@@ -1,4 +1,5 @@
 import { communicationSetting } from './config';
+import { hasRecordedTextConsent, recordedConsentRequired } from './consent-evidence';
 import { providerConfigured } from './provider';
 import { createHash } from 'crypto';
 import type { firestore } from 'firebase-admin';
@@ -15,8 +16,9 @@ export function canCommunicate(m: Record<string, any>) {
     : ['team-admin', 'coach'].includes(m.role);
 }
 const exactPhone = (value: unknown): value is string => typeof value === 'string' && /^\+[1-9]\d{9,14}$/.test(value);
-// Consent is handled externally. Missing in-app evidence is not a send gate;
-// explicit withdrawals, disabled contacts and STOP remain authoritative.
+// Base contact permission supports externally handled consent. eligible() can
+// additionally require recorded opt-in for campaigns registered with that flow.
+// Explicit withdrawals, disabled contacts and STOP remain authoritative.
 export function consentAllows(c: Record<string, any>, teamId: string, athleteId: string) {
   const blocked = ['withdrawn', 'paused', 'disabled', 'denied', 'revoked', 'opted-out', 'opted_out'];
   return c.teamId === teamId && c.athleteId === athleteId && c.enabled !== false &&
@@ -76,7 +78,8 @@ export async function eligible(db: firestore.Firestore, uid: string, teamId: str
   ]);
   const m = member.data() || {}, c = resolveTextContact(contact.data(), profile.data() || {}, teamId, athleteId);
   if (!member.exists || m.userId !== athleteId || m.teamId !== teamId || m.organizationId !== team.organizationId || m.role !== 'athlete' || !activeRecord(m)) throw new DashboardAccessError(403, 'This athlete is not active on this team.');
-  const allowed = consentAllows(c, teamId, athleteId);
+  const allowed = consentAllows(c, teamId, athleteId) &&
+    (!recordedConsentRequired() || await hasRecordedTextConsent(db, contact.data(), teamId, athleteId));
   const suppression = allowed ? await db.collection(COLLECTION).doc(ROOT).collection('sms-suppressions').doc(tokenDigest(c.phone)).get() : null;
   return { contact: c, eligible: allowed && suppression?.data()?.suppressed !== true };
 }
