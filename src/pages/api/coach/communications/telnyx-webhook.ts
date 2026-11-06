@@ -1,3 +1,4 @@
+import { communicationSetting } from '../../../../lib/coach-communications/config';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { verifyTelnyxEvent, telnyxIncomingForm, telnyxDeliveryForm } from '../../../../lib/coach-communications/provider';
 import { receiveSms } from '../../../../lib/coach-communications/service';
@@ -7,7 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return res.status(405).end(); }
   // Continue accepting STOP while outbound sending/worker is disabled.
-  if (process.env.COACH_COMMUNICATIONS_SMS_WEBHOOK_ENABLED !== 'true' || process.env.COACH_COMMUNICATIONS_FIREBASE_MODE !== 'prod') return res.status(503).end();
+  if (communicationSetting('COACH_COMMUNICATIONS_SMS_WEBHOOK_ENABLED') !== 'true' || communicationSetting('COACH_COMMUNICATIONS_FIREBASE_MODE') !== 'prod') return res.status(503).end();
   if (!req.headers['content-type']?.startsWith('application/json')) return res.status(415).end();
   const chunks: Uint8Array[] = []; let size = 0;
   try {

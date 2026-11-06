@@ -1,3 +1,4 @@
+import { communicationSetting } from './config';
 import { providerConfigured } from './provider';
 import { createHash } from 'crypto';
 import type { firestore } from 'firebase-admin';
@@ -80,10 +81,10 @@ export async function eligible(db: firestore.Firestore, uid: string, teamId: str
   return { contact: c, eligible: allowed && suppression?.data()?.suppressed !== true };
 }
 export function transportReady(mode: unknown) {
-  return mode !== 'dev' && process.env.COACH_COMMUNICATIONS_SMS_ENABLED === 'true' &&
-    process.env.COACH_COMMUNICATIONS_SMS_WEBHOOK_ENABLED === 'true' &&
-    process.env.COACH_COMMUNICATIONS_FIREBASE_MODE === (mode === 'dev' ? 'dev' : 'prod') &&
-    process.env.COACH_COMMUNICATIONS_WORKER_ENABLED === 'true' &&
+  return mode !== 'dev' && communicationSetting('COACH_COMMUNICATIONS_SMS_ENABLED') === 'true' &&
+    communicationSetting('COACH_COMMUNICATIONS_SMS_WEBHOOK_ENABLED') === 'true' &&
+    communicationSetting('COACH_COMMUNICATIONS_FIREBASE_MODE') === (mode === 'dev' ? 'dev' : 'prod') &&
+    communicationSetting('COACH_COMMUNICATIONS_WORKER_ENABLED') === 'true' &&
     providerConfigured();
 }
 export async function loadInbox(db: firestore.Firestore, uid: string, teamId: string, mode: unknown, cursor?: string) {

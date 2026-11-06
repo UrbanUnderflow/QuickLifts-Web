@@ -19,6 +19,43 @@ Set these in Netlify **production Functions/runtime scope**, never client-public
 
 Keep the last two flags false/absent until activation is approved and all prerequisites below are verified. Webhook processing must remain enabled while outbound sending is paused so STOP continues to suppress recipients. Do not overwrite Twilio credentials used by other services.
 
+### Compact configuration for Lambda environment limits
+
+Legacy Lambda functions have a 4 KB aggregate environment limit. The non-secret
+settings above can instead be stored as one minified `COACH_SMS_CONFIG` JSON value.
+Keep `TELNYX_API_KEY` as its existing separate server-side secret. Explicit legacy
+variables take precedence, including empty strings or `false`, so remove the
+replaced legacy variables only when deploying code that supports compact settings.
+
+| JSON field | Equivalent variable |
+| --- | --- |
+| `p` | `COACH_COMMUNICATIONS_SMS_PROVIDER` |
+| `m` | `COACH_COMMUNICATIONS_FIREBASE_MODE` |
+| `s` | `COACH_COMMUNICATIONS_SMS_ENABLED` |
+| `w` | `COACH_COMMUNICATIONS_WORKER_ENABLED` |
+| `h` | `COACH_COMMUNICATIONS_SMS_WEBHOOK_ENABLED` |
+| `u` | `COACH_COMMUNICATIONS_TELNYX_WEBHOOK_URL` |
+| `n` | `TELNYX_FROM_NUMBER` |
+| `id` | `TELNYX_MESSAGING_PROFILE_ID` |
+| `k` | `TELNYX_PUBLIC_KEY` |
+
+`s`, `w`, and `h` accept JSON booleans only; other fields accept strings. Omitted
+or malformed gates stay disabled. A paused configuration omits `s` and `w` and
+keeps `h: true`. Do not include the API key in this JSON or in source control.
+Netlify captures function environment values at deploy time; existing published
+functions keep their previous values until a successful new deployment. For
+rollback, restore the legacy variable set before rebuilding an older revision.
+
+The verified AthleticMind sender/profile/public verification key/webhook URL also
+have a named server-side profile in `account-profile.ts`. Select it with
+`{"p":"telnyx","m":"prod","h":true,"account":"athleticmind"}` to keep inbound
+processing available with outbound sending paused. This 75-byte key/value pair
+replaces 454 bytes of individual settings, saving 379 bytes. Explicit compact
+fields override the named profile, and legacy variables override both. A profile
+selection alone never supplies provider, database environment, or activation gates.
+An unknown profile name supplies no account defaults. Verify any public-key change
+against Telnyx before revising the profile; API credentials remain in Netlify.
+
 ## Telnyx portal
 
 1. Complete account verification and billing through the owner's authorized flow. Obtain explicit approval for purchases, credential creation, and agreements as applicable.
