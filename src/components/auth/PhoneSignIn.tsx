@@ -4,7 +4,7 @@ import { getFirebaseModeRequestHeaders } from '../../api/firebase/config';
 import { createPhoneAuthAttempt, normalizeAuthPhone, phoneAuthError } from '../../api/firebase/auth/phone';
 
 type Props = {
-  mode?: 'signin' | 'register' | 'link';
+  mode?: 'signin' | 'register' | 'link' | 'verify';
   organizationId?: string;
   initialEmail?: string;
   disabled?: boolean;
@@ -78,7 +78,7 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
     if (mode === 'register' && !acceptTerms) throw new Error('Agree to the Terms and Privacy Policy to continue.');
     const normalized = normalizeAuthPhone(phone);
     await attempt.current?.dispose();
-    attempt.current = await createPhoneAuthAttempt(container.current!, mode === 'link' ? 'link' : 'signin');
+    attempt.current = await createPhoneAuthAttempt(container.current!, mode === 'link' ? 'link' : mode === 'verify' ? 'verify' : 'signin');
     if (!active.current) { await attempt.current.dispose(); return; }
     await attempt.current.send(normalized);
     if (active.current) { setPhone(normalized.slice(2)); setSent(true); setCode(''); setRetryAt(Date.now() + 60000); setNow(Date.now()); }
@@ -98,10 +98,11 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
     }}>
       {!open ? (
         <button type="button" disabled={disabled} onClick={() => setOpen(true)} className="w-full py-2 font-medium disabled:opacity-50">
-          {mode === 'link' ? 'Connect phone number' : 'Log in'}
+          {mode === 'link' ? 'Connect phone number' : mode === 'verify' ? 'Verify phone' : 'Log in'}
         </button>
       ) : (
         <div className="space-y-5">
+          {!sent && mode === 'verify' && <p className="text-xs text-zinc-300">Enter the phone number already connected to your signed-in account.</p>}
           {!sent && mode === 'register' && <label className="block text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">Institutional email
             <input type="email" autoComplete="email" value={institutionalEmail} onChange={(e) => setInstitutionalEmail(e.target.value)} disabled={sent || busy}
               placeholder="you@institution.edu" className="mt-2 min-h-[52px] w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-base font-normal normal-case tracking-normal text-white outline-none focus:border-[#E0FE10]/60" />
@@ -127,7 +128,7 @@ export default function PhoneSignIn({ mode = 'signin', disabled, onSuccess, onBu
           {existingAccount && <a className="block text-xs underline" href={`/PulseCheck/login?phoneSetup=1&email=${encodeURIComponent(institutionalEmail)}`}>Connect your existing account without a password</a>}
           <button type="button" onClick={sent ? confirm : send} disabled={busy || disabled || (sent && code.length !== 6)}
             className="min-h-[52px] w-full rounded-2xl bg-gradient-to-br from-[#E0FE10] to-[#A6C900] px-4 py-3 text-base font-semibold text-black shadow-[0_8px_28px_rgba(224,254,16,0.14)] transition hover:brightness-110 disabled:opacity-50">
-            {busy ? 'Please wait…' : sent ? (mode === 'link' ? 'Verify and connect' : 'Continue') : mode === 'register' ? 'Sign up' : mode === 'link' ? 'Connect phone number' : 'Log in'}
+            {busy ? 'Please wait…' : sent ? (mode === 'link' ? 'Verify and connect' : mode === 'verify' ? 'Verify phone' : 'Continue') : mode === 'register' ? 'Sign up' : mode === 'link' ? 'Connect phone number' : mode === 'verify' ? 'Send verification code' : 'Log in'}
           </button>
           {sent && <button type="button" disabled={busy || remaining > 0} onClick={send} className="mr-4 text-xs disabled:opacity-50">
             {remaining ? `Resend in ${remaining}s` : 'Resend code'}

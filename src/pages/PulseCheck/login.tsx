@@ -181,7 +181,7 @@ const PulseCheckLoginPage: NextPage = () => {
       if (router.query.phoneSetup === '1') { void router.replace('/settings'); return; }
       // Already signed in — go straight to the app
       localStorage.setItem(STORAGE_KEY_PC, 'true');
-      router.replace(router.query.returnTo === '/PulseCheck/baseline' ? '/PulseCheck/baseline' : router.query.returnTo === '/PulseCheck/questionnaire/cau' ? '/PulseCheck/questionnaire/cau' : '/PulseCheck?web=1');
+      router.replace(router.query.returnTo === '/PulseCheck/text-preferences' ? '/PulseCheck/text-preferences' : router.query.returnTo === '/PulseCheck/baseline' ? '/PulseCheck/baseline' : router.query.returnTo === '/PulseCheck/questionnaire/cau' ? '/PulseCheck/questionnaire/cau' : '/PulseCheck?web=1');
     }
   }, [currentUser, router]);
 
@@ -218,7 +218,7 @@ const PulseCheckLoginPage: NextPage = () => {
   const enterApp = useCallback(() => {
     if (router.query.phoneSetup === '1') { void router.replace('/settings'); return; }
     localStorage.setItem(STORAGE_KEY_PC, 'true');
-    router.replace(router.query.returnTo === '/PulseCheck/baseline' ? '/PulseCheck/baseline' : router.query.returnTo === '/PulseCheck/questionnaire/cau' ? '/PulseCheck/questionnaire/cau' : '/PulseCheck?web=1');
+    router.replace(router.query.returnTo === '/PulseCheck/text-preferences' ? '/PulseCheck/text-preferences' : router.query.returnTo === '/PulseCheck/baseline' ? '/PulseCheck/baseline' : router.query.returnTo === '/PulseCheck/questionnaire/cau' ? '/PulseCheck/questionnaire/cau' : '/PulseCheck?web=1');
   }, [router]);
 
   const ensureFirestoreUser = async (firebaseUser: any) => {

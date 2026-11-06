@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {consentAllows, resolveTextContact, eligible, receiveSms, digest} from '../../src/lib/coach-communications/service';
 import {enqueueBatch,processQueue} from '../../src/lib/coach-communications/queue';
 import {COLLECTION, ROOT, tokenDigest} from '../../src/lib/coachSurveys/service';
+import { ownPreferences, ownTextTeams, setOwnConsent, SMS_CONSENT_VERSION } from '../../src/lib/coach-communications/consent';
+import { createTextPreferencesHandler } from '../../src/pages/api/pulsecheck/text-preferences';
 class MemoryDB {
   data = new Map<string, any>();
   queue = Promise.resolve();
@@ -64,4 +66,52 @@ test('pause preserves withdrawal and refuses inactive or foreign athlete members
  const {pauseContact}=await import('../../src/lib/coach-communications/consent');
  const db=fixture();db.data.get(contactPath()).consent={status:'withdrawn',withdrawnAtMs:1};await pauseContact(db as any,'coach','team','a');assert.equal(db.data.get(contactPath()).consent.status,'withdrawn');
  for(const patch of [{status:'transferred'},{role:'coach'},{organizationId:'foreign'}]){const other=fixture();other.data.delete(contactPath());Object.assign(other.data.get('pulsecheck-team-memberships/team_a'),patch);await assert.rejects(pauseContact(other as any,'coach','team','a'));assert.equal(other.data.has(contactPath()),false)}
+});
+
+test('external delivery permission is separate from this page\'s explicit current consent evidence',async()=>{
+ const db=fixture();db.data.delete(contactPath());db.data.set('users/a',{phoneNumber:'+12025550100'});
+ let prefs=await ownPreferences(db as any,'a','team');
+ assert.equal(prefs.enabled,true);assert.equal(prefs.explicitConsentRecorded,false);
+ prefs=await setOwnConsent(db as any,'a','team',true,'+12025550100');
+ assert.equal(prefs.explicitConsentRecorded,true);assert.equal(prefs.version,SMS_CONSENT_VERSION);
+ const saved=db.data.get(contactPath()), eventPath=`${COLLECTION}/coach-communications-v1/consent-events/${saved.consent.evidenceId}`;
+ const event={...db.data.get(eventPath)};
+ for(const patch of [{uid:'b'},{teamId:'another'},{accepted:false},{version:'team-texts-v1'},{phoneHash:tokenDigest('+12025550101')},{text:'Different terms'}]){
+  db.data.set(eventPath,{...event,...patch});
+  assert.equal((await ownPreferences(db as any,'a','team')).explicitConsentRecorded,false);
+ }
+ db.data.set(eventPath,event);db.data.set(`${COLLECTION}/${ROOT}/sms-suppressions/${tokenDigest('+12025550100')}`,{suppressed:true});
+ prefs=await ownPreferences(db as any,'a','team');assert.equal(prefs.enabled,false);assert.equal(prefs.explicitConsentRecorded,true);assert.equal(prefs.suppressed,true);
+ prefs=await setOwnConsent(db as any,'a','team',false);assert.equal(prefs.explicitConsentRecorded,false);assert.equal(prefs.enabled,false);
+});
+
+test('team choices include only canonical active athlete memberships in active organizations',async()=>{
+ const db=fixture();db.data.get('pulsecheck-teams/team').name='Synthetic team';
+ for(const [id,memberPatch,teamPatch] of [
+  ['staff',{role:'coach'},{}],['removed',{status:'removed'},{}],['closed',{}, {status:'archived'}],['foreign',{organizationId:'wrong'},{}],
+ ] as [string,Record<string,unknown>,Record<string,unknown>][]){
+  db.data.set(`pulsecheck-teams/${id}`,{status:'active',organizationId:'org',...teamPatch});
+  db.data.set(`pulsecheck-team-memberships/${id}_a`,{userId:'a',teamId:id,organizationId:'org',role:'athlete',status:'active',...memberPatch});
+ }
+ db.data.set('pulsecheck-team-memberships/duplicate',{userId:'a',teamId:'team',organizationId:'org',role:'athlete',status:'active'});
+ assert.deepEqual(await ownTextTeams(db as any,'a'),[{teamId:'team',displayName:'Synthetic team'}]);
+ db.data.get('pulsecheck-organizations/org').status='archived';assert.deepEqual(await ownTextTeams(db as any,'a'),[]);
+ db.data.get('users/a').accountStatus='closed';await assert.rejects(ownTextTeams(db as any,'a'),/closing or closed/);
+});
+
+test('text preferences route authenticates team listing, returns only team labels, and requires a scoped team for writes',async()=>{
+ const db=fixture();const handler=createTextPreferencesHandler({authorize:async()=>({uid:'a',db:db as any})});
+ async function request(method:string,query:any={},body:any={},chosen=handler){
+  const result:any={statusCode:200,headers:{}};
+  const res:any={setHeader:(k:string,v:string)=>{result.headers[k]=v;},status:(n:number)=>{result.statusCode=n;return res;},json:(v:any)=>{result.body=v;return res;},end:()=>res};
+  await chosen({method,query,body,headers:{}} as any,res);return result;
+ }
+ assert.deepEqual((await request('GET')).body,{teams:[{teamId:'team',displayName:'Team'}]});
+ assert.equal((await request('GET',{teamId:['team']})).statusCode,400);
+ assert.equal((await request('POST',{}, {accepted:true,version:SMS_CONSENT_VERSION})).statusCode,400);
+ assert.equal((await request('GET',{teamId:'unknown'})).statusCode,403);
+ assert.equal((await request('POST',{teamId:'team'},{accepted:true,version:'team-texts-v1'})).statusCode,400);
+ const signedOut=createTextPreferencesHandler({authorize:async()=>{throw Error('signed out');}});
+ assert.equal((await request('GET',{}, {},signedOut)).statusCode,401);
+ assert.equal((await request('GET')).headers['Cache-Control'],'private, no-store');
 });

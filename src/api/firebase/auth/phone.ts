@@ -1,7 +1,7 @@
 import { deleteApp, initializeApp } from 'firebase/app';
 import {
   browserLocalPersistence, deleteUser, getAdditionalUserInfo, getAuth,
-  inMemoryPersistence, linkWithCredential, PhoneAuthProvider, RecaptchaVerifier,
+  inMemoryPersistence, linkWithCredential, reauthenticateWithCredential, PhoneAuthProvider, RecaptchaVerifier,
   setPersistence, signInWithCredential, signInWithEmailLink, signOut, updateCurrentUser, type Auth, type User, type UserCredential,
 } from 'firebase/auth';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
@@ -33,9 +33,14 @@ export const phoneAuthError = (error: unknown): string => {
 };
 
 /** A separate, memory-only session prevents an unlinked phone creating a primary app session. */
-export const createPhoneAuthAttempt = async (container: HTMLElement, mode: 'signin' | 'link') => {
-  const owner = mode === 'link' ? auth.currentUser : null;
+export const createPhoneAuthAttempt = async (container: HTMLElement, mode: 'signin' | 'link' | 'verify') => {
+  const owner = mode !== 'signin' ? auth.currentUser : null;
   if (mode === 'link' && !owner) throw new Error('Sign in again before connecting a phone.');
+  if (mode === 'verify' && !owner) throw new Error('Sign in again before verifying your phone.');
+  if (mode === 'verify' && (!owner?.phoneNumber || !owner.providerData.some(provider => provider.providerId === 'phone'))) {
+    throw new Error('Connect your phone in account settings, then return here to verify it.');
+  }
+  const ownerPhone = owner?.phoneNumber;
   const app = mode === 'signin'
     ? initializeApp(auth.app.options, `phone-${crypto.randomUUID()}`)
     : null;
@@ -46,8 +51,14 @@ export const createPhoneAuthAttempt = async (container: HTMLElement, mode: 'sign
   let cancelled = false;
   return {
     async send(phone: string) {
+      if (cancelled) throw new Error('Request a new code to continue.');
+      const normalized = normalizeAuthPhone(phone);
+      if (mode === 'verify' && (auth.currentUser?.uid !== owner?.uid || auth.currentUser?.phoneNumber !== ownerPhone)) {
+        throw new Error('Your account changed. Open phone verification again.');
+      }
+      if (mode === 'verify' && normalized !== ownerPhone) throw new Error('Enter the phone number connected to your signed-in account.');
       verificationId = await new PhoneAuthProvider(verificationAuth)
-        .verifyPhoneNumber(normalizeAuthPhone(phone), verifier);
+        .verifyPhoneNumber(normalized, verifier);
     },
     async confirm(code: string, institutionalEmail = '', acceptTerms = false, organizationId?: string): Promise<User> {
       if (cancelled || !verificationId) throw new Error('Request a new code to continue.');
@@ -55,9 +66,14 @@ export const createPhoneAuthAttempt = async (container: HTMLElement, mode: 'sign
       const credential = PhoneAuthProvider.credential(verificationId, code.trim());
       if (owner) {
         if (auth.currentUser?.uid !== owner.uid) throw new Error('Your account changed. Sign in again before connecting a phone.');
-        const result = await linkWithCredential(owner, credential);
+        if (mode === 'verify' && auth.currentUser?.phoneNumber !== ownerPhone) throw new Error('Your phone changed. Open phone verification again.');
+        const result = mode === 'verify'
+          ? await reauthenticateWithCredential(owner, credential)
+          : await linkWithCredential(owner, credential);
+        if (mode === 'verify' && (cancelled || result.user.uid !== owner.uid || auth.currentUser?.uid !== owner.uid)) throw new Error('Your account changed. Open phone verification again.');
         await result.user.reload();
         await result.user.getIdToken(true);
+        if (mode === 'verify' && (cancelled || auth.currentUser?.uid !== owner.uid || result.user.phoneNumber !== ownerPhone)) throw new Error('Your account changed. Open phone verification again.');
         return result.user;
       }
       const result = await signInWithCredential(verificationAuth, credential);
