@@ -8,9 +8,18 @@ type Section = {
   bullets?: string[];
 };
 
-const EFFECTIVE_DATE = 'April 8, 2026';
+const EFFECTIVE_DATE = 'November 6, 2026';
 
 const sections: Section[] = [
+  {
+    title: "Optional text messages and consent",
+    body: [
+      "The Athletic Mind and PulseCheck offer optional text messages from Pulse Intelligence Labs, Inc. and authorized coaches for program updates, practice and meeting reminders, account and onboarding assistance, and replies to your questions.",
+      "Texting requires your separate permission, which may be collected in person. Providing a phone number, joining a team, or accepting these general terms alone does not enroll you in text messages. Your choice about texts does not change your health-sharing or research choices. Consent to receive texts is not a condition of purchase or program participation.",
+      "Message frequency varies. Message and data rates may apply. Reply STOP to the sending number to stop texts, or reply HELP for help. You may also contact info@fitwithpulse.ai. After opting out, contact us if you want to resume texts; a request does not override an existing opt-out until it is reviewed.",
+      "Messages may use automated delivery technology. Delivery depends on your carrier and may be delayed or unavailable. Text messages are not an emergency service. Avoid sending sensitive health information by SMS. Review our Privacy Policy at https://fitwithpulse.ai/privacy for how messaging information is handled.",
+    ],
+  },
   {
     title: 'Scope and acceptance',
     body: [

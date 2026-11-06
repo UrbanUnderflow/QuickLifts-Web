@@ -8,9 +8,16 @@ type Section = {
   bullets?: string[];
 };
 
-const EFFECTIVE_DATE = 'June 29, 2026';
+const EFFECTIVE_DATE = 'November 6, 2026';
 
 const sections: Section[] = [
+  {
+    title: "Coach texting responsibilities",
+    body: [
+      "Before sending a text through AthleticMind or PulseCheck, confirm that the athlete agreed to receive the relevant messages. Permission may be collected outside the application, including in person. Maintain an accurate record of how and when permission was obtained. An athlete’s general participation or health-sharing agreement is not texting permission.",
+      "Use texting for the agreed program updates, coaching communications, and account support. Respect opt-outs and the platform’s phone and authorization checks. Never override an athlete’s opt-out or accept consent on their behalf. Review the optional text-messaging terms at https://fitwithpulse.ai/terms and privacy details at https://fitwithpulse.ai/privacy.",
+    ],
+  },
   {
     title: 'Scope and coach acceptance',
     body: [

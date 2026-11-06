@@ -19,7 +19,7 @@ type Section = {
   bullets?: string[];
 };
 
-const EFFECTIVE_DATE = 'April 8, 2026';
+const EFFECTIVE_DATE = 'November 6, 2026';
 
 const quickFacts = [
   {
@@ -37,6 +37,14 @@ const quickFacts = [
 ];
 
 const sections: Section[] = [
+  {
+    title: "Text messaging privacy",
+    body: [
+      "For optional AthleticMind and PulseCheck text messaging, we process your phone number, messages and replies, delivery information, and opt-in and opt-out records to provide conversations with authorized coaches, program updates, account assistance, and messaging support.",
+      "We do not sell mobile information or share it with third parties or affiliates for marketing, promotional purposes, lead generation, or their independent analytics. Text-messaging opt-in data and consent are excluded from other sharing provisions in this policy. We share messaging information only with service providers and carriers as needed to deliver and support the messaging service, or where disclosure is required by law.",
+      "Authorized coaches can read messages you send to them through the messaging service. SMS consent does not authorize access to private Nora conversations, journal entries, or additional health information. You can stop texts by replying STOP to the sending number. Reply HELP or contact info@fitwithpulse.ai for assistance. We retain suppression records as needed to honor opt-outs.",
+    ],
+  },
   {
     title: 'Scope',
     body: [
