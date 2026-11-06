@@ -1,3 +1,7 @@
+## Repository workflow
+
+Work only in the existing `main` checkout. Do not create feature branches, worktrees, or separate implementation clones. Keep unfinished edits local in this checkout and preserve unrelated work.
+
 # QuickLifts-Web Working Guide
 
 ## Shared preferences
