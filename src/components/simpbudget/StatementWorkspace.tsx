@@ -16,7 +16,7 @@ const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', curr
 const clean = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 const uid = () => crypto.randomUUID();
 
-export default function StatementWorkspace({ user, spaces, year, month }: { user: User; spaces: Space[]; year: number; month: number }) {
+export default function StatementWorkspace({ user, spaces, year, month, onImportsChange, statementRequest }: { user: User; spaces: Space[]; year: number; month: number; onImportsChange?: (imports:StatementImport[])=>void; statementRequest?: {id:string;sequence:number}|null }) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'upload'|'review'|'history'>('upload');
   const [showSorted, setShowSorted] = useState(false);
@@ -27,6 +27,8 @@ export default function StatementWorkspace({ user, spaces, year, month }: { user
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [imports, setImports] = useState<StatementImport[]>([]);
+  useEffect(()=>{onImportsChange?.(imports);},[imports,onImportsChange]);
+  const handledStatementRequest=useRef<number|null>(null);
   const importsRef = useRef<StatementImport[]>([]);
   const [accountId, setAccountId] = useState('');
   const [name, setName] = useState('');
@@ -68,11 +70,12 @@ export default function StatementWorkspace({ user, spaces, year, month }: { user
     const dataBase64=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file);});
     const result=await documentRequest({action:'attach',statementId,role,fileName:file.name,mimeType:/\.csv$/i.test(file.name)?'text/csv':file.type,dataBase64});rememberDocuments([result.document]);
   };
-  const viewDocument=(item:StatementDocument)=>void run(async()=>{
+  const loadDocument=async(item:StatementDocument)=>{
     const result=await documentRequest({action:'read',statementId:item.statementId,role:item.role});
     const bytes=Uint8Array.from(atob(result.dataBase64),(c:string)=>c.charCodeAt(0));
     setDocumentPreview({url:URL.createObjectURL(new Blob([bytes],{type:result.document.mimeType})),name:result.document.fileName,mime:result.document.mimeType});
-  });
+  };
+  const viewDocument=(item:StatementDocument)=>void run(()=>loadDocument(item));
   const uploadInput = useRef<HTMLInputElement>(null);
   useEffect(()=>{
     const file=stagedFiles[previewIndex];
@@ -223,14 +226,22 @@ export default function StatementWorkspace({ user, spaces, year, month }: { user
     change(t.id,{category:special?undefined:value,kind:special?value as StatementTransaction['kind']:(t.amount<0?'refund':'expense'),reviewed:special || t.reviewed});
     if(special) setMessage(`${kindLabels[value as keyof typeof kindLabels]} set aside from spending. Use Undo last sort to bring it back.`);
   };
-  const openImport = (item:StatementImport) => void run(async()=>{
+  const openImport = (item:StatementImport, previewId?:string) => void run(async()=>{
     if(active?.id!==item.id) {
       if(active?.status==='review') await persist(active,'review');
       setActive(item);setUndoStack([]);
     }
-    setView('review');setShowSorted(false);setSelected([]);setEditing(null);setSuggestionFilter('');setSourceFilter('');setKindFilter('');setAttachments([]);setDocumentPreview(null);
+    setOpen(true);setView('review');setShowSorted(false);setSelected([]);setEditing(null);setSuggestionFilter('');setSourceFilter('');setKindFilter('');setAttachments([]);setDocumentPreview(null);
     const result=await documentRequest({action:'list',ids:(item.members||[item]).map(m=>m.id)});rememberDocuments(result.documents);
+    if(previewId){const attached=result.documents.find((d:StatementDocument)=>d.statementId===previewId&&d.role==='original')||result.documents.find((d:StatementDocument)=>d.statementId===previewId);if(attached)await loadDocument(attached);else setMessage('Original not attached yet. Use Statement documents to attach it to these existing transactions.');}
   });
+  useEffect(()=>{
+    if(!ready||!statementRequest||handledStatementRequest.current===statementRequest.sequence)return;
+    const member=imports.find(i=>i.id===statementRequest.id);if(!member)return;
+    handledStatementRequest.current=statementRequest.sequence;
+    openImport(member.batchId?combineStatementImports(imports.filter(i=>i.batchId===member.batchId)):member,member.id);
+    // A request is handled once; import changes alone must not reopen the modal.
+  },[ready,statementRequest,imports]);
   return <section className="mb-6 rounded-2xl border border-stone-200 bg-white p-5 sm:p-6">
     <div className="flex flex-wrap items-center justify-between gap-4">
       <div><h2 className="text-xl font-semibold text-stone-950">Actual spending</h2><p className="mt-1 text-sm text-stone-600">Sort statement transactions into your budgets.</p></div>

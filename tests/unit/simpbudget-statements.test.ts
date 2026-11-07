@@ -89,3 +89,11 @@ test('Chase CSV preserves dates, signs, payments, source references and known bu
   assert.equal(parsed[0].amount,15.25);assert.equal(parsed[0].date,'2026-01-01');assert.equal(parsed[0].sourceFileName,'January.pdf');assert.equal(parsed[0].suggestedSpaceId,'pulse');assert.equal(parsed[0].reviewed,false);
   assert.equal(parsed[1].kind,'card_payment');assert.equal(parsed[1].amount,-50);
 });
+
+test('monthly misc ledger matches actual allocations and excludes drafts, undone, payments and other months', async()=>{
+ const {actualTransactions}=await import('../../src/lib/simpbudget/statements');
+ const data=[statement({transactions:[tx(),tx({id:'split',amount:80,splits:[{spaceId:'personal',amount:30},{spaceId:'pulse',amount:50}]}),tx({id:'refund',amount:-5,kind:'refund'}),tx({id:'payment',kind:'card_payment'}),tx({id:'old',date:'2026-10-01'}),tx({id:'excluded',excluded:true})]}),statement({id:'draft',status:'review'}),statement({id:'undone',status:'undone'})];
+ const before=JSON.stringify(data);const rows=actualTransactions(data,2026,11,'personal');
+ assert.equal(rows.length,3);assert.equal(rows.reduce((s,r)=>s+r.allocatedAmount,0),125);assert.ok(rows.every(r=>r.statementId==='s1'));assert.equal(JSON.stringify(data),before);
+ assert.equal(actualTransactions(data,2026,11,'pulse')[0].allocatedAmount,50);
+});

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
+import { actualTransactions, type StatementImport } from '../lib/simpbudget/statements';
 import StatementWorkspace from '../components/simpbudget/StatementWorkspace';
 import RenameBudgetSpaceModal from '../components/simpbudget/RenameBudgetSpaceModal';
 import {
@@ -547,6 +548,8 @@ const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | n
 };
 
 const SimpBudgetPage: React.FC = () => {
+  const [statementImports,setStatementImports]=useState<StatementImport[]>([]);
+  const [statementRequest,setStatementRequest]=useState<{id:string;sequence:number}|null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authMessage, setAuthMessage] = useState<{ type: MessageTone; text: string } | null>(null);
@@ -605,6 +608,8 @@ const SimpBudgetPage: React.FC = () => {
     (record) => record.year === selectedYear && record.month === selectedMonth
   );
 
+  const importedExpenses=actualTransactions(statementImports,selectedYear,selectedMonth,selectedView);
+  const importedExpenseTotal=importedExpenses.reduce((sum,row)=>sum+Math.round(row.allocatedAmount*100),0)/100;
   const draftTotals = calculateDraftTotals(draft);
   const allTotals = activeSpaces.reduce(
     (accumulator, space) => {
@@ -1471,7 +1476,7 @@ const SimpBudgetPage: React.FC = () => {
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
                   {[
                     { label: 'Recurring', value: '$2,140' },
-                    { label: 'Misc', value: '$680' },
+                    { label: 'Planned misc', value: '$680' },
                     { label: 'Debt', value: '$320' },
                   ].map((item) => (
                     <div key={item.label} className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
@@ -1656,7 +1661,7 @@ const SimpBudgetPage: React.FC = () => {
           </div>
         </header>
 
-        <StatementWorkspace key={user.uid} user={user} spaces={visibleSpaces} year={selectedYear} month={selectedMonth} />
+        <StatementWorkspace key={user.uid} user={user} spaces={visibleSpaces} year={selectedYear} month={selectedMonth} onImportsChange={setStatementImports} statementRequest={statementRequest} />
 
         <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">
@@ -1975,7 +1980,7 @@ const SimpBudgetPage: React.FC = () => {
                             <Receipt className="h-4 w-4 text-pink-600" />
                             Misc Expenses
                           </div>
-                          <div className="mt-1 text-sm text-stone-500">Month-specific expenses for {monthYearLabel(selectedMonth, selectedYear)}.</div>
+                          <div className="mt-1 text-sm text-stone-500">{monthYearLabel(selectedMonth, selectedYear)} · {importedExpenses.length} imported transactions · {formatCurrency(importedExpenseTotal)} actual spending</div>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -2010,10 +2015,11 @@ const SimpBudgetPage: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody>
+                            {importedExpenses.map(expense=><tr key={`imported-${expense.statementId}-${expense.id}`} className="border-t border-stone-200"><td className="whitespace-nowrap px-3 py-3">{expense.date}</td><td className="px-3 py-3"><span className="font-medium">{expense.description}</span><span className="mt-1 block text-xs text-stone-500">Imported{expense.splits.length?' · Split allocation':''}</span></td><td className="px-3 py-3 tabular-nums">{formatCurrency(expense.allocatedAmount)}</td><td className="px-3 py-3 text-xs">{expense.sourceAccountName||'Statement account'}</td><td className="px-3 py-3 text-xs text-stone-500">{expense.category}<span className="mt-1 block">{expense.sourceFileName}</span></td><td className="px-3 py-3"><button className="whitespace-nowrap text-xs underline" onClick={()=>setStatementRequest({id:expense.statementId,sequence:Date.now()})}>View statement</button></td></tr>)}
                             {draft.miscExpenses.length === 0 ? (
                               <tr>
                                 <td colSpan={6} className="px-3 py-8 text-center text-stone-500">
-                                  No misc expenses yet.
+                                  {importedExpenses.length?'No additional planned misc expenses.':'No misc expenses yet.'}
                                 </td>
                               </tr>
                             ) : (
@@ -2149,7 +2155,8 @@ const SimpBudgetPage: React.FC = () => {
                               ['Income', draftTotals.monthlyIncome],
                               ['Recurring', draftTotals.recurringTotal],
                               ['After recurring', draftTotals.afterRecurring],
-                              ['Misc', draftTotals.miscTotal],
+                              ['Planned misc', draftTotals.miscTotal],
+                              ['Imported actuals', importedExpenseTotal],
                               ['After misc', draftTotals.afterMisc],
                               ['Debt', draftTotals.debtPayments],
                               ['Remaining', draftTotals.remaining],
