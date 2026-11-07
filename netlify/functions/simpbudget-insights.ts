@@ -42,5 +42,10 @@ export const handler:Handler=async event=>{
     if(response.status!=='completed'||!response.output_text)throw new RequestError(502,'The AI story did not finish. Local insights remain available.');
     let story:unknown;try{story=JSON.parse(response.output_text);}catch{throw new RequestError(502,'The story could not be read. Local insights remain available.');}
     return reply(200,{...validateInsightStory(story,new Set(input.facts.map(fact=>fact.id))),generatedAt:new Date().toISOString()});
-  }catch(error){if(error instanceof RequestError)return reply(error.status,{error:error.message});return reply(503,{error:'AI stories are temporarily unavailable. Local insights remain available.'});}
+  }catch(error){
+    if(error instanceof RequestError)return reply(error.status,{error:error.message});
+    const code=(error as {code?:string})?.code;
+    if(code==='credit_balance_exhausted'||code==='insufficient_quota')return reply(503,{error:'AI stories are unavailable because the configured OpenAI account has no remaining credits. Local insights remain available.'});
+    return reply(503,{error:'AI stories are temporarily unavailable. Local insights remain available.'});
+  }
 };

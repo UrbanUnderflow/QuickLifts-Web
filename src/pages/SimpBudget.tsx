@@ -1,3 +1,4 @@
+import MonthlyBurn from '../components/simpbudget/MonthlyBurn';
 import SpendingInsights from '../components/simpbudget/SpendingInsights';
 import CPAExportPanel from '../components/simpbudget/CPAExportPanel';
 import CashFlowSummary from '../components/simpbudget/CashFlowSummary';
@@ -662,6 +663,8 @@ const SimpBudgetPage: React.FC = () => {
       remaining: 0,
     }
   );
+
+  const burnRecurring = (selectedView==='all'?activeSpaces:spaces.filter(space=>space.id===selectedView)).flatMap(space=>selectDraftForSpaceMonth(records,space.id,selectedYear,selectedMonth).draft.recurringExpenses);
 
   const displayedSummary=spendingSummary(cashFlow,selectedView==='all'?overviewSpending:monthlyActuals.find(item=>item.space.id===selectedView)?.spending||0,{income:selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome,spending:selectedView==='all'?allTotals.miscTotal:draftTotals.miscTotal},dateView==='month');
 
@@ -1809,6 +1812,7 @@ const SimpBudgetPage: React.FC = () => {
             <>
               <CashFlowSummary {...displayedSummary} onBreakdown={setReceiptBreakdownKind}/>
               <p className="text-xs text-stone-500">Net after spending = total money received − money spent. It includes other receipts and is not your bank balance. Card purchases count as spending; paying the card does not count them again.</p>
+              <MonthlyBurn imports={statementImports} spaceId={selectedView} view={dateView} year={selectedYear} month={selectedMonth} range={dateRange} recurring={burnRecurring} planLabel={`${monthLabel(selectedMonth)} ${selectedYear}`}/>
               <details className="rounded-lg border border-stone-200 bg-white p-4"><summary className="cursor-pointer text-sm font-medium">Bank cash flow · separate view</summary><p className="mt-3 text-sm text-stone-600">Money entering and leaving your recorded bank accounts. Card repayments count here; card purchases do not. Internal transfers and manual monthly entries are excluded. Amounts follow each bank transaction’s budget allocation.</p><dl className="mt-3 grid gap-3 sm:grid-cols-3">{[['Bank money received',cashFlow.totalReceived],['Bank money paid out',cashFlow.outgoing],['Net bank cash flow',cashFlow.net]].map(([label,value])=><div key={label}><dt className="text-sm text-stone-500">{label}</dt><dd className="font-semibold">{formatCurrency(value as number)}</dd></div>)}</dl>{cashFlow.unassigned>0&&<p className="mt-3 text-xs text-amber-800">{cashFlow.unassigned} bank transactions have no budget allocation and appear only in All Budgets cash flow.</p>}</details>
               {dateView==='month'&&<p className="text-sm text-stone-500">Recurring (planned): <strong>{formatCurrency(selectedView==='all'?allTotals.recurringTotal:draftTotals.recurringTotal)}</strong>. Plans are not added to spending until recorded.</p>}
 
