@@ -63,8 +63,8 @@ const renameCode = ts.transpile(source.slice(renameStart, source.indexOf('  cons
 function renameApp(answer, fail = false) {
   const writes = [], messages = [];
   let spaces = [{ id: 'business', name: 'Business', color: 'blue' }, { id: 'personal', name: 'Personal' }];
-  const deps = { user: { uid: 'owner' }, activeSpace: spaces[0], renameInFlightRef: { current: false },
-    window: { prompt: () => answer }, setRenaming: () => {},
+  const deps = { user: { uid: 'owner' }, renameTarget: answer === null ? null : { ...spaces[0], uid: 'owner' }, renameName: answer || '', renameInFlightRef: { current: false },
+    setRenameTarget: () => {}, setRenameError: () => {}, setRenaming: () => {},
     updateDoc: async (ref, value) => { if (fail) throw new Error('offline'); writes.push({ ref, value }); },
     doc: (collection, id) => `${collection}/${id}`, budgetSpacesCollectionRef: uid => `${uid}/budgetSpaces`,
     serverTimestamp: () => 'timestamp', setSpaces: update => { spaces = update(spaces); },

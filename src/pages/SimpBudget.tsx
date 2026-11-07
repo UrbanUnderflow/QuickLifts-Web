@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
+import RenameBudgetSpaceModal from '../components/simpbudget/RenameBudgetSpaceModal';
 import {
   GoogleAuthProvider,
   OAuthProvider,
@@ -698,6 +699,9 @@ const SimpBudgetPage: React.FC = () => {
   const autoMigrationAttemptedRef = useRef(false);
   const renameInFlightRef = useRef(false);
   const [renaming, setRenaming] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<{ id: string; name: string; uid: string } | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
 
   const normalizedUserEmail = user?.email?.toLowerCase() || '';
   const isMigrationOwner = normalizedUserEmail === TREMAINE_OWNER_EMAIL;
@@ -805,6 +809,7 @@ const SimpBudgetPage: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(simpBudgetAuth, async (currentUser) => {
+      setRenameTarget(null);
       setLoadedUserId(null);
       autoMigrationAttemptedRef.current = false;
       setUser(currentUser);
@@ -1129,19 +1134,21 @@ const SimpBudgetPage: React.FC = () => {
   };
 
   const renameBudgetSpace = async () => {
-    if (!user || !activeSpace || renameInFlightRef.current) return;
-    const spaceId = activeSpace.id;
-    const requestedName = window.prompt('Rename Budget Space', activeSpace.name);
-    if (requestedName === null) return;
-    const name = requestedName.trim();
+    if (!user || !renameTarget || renameTarget.uid !== user.uid || renameInFlightRef.current) return;
+    const spaceId = renameTarget.id;
+    const name = renameName.trim();
     if (!name) {
-      setAppMessage({ type: 'error', text: 'Enter a name for this Budget Space.' });
+      setRenameError('Enter a name for this Budget Space.');
       return;
     }
-    if (name === activeSpace.name) return;
+    if (name === renameTarget.name) {
+      setRenameTarget(null);
+      return;
+    }
 
     renameInFlightRef.current = true;
     setRenaming(true);
+    setRenameError(null);
     try {
       // Keep the stable space ID, every month, and any unsaved draft untouched.
       await updateDoc(doc(budgetSpacesCollectionRef(user.uid), spaceId), {
@@ -1151,9 +1158,12 @@ const SimpBudgetPage: React.FC = () => {
       setSpaces((currentSpaces) => currentSpaces.map((space) =>
         space.id === spaceId ? { ...space, name } : space
       ));
+      setRenameTarget(null);
       setAppMessage({ type: 'success', text: `Budget Space renamed to ${name}.` });
     } catch (error) {
-      setAppMessage({ type: 'error', text: readFirestoreError(error, 'Unable to rename this Budget Space. Try again.') });
+      const message = readFirestoreError(error, 'Unable to rename this Budget Space. Try again.');
+      setRenameError(message);
+      setAppMessage({ type: 'error', text: message });
     } finally {
       renameInFlightRef.current = false;
       setRenaming(false);
@@ -2356,7 +2366,12 @@ const SimpBudgetPage: React.FC = () => {
                           <h2 className="text-lg font-semibold text-stone-950">{activeSpace.name}</h2>
                           <button
                             type="button"
-                            onClick={renameBudgetSpace}
+                            onClick={() => {
+                              if (!user) return;
+                              setRenameTarget({ id: activeSpace.id, name: activeSpace.name, uid: user.uid });
+                              setRenameName(activeSpace.name);
+                              setRenameError(null);
+                            }}
                             disabled={renaming}
                             className="mt-1 text-sm font-semibold text-sky-700 hover:text-sky-900 disabled:opacity-50"
                           >
@@ -2445,6 +2460,15 @@ const SimpBudgetPage: React.FC = () => {
           )}
         </div>
       </main>
+      <RenameBudgetSpaceModal
+        open={renameTarget !== null}
+        name={renameName}
+        busy={renaming}
+        error={renameError}
+        onNameChange={(name) => { setRenameName(name); setRenameError(null); }}
+        onClose={() => setRenameTarget(null)}
+        onSave={renameBudgetSpace}
+      />
     </div>
   );
 };
