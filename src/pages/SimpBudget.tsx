@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
+import StatementWorkspace from '../components/simpbudget/StatementWorkspace';
 import RenameBudgetSpaceModal from '../components/simpbudget/RenameBudgetSpaceModal';
 import {
   GoogleAuthProvider,
@@ -22,7 +23,6 @@ import {
   setDoc,
   updateDoc,
 } from 'firebase/firestore';
-import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import {
   ArrowDownToLine,
   Building2,
@@ -30,7 +30,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
-  FileImage,
   Grid2X2,
   Loader2,
   LogOut,
@@ -48,7 +47,6 @@ import { auth as quickLiftsAuth, db as quickLiftsDb } from '../api/firebase/conf
 import {
   simpBudgetAuth,
   simpBudgetDb,
-  simpBudgetStorage,
 } from '../api/firebase/simpBudgetConfig';
 
 type MessageTone = 'success' | 'error' | 'info';
@@ -101,25 +99,6 @@ interface BudgetRecord extends BudgetDraft {
   sourceRecordId?: string;
 }
 
-interface ParsedExpenseImport {
-  date?: string;
-  label?: string;
-  amount?: number | string;
-  paymentMethod?: string;
-  notes?: string;
-}
-
-interface ParseExpenseImportResponse {
-  success?: boolean;
-  error?: string;
-  expenses?: ParsedExpenseImport[];
-  summary?: {
-    parsedCount?: number;
-    newCount?: number;
-    duplicateCount?: number;
-  };
-}
-
 interface FounderBudgetSourceRecord {
   id: string;
   scope: 'business' | 'personal';
@@ -140,9 +119,6 @@ const BUDGETS_SUBCOLLECTION = 'budgets';
 const QUICKLIFTS_FOUNDER_BUDGET_COLLECTION = 'founder-budgets';
 const TREMAINE_OWNER_EMAIL = 'tremaine.grant@gmail.com';
 const MAGIC_LINK_EMAIL_STORAGE_KEY = 'simpbudget.web.pendingMagicEmail';
-const EXPENSE_IMPORT_FUNCTION_ENDPOINT = '/.netlify/functions/founder-budget-parse-expenses';
-const EXPENSE_IMPORT_API_ENDPOINT = '/api/admin/founder-budget/parse-expenses';
-const EXPENSE_IMPORT_IMAGES_PER_REQUEST = 1;
 
 const CURRENT_DATE = new Date();
 const DEFAULT_MONTH = CURRENT_DATE.getMonth() + 1;
@@ -201,7 +177,6 @@ const createLocalId = (prefix: string) =>
 
 const sanitizeMoneyInput = (value: string) => value.replace(/[^0-9.-]/g, '');
 
-const sanitizeFileName = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '-');
 
 const slugify = (value: string) =>
   value
@@ -471,95 +446,6 @@ const cloneRecurringExpenses = (expenses: RecurringExpenseDraft[]) =>
     id: expense.id || `restored-recurring-${index + 1}`,
   }));
 
-const normalizeExpenseLabel = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/https?:\/\//g, ' ')
-    .replace(/www\./g, ' ')
-    .replace(/\b\d{4,}\b/g, ' ')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const labelsLikelyMatch = (left: string, right: string) => {
-  const normalizedLeft = normalizeExpenseLabel(left);
-  const normalizedRight = normalizeExpenseLabel(right);
-
-  if (!normalizedLeft || !normalizedRight) return false;
-  if (normalizedLeft === normalizedRight) return true;
-  if (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)) return true;
-
-  const leftTokens = normalizedLeft.split(' ').filter((token) => token.length > 2);
-  const rightTokens = normalizedRight.split(' ').filter((token) => token.length > 2);
-  if (!leftTokens.length || !rightTokens.length) return false;
-
-  const overlapCount = leftTokens.filter((token) => rightTokens.includes(token)).length;
-  return overlapCount >= Math.max(1, Math.min(leftTokens.length, rightTokens.length) - 1);
-};
-
-const expensesLikelyMatch = (
-  left: Pick<MiscExpenseDraft, 'date' | 'label' | 'amount'>,
-  right: Pick<MiscExpenseDraft, 'date' | 'label' | 'amount'>
-) => {
-  const leftAmount = moneyStringToNumber(left.amount);
-  const rightAmount = moneyStringToNumber(right.amount);
-  if (Math.abs(leftAmount - rightAmount) > 0.009) return false;
-  if (!labelsLikelyMatch(left.label || '', right.label || '')) return false;
-
-  if (left.date && right.date) {
-    return left.date === right.date;
-  }
-
-  return true;
-};
-
-const buildImportedMiscExpenses = (
-  existingExpenses: MiscExpenseDraft[],
-  parsedExpenses: ParsedExpenseImport[]
-) => {
-  const comparisonPool = existingExpenses.map((expense) => ({ ...expense }));
-  const addedExpenses: MiscExpenseDraft[] = [];
-  let duplicateCount = 0;
-
-  parsedExpenses.forEach((expense) => {
-    const label = typeof expense.label === 'string' ? expense.label.trim() : '';
-    const amount = compactMoneyString(expense.amount);
-    const candidate: MiscExpenseDraft = {
-      id: createMiscExpense().id,
-      date: typeof expense.date === 'string' ? expense.date : '',
-      label,
-      amount,
-      paymentMethod: normalizePaymentMethod(expense.paymentMethod),
-      notes: typeof expense.notes === 'string' ? expense.notes.trim() : '',
-    };
-
-    if (!candidate.label || moneyStringToNumber(candidate.amount) === 0) return;
-
-    const isDuplicate = comparisonPool.some((existingExpense) =>
-      expensesLikelyMatch(existingExpense, candidate)
-    );
-    if (isDuplicate) {
-      duplicateCount += 1;
-      return;
-    }
-
-    addedExpenses.push(candidate);
-    comparisonPool.push(candidate);
-  });
-
-  return { addedExpenses, duplicateCount };
-};
-
-const readResponseError = (payload: unknown, fallbackMessage: string) => {
-  if (payload && typeof payload === 'object') {
-    const candidate = payload as Record<string, unknown>;
-    if (typeof candidate.error === 'string' && candidate.error.trim()) return candidate.error;
-    if (typeof candidate.message === 'string' && candidate.message.trim()) return candidate.message;
-  }
-
-  return fallbackMessage;
-};
-
 const readAuthError = (error: unknown, fallbackMessage: string) => {
   const code =
     error && typeof error === 'object' && 'code' in error
@@ -661,7 +547,6 @@ const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | n
 };
 
 const SimpBudgetPage: React.FC = () => {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authMessage, setAuthMessage] = useState<{ type: MessageTone; text: string } | null>(null);
@@ -681,8 +566,6 @@ const SimpBudgetPage: React.FC = () => {
   const [hasPersistedRecord, setHasPersistedRecord] = useState(false);
   const [selectionStatus, setSelectionStatus] = useState('Choose a Budget Space.');
   const [appMessage, setAppMessage] = useState<{ type: MessageTone; text: string } | null>(null);
-  const [importMessage, setImportMessage] = useState<{ type: MessageTone; text: string } | null>(null);
-  const [parsingImport, setParsingImport] = useState(false);
   const [migrationMessage, setMigrationMessage] = useState<{ type: MessageTone; text: string } | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [sourceConnected, setSourceConnected] = useState(false);
@@ -1359,137 +1242,6 @@ const SimpBudgetPage: React.FC = () => {
     }
   };
 
-  const uploadExpenseImportImageToStorage = async (file: File) => {
-    if (!user || selectedView === 'all') throw new Error('Choose a Budget Space before importing.');
-
-    const filePath = `simpbudget-imports/${user.uid}/${selectedView}/${selectedYear}-${String(selectedMonth).padStart(2, '0')}/${Date.now()}-${sanitizeFileName(file.name)}`;
-    const screenshotRef = storageRef(simpBudgetStorage, filePath);
-
-    await uploadBytes(screenshotRef, file, {
-      contentType: file.type || 'image/png',
-    });
-
-    return getDownloadURL(screenshotRef);
-  };
-
-  const requestExpenseImport = async (
-    imageUrls: string[],
-    additionalExistingExpenses: ParsedExpenseImport[] = []
-  ) => {
-    const requestPayload = {
-      imageUrls,
-      targetMonth: selectedMonth,
-      targetYear: selectedYear,
-      existingExpenses: [
-        ...draft.miscExpenses.map((expense) => ({
-          date: expense.date,
-          label: expense.label,
-          amount: moneyStringToNumber(expense.amount),
-          paymentMethod: expense.paymentMethod,
-          notes: expense.notes,
-        })),
-        ...additionalExistingExpenses,
-      ],
-    };
-
-    let lastError: Error | null = null;
-
-    for (const endpoint of [EXPENSE_IMPORT_FUNCTION_ENDPOINT, EXPENSE_IMPORT_API_ENDPOINT]) {
-      try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestPayload),
-        });
-
-        let parsedResponse: ParseExpenseImportResponse;
-        try {
-          parsedResponse = (await response.json()) as ParseExpenseImportResponse;
-        } catch (_error) {
-          parsedResponse = { error: 'Expense import endpoint returned an unreadable response.' };
-        }
-
-        if (response.status === 404) continue;
-        if (!response.ok || !parsedResponse.success) {
-          throw new Error(readResponseError(parsedResponse, 'Unable to parse screenshot expenses.'));
-        }
-
-        return parsedResponse;
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Unable to parse screenshot expenses.');
-      }
-    }
-
-    throw lastError || new Error('Unable to parse screenshot expenses.');
-  };
-
-  const importExpenseScreenshots = async (files: File[]) => {
-    if (!files.length) return;
-    if (selectedView === 'all') {
-      setImportMessage({ type: 'error', text: 'Choose one Budget Space before importing screenshots.' });
-      return;
-    }
-
-    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-    if (!imageFiles.length) {
-      setImportMessage({ type: 'error', text: 'Upload image screenshots for web import.' });
-      return;
-    }
-
-    setParsingImport(true);
-    setImportMessage(null);
-
-    try {
-      const imageUrls = await Promise.all(imageFiles.map((file) => uploadExpenseImportImageToStorage(file)));
-      const parsedExpenses: ParsedExpenseImport[] = [];
-      let apiDuplicateCount = 0;
-
-      for (let index = 0; index < imageUrls.length; index += EXPENSE_IMPORT_IMAGES_PER_REQUEST) {
-        const result = await requestExpenseImport(
-          imageUrls.slice(index, index + EXPENSE_IMPORT_IMAGES_PER_REQUEST),
-          parsedExpenses
-        );
-        const resultExpenses = Array.isArray(result.expenses) ? result.expenses : [];
-        parsedExpenses.push(...resultExpenses);
-        apiDuplicateCount += result.summary?.duplicateCount || 0;
-      }
-
-      let mergeResult = { addedExpenses: [] as MiscExpenseDraft[], duplicateCount: 0 };
-      setDraft((currentDraft) => {
-        mergeResult = buildImportedMiscExpenses(currentDraft.miscExpenses, parsedExpenses);
-        if (!mergeResult.addedExpenses.length) return currentDraft;
-        return {
-          ...currentDraft,
-          miscExpenses: [...currentDraft.miscExpenses, ...mergeResult.addedExpenses],
-        };
-      });
-
-      const totalDuplicateCount = Math.max(apiDuplicateCount, mergeResult.duplicateCount);
-      if (mergeResult.addedExpenses.length > 0) {
-        setImportMessage({
-          type: 'success',
-          text: `Imported ${mergeResult.addedExpenses.length} misc expense${mergeResult.addedExpenses.length === 1 ? '' : 's'}. Skipped ${totalDuplicateCount} duplicate${totalDuplicateCount === 1 ? '' : 's'}.`,
-        });
-      } else {
-        setImportMessage({
-          type: 'info',
-          text:
-            totalDuplicateCount > 0
-              ? 'Everything in that screenshot already exists for this month.'
-              : 'No new expense rows were detected.',
-        });
-      }
-    } catch (error) {
-      console.error('Unable to import expenses:', error);
-      setImportMessage({
-        type: 'error',
-        text: error instanceof Error ? error.message : 'Unable to import screenshot expenses.',
-      });
-    } finally {
-      setParsingImport(false);
-    }
-  };
-
   const renderSpaceCreatePanel = (isFirstSpace: boolean) => (
     <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
       <div className="mb-5 flex items-start justify-between gap-4">
@@ -1904,6 +1656,8 @@ const SimpBudgetPage: React.FC = () => {
           </div>
         </header>
 
+        <StatementWorkspace key={user.uid} user={user} spaces={visibleSpaces} year={selectedYear} month={selectedMonth} />
+
         <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">
             <button
@@ -2223,27 +1977,6 @@ const SimpBudgetPage: React.FC = () => {
                           <div className="mt-1 text-sm text-stone-500">Month-specific expenses for {monthYearLabel(selectedMonth, selectedYear)}.</div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            className="hidden"
-                            onChange={(event) => {
-                              const files = Array.from(event.target.files || []);
-                              event.target.value = '';
-                              importExpenseScreenshots(files);
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={parsingImport}
-                            className={`${pillButtonClassName} border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:border-stone-300`}
-                          >
-                            {parsingImport ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileImage className="h-4 w-4" />}
-                            AI import
-                          </button>
                           <button
                             type="button"
                             onClick={() =>
@@ -2261,7 +1994,6 @@ const SimpBudgetPage: React.FC = () => {
                       </div>
 
                       <div className="p-4">
-                        <MessageBanner message={importMessage} />
                       </div>
 
                       <div className="overflow-x-auto p-3 pt-0">
