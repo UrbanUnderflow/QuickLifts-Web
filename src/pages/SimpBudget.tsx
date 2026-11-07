@@ -1,3 +1,4 @@
+import budgetLayout from '../components/simpbudget/BudgetLayout.module.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import { actualTransactions, type StatementImport } from '../lib/simpbudget/statements';
@@ -1578,7 +1579,7 @@ const SimpBudgetPage: React.FC = () => {
         <title>SimpBudget | Budget Spaces</title>
       </Head>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+      <main className="w-full min-w-0 px-4 py-6 md:px-6 md:py-8 xl:px-8">
         <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-3">
@@ -1873,8 +1874,8 @@ const SimpBudgetPage: React.FC = () => {
                   {renderSpaceCreatePanel(false)}
                 </section>
               ) : activeSpace ? (
-                <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-                  <div className="space-y-5">
+                <section className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,1fr)_340px]">
+                  <div className="min-w-0 space-y-5">
                     <section className="rounded-lg border border-stone-200 bg-white">
                       <div className="flex flex-col gap-3 border-b border-stone-200 px-5 py-4 md:flex-row md:items-center md:justify-between">
                         <div>
@@ -2004,8 +2005,8 @@ const SimpBudgetPage: React.FC = () => {
                       <div className="p-4">
                       </div>
 
-                      <div className="overflow-x-auto p-3 pt-0">
-                        <table className="min-w-[920px] text-sm">
+                      <div className="max-w-full overflow-x-auto p-3 pt-0" tabIndex={0} role="region" aria-label="Misc expenses">
+                        <table className={`${budgetLayout.transactions} text-sm`}>
                           <thead>
                             <tr className="text-left text-xs uppercase tracking-[0.14em] text-stone-500">
                               <th className="w-36 px-3 py-3 font-semibold">Date</th>
@@ -2017,7 +2018,7 @@ const SimpBudgetPage: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {importedExpenses.map(expense=><tr key={`imported-${expense.statementId}-${expense.id}`} className="border-t border-stone-200"><td className="whitespace-nowrap px-3 py-3">{expense.date}</td><td className="px-3 py-3"><span className="font-medium">{expense.description}</span><span className="mt-1 block text-xs text-stone-500">Imported{expense.splits.length?' · Split allocation':''}</span></td><td className="px-3 py-3 tabular-nums">{formatCurrency(expense.allocatedAmount)}</td><td className="px-3 py-3 text-xs">{expense.sourceAccountName||'Statement account'}</td><td className="px-3 py-3 text-xs text-stone-500">{expense.category}<span className="mt-1 block">{expense.sourceFileName}</span></td><td className="px-3 py-3"><button className="whitespace-nowrap text-xs underline" onClick={()=>setTransactionDetail({...expense,sourceType:expense.sourceType||(/\.(pdf|png|jpe?g|webp)$/i.test(expense.sourceFileName)?'document':'csv'),budget:activeSpace?.name,account:expense.sourceAccountName,splits:expense.splits.map(a=>({name:spaces.find(s=>s.id===a.spaceId)?.name||'Unknown budget',amount:a.amount}))})}>Details</button></td></tr>)}
+                            {importedExpenses.map(expense=><tr key={`imported-${expense.statementId}-${expense.id}`} className="border-t border-stone-200"><td data-label="Date" className="whitespace-nowrap px-3 py-3">{expense.date}</td><td data-label="Expense" className="px-3 py-3"><span className="font-medium">{expense.description}</span><span className="mt-1 block text-xs text-stone-500">Imported{expense.splits.length?' · Split allocation':''}</span></td><td data-label="Amount" className="whitespace-nowrap px-3 py-3 tabular-nums">{formatCurrency(expense.allocatedAmount)}</td><td data-label="Source / payment" className="px-3 py-3 text-xs">{expense.sourceAccountName||'Statement account'}</td><td data-label="Notes" className="px-3 py-3 text-xs text-stone-500">{expense.category}<span className="mt-1 block">{expense.sourceFileName}</span></td><td data-label="Actions" className="px-3 py-3"><button className="whitespace-nowrap text-xs underline" onClick={()=>setTransactionDetail({...expense,sourceType:expense.sourceType||(/\.(pdf|png|jpe?g|webp)$/i.test(expense.sourceFileName)?'document':'csv'),budget:activeSpace?.name,account:expense.sourceAccountName,splits:expense.splits.map(a=>({name:spaces.find(s=>s.id===a.spaceId)?.name||'Unknown budget',amount:a.amount}))})}>Details</button></td></tr>)}
                             {draft.miscExpenses.length === 0 ? (
                               <tr>
                                 <td colSpan={6} className="px-3 py-8 text-center text-stone-500">
@@ -2027,7 +2028,7 @@ const SimpBudgetPage: React.FC = () => {
                             ) : (
                               draft.miscExpenses.map((expense) => (
                                 <tr key={expense.id} className="border-t border-stone-200">
-                                  <td className="px-3 py-3">
+                                  <td data-label="Date" className="px-3 py-3">
                                     <input
                                       value={expense.date}
                                       onChange={(event) => updateMiscExpense(expense.id, 'date', event.target.value)}
@@ -2035,7 +2036,7 @@ const SimpBudgetPage: React.FC = () => {
                                       className={fieldClassName}
                                     />
                                   </td>
-                                  <td className="px-3 py-3">
+                                  <td data-label="Expense" className="px-3 py-3">
                                     <input
                                       value={expense.label}
                                       onChange={(event) => updateMiscExpense(expense.id, 'label', event.target.value)}
@@ -2043,7 +2044,7 @@ const SimpBudgetPage: React.FC = () => {
                                       className={fieldClassName}
                                     />
                                   </td>
-                                  <td className="px-3 py-3">
+                                  <td data-label="Amount" className="px-3 py-3">
                                     <input
                                       value={expense.amount}
                                       onChange={(event) => updateMiscExpense(expense.id, 'amount', event.target.value)}
@@ -2052,7 +2053,7 @@ const SimpBudgetPage: React.FC = () => {
                                       className={fieldClassName}
                                     />
                                   </td>
-                                  <td className="px-3 py-3">
+                                  <td data-label="Source / payment" className="px-3 py-3">
                                     <select
                                       value={expense.paymentMethod}
                                       onChange={(event) => updateMiscExpense(expense.id, 'paymentMethod', event.target.value)}
@@ -2065,7 +2066,7 @@ const SimpBudgetPage: React.FC = () => {
                                       ))}
                                     </select>
                                   </td>
-                                  <td className="px-3 py-3">
+                                  <td data-label="Notes" className="px-3 py-3">
                                     <input
                                       value={expense.notes}
                                       onChange={(event) => updateMiscExpense(expense.id, 'notes', event.target.value)}
@@ -2073,7 +2074,7 @@ const SimpBudgetPage: React.FC = () => {
                                       className={fieldClassName}
                                     />
                                   </td>
-                                  <td className="px-3 py-3 text-right">
+                                  <td data-label="Actions" className="px-3 py-3 text-right">
                                     <button className="mb-2 text-xs underline" onClick={()=>setTransactionDetail({date:expense.date,description:expense.label,amount:moneyStringToNumber(expense.amount),budget:activeSpace?.name,account:expense.paymentMethod,sourceType:'self_reported',notes:expense.notes})}>Details</button>
                                     <button
                                       type="button"
