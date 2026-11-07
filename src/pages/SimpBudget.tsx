@@ -1,3 +1,4 @@
+import RunwayScenarios from '../components/simpbudget/RunwayScenarios';
 import MonthlyBurn from '../components/simpbudget/MonthlyBurn';
 import SpendingInsights from '../components/simpbudget/SpendingInsights';
 import CPAExportPanel from '../components/simpbudget/CPAExportPanel';
@@ -561,6 +562,7 @@ const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | n
 
 const SimpBudgetPage: React.FC = () => {
   const [insightsOpen,setInsightsOpen]=useState(false);
+  const [runwayOpen,setRunwayOpen]=useState(false);
   const [transactionDetail,setTransactionDetail]=useState<TransactionDetail|null>(null);
   const [statementAccounts,setStatementAccounts]=useState<Account[]>([]);
   const [receiptBreakdownKind,setReceiptBreakdownKind]=useState<'total'|'earned'|'other'|null>(null);
@@ -1627,6 +1629,7 @@ const SimpBudgetPage: React.FC = () => {
           <div className="flex flex-col items-start gap-3 lg:items-end">
             <div className="flex flex-wrap items-center gap-2">
               <button className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-medium" onClick={()=>setInsightsOpen(true)}>Insights</button>
+              <button className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-medium" onClick={()=>setRunwayOpen(true)}>Runway</button>
               <CPAExportPanel user={user} year={selectedYear} imports={statementImports} accounts={statementAccounts} spaces={spaces.map(({id,name})=>({id,name}))}/>
             <AuditNotifications uid={user.uid} imports={statementImports} recurring={recurringNotifications} recurringPeriod={`${selectedYear}-${String(selectedMonth).padStart(2,'0')}`} onReviewRecurring={id=>{if(!confirmUnsavedNavigation())return false;setSelectedView(id);setDateView('month');return true;}} onOpenSource={id=>setStatementRequest({id,sequence:Date.now()})}/>
             </div>
@@ -2206,6 +2209,7 @@ const SimpBudgetPage: React.FC = () => {
           )}
         </div>
       </main>
+      <RunwayScenarios open={runwayOpen} onClose={()=>setRunwayOpen(false)} imports={statementImports} accounts={statementAccounts} spaces={activeSpaces.map(({id,name})=>({id,name}))} planLabel={`${monthLabel(DEFAULT_MONTH)} ${DEFAULT_YEAR}`} recurringBySpace={Object.fromEntries(activeSpaces.map(space=>[space.id,selectDraftForSpaceMonth(records,space.id,DEFAULT_YEAR,DEFAULT_MONTH).draft.recurringExpenses]))}/>
       <SpendingInsights user={user} open={insightsOpen} onClose={()=>setInsightsOpen(false)} imports={statementImports} accounts={statementAccounts} spaces={spaces.map(({id,name})=>({id,name}))} range={dateRange} onOpenSource={id=>{setInsightsOpen(false);setStatementRequest({id,sequence:Date.now()});}}/>
       <ReceiptBreakdown open={receiptBreakdownKind!==null} kind={receiptBreakdownKind||'other'} manualIncome={receiptBreakdownKind!=='other'&&dateView==='month'?(selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome):0} onClose={()=>setReceiptBreakdownKind(null)} rows={receiptBreakdownKind==='total'?cashFlow.receiptRows:receiptBreakdownKind==='earned'?cashFlow.earnedRows:cashFlow.otherRows} period={dateRange.label} budget={selectedView==='all'?'All Budgets':activeSpace?.name||'Selected budget'} onDetails={row=>{setReceiptBreakdownKind(null);setTransactionDetail({...row,allocatedAmount:-row.allocatedAmount,sourceType:row.sourceType||'document',account:row.sourceAccountName,budget:spaces.find(space=>space.id===row.spaceId)?.name,splits:row.splits.map(split=>({name:spaces.find(space=>space.id===split.spaceId)?.name||'Unknown budget',amount:split.amount}))});}}/>
       <TransactionDetails detail={transactionDetail} onClose={()=>setTransactionDetail(null)} onOpenSource={id=>{setTransactionDetail(null);setStatementRequest({id,sequence:Date.now()});}}/>
