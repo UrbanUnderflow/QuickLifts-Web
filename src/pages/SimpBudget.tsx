@@ -16,8 +16,10 @@ import {
   collection,
   doc,
   getDocs,
+  runTransaction,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import {
@@ -667,6 +669,7 @@ const SimpBudgetPage: React.FC = () => {
   const [spaces, setSpaces] = useState<BudgetSpace[]>([]);
   const [records, setRecords] = useState<BudgetRecord[]>([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [loadedUserId, setLoadedUserId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [selectedView, setSelectedView] = useState<BudgetView>('all');
   const [selectedMonth, setSelectedMonth] = useState(DEFAULT_MONTH);
@@ -693,6 +696,8 @@ const SimpBudgetPage: React.FC = () => {
   const [lastDeletedRecurringExpense, setLastDeletedRecurringExpense] =
     useState<RecurringExpenseDraft | null>(null);
   const autoMigrationAttemptedRef = useRef(false);
+  const renameInFlightRef = useRef(false);
+  const [renaming, setRenaming] = useState(false);
 
   const normalizedUserEmail = user?.email?.toLowerCase() || '';
   const isMigrationOwner = normalizedUserEmail === TREMAINE_OWNER_EMAIL;
@@ -752,7 +757,10 @@ const SimpBudgetPage: React.FC = () => {
     collection(simpBudgetDb, SIMPBUDGET_USERS_COLLECTION, uid, BUDGETS_SUBCOLLECTION);
 
   const loadSimpBudgetData = async (uid: string, mode: 'initial' | 'refresh' = 'initial') => {
-    if (mode === 'initial') setLoadingData(true);
+    if (mode === 'initial') {
+      setLoadedUserId(null);
+      setLoadingData(true);
+    }
 
     try {
       const [spaceSnapshot, budgetSnapshot] = await Promise.all([
@@ -777,6 +785,7 @@ const SimpBudgetPage: React.FC = () => {
 
       setSpaces(loadedSpaces);
       setRecords(loadedRecords);
+      setLoadedUserId(uid);
       setAppMessage(null);
 
       setSelectedView((currentView) => {
@@ -796,6 +805,8 @@ const SimpBudgetPage: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(simpBudgetAuth, async (currentUser) => {
+      setLoadedUserId(null);
+      autoMigrationAttemptedRef.current = false;
       setUser(currentUser);
       setAuthReady(true);
 
@@ -1117,6 +1128,38 @@ const SimpBudgetPage: React.FC = () => {
     }
   };
 
+  const renameBudgetSpace = async () => {
+    if (!user || !activeSpace || renameInFlightRef.current) return;
+    const spaceId = activeSpace.id;
+    const requestedName = window.prompt('Rename Budget Space', activeSpace.name);
+    if (requestedName === null) return;
+    const name = requestedName.trim();
+    if (!name) {
+      setAppMessage({ type: 'error', text: 'Enter a name for this Budget Space.' });
+      return;
+    }
+    if (name === activeSpace.name) return;
+
+    renameInFlightRef.current = true;
+    setRenaming(true);
+    try {
+      // Keep the stable space ID, every month, and any unsaved draft untouched.
+      await updateDoc(doc(budgetSpacesCollectionRef(user.uid), spaceId), {
+        name,
+        updatedAt: serverTimestamp(),
+      });
+      setSpaces((currentSpaces) => currentSpaces.map((space) =>
+        space.id === spaceId ? { ...space, name } : space
+      ));
+      setAppMessage({ type: 'success', text: `Budget Space renamed to ${name}.` });
+    } catch (error) {
+      setAppMessage({ type: 'error', text: readFirestoreError(error, 'Unable to rename this Budget Space. Try again.') });
+    } finally {
+      renameInFlightRef.current = false;
+      setRenaming(false);
+    }
+  };
+
   const migrateFounderBudgetData = async () => {
     if (!user || !isMigrationOwner) return;
     if (!quickLiftsAuth.currentUser) {
@@ -1144,9 +1187,12 @@ const SimpBudgetPage: React.FC = () => {
       const scopes = Array.from(new Set(sourceRecords.map((record) => record.scope)));
       await Promise.all(
         scopes.map((scope, index) =>
-          setDoc(
-            doc(budgetSpacesCollectionRef(user.uid), scope),
-            {
+          runTransaction(simpBudgetDb, async (transaction) => {
+            const spaceRef = doc(budgetSpacesCollectionRef(user.uid), scope);
+            const existingSpace = await transaction.get(spaceRef);
+            // Importing months must never reset a renamed or customized space.
+            if (existingSpace.exists()) return;
+            transaction.set(spaceRef, {
               name: scope === 'business' ? 'Business' : 'Personal',
               description:
                 scope === 'business'
@@ -1162,9 +1208,8 @@ const SimpBudgetPage: React.FC = () => {
               migratedAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
               createdAt: serverTimestamp(),
-            },
-            { merge: true }
-          )
+            });
+          })
         )
       );
 
@@ -1222,13 +1267,14 @@ const SimpBudgetPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!user || !isMigrationOwner || !sourceConnected || loadingData || migrating) return;
+    // Empty initial state (or a failed load) is not evidence of a new account.
+    if (!user || loadedUserId !== user.uid || !isMigrationOwner || !sourceConnected || loadingData || migrating) return;
     if (spaces.length > 0 || records.length > 0) return;
     if (autoMigrationAttemptedRef.current) return;
 
     autoMigrationAttemptedRef.current = true;
     migrateFounderBudgetData();
-  }, [isMigrationOwner, loadingData, migrating, records.length, sourceConnected, spaces.length, user]);
+  }, [isMigrationOwner, loadedUserId, loadingData, migrating, records.length, sourceConnected, spaces.length, user]);
 
   const updateDraftField = (field: 'monthlyIncome' | 'debtPayments' | 'notes', value: string) => {
     setDraft((currentDraft) => ({
@@ -2308,6 +2354,14 @@ const SimpBudgetPage: React.FC = () => {
                         </span>
                         <div>
                           <h2 className="text-lg font-semibold text-stone-950">{activeSpace.name}</h2>
+                          <button
+                            type="button"
+                            onClick={renameBudgetSpace}
+                            disabled={renaming}
+                            className="mt-1 text-sm font-semibold text-sky-700 hover:text-sky-900 disabled:opacity-50"
+                          >
+                            {renaming ? 'Renaming…' : 'Rename Budget Space'}
+                          </button>
                           <p className="text-sm text-stone-500">
                             {hasPersistedRecord ? 'Saved month' : 'Draft month'} · {hasUnsavedChanges ? 'Unsaved' : 'Saved'}
                           </p>
