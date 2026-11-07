@@ -1,9 +1,10 @@
+import { receiptLabels, type ReceiptType } from '../../lib/simpbudget/cashFlow';
 import React from 'react';
 import { Dialog, DialogPanel, DialogTitle, Description } from '@headlessui/react';
 
 export type TransactionDetail = {
   date: string; description: string; amount: number; allocatedAmount?: number;
-  category?: string; kind?: string; budget?: string; account?: string;
+  receiptType?:ReceiptType; category?: string; kind?: string; budget?: string; account?: string;
   sourceType: 'document'|'csv'|'self_reported'; sourceFileName?: string; sourceRow?: string|number;
   statementId?: string; notes?: string; splits?: {name:string;amount:number}[];
 };
@@ -21,6 +22,7 @@ export default function TransactionDetails({detail,onClose,onOpenSource}:{detail
         ...(detail.sourceFileName?[['Source document',detail.sourceFileName]]:[]),
         ...(detail.sourceRow?[['Source location',String(detail.sourceRow)]]:[]),
         ...(detail.kind?[['Transaction type',detail.kind.replace(/_/g,' ')]]:[]),
+        ...(detail.receiptType?[['Money received',receiptLabels[detail.receiptType]]]:[]),
         ...(detail.notes?[['Notes',detail.notes]]:[]),
       ].map(([label,value])=><React.Fragment key={label}><dt className="text-stone-500">{label}</dt><dd className="break-words font-medium">{value}</dd></React.Fragment>)}</dl>
       {!!detail.splits?.length&&<div className="mb-5 rounded-lg bg-stone-50 p-3 text-sm"><p className="mb-2 font-semibold">Budget split</p>{detail.splits.map((s,i)=><p key={i}>{s.name}: {money(s.amount)}</p>)}</div>}

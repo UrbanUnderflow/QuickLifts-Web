@@ -1,3 +1,6 @@
+import CashFlowSummary from '../components/simpbudget/CashFlowSummary';
+import { bankCashFlow } from '../lib/simpbudget/cashFlow';
+import ReceiptBreakdown from '../components/simpbudget/ReceiptBreakdown';
 import AuditNotifications from '../components/simpbudget/AuditNotifications';
 import { dateViewRange, type DateView } from '../lib/simpbudget/dateViews';
 import { validateRecurringMonth } from '../lib/simpbudget/recurringValidation';
@@ -5,7 +8,7 @@ import { recurringSuggestions } from '../lib/simpbudget/recurringSuggestions';
 import budgetLayout from '../components/simpbudget/BudgetLayout.module.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
-import { actualTransactions, validateTransaction, type StatementImport } from '../lib/simpbudget/statements';
+import { actualTransactions, validateTransaction, type StatementImport, type Account } from '../lib/simpbudget/statements';
 import TransactionDetails, { type TransactionDetail } from '../components/simpbudget/TransactionDetails';
 import StatementWorkspace from '../components/simpbudget/StatementWorkspace';
 import RenameBudgetSpaceModal from '../components/simpbudget/RenameBudgetSpaceModal';
@@ -555,6 +558,8 @@ const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | n
 
 const SimpBudgetPage: React.FC = () => {
   const [transactionDetail,setTransactionDetail]=useState<TransactionDetail|null>(null);
+  const [statementAccounts,setStatementAccounts]=useState<Account[]>([]);
+  const [receiptBreakdownOpen,setReceiptBreakdownOpen]=useState(false);
   const [statementImports,setStatementImports]=useState<StatementImport[]>([]);
   const [statementRequest,setStatementRequest]=useState<{id:string;sequence:number}|null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -628,8 +633,8 @@ const SimpBudgetPage: React.FC = () => {
     return {space, expenses, income, spending:expenses.reduce((sum,row)=>sum+Math.round(row.allocatedAmount*100),0)/100};
   });
   const overviewExpenses = monthlyActuals.flatMap(item => item.expenses.map(row => ({...row,budgetName:item.space.name,budgetId:item.space.id}))).sort((a,b)=>b.date.localeCompare(a.date));
-  const overviewIncome = monthlyActuals.reduce((sum,item)=>sum+Math.round(item.income*100),0)/100;
   const overviewSpending = monthlyActuals.reduce((sum,item)=>sum+Math.round(item.spending*100),0)/100;
+  const cashFlow=bankCashFlow(statementImports,statementAccounts,dateRange,selectedView);
   const importedExpenses=actualTransactions(statementImports,selectedYear,selectedMonth,selectedView);
   const importedExpenseTotal=importedExpenses.reduce((sum,row)=>sum+Math.round(row.allocatedAmount*100),0)/100;
   const draftTotals = calculateDraftTotals(draft);
@@ -1688,7 +1693,7 @@ const SimpBudgetPage: React.FC = () => {
           </div>
         </header>
 
-        <StatementWorkspace key={user.uid} user={user} spaces={visibleSpaces} year={selectedYear} month={selectedMonth} dateRange={dateRange} onImportsChange={setStatementImports} statementRequest={statementRequest} />
+        <StatementWorkspace key={user.uid} user={user} spaces={visibleSpaces} year={selectedYear} month={selectedMonth} dateRange={dateRange} onImportsChange={setStatementImports} onAccountsChange={setStatementAccounts} statementRequest={statementRequest} />
 
         <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">
@@ -1793,24 +1798,10 @@ const SimpBudgetPage: React.FC = () => {
             </>
           ) : (
             <>
-              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {[
-                  { label: 'Income', value: isOverview ? overviewIncome+(dateView==='month'?allTotals.monthlyIncome:0) : (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome, color: 'text-emerald-600' },
-                  { label: 'Recurring (planned)', value: isOverview ? allTotals.recurringTotal : draftTotals.recurringTotal, color: 'text-sky-600' },
-                  { label: 'Misc', value: isOverview ? overviewSpending+(dateView==='month'?allTotals.miscTotal:0) : importedExpenseTotal+draftTotals.miscTotal, color: 'text-pink-600' },
-                  { label: 'Net', value: isOverview ? overviewIncome+(dateView==='month'?allTotals.monthlyIncome:0)-overviewSpending-(dateView==='month'?allTotals.miscTotal:0) : (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome-importedExpenseTotal-draftTotals.miscTotal, color: 'text-amber-600' },
-                ].filter(metric=>dateView==='month'||metric.label!=='Recurring (planned)').map((metric) => (
-                  <div key={metric.label} className="rounded-lg border border-stone-200 bg-white p-4">
-                    <div className={`mb-3 ${metric.color}`}>
-                      <CircleDollarSign className="h-5 w-5" />
-                    </div>
-                    <div className="text-sm text-stone-500">{metric.label}</div>
-                    <div className="mt-1 text-2xl font-semibold text-stone-950">{formatCurrency(metric.value)}</div>
-                  </div>
-                ))}
-              </section>
-
-              <p className="text-xs text-stone-500">Net is recorded income minus recorded spending. Recurring plans, transfers and financing are excluded. Enter additional income and misc only when they are not already imported.</p>
+              <CashFlowSummary received={cashFlow.totalReceived+(dateView==='month'?(selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome):0)} earned={cashFlow.earned+(dateView==='month'?(selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome):0)} other={cashFlow.other} net={cashFlow.net} onOther={()=>setReceiptBreakdownOpen(true)}/>
+              <p className="text-xs text-stone-500">Net cash flow is received minus paid out in recorded bank activity, not your bank balance. Card repayments count here; credit-card purchases appear in spending instead. Internal transfers, including reimbursements between your own accounts, and monthly manual entries are excluded from cash flow. Cash flow follows each bank transaction’s budget allocation, not the categories of purchases paid by a card bill. Earned income includes additional manual income in Month view. Receipt categories do not determine tax treatment.</p>
+              {cashFlow.unassigned>0&&<p className="text-xs text-amber-800">{cashFlow.unassigned} bank transactions have no budget allocation. They appear only in All Budgets cash flow.</p>}
+              <div className="flex flex-wrap gap-6 rounded-lg border border-stone-200 bg-white p-4 text-sm"><span>Misc spending <strong>{formatCurrency(isOverview?overviewSpending+(dateView==='month'?allTotals.miscTotal:0):importedExpenseTotal+draftTotals.miscTotal)}</strong></span>{dateView==='month'&&<span>Recurring (planned) <strong>{formatCurrency(selectedView==='all'?allTotals.recurringTotal:draftTotals.recurringTotal)}</strong></span>}</div>
 
               {isOverview ? (
                 <section className="space-y-4">
@@ -1838,7 +1829,7 @@ const SimpBudgetPage: React.FC = () => {
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div><div className="text-stone-500">Actual income</div><div className="font-semibold">{formatCurrency((monthlyActuals.find(item=>item.space.id===space.id)?.income||0)+(dateView==='month'?totals.monthlyIncome:0))}</div></div>
+                            <div><div className="text-stone-500">Money received</div><div className="font-semibold">{formatCurrency(bankCashFlow(statementImports,statementAccounts,dateRange,space.id).totalReceived+(dateView==='month'?totals.monthlyIncome:0))}</div></div><div><div className="text-stone-500">Net cash flow</div><div className="font-semibold">{formatCurrency(bankCashFlow(statementImports,statementAccounts,dateRange,space.id).net)}</div></div>
                             {dateView==='month'&&<div><div className="text-stone-500">Recurring (planned)</div><div className="font-semibold">{formatCurrency(totals.recurringTotal)}</div></div>}
                           </div>
                         </button>
@@ -2154,11 +2145,13 @@ const SimpBudgetPage: React.FC = () => {
                         <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
                           <div className="space-y-3 text-sm">
                             {[
-                              ['Income', (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome],
+                              ['Total money received', cashFlow.totalReceived+draftTotals.monthlyIncome],
+                              ['Earned income', cashFlow.earned+draftTotals.monthlyIncome],
+                              ['Other money received', cashFlow.other],
                               ['Recurring (planned)', draftTotals.recurringTotal],
                               ['Misc', draftTotals.miscTotal+importedExpenseTotal],
                               ['Debt', draftTotals.debtPayments],
-                              ['Net', (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome-importedExpenseTotal-draftTotals.miscTotal],
+                              ['Net cash flow', cashFlow.net],
                             ].map(([label, value]) => (
                               <div key={label} className="flex items-center justify-between gap-4">
                                 <span className="text-stone-500">{label}</span>
@@ -2199,6 +2192,7 @@ const SimpBudgetPage: React.FC = () => {
           )}
         </div>
       </main>
+      <ReceiptBreakdown open={receiptBreakdownOpen} onClose={()=>setReceiptBreakdownOpen(false)} rows={cashFlow.otherRows} period={dateRange.label} budget={selectedView==='all'?'All Budgets':activeSpace?.name||'Selected budget'} onDetails={row=>{setReceiptBreakdownOpen(false);setTransactionDetail({...row,sourceType:row.sourceType||'document',account:row.sourceAccountName,budget:spaces.find(space=>space.id===row.spaceId)?.name,splits:row.splits.map(split=>({name:spaces.find(space=>space.id===split.spaceId)?.name||'Unknown budget',amount:split.amount}))});}}/>
       <TransactionDetails detail={transactionDetail} onClose={()=>setTransactionDetail(null)} onOpenSource={id=>{setTransactionDetail(null);setStatementRequest({id,sequence:Date.now()});}}/>
       <RenameBudgetSpaceModal
         open={renameTarget !== null}

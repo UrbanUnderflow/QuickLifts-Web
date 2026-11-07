@@ -5,6 +5,9 @@ export interface Rule { id: string; contains: string; spaceId: string }
 export interface StatementTransaction {
   sourceAccountId?: string; sourceAccountName?: string; sourceFileName?: string; sourceImportId?: string;
   sourceType?: 'document'|'csv';
+  sourceAccountType?: 'bank'|'card';
+  receiptType?: 'earned'|'tax_refund'|'insurance'|'investment'|'retirement'|'reimbursement'|'prize'|'bonus'|'financing'|'other';
+  cashFlowExcluded?: boolean;
   category?: string; notes?: string; categoryAuditDismissed?: string;
   id: string; date: string; description: string; amount: number; kind: TransactionKind;
   spaceId: string; suggestedSpaceId?: string; reason: string; sourceRow: number | string;
@@ -146,8 +149,8 @@ export function markDuplicates(imports: StatementImport[], newImport: StatementI
 }
 
 /** Keep account/file provenance on every row, including after batch sorting or splitting. */
-export function withStatementSource(item: StatementImport, accountName: string): StatementImport {
-  return {...item, transactions:item.transactions.map(tx=>({...tx, sourceAccountId:item.accountId,
+export function withStatementSource(item: StatementImport, accountName: string, accountType?: Account['type']): StatementImport {
+  return {...item, transactions:item.transactions.map(tx=>({...tx, ...(accountType?{sourceAccountType:accountType}:{}), sourceAccountId:item.accountId,
     sourceType:tx.sourceType || (/\.(pdf|png|jpe?g|webp)$/i.test(tx.sourceFileName||item.fileName)?'document':'csv'),
     sourceAccountName:accountName, sourceFileName:tx.sourceFileName || item.fileName, sourceImportId:item.id}))};
 }
