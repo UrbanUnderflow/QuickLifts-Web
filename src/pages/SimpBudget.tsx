@@ -1478,7 +1478,7 @@ const SimpBudgetPage: React.FC = () => {
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
                   {[
                     { label: 'Recurring', value: '$2,140' },
-                    { label: 'Planned misc', value: '$680' },
+                    { label: 'Misc', value: '$680' },
                     { label: 'Debt', value: '$320' },
                   ].map((item) => (
                     <div key={item.label} className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
@@ -1808,7 +1808,7 @@ const SimpBudgetPage: React.FC = () => {
                 {[
                   { label: 'Income', value: selectedView === 'all' ? allTotals.monthlyIncome : draftTotals.monthlyIncome, color: 'text-emerald-600' },
                   { label: 'Recurring', value: selectedView === 'all' ? allTotals.recurringTotal : draftTotals.recurringTotal, color: 'text-sky-600' },
-                  { label: 'Misc', value: selectedView === 'all' ? allTotals.miscTotal : draftTotals.miscTotal, color: 'text-pink-600' },
+                  { label: 'Planned misc', value: selectedView === 'all' ? allTotals.miscTotal : draftTotals.miscTotal, color: 'text-pink-600' },
                   { label: 'Remaining', value: selectedView === 'all' ? allTotals.remaining : draftTotals.remaining, color: 'text-amber-600' },
                 ].map((metric) => (
                   <div key={metric.label} className="rounded-lg border border-stone-200 bg-white p-4">
