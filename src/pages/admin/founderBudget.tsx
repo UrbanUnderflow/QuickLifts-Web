@@ -975,10 +975,13 @@ const FounderBudgetAdminPage: React.FC = () => {
     requestPayload: ReturnType<typeof buildExpenseImportRequestPayload>,
     options?: { allowMissing?: boolean }
   ) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('Sign in again to use screenshot import.');
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${await currentUser.getIdToken()}`,
       },
       body: JSON.stringify(requestPayload),
     });

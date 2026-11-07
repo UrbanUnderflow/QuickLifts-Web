@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import OpenAI from 'openai';
+import { requireAdminRequest } from '../_auth';
 
 const PAYMENT_METHOD_OPTIONS = [
   'Discover',
@@ -135,11 +136,13 @@ const normalizeParsedExpense = (value: unknown): ParsedExpense | null => {
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
+    if (!await requireAdminRequest(req)) return res.status(401).json({ error: 'Administrator sign-in required.' });
     const {
       imageUrls = [],
       existingExpenses = [],
@@ -278,10 +281,9 @@ Return JSON only in this exact shape:
             : duplicateCount,
       },
     });
-  } catch (error) {
-    console.error('[FounderBudget] Failed to parse screenshot expenses:', error);
+  } catch {
     return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Failed to parse founder budget screenshot expenses.',
+      error: 'Failed to parse founder budget screenshot expenses. Please retry.',
     });
   }
 }

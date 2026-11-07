@@ -1,6 +1,7 @@
 import type { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
 import { resolveOpenAIApiKey } from './utils/resolveOpenAIApiKey';
+import { admin, getFirebaseAdminApp } from './config/firebase';
 
 const PAYMENT_METHOD_OPTIONS = [
   'Discover',
@@ -43,6 +44,7 @@ const responseHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Content-Type': 'application/json',
+  'Cache-Control': 'no-store',
 };
 
 const normalizePaymentMethod = (value?: string) =>
@@ -108,6 +110,7 @@ const cleanJsonResponse = (value: string) =>
 const parseModelResponse = (value: string) => {
   const cleaned = cleanJsonResponse(value);
 
+
   try {
     return JSON.parse(cleaned);
   } catch (_error) {
@@ -148,6 +151,18 @@ export const handler: Handler = async (event) => {
       headers: responseHeaders,
       body: JSON.stringify({ error: 'Method Not Allowed' }),
     };
+  }
+
+  const token = (event.headers.authorization || event.headers.Authorization || '').match(/^Bearer (\S+)$/)?.[1];
+  if (!token) return { statusCode: 401, headers: responseHeaders, body: JSON.stringify({ error: 'Administrator sign-in required.' }) };
+  try {
+    const app = getFirebaseAdminApp(event);
+    const identity = await admin.auth(app).verifyIdToken(token, true);
+    if (!identity.email || !(await admin.firestore(app).collection('admin').doc(identity.email).get()).exists) {
+      return { statusCode: 403, headers: responseHeaders, body: JSON.stringify({ error: 'Administrator access required.' }) };
+    }
+  } catch {
+    return { statusCode: 401, headers: responseHeaders, body: JSON.stringify({ error: 'Unable to verify administrator sign-in.' }) };
   }
 
   try {
@@ -301,13 +316,12 @@ Return JSON only in this exact shape:
         },
       }),
     };
-  } catch (error) {
-    console.error('[FounderBudget Netlify Function] Failed to parse screenshot expenses:', error);
+  } catch {
     return {
       statusCode: 500,
       headers: responseHeaders,
       body: JSON.stringify({
-        error: error instanceof Error ? error.message : 'Failed to parse founder budget screenshot expenses.',
+        error: 'Failed to parse founder budget screenshot expenses. Please retry.',
       }),
     };
   }
