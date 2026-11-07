@@ -1,0 +1,15 @@
+export type SaveState='saved'|'pending'|'saving'|'error';
+export interface AutosaveEntry<T>{value:T;history:T[];version:number;savedVersion:number;status:SaveState;error:string;group:string;editedAt:number;timer:ReturnType<typeof setTimeout>|null;running:boolean}
+/** Per-document queues retain drafts across navigation and never let old acknowledgements replace newer input. */
+export class BudgetAutosave<T>{
+ readonly entries=new Map<string,AutosaveEntry<T>>();
+ constructor(private write:(key:string,value:T)=>Promise<void>,private changed:()=>void,private clone:(value:T)=>T,private delay=500){}
+ seed(key:string,value:T){if(!this.entries.has(key))this.entries.set(key,{value:this.clone(value),history:[],version:0,savedVersion:0,status:'saved',error:'',group:'',editedAt:0,timer:null,running:false});return this.entries.get(key)!;}
+ edit(key:string,value:T,group='',immediate=false){const entry=this.entries.get(key);if(!entry)throw Error('Budget is not loaded.');if(JSON.stringify(value)===JSON.stringify(entry.value))return;const now=Date.now();if(!group||entry.group!==group||now-entry.editedAt>800){entry.history.push(this.clone(entry.value));if(entry.history.length>50)entry.history.shift();}entry.group=group;entry.editedAt=now;entry.value=this.clone(value);entry.version++;entry.status='pending';entry.error='';if(entry.timer)clearTimeout(entry.timer);entry.timer=setTimeout(()=>{entry.timer=null;void this.flush(key);},immediate?0:this.delay);this.changed();}
+ undo(key:string){const entry=this.entries.get(key);if(!entry?.history.length)return;const prior=entry.history.pop()!;entry.value=this.clone(prior);entry.version++;entry.group='';entry.status='pending';entry.error='';if(entry.timer)clearTimeout(entry.timer);entry.timer=null;this.changed();void this.flush(key);}
+ async flush(key:string){const entry=this.entries.get(key);if(!entry||entry.running)return;if(entry.timer){clearTimeout(entry.timer);entry.timer=null;}entry.running=true;try{while(entry.savedVersion<entry.version){const version=entry.version,value=this.clone(entry.value);entry.status='saving';entry.error='';this.changed();try{await this.write(key,value);}catch(error){entry.status='error';entry.error=error instanceof Error?error.message:'Could not save changes.';this.changed();return;}entry.savedVersion=version;entry.status=entry.version===version?'saved':'pending';this.changed();}}finally{entry.running=false;if(entry.savedVersion===entry.version&&entry.timer){clearTimeout(entry.timer);entry.timer=null;}}}
+ pending(){return [...this.entries.values()].some(e=>e.version!==e.savedVersion);}
+ flushAll(){for(const key of this.entries.keys())void this.flush(key);}
+}
+/** Transactions must reject remote edits rather than silently rebasing a stale local sheet. */
+export function assertBudgetBase(actual:string|null,expected:string|null|undefined){if(expected===undefined||actual!==expected)throw new Error('This month changed in another window. Your edits remain here; review the other window before resolving this conflict.');}

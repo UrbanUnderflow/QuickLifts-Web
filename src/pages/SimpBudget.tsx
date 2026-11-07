@@ -1,3 +1,4 @@
+import {BudgetAutosave,assertBudgetBase} from '../lib/simpbudget/budgetAutosave';
 import RunwayScenarios from '../components/simpbudget/RunwayScenarios';
 import MonthlyBurn from '../components/simpbudget/MonthlyBurn';
 import SpendingInsights from '../components/simpbudget/SpendingInsights';
@@ -51,7 +52,6 @@ import {
   Plus,
   Receipt,
   RotateCcw,
-  Save,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -357,30 +357,6 @@ const normalizeFounderBudgetSourceRecord = (
   };
 };
 
-const buildComparableDraft = (draft: BudgetDraft) => ({
-  budgetSpaceId: draft.budgetSpaceId,
-  year: draft.year,
-  month: draft.month,
-  monthlyIncome: moneyStringToNumber(draft.monthlyIncome),
-  debtPayments: moneyStringToNumber(draft.debtPayments),
-  notes: draft.notes.trim(),
-  recurringExpenses: draft.recurringExpenses
-    .map((expense) => ({
-      label: expense.label.trim(),
-      amount: moneyStringToNumber(expense.amount),
-    }))
-    .filter((expense) => expense.label || expense.amount !== 0),
-  miscExpenses: draft.miscExpenses
-    .map((expense) => ({
-      date: expense.date,
-      label: expense.label.trim(),
-      amount: moneyStringToNumber(expense.amount),
-      paymentMethod: expense.paymentMethod,
-      notes: expense.notes.trim(),
-    }))
-    .filter((expense) => expense.date || expense.label || expense.amount !== 0 || expense.notes),
-});
-
 const selectDraftForSpaceMonth = (
   records: BudgetRecord[],
   budgetSpaceId: string,
@@ -585,8 +561,7 @@ const SimpBudgetPage: React.FC = () => {
   const dateRange=dateViewRange(dateView,selectedYear,selectedMonth);
   const isOverview=selectedView==='all'||dateView!=='month';
   const [showArchivedSpaces, setShowArchivedSpaces] = useState(false);
-  const [draft, setDraft] = useState<BudgetDraft>(createEmptyDraft('', DEFAULT_YEAR, DEFAULT_MONTH));
-  const [baselineDraft, setBaselineDraft] = useState<BudgetDraft>(createEmptyDraft('', DEFAULT_YEAR, DEFAULT_MONTH));
+  const [draft, setDraftState] = useState<BudgetDraft>(createEmptyDraft('', DEFAULT_YEAR, DEFAULT_MONTH));
   const [hasPersistedRecord, setHasPersistedRecord] = useState(false);
   const [selectionStatus, setSelectionStatus] = useState('Choose a Budget Space.');
   const [appMessage, setAppMessage] = useState<{ type: MessageTone; text: string } | null>(null);
@@ -601,8 +576,6 @@ const SimpBudgetPage: React.FC = () => {
   const [starterRecurring, setStarterRecurring] = useState<RecurringExpenseDraft[]>([
     createRecurringExpense('', ''),
   ]);
-  const [lastDeletedRecurringExpense, setLastDeletedRecurringExpense] =
-    useState<RecurringExpenseDraft | null>(null);
   const autoMigrationAttemptedRef = useRef(false);
   const renameInFlightRef = useRef(false);
   const [renaming, setRenaming] = useState(false);
@@ -621,9 +594,7 @@ const SimpBudgetPage: React.FC = () => {
     [spaces]
   );
   const activeSpace = selectedView === 'all' ? null : spaces.find((space) => space.id === selectedView) || null;
-  const comparableDraft = JSON.stringify(buildComparableDraft(draft));
-  const comparableBaseline = JSON.stringify(buildComparableDraft(baselineDraft));
-  const hasUnsavedChanges = selectedView !== 'all' && comparableDraft !== comparableBaseline;
+
 
   const [acceptedRecurringId,setAcceptedRecurringId]=useState<string|null>(null);
   const recurringValidation=validateRecurringMonth(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
@@ -804,38 +775,56 @@ const SimpBudgetPage: React.FC = () => {
     return unsubscribe;
   }, []);
 
-  useEffect(() => {
-    if (selectedView === 'all' || !selectedView) {
-      setDraft(createEmptyDraft('', selectedYear, selectedMonth));
-      setBaselineDraft(createEmptyDraft('', selectedYear, selectedMonth));
-      setSelectionStatus('Viewing all Budget Spaces together.');
-      setHasPersistedRecord(false);
-      return;
-    }
-
-    const nextSelection = selectDraftForSpaceMonth(records, selectedView, selectedYear, selectedMonth);
-    setDraft(cloneDraft(nextSelection.draft));
-    setBaselineDraft(cloneDraft(nextSelection.draft));
-    setSelectionStatus(nextSelection.statusMessage);
-    setHasPersistedRecord(nextSelection.hasPersistedRecord);
-  }, [records, selectedView, selectedYear, selectedMonth]);
-
-  useEffect(() => {
-    if (!hasUnsavedChanges || typeof window === 'undefined') return undefined;
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
-
-  const confirmUnsavedNavigation = () => {
-    if (!hasUnsavedChanges || typeof window === 'undefined') return true;
-    return window.confirm('You have unsaved SimpBudget edits. Leave this sheet without saving?');
+  const currentUserRef=useRef(user);currentUserRef.current=user;
+  const [,refreshAutosave]=useState(0);
+  const autosaveRef=useRef<BudgetAutosave<BudgetDraft>|null>(null);
+  const expectedBudgetRef=useRef(new Map<string,string|null>());
+  if(!autosaveRef.current)autosaveRef.current=new BudgetAutosave<BudgetDraft>(async(key,value)=>{
+    const uid=key.split('|')[0];
+    const identity=currentUserRef.current;
+    if(!identity||identity.uid!==uid)throw new Error('Sign back into the same account to save these changes.');
+    const id=buildBudgetDocId(value.budgetSpaceId,value.year,value.month);
+    const payload=buildDraftPayload(value);
+    await runTransaction(simpBudgetDb,async transaction=>{
+      const ref=doc(budgetsCollectionRef(uid),id),snapshot=await transaction.get(ref);
+      const actual=snapshot.exists()?JSON.stringify(buildDraftPayload(normalizeBudgetRecord(id,snapshot.data()))):null;
+      assertBudgetBase(actual,expectedBudgetRef.current.get(key));
+      transaction.set(ref,{...payload,ownerEmail:identity.email||'',createdAt:snapshot.data()?.createdAt||serverTimestamp(),updatedAt:serverTimestamp()},{merge:true});
+    });
+    expectedBudgetRef.current.set(key,JSON.stringify(payload));
+    if(currentUserRef.current?.uid!==uid)return;
+    // Update summaries without reloading the selected sheet or overwriting newer typing.
+    setRecords(current=>{const existing=current.find(item=>item.id===id);const record={...value,id,createdAt:existing?.createdAt};return [...current.filter(item=>item.id!==id),record];});
+  },()=>refreshAutosave(version=>version+1),cloneDraft);
+  const autosave=autosaveRef.current;
+  const draftKey=user&&selectedView!=='all'?`${user.uid}|${buildBudgetDocId(selectedView,selectedYear,selectedMonth)}`:'';
+  const selectedDraftKey=useRef('');
+  const autosaveEntry=draftKey?autosave.entries.get(draftKey):undefined;
+  const hasUnsavedChanges=[...autosave.entries].some(([key,entry])=>key.startsWith(`${user?.uid}|`)&&entry.version!==entry.savedVersion);
+  const editDraft=(update:React.SetStateAction<BudgetDraft>,group='',immediate=true)=>{
+    if(!draftKey||selectedDraftKey.current!==draftKey||loadedUserId!==user?.uid)return;
+    const entry=autosave.entries.get(draftKey);if(!entry)return;
+    const value=typeof update==='function'?update(cloneDraft(entry.value)):update;
+    autosave.edit(draftKey,value,group,immediate);setDraftState(cloneDraft(value));
   };
+  const setDraft=(update:React.SetStateAction<BudgetDraft>)=>editDraft(update);
+  useEffect(()=>{
+    if(!draftKey||loadedUserId!==user?.uid){selectedDraftKey.current='';setDraftState(createEmptyDraft('',selectedYear,selectedMonth));return;}
+    if(selectedDraftKey.current===draftKey)return;
+    if(selectedDraftKey.current)void autosave.flush(selectedDraftKey.current);
+    const selection=selectDraftForSpaceMonth(records,selectedView,selectedYear,selectedMonth);
+    if(!expectedBudgetRef.current.has(draftKey)){const existing=records.find(record=>record.budgetSpaceId===selectedView&&record.year===selectedYear&&record.month===selectedMonth);expectedBudgetRef.current.set(draftKey,existing?JSON.stringify(buildDraftPayload(existing)):null);}
+    const entry=autosave.seed(draftKey,selection.draft);
+    selectedDraftKey.current=draftKey;setDraftState(cloneDraft(entry.value));
+    setSelectionStatus(selection.statusMessage);setHasPersistedRecord(selection.hasPersistedRecord);
+  },[draftKey,loadedUserId,records,selectedView,selectedYear,selectedMonth,user?.uid,autosave]);
+  useEffect(()=>{
+    if(!hasUnsavedChanges)return;
+    const beforeUnload=(event:BeforeUnloadEvent)=>{autosave.flushAll();event.preventDefault();event.returnValue='';};
+    window.addEventListener('beforeunload',beforeUnload);return()=>window.removeEventListener('beforeunload',beforeUnload);
+  },[hasUnsavedChanges,autosave]);
+  const confirmUnsavedNavigation=()=>{if(draftKey)void autosave.flush(draftKey);return true;};
+  const undoBudgetEdit=()=>{if(!draftKey)return;autosave.undo(draftKey);const entry=autosave.entries.get(draftKey);if(entry)setDraftState(cloneDraft(entry.value));setAcceptedRecurringId(null);};
 
   const previousBudgetRecord =
     selectedView !== 'all'
@@ -851,7 +840,7 @@ const SimpBudgetPage: React.FC = () => {
     const confirmed =
       typeof window === 'undefined' ||
       window.confirm(
-        `Replace this month’s recurring expenses with ${monthYearLabel(previousBudgetRecord.month, previousBudgetRecord.year)}? This will only change the current draft until you save.`
+        `Replace this month’s recurring expenses with ${monthYearLabel(previousBudgetRecord.month, previousBudgetRecord.year)}? This change saves automatically and can be undone.`
       );
     if (!confirmed) return;
 
@@ -861,32 +850,11 @@ const SimpBudgetPage: React.FC = () => {
     }));
     setAppMessage({
       type: 'info',
-      text: `Recurring expenses reset from ${monthYearLabel(previousBudgetRecord.month, previousBudgetRecord.year)}. Click Save Budget to keep this month’s change.`,
+      text: `Recurring expenses reset from ${monthYearLabel(previousBudgetRecord.month, previousBudgetRecord.year)}. Changes save automatically.`,
     });
-  };
-
-  const undoLastRecurringDelete = () => {
-    if (!lastDeletedRecurringExpense) return;
-
-    setDraft((currentDraft) => ({
-      ...currentDraft,
-      recurringExpenses: [
-        ...currentDraft.recurringExpenses,
-        {
-          ...lastDeletedRecurringExpense,
-          id: lastDeletedRecurringExpense.id || createLocalId('recurring'),
-        },
-      ],
-    }));
-    setAppMessage({
-      type: 'info',
-      text: `${lastDeletedRecurringExpense.label || 'Recurring expense'} restored. Click Save Budget to keep this month’s change.`,
-    });
-    setLastDeletedRecurringExpense(null);
   };
 
   const removeRecurringExpense = (expense: RecurringExpenseDraft) => {
-    setLastDeletedRecurringExpense({ ...expense });
     setDraft((currentDraft) => ({
       ...currentDraft,
       recurringExpenses: currentDraft.recurringExpenses.filter((candidate) => candidate.id !== expense.id),
@@ -1211,10 +1179,7 @@ const SimpBudgetPage: React.FC = () => {
   }, [isMigrationOwner, loadedUserId, loadingData, migrating, records.length, sourceConnected, spaces.length, user]);
 
   const updateDraftField = (field: 'monthlyIncome' | 'debtPayments' | 'notes', value: string) => {
-    setDraft((currentDraft) => ({
-      ...currentDraft,
-      [field]: field === 'notes' ? value : sanitizeMoneyInput(value),
-    }));
+    editDraft((currentDraft) => ({...currentDraft,[field]:field==='notes'?value:sanitizeMoneyInput(value)}),`field:${field}`,false);
   };
 
   const updateRecurringExpense = (
@@ -1222,14 +1187,14 @@ const SimpBudgetPage: React.FC = () => {
     field: keyof Omit<RecurringExpenseDraft, 'id'>,
     value: string
   ) => {
-    setDraft((currentDraft) => ({
+    editDraft((currentDraft) => ({
       ...currentDraft,
       recurringExpenses: currentDraft.recurringExpenses.map((expense) =>
         expense.id === expenseId
           ? { ...expense, [field]: field === 'amount' ? sanitizeMoneyInput(value) : value }
           : expense
       ),
-    }));
+    }),`recurring:${expenseId}:${field}`,false);
   };
 
   const updateMiscExpense = (
@@ -1237,51 +1202,17 @@ const SimpBudgetPage: React.FC = () => {
     field: keyof Omit<MiscExpenseDraft, 'id'>,
     value: string
   ) => {
-    setDraft((currentDraft) => ({
+    editDraft((currentDraft) => ({
       ...currentDraft,
       miscExpenses: currentDraft.miscExpenses.map((expense) =>
         expense.id === expenseId
           ? { ...expense, [field]: field === 'amount' ? sanitizeMoneyInput(value) : value }
           : expense
       ),
-    }));
+    }),`misc:${expenseId}:${field}`,false);
   };
 
-  const saveDraft = async (value:BudgetDraft = draft) => {
-    if (!user || selectedView === 'all' || !activeSpace) return;
-
-    setSaving(true);
-    setAppMessage(null);
-
-    try {
-      const matchingRecord = records.find(
-        (record) =>
-          record.budgetSpaceId === draft.budgetSpaceId &&
-          record.year === draft.year &&
-          record.month === draft.month
-      );
-      const payload = {
-        ...buildDraftPayload(value),
-        ownerEmail: user.email || '',
-        createdAt: matchingRecord?.createdAt || serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      await setDoc(doc(budgetsCollectionRef(user.uid), buildBudgetDocId(draft.budgetSpaceId, draft.year, draft.month)), payload, {
-        merge: true,
-      });
-      await loadSimpBudgetData(user.uid, 'refresh');
-      setAppMessage({ type: 'success', text: `${activeSpace.name} saved for ${monthYearLabel(selectedMonth, selectedYear)}.` });
-    } catch (error) {
-      console.error('Unable to save budget:', error);
-      setAppMessage({
-        type: 'error',
-        text: error instanceof Error ? error.message : 'Unable to save this budget.',
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+  const saveDraft=(value:BudgetDraft=draft)=>{editDraft(value);return true;};
 
   const renderSpaceCreatePanel = (isFirstSpace: boolean) => (
     <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
@@ -1767,6 +1698,7 @@ const SimpBudgetPage: React.FC = () => {
 
         <div className="space-y-5">
           <MessageBanner message={appMessage} />
+          {[...autosave.entries].filter(([key,entry])=>key.startsWith(`${user.uid}|`)&&entry.status==='error').map(([key,entry])=><div key={key} role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-red-50 p-3 text-sm text-red-800"><span>{spaces.find(space=>space.id===entry.value.budgetSpaceId)?.name||'Budget'} · {monthYearLabel(entry.value.month,entry.value.year)}: changes are still in this session. {entry.error}</span><button className="rounded border border-red-200 px-3 py-1" onClick={()=>void autosave.flush(key)}>Retry saving</button></div>)}
 
           {loadingData ? (
             <div className="flex min-h-[360px] items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500">
@@ -1881,16 +1813,7 @@ const SimpBudgetPage: React.FC = () => {
                           <div className="mt-1 text-sm text-stone-500">{selectionStatus}</div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {lastDeletedRecurringExpense && (
-                            <button
-                              type="button"
-                              onClick={undoLastRecurringDelete}
-                              className={`${pillButtonClassName} border border-emerald-100 bg-emerald-50 text-emerald-700 hover:border-emerald-200`}
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                              Undo deleted item
-                            </button>
-                          )}
+                          <button type="button" disabled={!autosaveEntry?.history.length} onClick={undoBudgetEdit} className={`${pillButtonClassName} border border-stone-200 disabled:opacity-40`}><RotateCcw className="h-4 w-4"/>Undo last edit</button>
                           <button
                             type="button"
                             onClick={restoreRecurringFromPreviousMonth}
@@ -1930,7 +1853,7 @@ const SimpBudgetPage: React.FC = () => {
                             {recurringCandidates.map(suggestion=><tr key={suggestion.key} className="border-t border-amber-200 bg-amber-50">
                               <td className="px-3 py-3"><span className="font-medium">{suggestion.label}</span><span className="block text-xs font-semibold text-amber-800">Suggested recurring</span><span className="block text-xs text-stone-600">One charge per month across {suggestion.months} months · {suggestion.firstMonth}–{suggestion.lastMonth}. Estimated from the latest charge.</span></td>
                               <td className="px-3 py-3">{formatCurrency(suggestion.amount)}</td>
-                              <td className="px-3 py-3"><button disabled={saving||hasUnsavedChanges} title={hasUnsavedChanges?'Save your current edits before accepting a suggestion.':undefined} className="rounded-lg bg-amber-100 px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-200 disabled:opacity-50" onClick={async()=>{const id=crypto.randomUUID();const value={...draft,recurringExpenses:[...draft.recurringExpenses,{id,label:suggestion.label,amount:suggestion.amount.toFixed(2)}]};setAcceptedRecurringId(id);await saveDraft(value);}}>Accept</button></td>
+                              <td className="px-3 py-3"><button  className="rounded-lg bg-amber-100 px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-200 disabled:opacity-50" onClick={async()=>{const id=crypto.randomUUID();const value={...draft,recurringExpenses:[...draft.recurringExpenses,{id,label:suggestion.label,amount:suggestion.amount.toFixed(2)}]};setAcceptedRecurringId(id);await saveDraft(value);}}>Accept</button></td>
                             </tr>)}
                             {draft.recurringExpenses.length === 0 ? (
                               <tr>
@@ -1943,7 +1866,7 @@ const SimpBudgetPage: React.FC = () => {
                                 const validation=recurringValidation.find(item=>item.id===expense.id)!;
                                 return <tr key={expense.id} className={`border-t border-stone-200 ${acceptedRecurringId===expense.id?budgetLayout.acceptedRecurring:''}`}>
                                   <td className="px-3 py-3">
-                                    {acceptedRecurringId===expense.id&&<span role="status" className="mb-1 block text-xs font-semibold text-emerald-700">✓ Accepted and saved</span>}
+                                    {acceptedRecurringId===expense.id&&<span role="status" className="mb-1 block text-xs font-semibold text-emerald-700">✓ Accepted{autosaveEntry?.status==='saved'?' and saved':autosaveEntry?.status==='error'?' · save failed':' · saving…'}</span>}
                                     <input
                                       value={expense.label}
                                       onChange={(event) => updateRecurringExpense(expense.id, 'label', event.target.value)}
@@ -1952,7 +1875,7 @@ const SimpBudgetPage: React.FC = () => {
                                     />
                                     <div className="mt-2 text-xs"><span className={`rounded-full px-2 py-1 font-medium ${validation.status==='Matched'?'bg-emerald-50 text-emerald-800':'bg-amber-50 text-amber-900'}`}>{validation.status}</span><span className="ml-2">{monthYearLabel(selectedMonth,selectedYear)} {validation.proposed?'possible total':'actual'}: {validation.matches.length?formatCurrency(validation.amount):'Not found in imported statements'}</span>{!validation.matches.length&&validation.lastSeen&&<p className="mt-2 text-stone-600">Historical recurring charge last matched on {validation.lastSeen}; no charge matched this selected month. This does not confirm cancellation.</p>}{validation.explanation&&<p className="mt-2 text-stone-600">{validation.explanation}</p>}</div>
                                     {!!validation.matches.length&&<details className="mt-2 text-xs"><summary className="cursor-pointer underline">Review {validation.matches.length} matching transaction{validation.matches.length===1?'':'s'}</summary><ul className="mt-2 space-y-2">{validation.matches.map(row=><li key={`${row.statementId}-${row.id}`}><button className="text-left underline" onClick={()=>setTransactionDetail({...row,budget:activeSpace?.name,account:row.sourceAccountName,sourceType:row.sourceType||'document',splits:row.splits.map(split=>({name:spaces.find(space=>space.id===split.spaceId)?.name||'Unknown budget',amount:split.amount}))})}>{row.date} · {row.description} · {formatCurrency(row.allocatedAmount)} · {row.sourceAccountName}</button></li>)}</ul>{validation.ambiguous&&<p className="mt-2 text-amber-900">These charges match more than one recurring name. Refine the name before updating.</p>}</details>}
-                                    {validation.matches.length>0&&!validation.ambiguous&&validation.amount>=0&&Math.round(validation.amount*100)!==Math.round(Number(expense.amount)*100)&&<button className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 disabled:opacity-50" disabled={saving||hasUnsavedChanges} title={hasUnsavedChanges?'Save current edits first.':undefined} onClick={async()=>{const value={...draft,recurringExpenses:draft.recurringExpenses.map(row=>row.id===expense.id?{...row,amount:validation.amount.toFixed(2)}:row)};setAcceptedRecurringId(expense.id);await saveDraft(value);}}>{validation.proposed?'Confirm candidate total':'Use'} {formatCurrency(validation.amount)} for {monthLabel(selectedMonth)}</button>}
+                                    {validation.matches.length>0&&!validation.ambiguous&&validation.amount>=0&&Math.round(validation.amount*100)!==Math.round(Number(expense.amount)*100)&&<button className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 disabled:opacity-50"  onClick={async()=>{const value={...draft,recurringExpenses:draft.recurringExpenses.map(row=>row.id===expense.id?{...row,amount:validation.amount.toFixed(2)}:row)};if(await saveDraft(value))setAcceptedRecurringId(expense.id);}}>{validation.proposed?'Confirm candidate total':'Use'} {formatCurrency(validation.amount)} for {monthLabel(selectedMonth)}</button>}
                                   </td>
                                   <td className="px-3 py-3">
                                     <input
@@ -2127,7 +2050,7 @@ const SimpBudgetPage: React.FC = () => {
                             {renaming ? 'Renaming…' : 'Rename Budget Space'}
                           </button>
                           <p className="text-sm text-stone-500">
-                            {hasPersistedRecord ? 'Saved month' : 'Draft month'} · {hasUnsavedChanges ? 'Unsaved' : 'Saved'}
+                            {hasPersistedRecord||autosaveEntry?.version ? 'Monthly budget' : 'New month'} · {autosaveEntry?.status==='error'?'Save failed':autosaveEntry?.status==='pending'||autosaveEntry?.status==='saving'?'Saving…':hasPersistedRecord||autosaveEntry?.version?'Saved':'Ready'}
                           </p>
                         </div>
                       </div>
@@ -2191,15 +2114,11 @@ const SimpBudgetPage: React.FC = () => {
                           />
                         </label>
 
-                        <button
-                          type="button"
-                          onClick={()=>void saveDraft()}
-                          disabled={saving}
-                          className={`${pillButtonClassName} w-full bg-stone-900 text-white hover:bg-stone-800`}
-                        >
-                          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                          Save Budget
-                        </button>
+                        <div className="space-y-2" aria-live="polite">
+                          <p className="text-sm text-stone-500">{autosaveEntry?.status==='error'?'Changes kept on this device for this session. Saving failed.':autosaveEntry?.status==='pending'||autosaveEntry?.status==='saving'?'Saving automatically…':hasPersistedRecord||autosaveEntry?.version?'All changes saved automatically.':'Ready · changes save automatically.'}</p>
+                          {autosaveEntry?.status==='error'&&<><p className="text-sm text-red-700">{autosaveEntry.error}</p><button onClick={()=>void autosave.flush(draftKey)} className="rounded-lg border px-3 py-2 text-sm">Retry saving</button></>}
+                          <button disabled={!autosaveEntry?.history.length} onClick={undoBudgetEdit} className={`${pillButtonClassName} w-full border border-stone-200 disabled:opacity-40`}><RotateCcw className="h-4 w-4"/>Undo last edit</button>
+                        </div>
                       </div>
                     </section>
                   </aside>
