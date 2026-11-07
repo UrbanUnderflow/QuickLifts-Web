@@ -68,3 +68,24 @@ test('advertised merchant-first upload guidance suggests TresProperties without 
   assert.equal(suggestion.suggestedSpaceId,'tres'); assert.equal(suggestion.spaceId,''); assert.equal(suggestion.reviewed,false);
   assert.equal(other.suggestedSpaceId,'personal');
 });
+
+test('batch provenance survives splitting and account-aware duplicates across files', async()=>{
+  const {withStatementSource,combineStatementImports,splitStatementBatch}=await import('../../src/lib/simpbudget/statements');
+  const a=withStatementSource(statement({id:'a1',batchId:'batch',accountId:'card1',status:'review'}),'Chase Ink');
+  const b=withStatementSource(statement({id:'b1',batchId:'batch',accountId:'card2',status:'review',transactions:[tx({id:'2'})]}),'Chase Slate');
+  const merged=combineStatementImports([a,b]);assert.equal(merged.transactions.length,2);
+  assert.deepEqual(merged.transactions.map(t=>t.sourceAccountName),['Chase Ink','Chase Slate']);
+  const saved=splitStatementBatch({...merged,status:'committed'});assert.equal(saved.length,2);
+  assert.ok(saved.every(s=>s.status==='committed'&&s.transactions.length===1&&!s.members));
+  assert.equal(markDuplicates([a],b).transactions[0].duplicate,false);
+  assert.equal(markDuplicates([a],withStatementSource({...b,accountId:'card1'},'Chase Ink')).transactions[0].duplicate,true);
+  assert.throws(()=>splitStatementBatch({...merged,transactions:[tx()]}),/source statement/);
+});
+
+test('Chase CSV preserves dates, signs, payments, source references and known budget suggestions',async()=>{
+  const {parseChaseCsv}=await import('../../src/lib/simpbudget/statements');
+  const rows=[['Transaction Date','Post Date','Description','Category','Type','Amount','Source document','Source row','Suggested budget','Review reason'],['01/01/2026','01/02/2026','Cloud','Business services','Sale','-15.25','January.pdf','PDF page 3','Pulse','Confirmed by owner'],['01/02/2026','01/03/2026','Payment','','Payment','50','','','','']];
+  const parsed=parseChaseCsv(rows,[{id:'pulse',name:'Pulse'}])!;
+  assert.equal(parsed[0].amount,15.25);assert.equal(parsed[0].date,'2026-01-01');assert.equal(parsed[0].sourceFileName,'January.pdf');assert.equal(parsed[0].suggestedSpaceId,'pulse');assert.equal(parsed[0].reviewed,false);
+  assert.equal(parsed[1].kind,'card_payment');assert.equal(parsed[1].amount,-50);
+});

@@ -3,12 +3,16 @@ export type TransactionKind = 'expense' | 'refund' | 'transfer' | 'card_payment'
 export interface Account { id: string; name: string; type: 'bank' | 'card'; defaultSpaceId: string }
 export interface Rule { id: string; contains: string; spaceId: string }
 export interface StatementTransaction {
+  sourceAccountId?: string; sourceAccountName?: string; sourceFileName?: string; sourceImportId?: string;
   category?: string;
   id: string; date: string; description: string; amount: number; kind: TransactionKind;
   spaceId: string; suggestedSpaceId?: string; reason: string; sourceRow: number | string;
   reviewed: boolean; excluded: boolean; duplicate: boolean; splits: { spaceId: string; amount: number }[];
 }
 export interface StatementImport {
+  batchId?: string;
+  /** UI-only aggregate; persisted as separate source documents in one transaction. */
+  members?: StatementImport[];
   id: string; accountId: string; fileName: string; fingerprint: string; guidance: string;
   revision?: number; createdAt: string; status: 'review' | 'committed' | 'undone'; transactions: StatementTransaction[];
   openingBalance?: number; closingBalance?: number; statementTotal?: number; warnings: string[];
@@ -134,10 +138,58 @@ export function transactionFingerprint(accountId: string, tx: Pick<StatementTran
 
 export function markDuplicates(imports: StatementImport[], newImport: StatementImport): StatementImport {
   const seen = new Set<string>();
-  for (const item of imports) if (item.id !== newImport.id && item.status !== 'undone') for (const tx of item.transactions) if (!tx.excluded) seen.add(transactionFingerprint(item.accountId, tx));
+  for (const item of imports) if (item.id !== newImport.id && item.status !== 'undone') for (const tx of item.transactions) if (!tx.excluded) seen.add(transactionFingerprint(tx.sourceAccountId || item.accountId, tx));
   const sameFile = imports.some(item => item.id !== newImport.id && item.status !== 'undone' && item.accountId === newImport.accountId && item.fingerprint && item.fingerprint === newImport.fingerprint);
-  const transactions = newImport.transactions.map(tx => { const key = transactionFingerprint(newImport.accountId, tx); const duplicate = sameFile || seen.has(key); seen.add(key); return { ...tx, duplicate }; });
+  const transactions = newImport.transactions.map(tx => { const key = transactionFingerprint(tx.sourceAccountId || newImport.accountId, tx); const duplicate = sameFile || seen.has(key); seen.add(key); return { ...tx, duplicate }; });
   return { ...newImport, transactions };
+}
+
+/** Keep account/file provenance on every row, including after batch sorting or splitting. */
+export function withStatementSource(item: StatementImport, accountName: string): StatementImport {
+  return {...item, transactions:item.transactions.map(tx=>({...tx, sourceAccountId:item.accountId,
+    sourceAccountName:accountName, sourceFileName:tx.sourceFileName || item.fileName, sourceImportId:item.id}))};
+}
+
+export function combineStatementImports(members: StatementImport[]): StatementImport {
+  if (!members.length) throw new Error('No statements to combine.');
+  if (members.length===1) return members[0];
+  if (members.some(m=>m.status!==members[0].status)) throw new Error('These statements have different statuses. Open them separately.');
+  return {...members[0], id:members[0].batchId || members[0].id, accountId:'',
+    fileName:`${members.length} statements`, fingerprint:'', members,
+    openingBalance:undefined, closingBalance:undefined, statementTotal:undefined,
+    transactions:members.flatMap(m=>m.transactions).sort((a,b)=>a.date.localeCompare(b.date)),
+    warnings:members.flatMap(m=>m.warnings.map(w=>`${m.fileName}: ${w}`))};
+}
+
+export function splitStatementBatch(value: StatementImport): StatementImport[] {
+  if (!value.members) return [value];
+  const ids=new Set(value.members.map(m=>m.id));
+  if (value.transactions.some(tx=>!tx.sourceImportId || !ids.has(tx.sourceImportId))) throw new Error('A transaction is missing its source statement.');
+  return value.members.map(member=>({...member,status:value.status,
+    transactions:value.transactions.filter(tx=>tx.sourceImportId===member.id)}));
+}
+
+/** Chase CSV exports encode purchases negative and payments positive. Preserve category/type. */
+export function isChaseCsv(rows: string[][]): boolean {
+  const header=rows[0]?.map(h=>h.trim().toLowerCase()) || [];
+  return ['transaction date','post date','description','category','type','amount'].every(h=>header.includes(h));
+}
+
+export function parseChaseCsv(rows: string[][], spaces: {id:string;name:string}[] = []): StatementTransaction[] | null {
+  const header=rows[0]?.map(h=>h.trim().toLowerCase()) || [];
+  const index=(name:string)=>header.indexOf(name);
+  if (!isChaseCsv(rows)) return null;
+  const mapped=mapCsv(rows.slice(1),{date:index('transaction date'),description:index('description'),amount:index('amount')},{positiveExpenses:false});
+  return mapped.map((tx,i)=>{
+    const type=rows[i+1][index('type')].trim().toLowerCase();
+    const kind:TransactionKind=type==='payment'?'card_payment':tx.amount<0?'refund':'expense';
+    const optional=(name:string)=>index(name)>=0?rows[i+1][index(name)]?.trim():undefined;
+    const suggestion=spaces.find(s=>normalized(s.name)===normalized(optional('suggested budget')||''));
+    return {...tx,kind,category:rows[i+1][index('category')].trim() || undefined,
+      sourceFileName:optional('source document'),sourceRow:optional('source row')||tx.sourceRow,
+      ...(suggestion?{suggestedSpaceId:suggestion.id}:{}),
+      reason:optional('review reason') || (kind==='card_payment'?'Chase identifies this as a card payment; exclude from spending.':'Chase CSV transaction; review its budget.')};
+  });
 }
 
 export function validateTransaction(tx: StatementTransaction): string | null {

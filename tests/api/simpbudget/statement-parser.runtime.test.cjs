@@ -29,7 +29,7 @@ test('bounds and validates file data, mime signatures, details, JSON and space o
   assert.equal(app.calls, 0);
 });
 test('durable per-user rate limit prevents model calls', async () => {
-  const app = fixture({ count: 20 }); assert.equal((await app.run()).statusCode, 429); assert.equal(app.calls, 0);
+  const app = fixture({ count: 60 }); assert.equal((await app.run()).statusCode, 429); assert.equal(app.calls, 0);
 });
 test('valid PDF uses private nonstored extraction and owner-resolved labels, retaining rows', async () => {
   const app = fixture(); const response = await app.run(); assert.equal(response.statusCode, 200);

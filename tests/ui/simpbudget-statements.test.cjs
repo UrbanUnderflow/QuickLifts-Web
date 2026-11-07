@@ -98,3 +98,27 @@ test('PDF selection stays local until Analyze sends the staged document and prom
     await h.click('Analyze');assert.equal(calls.length,1);assert.equal(calls[0].body.guidance,'Hardware is for Pulse');assert.equal(calls[0].body.fileName,'synthetic.pdf');assert.equal(h.writes.at(-1).status,'review');assert.match(h.text(),/Sort your transactions/);
   }finally{await h.close();globalThis.fetch=previousFetch;globalThis.FileReader=previousReader;}
 });
+
+test('multiple files form one review and commit/undo atomically with source identity',async()=>{
+ const h=await harness();try{
+  const make=(name,desc)=>{const csv=`Transaction Date,Post Date,Description,Category,Type,Amount\n01/01/2026,01/02/2026,${desc},Shopping,Sale,-10`;return {name,size:csv.length,type:'text/csv',arrayBuffer:async()=>new TextEncoder().encode(csv).buffer,text:async()=>csv};};
+  await act(async()=>Simulate.change(h.input('Upload statements'),{target:{files:[make('jan.csv','Shop'),make('feb.csv','Other shop')],value:'fake'}}));
+  await h.change('Statement account','a');await h.click('Analyze');assert.equal(h.writes.length,2);
+  assert.match(h.text(),/2 statements/);assert.match(h.text(),/Source/);assert.match(h.text(),/jan.csv/);assert.match(h.text(),/feb.csv/);
+  assert.ok(h.writes.every(w=>w.transactions[0].sourceAccountName==='Checking'));assert.notEqual(h.writes[0].transactions[0].id,h.writes[1].transactions[0].id);
+  await h.click('Select all');await h.click('Assign to Personal');await h.click('Finish import');
+  assert.ok(h.writes.slice(-2).every(w=>w.status==='committed'));await h.click('Undo import');assert.ok(h.writes.slice(-2).every(w=>w.status==='undone'));
+ }finally{await h.close();}
+});
+
+test('failure in a later PDF leaves no partial batch imported',async()=>{
+ const h=await harness();const oldFetch=global.fetch;const oldReader=global.FileReader;const oldCreate=URL.createObjectURL;const oldRevoke=URL.revokeObjectURL;let calls=0;
+ try{
+  URL.createObjectURL=()=> 'blob:test';URL.revokeObjectURL=()=>{};
+  global.FileReader=class{readAsDataURL(){this.result='data:application/pdf;base64,JVBERg==';this.onload();}};
+  global.fetch=async()=>({ok:++calls===1,json:async()=>calls===1?{transactions:[row()]}:{error:'Provider unavailable'}});
+  const file=name=>({name,type:'application/pdf',size:4,arrayBuffer:async()=>new Uint8Array([1,2,3,4]).buffer});
+  await act(async()=>Simulate.change(h.input('Upload statements'),{target:{files:[file('one.pdf'),file('two.pdf')],value:'fake'}}));await h.change('Statement account','a');await h.click('Analyze');
+  assert.equal(calls,2);assert.equal(h.writes.length,0);assert.match(h.text(),/Provider unavailable/);
+ }finally{global.fetch=oldFetch;global.FileReader=oldReader;URL.createObjectURL=oldCreate;URL.revokeObjectURL=oldRevoke;await h.close();}
+});

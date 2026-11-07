@@ -91,7 +91,7 @@ export const handler: Handler = async (event) => {
       const now = Date.now();
       const active = typeof previous.startedAt === 'number' && now - previous.startedAt < 3_600_000;
       const count = active ? Number(previous.count) || 0 : 0;
-      if (count >= 20) throw new RequestError(429, 'Statement extraction limit reached. Try again in an hour.');
+      if (count >= 60) throw new RequestError(429, 'Statement extraction limit reached. Try again in an hour.');
       transaction.set(rateRef, { startedAt: active ? previous.startedAt : now, count: count + 1 });
     });
     const client = new OpenAI({ apiKey, timeout: 90_000, maxRetries: 0 });
