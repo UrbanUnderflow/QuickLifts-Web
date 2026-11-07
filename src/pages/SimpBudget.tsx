@@ -1,3 +1,4 @@
+import {projectedRecurring} from '../lib/simpbudget/recurringProjection';
 import {BudgetAutosave,assertBudgetBase} from '../lib/simpbudget/budgetAutosave';
 import RunwayScenarios from '../components/simpbudget/RunwayScenarios';
 import MonthlyBurn from '../components/simpbudget/MonthlyBurn';
@@ -398,11 +399,11 @@ const selectDraftForSpaceMonth = (
         monthlyIncome: previousRecord.monthlyIncome,
         debtPayments: previousRecord.debtPayments,
         notes: '',
-        recurringExpenses: previousRecord.recurringExpenses.map((expense) => ({ ...expense })),
+        recurringExpenses: [],
         miscExpenses: [],
       },
       hasPersistedRecord: false,
-      statusMessage: `New month seeded from ${monthYearLabel(previousRecord.month, previousRecord.year)}.`,
+      statusMessage: `Income and debt seeded from ${monthYearLabel(previousRecord.month, previousRecord.year)}. Accepted recurring charges appear from this month’s transactions.`,
     };
   }
 
@@ -596,11 +597,23 @@ const SimpBudgetPage: React.FC = () => {
   const activeSpace = selectedView === 'all' ? null : spaces.find((space) => space.id === selectedView) || null;
 
 
+  const autosaveRefForProjection=useRef<BudgetAutosave<BudgetDraft>|null>(null);
   const [acceptedRecurringId,setAcceptedRecurringId]=useState<string|null>(null);
+  // Session drafts override saved identities so Undo propagates before its write finishes.
+  const recurringSourceRecords=[...records];
+  for(const [key,entry] of autosaveRefForProjection.current?.entries||[]){
+    if(!key.startsWith(`${user?.uid}|`))continue;
+    const index=recurringSourceRecords.findIndex(record=>record.budgetSpaceId===entry.value.budgetSpaceId&&record.year===entry.value.year&&record.month===entry.value.month);
+    const replacement={...entry.value,id:buildBudgetDocId(entry.value.budgetSpaceId,entry.value.year,entry.value.month)};
+    if(index>=0)recurringSourceRecords[index]=replacement;else recurringSourceRecords.push(replacement);
+  }
+  const recurringFor=(value:BudgetDraft)=>[...value.recurringExpenses,...projectedRecurring(statementImports,recurringSourceRecords,value.budgetSpaceId,value.year,value.month,value.recurringExpenses)];
+  const inheritedRecurring=projectedRecurring(statementImports,recurringSourceRecords,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
+  const effectiveRecurring=[...draft.recurringExpenses,...inheritedRecurring];
   const recurringValidation=validateRecurringMonth(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
-  const recurringCandidates=recurringSuggestions(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
+  const recurringCandidates=recurringSuggestions(statementImports,selectedView,selectedYear,selectedMonth,effectiveRecurring);
   const recurringNotifications=activeSpaces.map(space=>{
-    const recurring=selectDraftForSpaceMonth(records,space.id,selectedYear,selectedMonth).draft.recurringExpenses;
+    const recurring=recurringFor(selectDraftForSpaceMonth(records,space.id,selectedYear,selectedMonth).draft);
     return {id:space.id,name:space.name,suggestions:recurringSuggestions(statementImports,space.id,selectedYear,selectedMonth,recurring).length,reviews:validateRecurringMonth(statementImports,space.id,selectedYear,selectedMonth,recurring).filter(item=>item.status!=='Matched').length};
   }).filter(item=>item.suggestions||item.reviews);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
@@ -614,11 +627,11 @@ const SimpBudgetPage: React.FC = () => {
   const cashFlow=bankCashFlow(statementImports,statementAccounts,dateRange,selectedView);
   const importedExpenses=actualTransactions(statementImports,selectedYear,selectedMonth,selectedView);
   const importedExpenseTotal=importedExpenses.reduce((sum,row)=>sum+Math.round(row.allocatedAmount*100),0)/100;
-  const draftTotals = calculateDraftTotals(draft);
+  const draftTotals = calculateDraftTotals({...draft,recurringExpenses:effectiveRecurring});
   const allTotals = activeSpaces.reduce(
     (accumulator, space) => {
       const totals = calculateDraftTotals(
-        selectDraftForSpaceMonth(records, space.id, selectedYear, selectedMonth).draft
+        ({...selectDraftForSpaceMonth(records, space.id, selectedYear, selectedMonth).draft,recurringExpenses:recurringFor(selectDraftForSpaceMonth(records, space.id, selectedYear, selectedMonth).draft)})
       );
 
       accumulator.monthlyIncome += totals.monthlyIncome;
@@ -637,7 +650,7 @@ const SimpBudgetPage: React.FC = () => {
     }
   );
 
-  const burnRecurring = (selectedView==='all'?activeSpaces:spaces.filter(space=>space.id===selectedView)).flatMap(space=>selectDraftForSpaceMonth(records,space.id,selectedYear,selectedMonth).draft.recurringExpenses);
+  const burnRecurring = (selectedView==='all'?activeSpaces:spaces.filter(space=>space.id===selectedView)).flatMap(space=>recurringFor(selectDraftForSpaceMonth(records,space.id,selectedYear,selectedMonth).draft));
 
   const displayedSummary=spendingSummary(cashFlow,selectedView==='all'?overviewSpending:monthlyActuals.find(item=>item.space.id===selectedView)?.spending||0,{income:selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome,spending:selectedView==='all'?allTotals.miscTotal:draftTotals.miscTotal},dateView==='month');
 
@@ -777,7 +790,7 @@ const SimpBudgetPage: React.FC = () => {
 
   const currentUserRef=useRef(user);currentUserRef.current=user;
   const [,refreshAutosave]=useState(0);
-  const autosaveRef=useRef<BudgetAutosave<BudgetDraft>|null>(null);
+  const autosaveRef=autosaveRefForProjection;
   const expectedBudgetRef=useRef(new Map<string,string|null>());
   if(!autosaveRef.current)autosaveRef.current=new BudgetAutosave<BudgetDraft>(async(key,value)=>{
     const uid=key.split('|')[0];
@@ -1757,7 +1770,7 @@ const SimpBudgetPage: React.FC = () => {
                     {visibleSpaces.filter(space=>dateView==='month'||selectedView==='all'||space.id===selectedView).map((space) => {
                       const Icon = getSpaceIcon(space.icon);
                                       const totals = calculateDraftTotals(
-                        selectDraftForSpaceMonth(records, space.id, selectedYear, selectedMonth).draft
+                        ({...selectDraftForSpaceMonth(records, space.id, selectedYear, selectedMonth).draft,recurringExpenses:recurringFor(selectDraftForSpaceMonth(records, space.id, selectedYear, selectedMonth).draft)})
                       );
 
                       const spaceSummary=spendingSummary(bankCashFlow(statementImports,statementAccounts,dateRange,space.id),monthlyActuals.find(item=>item.space.id===space.id)?.spending||0,{income:totals.monthlyIncome,spending:totals.miscTotal},dateView==='month');
@@ -1811,6 +1824,7 @@ const SimpBudgetPage: React.FC = () => {
                             Recurring Monthly Expenses
                           </div>
                           <div className="mt-1 text-sm text-stone-500">{selectionStatus}</div>
+                          <p className="mt-1 text-xs text-stone-600">Suggestions use charges assigned to {activeSpace.name}. Check each budget for its bills.</p>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <button type="button" disabled={!autosaveEntry?.history.length} onClick={undoBudgetEdit} className={`${pillButtonClassName} border border-stone-200 disabled:opacity-40`}><RotateCcw className="h-4 w-4"/>Undo last edit</button>
@@ -1851,14 +1865,15 @@ const SimpBudgetPage: React.FC = () => {
                           </thead>
                           <tbody>
                             {recurringCandidates.map(suggestion=><tr key={suggestion.key} className="border-t border-amber-200 bg-amber-50">
-                              <td className="px-3 py-3"><span className="font-medium">{suggestion.label}</span><span className="block text-xs font-semibold text-amber-800">Suggested recurring</span><span className="block text-xs text-stone-600">One charge per month across {suggestion.months} months · {suggestion.firstMonth}–{suggestion.lastMonth}. Estimated from the latest charge.</span></td>
+                              <td className="px-3 py-3"><span className="font-medium">{suggestion.label}</span><span className="block text-xs font-semibold text-amber-800">{suggestion.confidence==='single-bill'?'Possible recurring bill':suggestion.confidence==='limited-history'?'Suggested recurring · limited history':'Suggested recurring'}</span><span className="block text-xs text-stone-600">{suggestion.explanation}</span><details className="mt-2 text-xs text-stone-700"><summary className="cursor-pointer underline">Review {suggestion.months} {suggestion.months===1?'month':'months'} of charges</summary><ul className="mt-2 space-y-1">{suggestion.evidence.map(item=><li key={item.month}>{item.month} · {formatCurrency(item.amount)} · {item.charges} {item.charges===1?'charge':'charges'}</li>)}</ul></details></td>
                               <td className="px-3 py-3">{formatCurrency(suggestion.amount)}</td>
                               <td className="px-3 py-3"><button  className="rounded-lg bg-amber-100 px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-200 disabled:opacity-50" onClick={async()=>{const id=crypto.randomUUID();const value={...draft,recurringExpenses:[...draft.recurringExpenses,{id,label:suggestion.label,amount:suggestion.amount.toFixed(2)}]};setAcceptedRecurringId(id);await saveDraft(value);}}>Accept</button></td>
                             </tr>)}
-                            {draft.recurringExpenses.length === 0 ? (
+                            {inheritedRecurring.map(expense=><tr key={expense.id} className="border-t border-emerald-100 bg-emerald-50/40"><td className="px-3 py-4"><p className="font-medium">{expense.label}</p><p className="mt-1 text-xs text-emerald-800">Accepted across months · {monthYearLabel(selectedMonth,selectedYear)} actual</p><button className="mt-2 text-xs underline" onClick={()=>{if(confirmUnsavedNavigation()){setSelectedYear(expense.sourceYear);setSelectedMonth(expense.sourceMonth);}}}>Manage acceptance in {monthYearLabel(expense.sourceMonth,expense.sourceYear)}</button><details className="mt-2 text-xs"><summary className="cursor-pointer underline">Review {expense.matches.length} matching charges</summary><ul className="mt-2 space-y-1">{expense.matches.map(row=><li key={`${row.statementId}-${row.id}`}>{row.date} · {row.description} · {formatCurrency(row.allocatedAmount)}</li>)}</ul></details></td><td className="px-3 py-4">{formatCurrency(Number(expense.amount))}</td><td/></tr>)}
+                            {draft.recurringExpenses.length === 0 && inheritedRecurring.length===0 ? (
                               <tr>
                                 <td colSpan={3} className="px-3 py-8 text-center text-stone-500">
-                                  No recurring expenses yet.
+                                  No accepted recurring expenses yet.
                                 </td>
                               </tr>
                             ) : (
@@ -1866,7 +1881,7 @@ const SimpBudgetPage: React.FC = () => {
                                 const validation=recurringValidation.find(item=>item.id===expense.id)!;
                                 return <tr key={expense.id} className={`border-t border-stone-200 ${acceptedRecurringId===expense.id?budgetLayout.acceptedRecurring:''}`}>
                                   <td className="px-3 py-3">
-                                    {acceptedRecurringId===expense.id&&<span role="status" className="mb-1 block text-xs font-semibold text-emerald-700">✓ Accepted{autosaveEntry?.status==='saved'?' and saved':autosaveEntry?.status==='error'?' · save failed':' · saving…'}</span>}
+                                    {acceptedRecurringId===expense.id&&<span role="status" className="mb-1 block text-xs font-semibold text-emerald-700">✓ Accepted across detected months{autosaveEntry?.status==='saved'?' and saved':autosaveEntry?.status==='error'?' · save failed':' · saving…'}</span>}
                                     <input
                                       value={expense.label}
                                       onChange={(event) => updateRecurringExpense(expense.id, 'label', event.target.value)}
