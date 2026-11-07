@@ -97,3 +97,10 @@ test('monthly misc ledger matches actual allocations and excludes drafts, undone
  assert.equal(rows.length,3);assert.equal(rows.reduce((s,r)=>s+r.allocatedAmount,0),125);assert.ok(rows.every(r=>r.statementId==='s1'));assert.equal(JSON.stringify(data),before);
  assert.equal(actualTransactions(data,2026,11,'pulse')[0].allocatedAmount,50);
 });
+
+test('provenance distinguishes document extraction from ordinary CSV imports',async()=>{
+ const {withStatementSource}=await import('../../src/lib/simpbudget/statements');
+ assert.equal(withStatementSource(statement(), 'Card').transactions[0].sourceType,'csv');
+ assert.equal(withStatementSource(statement({fileName:'scan.pdf'}),'Card').transactions[0].sourceType,'document');
+ assert.equal(withStatementSource(statement({transactions:[tx({sourceFileName:'original.pdf'})]}),'Card').transactions[0].sourceType,'document');
+});

@@ -24,7 +24,7 @@ async function harness(initial=[]) {
   const writes=[];
   let failLoad=false;
   const firebase={collection:(_db,...path)=>path.join('/'),doc:(path,id)=>`${path}/${id}`,getDocs:async path=>{if(failLoad)throw Error('offline');return {docs:[...data].filter(([key])=>key.startsWith(path+'/')).map(([,value])=>({data:()=>structuredClone(value)}))};},setDoc:async(path,value)=>{data.set(path,structuredClone(value));writes.push(value);},runTransaction:async(_db,fn)=>{const staged=[];await fn({get:async path=>({exists:()=>data.has(path),data:()=>structuredClone(data.get(path))}),set:(path,value)=>staged.push([path,structuredClone(value)])});for(const [path,value]of staged){data.set(path,value);writes.push(value);}}};
-  const Component=compile('src/components/simpbudget/StatementWorkspace.tsx',name=>name==='firebase/firestore'?firebase:name.includes('simpBudgetConfig')?{simpBudgetDb:{}}:name.includes('/statements')?domain:require(name)).default;
+  const Component=compile('src/components/simpbudget/StatementWorkspace.tsx',name=>name==='firebase/firestore'?firebase:name.includes('simpBudgetConfig')?{simpBudgetDb:{}}:name.includes('/statements')?domain:name==='./TransactionDetails'?compile('src/components/simpbudget/TransactionDetails.tsx'):require(name)).default;
   const root=createRoot(document.getElementById('root'));
   await act(async()=>root.render(React.createElement(Component,{user:{uid:'u',getIdToken:async()=> 'test-token'},spaces:[{id:'personal',name:'Personal'},{id:'pulse',name:'Pulse'},{id:'tres',name:'TresProperties'}],year:2026,month:11})));
   const button=(text)=>[...document.querySelectorAll('button')].find(b=>b.textContent===text||b.getAttribute('aria-label')===text);
@@ -135,4 +135,16 @@ test('attaching an original to a committed import preserves all sorted transacti
   await h.click('Attach selected documents');assert.equal(JSON.stringify([...h.data]),before);assert.equal(h.writes.length,0);
   assert.match(h.text(),/1\/1 originals attached/);assert.match(document.querySelector('tbody').textContent,/View statement/);
  }finally{await h.close();}
+});
+
+test('transaction details distinguishes self-reported entries and opens the exact imported source',async()=>{
+ const Details=compile('src/components/simpbudget/TransactionDetails.tsx').default;const root=createRoot(document.getElementById('root'));let opened;
+ const props={onClose(){},onOpenSource:id=>{opened=id;}};
+ try{
+  await act(async()=>root.render(React.createElement(Details,{...props,detail:{date:'2026-06-01',description:'Manual receipt',amount:30,sourceType:'self_reported'}})));
+  assert.match(document.body.textContent,/Self-reported/);assert.match(document.body.textContent,/No source document/);
+  await act(async()=>root.render(React.createElement(Details,{...props,detail:{date:'2026-06-01',description:'Hardware',amount:100,allocatedAmount:40,sourceType:'document',sourceFileName:'june.pdf',sourceRow:'Page 2 row 3',statementId:'statement-42',splits:[{name:'TresProperties',amount:40},{name:'Personal',amount:60}]}})));
+  assert.match(document.body.textContent,/Extracted from a document/);assert.match(document.body.textContent,/Page 2 row 3/);assert.match(document.body.textContent,/This budget’s share/);
+  await act(async()=>Simulate.click([...document.querySelectorAll('button')].find(b=>b.textContent==='View source document')));assert.equal(opened,'statement-42');
+ }finally{await act(async()=>root.unmount());}
 });

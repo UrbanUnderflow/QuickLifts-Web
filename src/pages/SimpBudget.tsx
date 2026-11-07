@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import { actualTransactions, type StatementImport } from '../lib/simpbudget/statements';
+import TransactionDetails, { type TransactionDetail } from '../components/simpbudget/TransactionDetails';
 import StatementWorkspace from '../components/simpbudget/StatementWorkspace';
 import RenameBudgetSpaceModal from '../components/simpbudget/RenameBudgetSpaceModal';
 import {
@@ -548,6 +549,7 @@ const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | n
 };
 
 const SimpBudgetPage: React.FC = () => {
+  const [transactionDetail,setTransactionDetail]=useState<TransactionDetail|null>(null);
   const [statementImports,setStatementImports]=useState<StatementImport[]>([]);
   const [statementRequest,setStatementRequest]=useState<{id:string;sequence:number}|null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -2009,13 +2011,13 @@ const SimpBudgetPage: React.FC = () => {
                               <th className="w-36 px-3 py-3 font-semibold">Date</th>
                               <th className="px-3 py-3 font-semibold">Expense</th>
                               <th className="w-36 px-3 py-3 font-semibold">Amount</th>
-                              <th className="w-40 px-3 py-3 font-semibold">Payment</th>
+                              <th className="w-40 px-3 py-3 font-semibold">Source / payment</th>
                               <th className="w-56 px-3 py-3 font-semibold">Notes</th>
                               <th className="w-16 px-3 py-3" />
                             </tr>
                           </thead>
                           <tbody>
-                            {importedExpenses.map(expense=><tr key={`imported-${expense.statementId}-${expense.id}`} className="border-t border-stone-200"><td className="whitespace-nowrap px-3 py-3">{expense.date}</td><td className="px-3 py-3"><span className="font-medium">{expense.description}</span><span className="mt-1 block text-xs text-stone-500">Imported{expense.splits.length?' · Split allocation':''}</span></td><td className="px-3 py-3 tabular-nums">{formatCurrency(expense.allocatedAmount)}</td><td className="px-3 py-3 text-xs">{expense.sourceAccountName||'Statement account'}</td><td className="px-3 py-3 text-xs text-stone-500">{expense.category}<span className="mt-1 block">{expense.sourceFileName}</span></td><td className="px-3 py-3"><button className="whitespace-nowrap text-xs underline" onClick={()=>setStatementRequest({id:expense.statementId,sequence:Date.now()})}>View statement</button></td></tr>)}
+                            {importedExpenses.map(expense=><tr key={`imported-${expense.statementId}-${expense.id}`} className="border-t border-stone-200"><td className="whitespace-nowrap px-3 py-3">{expense.date}</td><td className="px-3 py-3"><span className="font-medium">{expense.description}</span><span className="mt-1 block text-xs text-stone-500">Imported{expense.splits.length?' · Split allocation':''}</span></td><td className="px-3 py-3 tabular-nums">{formatCurrency(expense.allocatedAmount)}</td><td className="px-3 py-3 text-xs">{expense.sourceAccountName||'Statement account'}</td><td className="px-3 py-3 text-xs text-stone-500">{expense.category}<span className="mt-1 block">{expense.sourceFileName}</span></td><td className="px-3 py-3"><button className="whitespace-nowrap text-xs underline" onClick={()=>setTransactionDetail({...expense,sourceType:expense.sourceType||(/\.(pdf|png|jpe?g|webp)$/i.test(expense.sourceFileName)?'document':'csv'),budget:activeSpace?.name,account:expense.sourceAccountName,splits:expense.splits.map(a=>({name:spaces.find(s=>s.id===a.spaceId)?.name||'Unknown budget',amount:a.amount}))})}>Details</button></td></tr>)}
                             {draft.miscExpenses.length === 0 ? (
                               <tr>
                                 <td colSpan={6} className="px-3 py-8 text-center text-stone-500">
@@ -2072,6 +2074,7 @@ const SimpBudgetPage: React.FC = () => {
                                     />
                                   </td>
                                   <td className="px-3 py-3 text-right">
+                                    <button className="mb-2 text-xs underline" onClick={()=>setTransactionDetail({date:expense.date,description:expense.label,amount:moneyStringToNumber(expense.amount),budget:activeSpace?.name,account:expense.paymentMethod,sourceType:'self_reported',notes:expense.notes})}>Details</button>
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -2200,6 +2203,7 @@ const SimpBudgetPage: React.FC = () => {
           )}
         </div>
       </main>
+      <TransactionDetails detail={transactionDetail} onClose={()=>setTransactionDetail(null)} onOpenSource={id=>{setTransactionDetail(null);setStatementRequest({id,sequence:Date.now()});}}/>
       <RenameBudgetSpaceModal
         open={renameTarget !== null}
         name={renameName}
