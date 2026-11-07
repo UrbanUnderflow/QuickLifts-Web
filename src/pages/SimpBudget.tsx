@@ -1,3 +1,5 @@
+import SpendingInsights from '../components/simpbudget/SpendingInsights';
+import CPAExportPanel from '../components/simpbudget/CPAExportPanel';
 import CashFlowSummary from '../components/simpbudget/CashFlowSummary';
 import { bankCashFlow, spendingSummary } from '../lib/simpbudget/cashFlow';
 import ReceiptBreakdown from '../components/simpbudget/ReceiptBreakdown';
@@ -557,6 +559,7 @@ const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | n
 };
 
 const SimpBudgetPage: React.FC = () => {
+  const [insightsOpen,setInsightsOpen]=useState(false);
   const [transactionDetail,setTransactionDetail]=useState<TransactionDetail|null>(null);
   const [statementAccounts,setStatementAccounts]=useState<Account[]>([]);
   const [receiptBreakdownKind,setReceiptBreakdownKind]=useState<'total'|'earned'|'other'|null>(null);
@@ -1619,7 +1622,11 @@ const SimpBudgetPage: React.FC = () => {
           </div>
 
           <div className="flex flex-col items-start gap-3 lg:items-end">
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-medium" onClick={()=>setInsightsOpen(true)}>Insights</button>
+              <CPAExportPanel user={user} year={selectedYear} imports={statementImports} accounts={statementAccounts} spaces={spaces.map(({id,name})=>({id,name}))}/>
             <AuditNotifications uid={user.uid} imports={statementImports} recurring={recurringNotifications} recurringPeriod={`${selectedYear}-${String(selectedMonth).padStart(2,'0')}`} onReviewRecurring={id=>{if(!confirmUnsavedNavigation())return false;setSelectedView(id);setDateView('month');return true;}} onOpenSource={id=>setStatementRequest({id,sequence:Date.now()})}/>
+            </div>
           <div className="flex flex-wrap items-center gap-2">
             {([['month','Month'],['this-year','This year'],['last-year','Last year'],['last-seven','Last 7 days']] as const).map(([value,label])=><button key={value} aria-pressed={dateView===value} className={`${pillButtonClassName} ${dateView===value?'bg-stone-900 text-white':'border border-stone-200 bg-white text-stone-600'}`} onClick={()=>{if(confirmUnsavedNavigation())setDateView(value);}}>{label}</button>)}
             {dateView==='month'&&<>
@@ -2195,6 +2202,7 @@ const SimpBudgetPage: React.FC = () => {
           )}
         </div>
       </main>
+      <SpendingInsights user={user} open={insightsOpen} onClose={()=>setInsightsOpen(false)} imports={statementImports} accounts={statementAccounts} spaces={spaces.map(({id,name})=>({id,name}))} range={dateRange} onOpenSource={id=>{setInsightsOpen(false);setStatementRequest({id,sequence:Date.now()});}}/>
       <ReceiptBreakdown open={receiptBreakdownKind!==null} kind={receiptBreakdownKind||'other'} manualIncome={receiptBreakdownKind!=='other'&&dateView==='month'?(selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome):0} onClose={()=>setReceiptBreakdownKind(null)} rows={receiptBreakdownKind==='total'?cashFlow.receiptRows:receiptBreakdownKind==='earned'?cashFlow.earnedRows:cashFlow.otherRows} period={dateRange.label} budget={selectedView==='all'?'All Budgets':activeSpace?.name||'Selected budget'} onDetails={row=>{setReceiptBreakdownKind(null);setTransactionDetail({...row,allocatedAmount:-row.allocatedAmount,sourceType:row.sourceType||'document',account:row.sourceAccountName,budget:spaces.find(space=>space.id===row.spaceId)?.name,splits:row.splits.map(split=>({name:spaces.find(space=>space.id===split.spaceId)?.name||'Unknown budget',amount:split.amount}))});}}/>
       <TransactionDetails detail={transactionDetail} onClose={()=>setTransactionDetail(null)} onOpenSource={id=>{setTransactionDetail(null);setStatementRequest({id,sequence:Date.now()});}}/>
       <RenameBudgetSpaceModal
