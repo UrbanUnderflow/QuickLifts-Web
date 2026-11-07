@@ -1,12 +1,13 @@
 import { actualTransactions, type StatementImport } from './statements';
-export const recurringMerchantKey = (label:string) => label.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+import { recurringMerchantKey, recurringMatch } from './merchantMatching';
+export { recurringMerchantKey } from './merchantMatching';
 export function recurringSuggestions(imports:StatementImport[],spaceId:string,year:number,month:number,existing:{label:string}[]) {
   const groups=new Map<string,{label:string;amounts:Map<number,number[]>}>();
   const end=year*12+month-1;
   for(let offset=0;offset<6;offset++) {
     const serial=end-offset;
     for(const row of actualTransactions(imports,Math.floor(serial/12),serial%12+1,spaceId)) {
-      if(row.kind!=='expense'||row.allocatedAmount<=0)continue;
+      if(row.kind!=='expense'||row.allocatedAmount<=0||/dispute|reversal|chargeback/i.test(row.description))continue;
       const key=recurringMerchantKey(row.description);
       const group=groups.get(key)||{label:row.description,amounts:new Map<number,number[]>()};
       group.amounts.set(serial,[...(group.amounts.get(serial)||[]),row.allocatedAmount]);groups.set(key,group);
@@ -14,7 +15,7 @@ export function recurringSuggestions(imports:StatementImport[],spaceId:string,ye
   }
   const known=new Set(existing.map(row=>recurringMerchantKey(row.label)));
   return [...groups].flatMap(([key,group])=>{
-    if([...known].some(name=>name && (` ${key} `.includes(` ${name} `)||` ${name} `.includes(` ${key} `))))return [];
+    if([...known].some(name=>name && (recurringMatch(group.label,name).matched||` ${name} `.includes(` ${key} `))))return [];
     const months=[...group.amounts.keys()].sort((a,b)=>a-b);
     if(months.length<3||months.at(-1)!<end-1||!months.some((n,i)=>i>=2&&months[i-1]===n-1&&months[i-2]===n-2))return [];
     // Multiple purchases in one month are not strong evidence of a monthly bill.

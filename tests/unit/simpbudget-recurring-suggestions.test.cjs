@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),ts=require('typescript');
-const load=file=>{const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(name=>name==='./statements'?load('src/lib/simpbudget/statements.ts'):require(name),m,m.exports);return m.exports;};
+const load=file=>{const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(name=>name.startsWith('./')?load('src/lib/simpbudget/'+name.slice(2)+'.ts'):require(name),m,m.exports);return m.exports;};
 const {recurringSuggestions}=load('src/lib/simpbudget/recurringSuggestions.ts');
 const tx=(month,overrides={})=>({id:month,date:`2026-${month}-05`,description:'Elevenlabs.io',amount:5,kind:'expense',spaceId:'pulse',reason:'',sourceRow:1,reviewed:true,excluded:false,duplicate:false,splits:[],...overrides});
 const imports=rows=>[{status:'committed',id:'statement',accountId:'bank',transactions:rows}];
