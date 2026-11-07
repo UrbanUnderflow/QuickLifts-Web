@@ -1,7 +1,7 @@
 import budgetLayout from '../components/simpbudget/BudgetLayout.module.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
-import { actualTransactions, type StatementImport } from '../lib/simpbudget/statements';
+import { actualTransactions, validateTransaction, type StatementImport } from '../lib/simpbudget/statements';
 import TransactionDetails, { type TransactionDetail } from '../components/simpbudget/TransactionDetails';
 import StatementWorkspace from '../components/simpbudget/StatementWorkspace';
 import RenameBudgetSpaceModal from '../components/simpbudget/RenameBudgetSpaceModal';
@@ -611,6 +611,15 @@ const SimpBudgetPage: React.FC = () => {
     (record) => record.year === selectedYear && record.month === selectedMonth
   );
 
+  const [showCreateSpace, setShowCreateSpace] = useState(false);
+  const monthlyActuals = visibleSpaces.map(space => {
+    const expenses = actualTransactions(statementImports, selectedYear, selectedMonth, space.id);
+    const income = statementImports.filter(item => item.status === 'committed').flatMap(item => item.transactions).filter(tx => tx.date.startsWith(`${selectedYear}-${String(selectedMonth).padStart(2,'0')}`) && tx.kind === 'income' && !tx.excluded && !validateTransaction(tx)).reduce((sum,tx) => sum + (tx.splits.length ? tx.splits.filter(split => split.spaceId === space.id).reduce((n,split) => n - Math.round(split.amount*100),0) : tx.spaceId === space.id ? -Math.round(tx.amount*100) : 0),0)/100;
+    return {space, expenses, income, spending:expenses.reduce((sum,row)=>sum+Math.round(row.allocatedAmount*100),0)/100};
+  });
+  const overviewExpenses = monthlyActuals.flatMap(item => item.expenses.map(row => ({...row,budgetName:item.space.name,budgetId:item.space.id}))).sort((a,b)=>b.date.localeCompare(a.date));
+  const overviewIncome = monthlyActuals.reduce((sum,item)=>sum+Math.round(item.income*100),0)/100;
+  const overviewSpending = monthlyActuals.reduce((sum,item)=>sum+Math.round(item.spending*100),0)/100;
   const importedExpenses=actualTransactions(statementImports,selectedYear,selectedMonth,selectedView);
   const importedExpenseTotal=importedExpenses.reduce((sum,row)=>sum+Math.round(row.allocatedAmount*100),0)/100;
   const draftTotals = calculateDraftTotals(draft);
@@ -1806,12 +1815,17 @@ const SimpBudgetPage: React.FC = () => {
               )}
 
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {[
-                  { label: 'Income', value: selectedView === 'all' ? allTotals.monthlyIncome : draftTotals.monthlyIncome, color: 'text-emerald-600' },
+                {(selectedView === 'all' ? [
+                  { label: 'Actual income', value: overviewIncome, color: 'text-emerald-600' },
+                  { label: 'Actual spending', value: overviewSpending, color: 'text-pink-600' },
+                  { label: 'Income less spending', value: overviewIncome-overviewSpending, color: 'text-sky-600' },
+                  { label: 'Planned expenses', value: allTotals.recurringTotal+allTotals.miscTotal+allTotals.debtPayments, color: 'text-amber-600' },
+                ] : [
+                  { label: 'Planned income', value: selectedView === 'all' ? allTotals.monthlyIncome : draftTotals.monthlyIncome, color: 'text-emerald-600' },
                   { label: 'Recurring', value: selectedView === 'all' ? allTotals.recurringTotal : draftTotals.recurringTotal, color: 'text-sky-600' },
                   { label: 'Planned misc', value: selectedView === 'all' ? allTotals.miscTotal : draftTotals.miscTotal, color: 'text-pink-600' },
                   { label: 'Remaining', value: selectedView === 'all' ? allTotals.remaining : draftTotals.remaining, color: 'text-amber-600' },
-                ].map((metric) => (
+                ]).map((metric) => (
                   <div key={metric.label} className="rounded-lg border border-stone-200 bg-white p-4">
                     <div className={`mb-3 ${metric.color}`}>
                       <CircleDollarSign className="h-5 w-5" />
@@ -1825,7 +1839,7 @@ const SimpBudgetPage: React.FC = () => {
               {selectedView === 'all' ? (
                 <section className="space-y-4">
                   <div className="grid gap-4 lg:grid-cols-2">
-                    {activeSpaces.map((space) => {
+                    {visibleSpaces.map((space) => {
                       const Icon = getSpaceIcon(space.icon);
                       const record = selectedMonthRecords.find((candidate) => candidate.budgetSpaceId === space.id);
                       const totals = calculateDraftTotals(
@@ -1845,33 +1859,31 @@ const SimpBudgetPage: React.FC = () => {
                             </span>
                             <div>
                               <div className="text-lg font-semibold text-stone-950">{space.name}</div>
-                              <div className="text-sm text-stone-500">Remaining {formatCurrency(totals.remaining)}</div>
+                              <div className="text-sm text-stone-500">Actual spending {formatCurrency(monthlyActuals.find(item=>item.space.id===space.id)?.spending||0)}</div>
                             </div>
                           </div>
-                          <div className="grid grid-cols-4 gap-3 text-sm">
-                            <div>
-                              <div className="text-stone-500">Income</div>
-                              <div className="font-semibold text-stone-950">{formatCurrency(totals.monthlyIncome)}</div>
-                            </div>
-                            <div>
-                              <div className="text-stone-500">Recurring</div>
-                              <div className="font-semibold text-stone-950">{formatCurrency(totals.recurringTotal)}</div>
-                            </div>
-                            <div>
-                              <div className="text-stone-500">Misc</div>
-                              <div className="font-semibold text-stone-950">{formatCurrency(totals.miscTotal)}</div>
-                            </div>
-                            <div>
-                              <div className="text-stone-500">Debt</div>
-                              <div className="font-semibold text-stone-950">{formatCurrency(totals.debtPayments)}</div>
-                            </div>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div><div className="text-stone-500">Actual income</div><div className="font-semibold">{formatCurrency(monthlyActuals.find(item=>item.space.id===space.id)?.income||0)}</div></div>
+                            <div><div className="text-stone-500">Planned expenses</div><div className="font-semibold">{formatCurrency(totals.recurringTotal+totals.miscTotal+totals.debtPayments)}</div></div>
                           </div>
                         </button>
                       );
                     })}
                   </div>
 
-                  {renderSpaceCreatePanel(false)}
+                  <section className="min-w-0 rounded-lg border border-stone-200 bg-white">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 p-5">
+                      <div><h2 className="font-semibold">Expenses across all budgets</h2><p className="text-sm text-stone-500">{monthLabel(selectedMonth)} {selectedYear} · {overviewExpenses.length} allocations · {formatCurrency(overviewSpending)} actual spending</p></div>
+                      <button className={pillButtonClassName} onClick={()=>setShowCreateSpace(value=>!value)}>{showCreateSpace?'Close new budget':'Add Budget Space'}</button>
+                    </div>
+                    <div className="overflow-x-auto p-4"><table className={`${budgetLayout.transactions} text-sm`}>
+                      <thead><tr className="text-left text-xs uppercase text-stone-500"><th className="p-3">Date</th><th className="p-3">Expense / budget</th><th className="p-3">Amount</th><th className="p-3">Source</th><th className="p-3">Category</th><th className="p-3">Details</th></tr></thead>
+                      <tbody>{overviewExpenses.map(row=><tr className="border-t border-stone-200" key={`${row.statementId}-${row.id}-${row.budgetId}`}>
+                        <td data-label="Date" className="p-3">{row.date}</td><td data-label="Expense / budget" className="p-3"><span className="font-medium">{row.description}</span><span className="block text-xs text-stone-500">{row.budgetName}{row.splits.length?' · Split allocation':''}</span></td><td data-label="Amount" className="p-3 tabular-nums">{formatCurrency(row.allocatedAmount)}</td><td data-label="Source" className="p-3">{row.sourceAccountName||'Statement account'}</td><td data-label="Category" className="p-3">{row.category}</td><td data-label="Details" className="p-3"><button className="underline" onClick={()=>setTransactionDetail({...row,budget:row.budgetName,account:row.sourceAccountName,sourceType:row.sourceType||'document',splits:row.splits.map(split=>({name:spaces.find(space=>space.id===split.spaceId)?.name||'Unknown budget',amount:split.amount}))})}>Details</button></td>
+                      </tr>)}{!overviewExpenses.length&&<tr><td colSpan={6} className="p-8 text-center text-stone-500">No imported expenses for this month.</td></tr>}</tbody>
+                    </table></div>
+                  </section>
+                  {showCreateSpace&&renderSpaceCreatePanel(false)}
                 </section>
               ) : activeSpace ? (
                 <section className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(0,1fr)_340px]">
