@@ -7,6 +7,8 @@ const crypto = require('node:crypto').webcrypto;
 const dom = new JSDOM('<!doctype html><div id="root"></div>', {url:'http://localhost',pretendToBeVisual:true});
 for (const [key,value] of Object.entries({window:dom.window,document:dom.window.document,navigator:dom.window.navigator,HTMLElement:dom.window.HTMLElement,HTMLInputElement:dom.window.HTMLInputElement,HTMLButtonElement:dom.window.HTMLButtonElement,Element:dom.window.Element,Node:dom.window.Node,MutationObserver:dom.window.MutationObserver,getComputedStyle:dom.window.getComputedStyle,requestAnimationFrame:dom.window.requestAnimationFrame.bind(dom.window),cancelAnimationFrame:dom.window.cancelAnimationFrame.bind(dom.window),ResizeObserver:class{observe(){}disconnect(){}unobserve(){}},IntersectionObserver:class{observe(){}disconnect(){}unobserve(){}},IS_REACT_ACT_ENVIRONMENT:true,crypto})) Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});
 dom.window.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});
+globalThis.fetch=async(_url,options)=>{const b=JSON.parse(options.body);return {ok:true,json:async()=>b.action==='list'?{documents:[]}:{document:{statementId:b.statementId,role:b.role,fileName:b.fileName,mimeType:b.mimeType}}};};
+globalThis.FileReader=class{readAsDataURL(file){file.arrayBuffer().then(bytes=>{this.result='data:application/octet-stream;base64,'+Buffer.from(bytes).toString('base64');this.onload();});}};
 const React = require('react');
 const {act} = React;
 const {Simulate} = require('react-dom/test-utils');
@@ -88,7 +90,7 @@ test('repeated finish clicks issue one transaction',async()=>{
 test('PDF selection stays local until Analyze sends the staged document and prompt',async()=>{
   const previousFetch=globalThis.fetch, previousReader=globalThis.FileReader;
   const calls=[];
-  globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return{ok:true,json:async()=>({transactions:[{date:'2026-11-01',description:'Synthetic purchase',amount:12,kind:'expense',reason:'Needs review',sourceRow:'Page 1 row 1'}],warnings:[]})};};
+  globalThis.fetch=async(url,options)=>{if(url.includes('statement-document'))return previousFetch(url,options);calls.push({url,body:JSON.parse(options.body)});return{ok:true,json:async()=>({transactions:[{date:'2026-11-01',description:'Synthetic purchase',amount:12,kind:'expense',reason:'Needs review',sourceRow:'Page 1 row 1'}],warnings:[]})};};
   globalThis.FileReader=class{readAsDataURL(file){file.arrayBuffer().then(bytes=>{this.result='data:application/pdf;base64,'+Buffer.from(bytes).toString('base64');this.onload();});}};
   const h=await harness();try{
     const file=Object.assign(new Blob(['%PDF-1.7 synthetic'],{type:'application/pdf'}),{name:'synthetic.pdf'});
@@ -121,4 +123,16 @@ test('failure in a later PDF leaves no partial batch imported',async()=>{
   await act(async()=>Simulate.change(h.input('Upload statements'),{target:{files:[file('one.pdf'),file('two.pdf')],value:'fake'}}));await h.change('Statement account','a');await h.click('Analyze');
   assert.equal(calls,2);assert.equal(h.writes.length,0);assert.match(h.text(),/Provider unavailable/);
  }finally{global.fetch=oldFetch;global.FileReader=oldReader;URL.createObjectURL=oldCreate;URL.revokeObjectURL=oldRevoke;await h.close();}
+});
+
+test('attaching an original to a committed import preserves all sorted transactions and offers row links',async()=>{
+ const value=statement({status:'committed',transactions:[row({spaceId:'pulse',reviewed:true,category:'Travel',splits:[{spaceId:'pulse',amount:100}]})]});
+ const h=await harness([value]);try{
+  await h.open();const before=JSON.stringify([...h.data]);
+  const file={name:'existing.pdf',size:20,type:'application/pdf',arrayBuffer:async()=>Buffer.from('%PDF-1.7 synthetic').buffer};
+  await act(async()=>Simulate.change(h.input('Attach original statements'),{target:{files:[file],value:'fake'}}));
+  assert.equal(h.input('Statement for existing.pdf').value,'s1');
+  await h.click('Attach selected documents');assert.equal(JSON.stringify([...h.data]),before);assert.equal(h.writes.length,0);
+  assert.match(h.text(),/1\/1 originals attached/);assert.match(document.querySelector('tbody').textContent,/View statement/);
+ }finally{await h.close();}
 });
