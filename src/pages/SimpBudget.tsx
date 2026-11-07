@@ -1,3 +1,5 @@
+import RecurringAcrossBudgets from '../components/simpbudget/RecurringAcrossBudgets';
+import {recurringOverview} from '../lib/simpbudget/recurringOverview';
 import {projectedRecurring} from '../lib/simpbudget/recurringProjection';
 import {BudgetAutosave,assertBudgetBase} from '../lib/simpbudget/budgetAutosave';
 import RunwayScenarios from '../components/simpbudget/RunwayScenarios';
@@ -544,7 +546,7 @@ const SimpBudgetPage: React.FC = () => {
   const [statementAccounts,setStatementAccounts]=useState<Account[]>([]);
   const [receiptBreakdownKind,setReceiptBreakdownKind]=useState<'total'|'earned'|'other'|null>(null);
   const [statementImports,setStatementImports]=useState<StatementImport[]>([]);
-  const [statementRequest,setStatementRequest]=useState<{id:string;sequence:number}|null>(null);
+  const [statementRequest,setStatementRequest]=useState<{id:string;sequence:number;reviewOnly?:boolean}|null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authMessage, setAuthMessage] = useState<{ type: MessageTone; text: string } | null>(null);
@@ -612,10 +614,8 @@ const SimpBudgetPage: React.FC = () => {
   const effectiveRecurring=[...draft.recurringExpenses,...inheritedRecurring];
   const recurringValidation=validateRecurringMonth(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
   const recurringCandidates=recurringSuggestions(statementImports,selectedView,selectedYear,selectedMonth,effectiveRecurring);
-  const recurringNotifications=activeSpaces.map(space=>{
-    const recurring=recurringFor(selectDraftForSpaceMonth(records,space.id,selectedYear,selectedMonth).draft);
-    return {id:space.id,name:space.name,suggestions:recurringSuggestions(statementImports,space.id,selectedYear,selectedMonth,recurring).length,reviews:validateRecurringMonth(statementImports,space.id,selectedYear,selectedMonth,recurring).filter(item=>item.status!=='Matched').length};
-  }).filter(item=>item.suggestions||item.reviews);
+  const recurringSystem=recurringOverview(statementImports,recurringSourceRecords,activeSpaces,selectedYear,selectedMonth);
+  const recurringNotifications=recurringSystem.summaries;
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const monthlyActuals = visibleSpaces.filter(space=>dateView==='month'||selectedView==='all'||space.id===selectedView).map(space => {
     const expenses = actualTransactions(statementImports, selectedYear, selectedMonth, space.id,dateRange);
@@ -1575,7 +1575,10 @@ const SimpBudgetPage: React.FC = () => {
               <button className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-medium" onClick={()=>setInsightsOpen(true)}>Insights</button>
               <button className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-medium" onClick={()=>setRunwayOpen(true)}>Runway</button>
               <CPAExportPanel user={user} year={selectedYear} imports={statementImports} accounts={statementAccounts} spaces={spaces.map(({id,name})=>({id,name}))}/>
-            <AuditNotifications uid={user.uid} imports={statementImports} recurring={recurringNotifications} recurringPeriod={`${selectedYear}-${String(selectedMonth).padStart(2,'0')}`} onReviewRecurring={id=>{if(!confirmUnsavedNavigation())return false;setSelectedView(id);setDateView('month');return true;}} onOpenSource={id=>setStatementRequest({id,sequence:Date.now()})}/>
+            <AuditNotifications uid={user.uid} imports={statementImports} recurring={recurringNotifications} extraActions={[
+              ...statementImports.filter(item=>item.status==='review').map(item=>({id:`import:${item.id}`,title:'Finish statement import',description:`${item.fileName} · ${item.transactions.length} transactions awaiting completion`,count:1,label:'Continue review',onAction:()=>setStatementRequest({id:item.id,sequence:Date.now(),reviewOnly:true})})),
+              ...[...autosave.entries].filter(([key,entry])=>key.startsWith(`${user.uid}|`)&&entry.status==='error').map(([key,entry])=>({id:`save:${key}`,title:'Budget changes could not save',description:`${spaces.find(space=>space.id===entry.value.budgetSpaceId)?.name||'Budget'} · ${monthYearLabel(entry.value.month,entry.value.year)}. ${entry.error}`,count:1,label:'Review unsaved changes',onAction:()=>{setSelectedView(entry.value.budgetSpaceId);setSelectedYear(entry.value.year);setSelectedMonth(entry.value.month);setDateView('month');}}))
+            ]} onReviewRecurring={(id,year,month)=>{if(!confirmUnsavedNavigation())return false;setSelectedView(id);setSelectedYear(year);setSelectedMonth(month);setDateView('month');return true;}} onOpenSource={id=>setStatementRequest({id,sequence:Date.now()})}/>
             </div>
           <div className="flex flex-wrap items-center gap-2">
             {([['month','Month'],['this-year','This year'],['last-year','Last year'],['last-seven','Last 7 days']] as const).map(([value,label])=><button key={value} aria-pressed={dateView===value} className={`${pillButtonClassName} ${dateView===value?'bg-stone-900 text-white':'border border-stone-200 bg-white text-stone-600'}`} onClick={()=>{if(confirmUnsavedNavigation())setDateView(value);}}>{label}</button>)}
@@ -1798,6 +1801,8 @@ const SimpBudgetPage: React.FC = () => {
                       );
                     })}
                   </div>
+
+                  {selectedView==='all'&&<RecurringAcrossBudgets rows={recurringSystem.rows} period={monthYearLabel(selectedMonth,selectedYear)} onReview={(id,year,month)=>{if(!confirmUnsavedNavigation())return;setSelectedView(id);setSelectedYear(year);setSelectedMonth(month);setDateView('month');}}/>}
 
                   <section className="min-w-0 rounded-lg border border-stone-200 bg-white">
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 p-5">

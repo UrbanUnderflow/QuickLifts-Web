@@ -20,7 +20,7 @@ const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', curr
 const clean = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 const uid = () => crypto.randomUUID();
 
-export default function StatementWorkspace({ user, spaces, year, month, dateRange, onImportsChange, onAccountsChange, statementRequest }: { user: User; spaces: Space[]; year: number; month: number; dateRange?: {start:string;end:string;label:string}; onImportsChange?: (imports:StatementImport[])=>void; onAccountsChange?: (accounts:Account[])=>void; statementRequest?: {id:string;sequence:number}|null }) {
+export default function StatementWorkspace({ user, spaces, year, month, dateRange, onImportsChange, onAccountsChange, statementRequest }: { user: User; spaces: Space[]; year: number; month: number; dateRange?: {start:string;end:string;label:string}; onImportsChange?: (imports:StatementImport[])=>void; onAccountsChange?: (accounts:Account[])=>void; statementRequest?: {id:string;sequence:number;reviewOnly?:boolean}|null }) {
   const [transactionDetail,setTransactionDetail]=useState<TransactionDetail|null>(null);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'upload'|'review'|'history'>('upload');
@@ -252,7 +252,7 @@ export default function StatementWorkspace({ user, spaces, year, month, dateRang
     if(!ready||!statementRequest||handledStatementRequest.current===statementRequest.sequence)return;
     const member=imports.find(i=>i.id===statementRequest.id);if(!member)return;
     handledStatementRequest.current=statementRequest.sequence;
-    openImport(member.batchId?combineStatementImports(imports.filter(i=>i.batchId===member.batchId)):member,member.id);
+    openImport(member.batchId?combineStatementImports(imports.filter(i=>i.batchId===member.batchId)):member,statementRequest.reviewOnly?undefined:member.id);
     // A request is handled once; import changes alone must not reopen the modal.
   },[ready,statementRequest,imports]);
   return <section className="mb-6 rounded-2xl border border-stone-200 bg-white p-5 sm:p-6">

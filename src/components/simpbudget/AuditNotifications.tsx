@@ -4,16 +4,20 @@ import { Bell, X } from 'lucide-react';
 import { doc, runTransaction } from 'firebase/firestore';
 import { simpBudgetDb } from '../../api/firebase/simpBudgetConfig';
 import { categoryAudit, applyCategoryAuditBatch, type CategorySuggestion } from '../../lib/simpbudget/categoryAudit';
+import {notificationSummary,type RecurringNotification,type ExtraNotificationAction} from '../../lib/simpbudget/notificationSummary';
 import type { StatementImport } from '../../lib/simpbudget/statements';
 
-export default function AuditNotifications({ uid, imports, onOpenSource, recurring, recurringPeriod, onReviewRecurring }: { uid: string; imports: StatementImport[]; onOpenSource: (id: string) => void; recurring: {id:string;name:string;suggestions:number;reviews:number}[]; recurringPeriod:string; onReviewRecurring:(id:string)=>boolean }) {
+export default function AuditNotifications({ uid, imports, onOpenSource, recurring, onReviewRecurring,extraActions=[] }: { uid: string; imports: StatementImport[]; onOpenSource: (id: string) => void; recurring:RecurringNotification[]; onReviewRecurring:(id:string,year:number,month:number)=>boolean;extraActions?:ExtraNotificationAction[] }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const busyRef=useRef(false);
   const [message, setMessage] = useState('');
   const [limit, setLimit] = useState(30);
+  const [recurringLimit,setRecurringLimit]=useState(12);
+  const [actionLimit,setActionLimit]=useState(12);
   const suggestions = useMemo(() => categoryAudit(imports), [imports]);
-  const notificationCount = suggestions.length + recurring.reduce((sum, item) => sum + item.suggestions + item.reviews, 0);
+  const summary=notificationSummary(suggestions.length,recurring,extraActions);
+  const notificationCount=summary.total;
   const visibleSuggestions=suggestions.slice(0,limit);
   const act = async (requested: CategorySuggestion[], action: 'accept'|'dismiss') => {
     if (busyRef.current || !requested.length) return;
@@ -34,19 +38,21 @@ export default function AuditNotifications({ uid, imports, onOpenSource, recurri
     finally { busyRef.current=false; setBusy(false); }
   };
   return <>
-    <button type="button" aria-label={`Notifications, ${notificationCount} suggestions and reviews`} aria-haspopup="dialog" onClick={() => setOpen(true)} className="relative flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-medium">
+    <button type="button" aria-label={`Notifications, ${notificationCount} actions need attention`} aria-haspopup="dialog" onClick={() => setOpen(true)} className="relative flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-medium">
       <Bell className="h-4 w-4" aria-hidden="true" /> Notifications
       {notificationCount > 0 && <span className="rounded-full bg-sky-100 px-2 text-sky-900">{notificationCount}</span>}
     </button>
     <Dialog open={open} onClose={() => setOpen(false)} className="relative z-[85]">
       <div className="fixed inset-0 bg-stone-950/35" aria-hidden="true" />
       <div className="fixed inset-0 flex justify-end"><DialogPanel className="flex h-full w-full max-w-xl flex-col bg-white shadow-xl">
-        <div className="border-b p-5"><div className="flex items-center justify-between gap-3"><DialogTitle className="text-xl font-semibold">Notifications</DialogTitle><button aria-label="Close notifications" onClick={() => setOpen(false)}><X className="h-5 w-5" /></button></div>
-          <Description className="mt-2 text-sm text-stone-600">Category review across all imported dates and budgets. Suggestions use merchant descriptions; review the source before accepting. Nothing changes automatically.</Description>
+        <div className="border-b p-5"><div className="flex items-center justify-between gap-3"><DialogTitle className="text-xl font-semibold">{notificationCount} {notificationCount===1?'action needs':'actions need'} attention</DialogTitle><button aria-label="Close notifications" onClick={() => setOpen(false)}><X className="h-5 w-5" /></button></div>
+          <Description className="mt-2 text-sm text-stone-600">Pending reviews, import actions and save issues across all budgets and available months. Review each suggestion before accepting; nothing changes automatically.</Description>
           <p role="status" className="mt-2 text-sm text-sky-800">{message}</p>
         </div>
         <div className="flex-1 overflow-y-auto p-5">
-          {recurring.length > 0 && <section className="mb-6"><h3 className="mb-3 font-semibold">Recurring review · {recurringPeriod}</h3><div className="space-y-3">{recurring.map(item => <article key={item.id} className="rounded-xl border border-sky-200 bg-sky-50 p-4"><h4 className="font-semibold">{item.name}</h4><p className="mt-1 text-sm">{item.suggestions} suggested recurring expenses · {item.reviews} existing {item.reviews===1?'item needs':'items need'} review</p><button className="mt-3 rounded-lg border border-sky-300 px-3 py-2 text-sm" onClick={() => { if(onReviewRecurring(item.id)) setOpen(false); }}>Review month</button></article>)}</div></section>}
+          {notificationCount===0&&<p className="mb-5 rounded-lg bg-stone-50 p-3 text-sm text-stone-600">No pending actions from the current checks. This does not certify that every transaction or statement is complete.</p>}
+          {summary.extraItems.length>0&&<section className="mb-6" aria-label="Imports and save issues"><h3 className="mb-3 font-semibold">Imports & system actions · {summary.extraCount}</h3><div className="space-y-3">{summary.extraItems.slice(0,actionLimit).map(item=><article key={item.id} className="rounded-xl border border-rose-200 bg-rose-50/50 p-4"><h4 className="font-semibold">{item.title} <span className="text-sm font-normal">({item.count})</span></h4><p className="mt-1 text-sm text-stone-700">{item.description}</p><button className="mt-3 rounded-lg border border-rose-300 px-3 py-2 text-sm" onClick={()=>{setOpen(false);item.onAction();}}>{item.label}</button></article>)}</div>{summary.extraItems.length>actionLimit&&<button className="mt-3 rounded-lg border px-3 py-2 text-sm" onClick={()=>setActionLimit(value=>value+12)}>Show more system actions ({summary.extraItems.length-actionLimit})</button>}</section>}
+          {summary.recurringItems.length>0&&<section className="mb-6" aria-label="Recurring reviews"><h3 className="mb-3 font-semibold">Recurring suggestions & reviews · {summary.recurringCount}</h3><p className="mb-3 text-xs text-stone-500">Across {summary.recurringItems.length} budget-month {summary.recurringItems.length===1?'view':'views'}. The same bill can need a separate review in each month.</p><div className="space-y-3">{summary.recurringItems.slice(0,recurringLimit).map(item=><article key={`${item.id}:${item.year}:${item.month}`} className="rounded-xl border border-sky-200 bg-sky-50 p-4"><h4 className="font-semibold">{item.name} · {new Date(Date.UTC(item.year,item.month-1,1)).toLocaleDateString('en-US',{month:'long',year:'numeric',timeZone:'UTC'})}</h4><p className="mt-1 text-sm">{item.suggestions} suggested recurring expenses · {item.reviews} existing {item.reviews===1?'item needs':'items need'} review</p><button className="mt-3 rounded-lg border border-sky-300 px-3 py-2 text-sm" onClick={()=>{if(onReviewRecurring(item.id,item.year,item.month))setOpen(false);}}>Review {item.name} · {item.year}-{String(item.month).padStart(2,'0')}</button></article>)}</div>{summary.recurringItems.length>recurringLimit&&<button className="mt-3 rounded-lg border px-3 py-2 text-sm" onClick={()=>setRecurringLimit(value=>value+12)}>Show more recurring months ({summary.recurringItems.length-recurringLimit})</button>}</section>}
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Category suggestions · {suggestions.length}</h3><div className="flex flex-wrap gap-2"><button disabled={busy||!suggestions.length} onClick={()=>void act(suggestions,'accept')} className="rounded-lg bg-stone-900 px-3 py-2 text-sm text-white disabled:opacity-50">Accept all ({suggestions.length})</button><button disabled={busy||!visibleSuggestions.length} onClick={()=>void act(visibleSuggestions,'accept')} className="rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-50">Accept visible ({visibleSuggestions.length})</button></div></div><p className="mb-3 text-xs text-stone-500">All includes every category suggestion across dates and budgets. Visible means the {visibleSuggestions.length} suggestions currently loaded below, including any added with Show more.</p>
           {!suggestions.length && <p className="text-sm text-stone-600">No category suggestions from the current merchant checks. This does not mean every transaction has been audited.</p>}
           <div className="space-y-3">{visibleSuggestions.map(suggestion => <article key={suggestion.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
