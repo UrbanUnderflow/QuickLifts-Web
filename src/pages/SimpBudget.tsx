@@ -559,7 +559,7 @@ const MessageBanner: React.FC<{ message: { type: MessageTone; text: string } | n
 const SimpBudgetPage: React.FC = () => {
   const [transactionDetail,setTransactionDetail]=useState<TransactionDetail|null>(null);
   const [statementAccounts,setStatementAccounts]=useState<Account[]>([]);
-  const [receiptBreakdownOpen,setReceiptBreakdownOpen]=useState(false);
+  const [receiptBreakdownKind,setReceiptBreakdownKind]=useState<'total'|'earned'|'other'|null>(null);
   const [statementImports,setStatementImports]=useState<StatementImport[]>([]);
   const [statementRequest,setStatementRequest]=useState<{id:string;sequence:number}|null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -1798,7 +1798,7 @@ const SimpBudgetPage: React.FC = () => {
             </>
           ) : (
             <>
-              <CashFlowSummary received={cashFlow.totalReceived+(dateView==='month'?(selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome):0)} earned={cashFlow.earned+(dateView==='month'?(selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome):0)} other={cashFlow.other} net={cashFlow.net} onOther={()=>setReceiptBreakdownOpen(true)}/>
+              <CashFlowSummary received={cashFlow.totalReceived+(dateView==='month'?(selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome):0)} earned={cashFlow.earned+(dateView==='month'?(selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome):0)} other={cashFlow.other} net={cashFlow.net} onBreakdown={setReceiptBreakdownKind}/>
               <p className="text-xs text-stone-500">Net cash flow is received minus paid out in recorded bank activity, not your bank balance. Card repayments count here; credit-card purchases appear in spending instead. Internal transfers, including reimbursements between your own accounts, and monthly manual entries are excluded from cash flow. Cash flow follows each bank transaction’s budget allocation, not the categories of purchases paid by a card bill. Earned income includes additional manual income in Month view. Receipt categories do not determine tax treatment.</p>
               {cashFlow.unassigned>0&&<p className="text-xs text-amber-800">{cashFlow.unassigned} bank transactions have no budget allocation. They appear only in All Budgets cash flow.</p>}
               <div className="flex flex-wrap gap-6 rounded-lg border border-stone-200 bg-white p-4 text-sm"><span>Misc spending <strong>{formatCurrency(isOverview?overviewSpending+(dateView==='month'?allTotals.miscTotal:0):importedExpenseTotal+draftTotals.miscTotal)}</strong></span>{dateView==='month'&&<span>Recurring (planned) <strong>{formatCurrency(selectedView==='all'?allTotals.recurringTotal:draftTotals.recurringTotal)}</strong></span>}</div>
@@ -2192,7 +2192,7 @@ const SimpBudgetPage: React.FC = () => {
           )}
         </div>
       </main>
-      <ReceiptBreakdown open={receiptBreakdownOpen} onClose={()=>setReceiptBreakdownOpen(false)} rows={cashFlow.otherRows} period={dateRange.label} budget={selectedView==='all'?'All Budgets':activeSpace?.name||'Selected budget'} onDetails={row=>{setReceiptBreakdownOpen(false);setTransactionDetail({...row,sourceType:row.sourceType||'document',account:row.sourceAccountName,budget:spaces.find(space=>space.id===row.spaceId)?.name,splits:row.splits.map(split=>({name:spaces.find(space=>space.id===split.spaceId)?.name||'Unknown budget',amount:split.amount}))});}}/>
+      <ReceiptBreakdown open={receiptBreakdownKind!==null} kind={receiptBreakdownKind||'other'} manualIncome={receiptBreakdownKind!=='other'&&dateView==='month'?(selectedView==='all'?allTotals.monthlyIncome:draftTotals.monthlyIncome):0} onClose={()=>setReceiptBreakdownKind(null)} rows={receiptBreakdownKind==='total'?cashFlow.receiptRows:receiptBreakdownKind==='earned'?cashFlow.earnedRows:cashFlow.otherRows} period={dateRange.label} budget={selectedView==='all'?'All Budgets':activeSpace?.name||'Selected budget'} onDetails={row=>{setReceiptBreakdownKind(null);setTransactionDetail({...row,allocatedAmount:-row.allocatedAmount,sourceType:row.sourceType||'document',account:row.sourceAccountName,budget:spaces.find(space=>space.id===row.spaceId)?.name,splits:row.splits.map(split=>({name:spaces.find(space=>space.id===split.spaceId)?.name||'Unknown budget',amount:split.amount}))});}}/>
       <TransactionDetails detail={transactionDetail} onClose={()=>setTransactionDetail(null)} onOpenSource={id=>{setTransactionDetail(null);setStatementRequest({id,sequence:Date.now()});}}/>
       <RenameBudgetSpaceModal
         open={renameTarget !== null}

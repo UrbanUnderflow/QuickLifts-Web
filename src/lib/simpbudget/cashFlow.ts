@@ -4,7 +4,7 @@ export type ReceiptType = keyof typeof receiptLabels;
 export type ReceiptRow = StatementTransaction & { statementId:string; allocatedAmount:number; receiptType:ReceiptType; sourceFileName:string };
 /** Bank cash movements only. Card purchases belong in spending, not cash flow. */
 export function bankCashFlow(imports:StatementImport[],accounts:Account[],range:{start:string;end:string},spaceId:string) {
-  let earned=0,other=0,outgoing=0,unassigned=0; const otherRows:ReceiptRow[]=[];
+  let earned=0,other=0,outgoing=0,unassigned=0; const receiptRows:ReceiptRow[]=[];
   const accountTypes=new Map(accounts.map(account=>[account.id,account.type]));
   for(const item of imports) {
     if(item.status!=='committed')continue;
@@ -18,10 +18,11 @@ export function bankCashFlow(imports:StatementImport[],accounts:Account[],range:
       const amount=allocations.filter(a=>spaceId==='all'||a.spaceId===spaceId).reduce((sum,a)=>sum+Math.round(a.amount*100),0);
       if(amount<0) {
         const type=tx.receiptType||(tx.kind==='income'?'earned':'other');
-        if(type==='earned')earned-=amount;
-        else {other-=amount;otherRows.push({...tx,receiptType:type,statementId:item.id,allocatedAmount:-amount/100,sourceFileName:tx.sourceFileName||item.fileName});}
+        if(type==='earned')earned-=amount; else other-=amount;
+        receiptRows.push({...tx,receiptType:type,statementId:item.id,allocatedAmount:-amount/100,sourceFileName:tx.sourceFileName||item.fileName});
       } else outgoing+=amount;
     }
   }
-  return {earned:earned/100,other:other/100,totalReceived:(earned+other)/100,outgoing:outgoing/100,net:(earned+other-outgoing)/100,otherRows:otherRows.sort((a,b)=>b.date.localeCompare(a.date)),unassigned};
+  receiptRows.sort((a,b)=>b.date.localeCompare(a.date));
+  return {earned:earned/100,other:other/100,totalReceived:(earned+other)/100,outgoing:outgoing/100,net:(earned+other-outgoing)/100,receiptRows,earnedRows:receiptRows.filter(row=>row.receiptType==='earned'),otherRows:receiptRows.filter(row=>row.receiptType!=='earned'),unassigned};
 }
