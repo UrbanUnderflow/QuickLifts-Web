@@ -20,7 +20,7 @@ const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', curr
 const clean = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 const uid = () => crypto.randomUUID();
 
-export default function StatementWorkspace({ user, spaces, year, month, dateRange, onImportsChange, onAccountsChange, statementRequest }: { user: User; spaces: Space[]; year: number; month: number; dateRange?: {start:string;end:string;label:string}; onImportsChange?: (imports:StatementImport[])=>void; onAccountsChange?: (accounts:Account[])=>void; statementRequest?: {id:string;sequence:number;reviewOnly?:boolean}|null }) {
+export default function StatementWorkspace({ user, spaces, year, month, dateRange, onImportsChange, onAccountsChange, onReadyChange, statementRequest }: { user: User; spaces: Space[]; year: number; month: number; dateRange?: {start:string;end:string;label:string}; onImportsChange?: (imports:StatementImport[])=>void; onAccountsChange?: (accounts:Account[])=>void; onReadyChange?: (ready:boolean)=>void; statementRequest?: {id:string;sequence:number;reviewOnly?:boolean}|null }) {
   const [transactionDetail,setTransactionDetail]=useState<TransactionDetail|null>(null);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'upload'|'review'|'history'>('upload');
@@ -95,6 +95,7 @@ export default function StatementWorkspace({ user, spaces, year, month, dateRang
     const url=URL.createObjectURL(file);setPreviewUrl(url);
     return ()=>URL.revokeObjectURL(url);
   },[stagedFiles,previewIndex]);
+  useEffect(()=>{onReadyChange?.(ready);},[ready,onReadyChange]);
   const root = (key: string) => collection(simpBudgetDb, 'simpbudget-users', user.uid, key);
   useEffect(() => {
     let live = true;

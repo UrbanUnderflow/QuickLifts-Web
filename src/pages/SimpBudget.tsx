@@ -546,6 +546,7 @@ const SimpBudgetPage: React.FC = () => {
   const [statementAccounts,setStatementAccounts]=useState<Account[]>([]);
   const [receiptBreakdownKind,setReceiptBreakdownKind]=useState<'total'|'earned'|'other'|null>(null);
   const [statementImports,setStatementImports]=useState<StatementImport[]>([]);
+  const [statementDataReady,setStatementDataReady]=useState(false);
   const [statementRequest,setStatementRequest]=useState<{id:string;sequence:number;reviewOnly?:boolean}|null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -1574,7 +1575,7 @@ const SimpBudgetPage: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2">
               <button className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-medium" onClick={()=>setInsightsOpen(true)}>Insights</button>
               <button className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-medium" onClick={()=>setRunwayOpen(true)}>Runway</button>
-              <CPAExportPanel user={user} year={selectedYear} imports={statementImports} accounts={statementAccounts} spaces={spaces.map(({id,name})=>({id,name}))}/>
+              <CPAExportPanel dataReady={!loadingData&&loadedUserId===user.uid&&statementDataReady} user={user} year={selectedYear} imports={statementImports} accounts={statementAccounts} spaces={spaces.map(({id,name})=>({id,name}))}/>
             <AuditNotifications uid={user.uid} imports={statementImports} recurring={recurringNotifications} extraActions={[
               ...statementImports.filter(item=>item.status==='review').map(item=>({id:`import:${item.id}`,title:'Finish statement import',description:`${item.fileName} · ${item.transactions.length} transactions awaiting completion`,count:1,label:'Continue review',onAction:()=>setStatementRequest({id:item.id,sequence:Date.now(),reviewOnly:true})})),
               ...[...autosave.entries].filter(([key,entry])=>key.startsWith(`${user.uid}|`)&&entry.status==='error').map(([key,entry])=>({id:`save:${key}`,title:'Budget changes could not save',description:`${spaces.find(space=>space.id===entry.value.budgetSpaceId)?.name||'Budget'} · ${monthYearLabel(entry.value.month,entry.value.year)}. ${entry.error}`,count:1,label:'Review unsaved changes',onAction:()=>{setSelectedView(entry.value.budgetSpaceId);setSelectedYear(entry.value.year);setSelectedMonth(entry.value.month);setDateView('month');}}))
@@ -1655,7 +1656,7 @@ const SimpBudgetPage: React.FC = () => {
           </div>
         </header>
 
-        <StatementWorkspace key={user.uid} user={user} spaces={visibleSpaces} year={selectedYear} month={selectedMonth} dateRange={dateRange} onImportsChange={setStatementImports} onAccountsChange={setStatementAccounts} statementRequest={statementRequest} />
+        <StatementWorkspace key={user.uid} user={user} spaces={visibleSpaces} year={selectedYear} month={selectedMonth} dateRange={dateRange} onImportsChange={setStatementImports} onAccountsChange={setStatementAccounts} onReadyChange={setStatementDataReady} statementRequest={statementRequest} />
 
         <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">

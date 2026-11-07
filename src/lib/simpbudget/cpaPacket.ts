@@ -1,5 +1,6 @@
-import { bankCashFlow } from './cashFlow';
-import { actualTransactions, type Account, type StatementImport } from './statements';
+import { bankCashFlow,receiptLabels } from './cashFlow';
+import {buildCPAEvidence} from './cpaEvidence';
+import { type Account, type StatementImport } from './statements';
 export type IntakeAnswer = {status:'missing'|'provided'|'not_applicable';answer:string};
 export type CPADraft = {states:string[];answers:Record<string,IntakeAnswer>;revision:number};
 export const cpaChecklist = [
@@ -42,8 +43,14 @@ export function buildCPAPacket(imports:StatementImport[],accounts:Account[],spac
  const today=now.toISOString().slice(0,10);
  const rows=imports.flatMap(item=>item.transactions.filter(tx=>tx.date>=range.start&&tx.date<=range.end).map(tx=>({item,tx})));
  const sources=imports.filter(item=>rows.some(row=>row.item.id===item.id)||item.fileName.includes(String(year)));
- const budgets=spaces.map(space=>{const cash=bankCashFlow(imports,accounts,range,space.id);const spent=actualTransactions(imports,year,1,space.id,range).reduce((sum,row)=>sum+Math.round(row.allocatedAmount*100),0)/100;return {...space,received:cash.totalReceived,earned:cash.earned,other:cash.other,spent,net:Math.round((cash.totalReceived-spent)*100)/100,bankOutgoing:cash.outgoing,bankNet:cash.net};});
+ const evidence=buildCPAEvidence(imports,accounts,spaces,year);
+ const budgets=evidence.byBudget.map(space=>{const cash=bankCashFlow(imports,accounts,range,space.id);const spent=space.total;return {id:space.id,name:space.name,received:cash.totalReceived,earned:cash.earned,other:cash.other,spent,net:Math.round((cash.totalReceived-spent)*100)/100,bankOutgoing:cash.outgoing,bankNet:cash.net};});
  const cash=bankCashFlow(imports,accounts,range,'all');
+ const receiptSummary=Object.entries(receiptLabels).map(([type,label])=>({type,label,count:cash.receiptRows.filter(row=>row.receiptType===type).length,total:cash.receiptRows.filter(row=>row.receiptType===type).reduce((sum,row)=>sum+Math.round(row.allocatedAmount*100),0)/100})).filter(row=>row.count);
+ const expenseCategories=csv([['Budget','Budget ID','Category','Net expense amount','Allocations'],...evidence.byBudgetCategory.map(row=>[row.budgetName,row.budgetId,row.category,row.total,row.count])]);
+ const monthlyExpenses=csv([['Month','Net expense amount','Allocations'],...evidence.byMonth.map(row=>[row.month,row.total,row.count])]);
+ const receipts=csv([['Receipt type','Recorded amount','Transactions'],...receiptSummary.map(row=>[row.label,row.total,row.count])]);
+ const topicEvidence=csv([['Checklist topic ID','Statement ID','Transaction ID','Date','Description','Budget','Category','Evidence type','Amount','Source file','Notes'],...Object.values(evidence.topics).flatMap(topic=>topic.rows.map(row=>[topic.topicId,row.statementId,row.id,row.date,row.description,row.budgetName,row.category,row.evidenceType,row.amount,row.sourceFileName,row.notes]))]);
  const ledger=csv([['Statement ID','Transaction ID','Date','Description','Signed amount (expense positive)','Kind','Receipt type','Budget ID','Splits (signed amounts)','Category','Notes','Account ID','Account name','Account type','Source file','Source row','Import status','Reviewed','Excluded from spending','Duplicate','Excluded from cash flow','Review reason'],...rows.map(({item,tx})=>[item.id,tx.id,tx.date,tx.description,tx.amount,tx.kind,tx.receiptType||'',tx.spaceId,JSON.stringify(tx.splits),tx.category||'',tx.notes||'',tx.sourceAccountId||item.accountId,tx.sourceAccountName||accounts.find(a=>a.id===item.accountId)?.name||'',tx.sourceAccountType||accounts.find(a=>a.id===item.accountId)?.type||'',tx.sourceFileName||item.fileName,tx.sourceRow,item.status,tx.reviewed,tx.excluded,tx.duplicate,tx.cashFlowExcluded??'',tx.reason])]);
  const flags=[
  'Preparation packet only; taxability and deductibility have not been determined. Manual monthly budget entries and plans are not included in this imported-transaction export.',
@@ -56,7 +63,7 @@ export function buildCPAPacket(imports:StatementImport[],accounts:Account[],spac
  ...(rows.some(({item})=>item.status!=='committed')?['Review or undone imports appear in the ledger for audit, but are excluded from summary totals.']:[]),
  ...(cash.unassigned?[`${cash.unassigned} bank transactions have no budget assignment. All-account cash totals may exceed budget totals.`]:[]),
  ];
- return {year,today,range,rows,sources,budgets,cash,ledger,flags};
+ return {year,today,range,rows,sources,budgets,cash,ledger,flags,evidence,expenseCategories,monthlyExpenses,receipts,receiptSummary,topicEvidence};
 }
 export type CPAPacket=ReturnType<typeof buildCPAPacket>;
 export function sourceManifest(packet:CPAPacket,documents:OriginalDocument[],includedIds:string[]=[]) {
