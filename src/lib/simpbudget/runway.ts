@@ -29,7 +29,7 @@ export function simulateRunway(entities:RunwayEntity[],transfers:RunwayTransfer[
       shares.sort((a,b)=>(b.exact-Math.floor(b.exact))-(a.exact-Math.floor(a.exact))||a.i-b.i);
       for(let i=0;i<remainder;i++)paid[shares[i].i]++;
     }
-    transfers.forEach((t,i)=>{balances[t.from]-=paid[i];balances[t.to]+=paid[i];const missing=cents(t.amount)-paid[i];if(missing>0){const warning=fundingWarnings[t.to]||{firstMonth:index+1,unfunded:0};warning.unfunded+=missing;fundingWarnings[t.to]=warning;}});
+    transfers.forEach((t,i)=>{balances[t.from]-=paid[i];balances[t.to]+=paid[i];const missing=cents(t.amount)-paid[i];if(missing>0){if(firstShortfall[t.from]===null)firstShortfall[t.from]=index+1;const warning=fundingWarnings[t.to]||{firstMonth:index+1,unfunded:0};warning.unfunded+=missing;fundingWarnings[t.to]=warning;}});
     for(const e of entities)if(balances[e.id]<0&&firstShortfall[e.id]===null)firstShortfall[e.id]=index+1;
     const total=Object.values(balances).reduce((a,b)=>a+b,0);if(total<0&&combinedShortfall===null)combinedShortfall=index+1;
     return {month:index+1,total:total/100,balances:Object.fromEntries(Object.entries(balances).map(([id,n])=>[id,n/100]))};
