@@ -1815,17 +1815,12 @@ const SimpBudgetPage: React.FC = () => {
               )}
 
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {(selectedView === 'all' ? [
-                  { label: 'Actual income', value: overviewIncome, color: 'text-emerald-600' },
-                  { label: 'Actual spending', value: overviewSpending, color: 'text-pink-600' },
-                  { label: 'Income less spending', value: overviewIncome-overviewSpending, color: 'text-sky-600' },
-                  { label: 'Planned expenses', value: allTotals.recurringTotal+allTotals.miscTotal+allTotals.debtPayments, color: 'text-amber-600' },
-                ] : [
-                  { label: 'Planned income', value: selectedView === 'all' ? allTotals.monthlyIncome : draftTotals.monthlyIncome, color: 'text-emerald-600' },
-                  { label: 'Recurring', value: selectedView === 'all' ? allTotals.recurringTotal : draftTotals.recurringTotal, color: 'text-sky-600' },
-                  { label: 'Planned misc', value: selectedView === 'all' ? allTotals.miscTotal : draftTotals.miscTotal, color: 'text-pink-600' },
-                  { label: 'Remaining', value: selectedView === 'all' ? allTotals.remaining : draftTotals.remaining, color: 'text-amber-600' },
-                ]).map((metric) => (
+                {[
+                  { label: 'Income', value: selectedView === 'all' ? overviewIncome+allTotals.monthlyIncome : (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome, color: 'text-emerald-600' },
+                  { label: 'Recurring (planned)', value: selectedView === 'all' ? allTotals.recurringTotal : draftTotals.recurringTotal, color: 'text-sky-600' },
+                  { label: 'Misc', value: selectedView === 'all' ? overviewSpending+allTotals.miscTotal : importedExpenseTotal+draftTotals.miscTotal, color: 'text-pink-600' },
+                  { label: 'Net', value: selectedView === 'all' ? overviewIncome+allTotals.monthlyIncome-overviewSpending-allTotals.miscTotal : (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome-importedExpenseTotal-draftTotals.miscTotal, color: 'text-amber-600' },
+                ].map((metric) => (
                   <div key={metric.label} className="rounded-lg border border-stone-200 bg-white p-4">
                     <div className={`mb-3 ${metric.color}`}>
                       <CircleDollarSign className="h-5 w-5" />
@@ -1835,6 +1830,8 @@ const SimpBudgetPage: React.FC = () => {
                   </div>
                 ))}
               </section>
+
+              <p className="text-xs text-stone-500">Net is recorded income minus recorded spending. Recurring plans, transfers and financing are excluded. Enter additional income and misc only when they are not already imported.</p>
 
               {selectedView === 'all' ? (
                 <section className="space-y-4">
@@ -1859,11 +1856,11 @@ const SimpBudgetPage: React.FC = () => {
                             </span>
                             <div>
                               <div className="text-lg font-semibold text-stone-950">{space.name}</div>
-                              <div className="text-sm text-stone-500">Actual spending {formatCurrency(monthlyActuals.find(item=>item.space.id===space.id)?.spending||0)}</div>
+                              <div className="text-sm text-stone-500">Actual spending {formatCurrency((monthlyActuals.find(item=>item.space.id===space.id)?.spending||0)+totals.miscTotal)}</div>
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div><div className="text-stone-500">Actual income</div><div className="font-semibold">{formatCurrency(monthlyActuals.find(item=>item.space.id===space.id)?.income||0)}</div></div>
+                            <div><div className="text-stone-500">Actual income</div><div className="font-semibold">{formatCurrency((monthlyActuals.find(item=>item.space.id===space.id)?.income||0)+totals.monthlyIncome)}</div></div>
                             <div><div className="text-stone-500">Planned expenses</div><div className="font-semibold">{formatCurrency(totals.recurringTotal+totals.miscTotal+totals.debtPayments)}</div></div>
                           </div>
                         </button>
@@ -2034,7 +2031,7 @@ const SimpBudgetPage: React.FC = () => {
                             {draft.miscExpenses.length === 0 ? (
                               <tr>
                                 <td colSpan={6} className="px-3 py-8 text-center text-stone-500">
-                                  {importedExpenses.length?'No additional planned misc expenses.':'No misc expenses yet.'}
+                                  {importedExpenses.length?'No additional manual misc expenses.':'No misc expenses yet.'}
                                 </td>
                               </tr>
                             ) : (
@@ -2141,7 +2138,7 @@ const SimpBudgetPage: React.FC = () => {
                       <div className="space-y-4">
                         <label className="block">
                           <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
-                            Monthly income
+                            Additional income (not imported)
                           </span>
                           <input
                             value={draft.monthlyIncome}
@@ -2168,14 +2165,11 @@ const SimpBudgetPage: React.FC = () => {
                         <div className="rounded-lg border border-stone-200 bg-[#FAFAF7] p-4">
                           <div className="space-y-3 text-sm">
                             {[
-                              ['Income', draftTotals.monthlyIncome],
-                              ['Recurring', draftTotals.recurringTotal],
-                              ['After recurring', draftTotals.afterRecurring],
-                              ['Planned misc', draftTotals.miscTotal],
-                              ['Imported actuals', importedExpenseTotal],
-                              ['After misc', draftTotals.afterMisc],
+                              ['Income', (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome],
+                              ['Recurring (planned)', draftTotals.recurringTotal],
+                              ['Misc', draftTotals.miscTotal+importedExpenseTotal],
                               ['Debt', draftTotals.debtPayments],
-                              ['Remaining', draftTotals.remaining],
+                              ['Net', (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome-importedExpenseTotal-draftTotals.miscTotal],
                             ].map(([label, value]) => (
                               <div key={label} className="flex items-center justify-between gap-4">
                                 <span className="text-stone-500">{label}</span>
