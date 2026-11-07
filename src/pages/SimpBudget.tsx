@@ -1778,42 +1778,6 @@ const SimpBudgetPage: React.FC = () => {
             </>
           ) : (
             <>
-              {isMigrationOwner && (
-                <details className="rounded-lg border border-stone-200 bg-white p-4">
-                  <summary className="cursor-pointer text-sm font-medium text-stone-500">Legacy budget migration</summary>
-                  <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-stone-950">Copy saved admin budgets</div>
-                      <div className="mt-1 text-sm text-stone-500">
-                        Copies saved planned budget months from the QuickLifts admin dashboard. Use Import statement above for PDFs, screenshots and CSVs.
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={connectQuickLiftsSource}
-                        className={`${pillButtonClassName} border border-stone-200 bg-[#FAFAF7] text-stone-600 hover:border-stone-300`}
-                      >
-                        <ShieldCheck className="h-4 w-4" />
-                        {sourceConnected ? 'Source connected' : 'Connect source'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={migrateFounderBudgetData}
-                        disabled={migrating || !sourceConnected}
-                        className={`${pillButtonClassName} bg-stone-900 text-white hover:bg-stone-800`}
-                      >
-                        {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownToLine className="h-4 w-4" />}
-                        Copy saved admin budgets
-                      </button>
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <MessageBanner message={migrationMessage} />
-                  </div>
-                </details>
-              )}
-
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {[
                   { label: 'Income', value: selectedView === 'all' ? overviewIncome+allTotals.monthlyIncome : (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome, color: 'text-emerald-600' },
