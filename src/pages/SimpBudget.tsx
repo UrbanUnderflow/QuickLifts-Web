@@ -1,3 +1,4 @@
+import { dateViewRange, type DateView } from '../lib/simpbudget/dateViews';
 import { validateRecurringMonth } from '../lib/simpbudget/recurringValidation';
 import { recurringSuggestions } from '../lib/simpbudget/recurringSuggestions';
 import budgetLayout from '../components/simpbudget/BudgetLayout.module.css';
@@ -568,6 +569,9 @@ const SimpBudgetPage: React.FC = () => {
   const [selectedView, setSelectedView] = useState<BudgetView>('all');
   const [selectedMonth, setSelectedMonth] = useState(DEFAULT_MONTH);
   const [selectedYear, setSelectedYear] = useState(DEFAULT_YEAR);
+  const [dateView,setDateView]=useState<DateView>('month');
+  const dateRange=dateViewRange(dateView,selectedYear,selectedMonth);
+  const isOverview=selectedView==='all'||dateView!=='month';
   const [showArchivedSpaces, setShowArchivedSpaces] = useState(false);
   const [draft, setDraft] = useState<BudgetDraft>(createEmptyDraft('', DEFAULT_YEAR, DEFAULT_MONTH));
   const [baselineDraft, setBaselineDraft] = useState<BudgetDraft>(createEmptyDraft('', DEFAULT_YEAR, DEFAULT_MONTH));
@@ -613,9 +617,9 @@ const SimpBudgetPage: React.FC = () => {
   const recurringValidation=validateRecurringMonth(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
   const recurringCandidates=recurringSuggestions(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
-  const monthlyActuals = visibleSpaces.map(space => {
-    const expenses = actualTransactions(statementImports, selectedYear, selectedMonth, space.id);
-    const income = statementImports.filter(item => item.status === 'committed').flatMap(item => item.transactions).filter(tx => tx.date.startsWith(`${selectedYear}-${String(selectedMonth).padStart(2,'0')}`) && tx.kind === 'income' && !tx.excluded && !validateTransaction(tx)).reduce((sum,tx) => sum + (tx.splits.length ? tx.splits.filter(split => split.spaceId === space.id).reduce((n,split) => n - Math.round(split.amount*100),0) : tx.spaceId === space.id ? -Math.round(tx.amount*100) : 0),0)/100;
+  const monthlyActuals = visibleSpaces.filter(space=>dateView==='month'||selectedView==='all'||space.id===selectedView).map(space => {
+    const expenses = actualTransactions(statementImports, selectedYear, selectedMonth, space.id,dateRange);
+    const income = statementImports.filter(item => item.status === 'committed').flatMap(item => item.transactions).filter(tx => tx.date>=dateRange.start && tx.date<=dateRange.end && tx.kind === 'income' && !tx.excluded && !validateTransaction(tx)).reduce((sum,tx) => sum + (tx.splits.length ? tx.splits.filter(split => split.spaceId === space.id).reduce((n,split) => n - Math.round(split.amount*100),0) : tx.spaceId === space.id ? -Math.round(tx.amount*100) : 0),0)/100;
     return {space, expenses, income, spending:expenses.reduce((sum,row)=>sum+Math.round(row.allocatedAmount*100),0)/100};
   });
   const overviewExpenses = monthlyActuals.flatMap(item => item.expenses.map(row => ({...row,budgetName:item.space.name,budgetId:item.space.id}))).sort((a,b)=>b.date.localeCompare(a.date));
@@ -1603,6 +1607,8 @@ const SimpBudgetPage: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {([['month','Month'],['this-year','This year'],['last-year','Last year'],['last-seven','Last 7 days']] as const).map(([value,label])=><button key={value} aria-pressed={dateView===value} className={`${pillButtonClassName} ${dateView===value?'bg-stone-900 text-white':'border border-stone-200 bg-white text-stone-600'}`} onClick={()=>{if(confirmUnsavedNavigation())setDateView(value);}}>{label}</button>)}
+            {dateView==='month'&&<>
             <button
               type="button"
               onClick={() => {
@@ -1662,6 +1668,7 @@ const SimpBudgetPage: React.FC = () => {
               <ChevronRight className="h-4 w-4" />
             </button>
 
+            </>}
             <button
               type="button"
               onClick={handleSignOut}
@@ -1673,7 +1680,7 @@ const SimpBudgetPage: React.FC = () => {
           </div>
         </header>
 
-        <StatementWorkspace key={user.uid} user={user} spaces={visibleSpaces} year={selectedYear} month={selectedMonth} onImportsChange={setStatementImports} statementRequest={statementRequest} />
+        <StatementWorkspace key={user.uid} user={user} spaces={visibleSpaces} year={selectedYear} month={selectedMonth} dateRange={dateRange} onImportsChange={setStatementImports} statementRequest={statementRequest} />
 
         <div className="mb-5 flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">
@@ -1780,11 +1787,11 @@ const SimpBudgetPage: React.FC = () => {
             <>
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {[
-                  { label: 'Income', value: selectedView === 'all' ? overviewIncome+allTotals.monthlyIncome : (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome, color: 'text-emerald-600' },
-                  { label: 'Recurring (planned)', value: selectedView === 'all' ? allTotals.recurringTotal : draftTotals.recurringTotal, color: 'text-sky-600' },
-                  { label: 'Misc', value: selectedView === 'all' ? overviewSpending+allTotals.miscTotal : importedExpenseTotal+draftTotals.miscTotal, color: 'text-pink-600' },
-                  { label: 'Net', value: selectedView === 'all' ? overviewIncome+allTotals.monthlyIncome-overviewSpending-allTotals.miscTotal : (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome-importedExpenseTotal-draftTotals.miscTotal, color: 'text-amber-600' },
-                ].map((metric) => (
+                  { label: 'Income', value: isOverview ? overviewIncome+(dateView==='month'?allTotals.monthlyIncome:0) : (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome, color: 'text-emerald-600' },
+                  { label: 'Recurring (planned)', value: isOverview ? allTotals.recurringTotal : draftTotals.recurringTotal, color: 'text-sky-600' },
+                  { label: 'Misc', value: isOverview ? overviewSpending+(dateView==='month'?allTotals.miscTotal:0) : importedExpenseTotal+draftTotals.miscTotal, color: 'text-pink-600' },
+                  { label: 'Net', value: isOverview ? overviewIncome+(dateView==='month'?allTotals.monthlyIncome:0)-overviewSpending-(dateView==='month'?allTotals.miscTotal:0) : (monthlyActuals.find(item=>item.space.id===selectedView)?.income||0)+draftTotals.monthlyIncome-importedExpenseTotal-draftTotals.miscTotal, color: 'text-amber-600' },
+                ].filter(metric=>dateView==='month'||metric.label!=='Recurring (planned)').map((metric) => (
                   <div key={metric.label} className="rounded-lg border border-stone-200 bg-white p-4">
                     <div className={`mb-3 ${metric.color}`}>
                       <CircleDollarSign className="h-5 w-5" />
@@ -1797,10 +1804,10 @@ const SimpBudgetPage: React.FC = () => {
 
               <p className="text-xs text-stone-500">Net is recorded income minus recorded spending. Recurring plans, transfers and financing are excluded. Enter additional income and misc only when they are not already imported.</p>
 
-              {selectedView === 'all' ? (
+              {isOverview ? (
                 <section className="space-y-4">
                   <div className="grid gap-4 lg:grid-cols-2">
-                    {visibleSpaces.map((space) => {
+                    {visibleSpaces.filter(space=>dateView==='month'||selectedView==='all'||space.id===selectedView).map((space) => {
                       const Icon = getSpaceIcon(space.icon);
                                       const totals = calculateDraftTotals(
                         selectDraftForSpaceMonth(records, space.id, selectedYear, selectedMonth).draft
@@ -1819,12 +1826,12 @@ const SimpBudgetPage: React.FC = () => {
                             </span>
                             <div>
                               <div className="text-lg font-semibold text-stone-950">{space.name}</div>
-                              <div className="text-sm text-stone-500">Actual spending {formatCurrency((monthlyActuals.find(item=>item.space.id===space.id)?.spending||0)+totals.miscTotal)}</div>
+                              <div className="text-sm text-stone-500">Actual spending {formatCurrency((monthlyActuals.find(item=>item.space.id===space.id)?.spending||0)+(dateView==='month'?totals.miscTotal:0))}</div>
                             </div>
                           </div>
                           <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div><div className="text-stone-500">Actual income</div><div className="font-semibold">{formatCurrency((monthlyActuals.find(item=>item.space.id===space.id)?.income||0)+totals.monthlyIncome)}</div></div>
-                            <div><div className="text-stone-500">Planned expenses</div><div className="font-semibold">{formatCurrency(totals.recurringTotal+totals.miscTotal+totals.debtPayments)}</div></div>
+                            <div><div className="text-stone-500">Actual income</div><div className="font-semibold">{formatCurrency((monthlyActuals.find(item=>item.space.id===space.id)?.income||0)+(dateView==='month'?totals.monthlyIncome:0))}</div></div>
+                            {dateView==='month'&&<div><div className="text-stone-500">Recurring (planned)</div><div className="font-semibold">{formatCurrency(totals.recurringTotal)}</div></div>}
                           </div>
                         </button>
                       );
@@ -1833,7 +1840,7 @@ const SimpBudgetPage: React.FC = () => {
 
                   <section className="min-w-0 rounded-lg border border-stone-200 bg-white">
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 p-5">
-                      <div><h2 className="font-semibold">Expenses across all budgets</h2><p className="text-sm text-stone-500">{monthLabel(selectedMonth)} {selectedYear} · {overviewExpenses.length} allocations · {formatCurrency(overviewSpending)} actual spending</p></div>
+                      <div><h2 className="font-semibold">{selectedView==='all'?'Expenses across all budgets':`${activeSpace?.name||'Budget'} expenses`}</h2><p className="text-sm text-stone-500">{dateRange.label} · {overviewExpenses.length} allocations · {formatCurrency(overviewSpending)} actual spending{dateView!=='month'?' · Imported transactions; monthly plans are available in Month view.':''}</p></div>
                       <button className={pillButtonClassName} onClick={()=>setShowCreateSpace(value=>!value)}>{showCreateSpace?'Close new budget':'Add Budget Space'}</button>
                     </div>
                     <div className="overflow-x-auto p-4"><table className={`${budgetLayout.transactions} text-sm`}>

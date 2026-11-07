@@ -222,10 +222,10 @@ export function actualTotals(imports: StatementImport[]): Record<string, number>
 }
 
 /** Read-only monthly ledger projection; never copies actuals into planned expenses. */
-export function actualTransactions(imports: StatementImport[], year: number, month: number, spaceId: string) {
+export function actualTransactions(imports: StatementImport[], year: number, month: number, spaceId: string, range?: {start:string;end:string}) {
   const prefix = `${year}-${String(month).padStart(2,'0')}`;
   return imports.filter(item=>item.status==='committed').flatMap(item=>item.transactions.flatMap(tx=>{
-    if(!tx.date.startsWith(prefix)||tx.excluded||!tx.reviewed||!['expense','refund'].includes(tx.kind)||validateTransaction(tx))return [];
+    if((range ? tx.date<range.start||tx.date>range.end : !tx.date.startsWith(prefix))||tx.excluded||!tx.reviewed||!['expense','refund'].includes(tx.kind)||validateTransaction(tx))return [];
     const allocations=tx.splits.length?tx.splits:[{spaceId:tx.spaceId,amount:tx.amount}];
     const matching=allocations.filter(a=>a.spaceId===spaceId);
     if(!matching.length)return [];

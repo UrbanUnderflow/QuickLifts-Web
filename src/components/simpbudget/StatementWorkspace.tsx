@@ -19,7 +19,7 @@ const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', curr
 const clean = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 const uid = () => crypto.randomUUID();
 
-export default function StatementWorkspace({ user, spaces, year, month, onImportsChange, statementRequest }: { user: User; spaces: Space[]; year: number; month: number; onImportsChange?: (imports:StatementImport[])=>void; statementRequest?: {id:string;sequence:number}|null }) {
+export default function StatementWorkspace({ user, spaces, year, month, dateRange, onImportsChange, statementRequest }: { user: User; spaces: Space[]; year: number; month: number; dateRange?: {start:string;end:string;label:string}; onImportsChange?: (imports:StatementImport[])=>void; statementRequest?: {id:string;sequence:number}|null }) {
   const [transactionDetail,setTransactionDetail]=useState<TransactionDetail|null>(null);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<'upload'|'review'|'history'>('upload');
@@ -210,7 +210,7 @@ export default function StatementWorkspace({ user, spaces, year, month, onImport
     setSelected([]); setShowSorted(false); setSuggestionFilter('');setSourceFilter('');setKindFilter(''); setMessage('Last change undone. The transaction is back in the list.');
   };
   const close = () => { if(!busy) void run(async()=>{ if(active?.status==='review') await persist(active,'review'); setOpen(false); }); };
-  const totals=actualTotals(imports.map(i=>({...i,transactions:i.transactions.filter(t=>t.date.startsWith(`${year}-${String(month).padStart(2,'0')}`))})));
+  const totals=actualTotals(imports.map(i=>({...i,transactions:i.transactions.filter(t=>dateRange ? t.date>=dateRange.start&&t.date<=dateRange.end : t.date.startsWith(`${year}-${String(month).padStart(2,'0')}`))})));
   const options=<><option value="">Needs a bucket</option>{spaces.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</>;
   const commit = () => run(async()=>{
     if(!active) return;
@@ -252,7 +252,7 @@ export default function StatementWorkspace({ user, spaces, year, month, onImport
       <div className="flex items-center gap-3"><button className="px-2 py-2 text-sm font-medium text-stone-600 hover:text-stone-950" onClick={()=>{setView('history');setOpen(true);setMessage('');}}>Import history</button><button className={primary} onClick={openUpload}>Import statement</button></div>
     </div>
     <div className="mt-5 grid gap-3 sm:grid-cols-3">{spaces.map(s=><div key={s.id} className="rounded-xl bg-stone-50 px-4 py-3"><span className="text-sm text-stone-600">{s.name}</span><p className="mt-1 text-2xl font-semibold text-stone-950">{money(totals[s.id]||0)}</p></div>)}</div>
-    <p className="mt-3 text-xs text-stone-500">{new Date(year,month-1).toLocaleString('en-US',{month:'long',year:'numeric'})} · Imported spending. Your planned budgets stay separate.</p>
+    <p className="mt-3 text-xs text-stone-500">{dateRange?.label||new Date(year,month-1).toLocaleString('en-US',{month:'long',year:'numeric'})} · Imported spending. Your planned budgets stay separate.</p>
     <Dialog open={open} onClose={close} className="relative z-[70]">
       <div className="fixed inset-0 bg-stone-950/45 backdrop-blur-sm" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-6">
