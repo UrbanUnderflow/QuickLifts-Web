@@ -1,3 +1,4 @@
+import { validateRecurringMonth } from '../lib/simpbudget/recurringValidation';
 import { recurringSuggestions } from '../lib/simpbudget/recurringSuggestions';
 import budgetLayout from '../components/simpbudget/BudgetLayout.module.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -609,6 +610,7 @@ const SimpBudgetPage: React.FC = () => {
   const hasUnsavedChanges = selectedView !== 'all' && comparableDraft !== comparableBaseline;
 
   const [acceptedRecurringId,setAcceptedRecurringId]=useState<string|null>(null);
+  const recurringValidation=validateRecurringMonth(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
   const recurringCandidates=recurringSuggestions(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const monthlyActuals = visibleSpaces.map(space => {
@@ -1950,8 +1952,9 @@ const SimpBudgetPage: React.FC = () => {
                                 </td>
                               </tr>
                             ) : (
-                              draft.recurringExpenses.map((expense) => (
-                                <tr key={expense.id} className={`border-t border-stone-200 ${acceptedRecurringId===expense.id?budgetLayout.acceptedRecurring:''}`}>
+                              draft.recurringExpenses.map((expense) => {
+                                const validation=recurringValidation.find(item=>item.id===expense.id)!;
+                                return <tr key={expense.id} className={`border-t border-stone-200 ${acceptedRecurringId===expense.id?budgetLayout.acceptedRecurring:''}`}>
                                   <td className="px-3 py-3">
                                     {acceptedRecurringId===expense.id&&<span role="status" className="mb-1 block text-xs font-semibold text-emerald-700">✓ Accepted and saved</span>}
                                     <input
@@ -1960,9 +1963,13 @@ const SimpBudgetPage: React.FC = () => {
                                       placeholder="Expense name"
                                       className={fieldClassName}
                                     />
+                                    <div className="mt-2 text-xs"><span className={`rounded-full px-2 py-1 font-medium ${validation.status==='Matched'?'bg-emerald-50 text-emerald-800':'bg-amber-50 text-amber-900'}`}>{validation.status}</span><span className="ml-2">{monthYearLabel(selectedMonth,selectedYear)} actual: {validation.matches.length?formatCurrency(validation.amount):'Not found in imported statements'}</span></div>
+                                    {!!validation.matches.length&&<details className="mt-2 text-xs"><summary className="cursor-pointer underline">Review {validation.matches.length} matching transaction{validation.matches.length===1?'':'s'}</summary><ul className="mt-2 space-y-2">{validation.matches.map(row=><li key={`${row.statementId}-${row.id}`}><button className="text-left underline" onClick={()=>setTransactionDetail({...row,budget:activeSpace?.name,account:row.sourceAccountName,sourceType:row.sourceType||'document',splits:row.splits.map(split=>({name:spaces.find(space=>space.id===split.spaceId)?.name||'Unknown budget',amount:split.amount}))})}>{row.date} · {row.description} · {formatCurrency(row.allocatedAmount)} · {row.sourceAccountName}</button></li>)}</ul>{validation.ambiguous&&<p className="mt-2 text-amber-900">These charges match more than one recurring name. Refine the name before updating.</p>}</details>}
+                                    {validation.matches.length>0&&!validation.ambiguous&&validation.amount>=0&&Math.round(validation.amount*100)!==Math.round(Number(expense.amount)*100)&&<button className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 disabled:opacity-50" disabled={saving||hasUnsavedChanges} title={hasUnsavedChanges?'Save current edits first.':undefined} onClick={async()=>{const value={...draft,recurringExpenses:draft.recurringExpenses.map(row=>row.id===expense.id?{...row,amount:validation.amount.toFixed(2)}:row)};setAcceptedRecurringId(expense.id);await saveDraft(value);}}>Use {formatCurrency(validation.amount)} for {monthLabel(selectedMonth)}</button>}
                                   </td>
                                   <td className="px-3 py-3">
                                     <input
+                                      aria-label={`Planned amount for ${expense.label}`}
                                       value={expense.amount}
                                       onChange={(event) => updateRecurringExpense(expense.id, 'amount', event.target.value)}
                                       placeholder="0.00"
@@ -1980,8 +1987,8 @@ const SimpBudgetPage: React.FC = () => {
                                       <Trash2 className="h-4 w-4" />
                                     </button>
                                   </td>
-                                </tr>
-                              ))
+                                </tr>;
+                              })
                             )}
                           </tbody>
                         </table>
