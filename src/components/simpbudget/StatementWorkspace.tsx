@@ -4,7 +4,7 @@ import TransactionDetails, { type TransactionDetail } from './TransactionDetails
 import React, { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogPanel, DialogTitle, Description } from '@headlessui/react';
 import type { User } from 'firebase/auth';
-import { collection, deleteDoc, doc, getDocs, runTransaction, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, runTransaction, setDoc } from 'firebase/firestore';
 import { simpBudgetDb } from '../../api/firebase/simpBudgetConfig';
 import { Account, Rule, StatementImport, StatementTransaction, parseCsv, mapCsv, applySuggestions, markDuplicates, validateTransaction, actualTotals, withStatementSource, combineStatementImports, splitStatementBatch, parseChaseCsv, isChaseCsv, parseStatementAmount } from '../../lib/simpbudget/statements';
 
@@ -13,7 +13,7 @@ type Space = { id: string; name: string };
 const field = 'rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-900 focus:ring-2 focus:ring-sky-200';
 const button = 'rounded-lg border border-stone-300 px-4 py-2.5 text-sm font-medium disabled:opacity-40 hover:bg-stone-100';
 const primary = 'rounded-lg bg-stone-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-stone-700 disabled:opacity-40';
-const categories = ['Groceries', 'Dining', 'Shopping', 'Travel', 'Housing', 'Utilities', 'Health', 'Business services', 'Supplies & materials', 'Other'];
+const categories = ['Food delivery', 'Rideshare', 'Vehicle charging', 'Interest', 'Fees', 'Groceries', 'Dining', 'Shopping', 'Travel', 'Housing', 'Utilities', 'Health', 'Business services', 'Supplies & materials', 'Other'];
 const kindLabels = { expense: 'Expense', refund: 'Refund', transfer: 'Transfer', card_payment: 'Card payment', income: 'Income' };
 const money = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 const clean = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
@@ -96,13 +96,18 @@ export default function StatementWorkspace({ user, spaces, year, month, dateRang
   const root = (key: string) => collection(simpBudgetDb, 'simpbudget-users', user.uid, key);
   useEffect(() => {
     let live = true;
+    let accountsLoaded = false, importsLoaded = false;
     setReady(false);
-    Promise.all(['statementAccounts','statementRules','statementImports'].map(key => getDocs(collection(simpBudgetDb,'simpbudget-users',user.uid,key)))).then(([a,r,i]) => {
+    Promise.all(['statementAccounts','statementRules'].map(key => getDocs(collection(simpBudgetDb,'simpbudget-users',user.uid,key)))).then(([a,r]) => {
       if (!live) return;
       setAccounts(a.docs.map(d=>d.data() as Account)); setRules(r.docs.map(d=>d.data() as Rule));
-      importsRef.current=i.docs.map(d=>d.data() as StatementImport); setImports(importsRef.current); setReady(true);
+      accountsLoaded = true; setReady(importsLoaded);
     }).catch(()=> { if(live) setMessage('Unable to load statements. Reload before importing.'); });
-    return ()=> { live=false; };
+    const stop = onSnapshot(collection(simpBudgetDb,'simpbudget-users',user.uid,'statementImports'), snapshot => {
+      importsRef.current=snapshot.docs.map(d=>d.data() as StatementImport); setImports(importsRef.current);
+      importsLoaded = true; setReady(accountsLoaded);
+    }, () => { setReady(false); setMessage('Unable to refresh statements. Reload before editing.'); });
+    return ()=> { live=false; stop(); };
   }, [user.uid]);
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => { if(active?.status==='review') {event.preventDefault(); event.returnValue='';} };

@@ -5,7 +5,7 @@ export interface Rule { id: string; contains: string; spaceId: string }
 export interface StatementTransaction {
   sourceAccountId?: string; sourceAccountName?: string; sourceFileName?: string; sourceImportId?: string;
   sourceType?: 'document'|'csv';
-  category?: string;
+  category?: string; notes?: string; categoryAuditDismissed?: string;
   id: string; date: string; description: string; amount: number; kind: TransactionKind;
   spaceId: string; suggestedSpaceId?: string; reason: string; sourceRow: number | string;
   reviewed: boolean; excluded: boolean; duplicate: boolean; splits: { spaceId: string; amount: number }[];

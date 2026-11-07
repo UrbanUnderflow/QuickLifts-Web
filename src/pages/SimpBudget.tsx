@@ -1,3 +1,4 @@
+import AuditNotifications from '../components/simpbudget/AuditNotifications';
 import { dateViewRange, type DateView } from '../lib/simpbudget/dateViews';
 import { validateRecurringMonth } from '../lib/simpbudget/recurringValidation';
 import { recurringSuggestions } from '../lib/simpbudget/recurringSuggestions';
@@ -616,6 +617,10 @@ const SimpBudgetPage: React.FC = () => {
   const [acceptedRecurringId,setAcceptedRecurringId]=useState<string|null>(null);
   const recurringValidation=validateRecurringMonth(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
   const recurringCandidates=recurringSuggestions(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
+  const recurringNotifications=activeSpaces.map(space=>{
+    const recurring=selectDraftForSpaceMonth(records,space.id,selectedYear,selectedMonth).draft.recurringExpenses;
+    return {id:space.id,name:space.name,suggestions:recurringSuggestions(statementImports,space.id,selectedYear,selectedMonth,recurring).length,reviews:validateRecurringMonth(statementImports,space.id,selectedYear,selectedMonth,recurring).filter(item=>item.status!=='Matched').length};
+  }).filter(item=>item.suggestions||item.reviews);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const monthlyActuals = visibleSpaces.filter(space=>dateView==='month'||selectedView==='all'||space.id===selectedView).map(space => {
     const expenses = actualTransactions(statementImports, selectedYear, selectedMonth, space.id,dateRange);
@@ -1606,6 +1611,8 @@ const SimpBudgetPage: React.FC = () => {
             </div>
           </div>
 
+          <div className="flex flex-col items-start gap-3 lg:items-end">
+            <AuditNotifications uid={user.uid} imports={statementImports} recurring={recurringNotifications} recurringPeriod={`${selectedYear}-${String(selectedMonth).padStart(2,'0')}`} onReviewRecurring={id=>{if(!confirmUnsavedNavigation())return false;setSelectedView(id);setDateView('month');return true;}} onOpenSource={id=>setStatementRequest({id,sequence:Date.now()})}/>
           <div className="flex flex-wrap items-center gap-2">
             {([['month','Month'],['this-year','This year'],['last-year','Last year'],['last-seven','Last 7 days']] as const).map(([value,label])=><button key={value} aria-pressed={dateView===value} className={`${pillButtonClassName} ${dateView===value?'bg-stone-900 text-white':'border border-stone-200 bg-white text-stone-600'}`} onClick={()=>{if(confirmUnsavedNavigation())setDateView(value);}}>{label}</button>)}
             {dateView==='month'&&<>
@@ -1677,6 +1684,7 @@ const SimpBudgetPage: React.FC = () => {
               <LogOut className="h-4 w-4" />
               Sign out
             </button>
+          </div>
           </div>
         </header>
 
