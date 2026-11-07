@@ -16,3 +16,6 @@
  .transactions td[colspan]::before { display: none; }
  .transactions input, .transactions select { min-width: 0; max-width: 100%; }
 }
+.acceptedRecurring { animation: acceptRecurring 900ms ease-out both; }
+@keyframes acceptRecurring { 0% { background-color: #fef3c7; transform: translateY(4px); } 45% { background-color: #d1fae5; } 100% { background-color: #ecfdf5; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .acceptedRecurring { animation: none; background-color: #ecfdf5; } }

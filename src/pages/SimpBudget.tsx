@@ -1,3 +1,4 @@
+import { recurringSuggestions } from '../lib/simpbudget/recurringSuggestions';
 import budgetLayout from '../components/simpbudget/BudgetLayout.module.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
@@ -611,6 +612,8 @@ const SimpBudgetPage: React.FC = () => {
     (record) => record.year === selectedYear && record.month === selectedMonth
   );
 
+  const [acceptedRecurringId,setAcceptedRecurringId]=useState<string|null>(null);
+  const recurringCandidates=recurringSuggestions(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
   const monthlyActuals = visibleSpaces.map(space => {
     const expenses = actualTransactions(statementImports, selectedYear, selectedMonth, space.id);
@@ -1223,7 +1226,7 @@ const SimpBudgetPage: React.FC = () => {
     }));
   };
 
-  const saveDraft = async () => {
+  const saveDraft = async (value:BudgetDraft = draft) => {
     if (!user || selectedView === 'all' || !activeSpace) return;
 
     setSaving(true);
@@ -1237,7 +1240,7 @@ const SimpBudgetPage: React.FC = () => {
           record.month === draft.month
       );
       const payload = {
-        ...buildDraftPayload(draft),
+        ...buildDraftPayload(value),
         ownerEmail: user.email || '',
         createdAt: matchingRecord?.createdAt || serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -1941,6 +1944,11 @@ const SimpBudgetPage: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody>
+                            {recurringCandidates.map(suggestion=><tr key={suggestion.key} className="border-t border-amber-200 bg-amber-50">
+                              <td className="px-3 py-3"><span className="font-medium">{suggestion.label}</span><span className="block text-xs font-semibold text-amber-800">Suggested recurring</span><span className="block text-xs text-stone-600">One charge per month across {suggestion.months} months · {suggestion.firstMonth}–{suggestion.lastMonth}. Estimated from the latest charge.</span></td>
+                              <td className="px-3 py-3">{formatCurrency(suggestion.amount)}</td>
+                              <td className="px-3 py-3"><button disabled={saving||hasUnsavedChanges} title={hasUnsavedChanges?'Save your current edits before accepting a suggestion.':undefined} className="rounded-lg bg-amber-100 px-3 py-2 font-medium text-amber-950 transition hover:bg-amber-200 disabled:opacity-50" onClick={async()=>{const id=crypto.randomUUID();const value={...draft,recurringExpenses:[...draft.recurringExpenses,{id,label:suggestion.label,amount:suggestion.amount.toFixed(2)}]};setAcceptedRecurringId(id);await saveDraft(value);}}>Accept</button></td>
+                            </tr>)}
                             {draft.recurringExpenses.length === 0 ? (
                               <tr>
                                 <td colSpan={3} className="px-3 py-8 text-center text-stone-500">
@@ -1949,8 +1957,9 @@ const SimpBudgetPage: React.FC = () => {
                               </tr>
                             ) : (
                               draft.recurringExpenses.map((expense) => (
-                                <tr key={expense.id} className="border-t border-stone-200">
+                                <tr key={expense.id} className={`border-t border-stone-200 ${acceptedRecurringId===expense.id?budgetLayout.acceptedRecurring:''}`}>
                                   <td className="px-3 py-3">
+                                    {acceptedRecurringId===expense.id&&<span role="status" className="mb-1 block text-xs font-semibold text-emerald-700">✓ Accepted and saved</span>}
                                     <input
                                       value={expense.label}
                                       onChange={(event) => updateRecurringExpense(expense.id, 'label', event.target.value)}
@@ -2194,7 +2203,7 @@ const SimpBudgetPage: React.FC = () => {
 
                         <button
                           type="button"
-                          onClick={saveDraft}
+                          onClick={()=>void saveDraft()}
                           disabled={saving}
                           className={`${pillButtonClassName} w-full bg-stone-900 text-white hover:bg-stone-800`}
                         >
