@@ -14,7 +14,7 @@ export function recurringSuggestions(imports:StatementImport[],spaceId:string,ye
   }
   const known=new Set(existing.map(row=>recurringMerchantKey(row.label)));
   return [...groups].flatMap(([key,group])=>{
-    if(known.has(key))return [];
+    if([...known].some(name=>name && (` ${key} `.includes(` ${name} `)||` ${name} `.includes(` ${key} `))))return [];
     const months=[...group.amounts.keys()].sort((a,b)=>a-b);
     if(months.length<3||months.at(-1)!<end-1||!months.some((n,i)=>i>=2&&months[i-1]===n-1&&months[i-2]===n-2))return [];
     // Multiple purchases in one month are not strong evidence of a monthly bill.
