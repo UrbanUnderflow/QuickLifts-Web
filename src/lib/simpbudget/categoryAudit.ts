@@ -29,3 +29,16 @@ export function applyCategorySuggestion(tx: StatementTransaction, suggestion: Ca
   if (JSON.stringify([tx.description, tx.category || '', suggestion.proposed]) !== suggestion.signature) throw new Error('This transaction changed. Review the refreshed suggestion.');
   return action === 'accept' ? { ...tx, category: suggestion.proposed } : { ...tx, categoryAuditDismissed: suggestion.signature };
 }
+
+/** Prepare an all-or-nothing category change from fresh statement snapshots. */
+export function applyCategoryAuditBatch(imports:StatementImport[], suggestions:CategorySuggestion[], action:'accept'|'dismiss') {
+  const requested=new Map(suggestions.map(suggestion=>[suggestion.id,suggestion]));
+  const currentSuggestions=new Map(categoryAudit(imports).map(suggestion=>[suggestion.id,suggestion]));
+  for(const suggestion of requested.values()) {
+    if(currentSuggestions.get(suggestion.id)?.signature!==suggestion.signature) throw new Error('A suggestion changed since this list loaded. Nothing was changed. Review the refreshed list and try again.');
+  }
+  return imports.filter(item=>[...requested.values()].some(suggestion=>suggestion.statementId===item.id)).map(item=>({...item,revision:(item.revision||0)+1,transactions:item.transactions.map(tx=>{
+    const suggestion=requested.get(`${item.id}:${tx.id}`);
+    return suggestion?applyCategorySuggestion(tx,suggestion,action):tx;
+  })}));
+}

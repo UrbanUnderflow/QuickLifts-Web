@@ -26,3 +26,11 @@ export function bankCashFlow(imports:StatementImport[],accounts:Account[],range:
   receiptRows.sort((a,b)=>b.date.localeCompare(a.date));
   return {earned:earned/100,other:other/100,totalReceived:(earned+other)/100,outgoing:outgoing/100,net:(earned+other-outgoing)/100,receiptRows,earnedRows:receiptRows.filter(row=>row.receiptType==='earned'),otherRows:receiptRows.filter(row=>row.receiptType!=='earned'),unassigned};
 }
+
+/** Displayed receipts and spending use the same budget/date scope; manual entries are monthly only. */
+export function spendingSummary(bank:{totalReceived:number;earned:number;other:number}, spending:number, manual:{income:number;spending:number}, includeManual:boolean) {
+  const cents=(value:number)=>Math.round(value*100);
+  const received=cents(bank.totalReceived)+(includeManual?cents(manual.income):0);
+  const spent=cents(spending)+(includeManual?cents(manual.spending):0);
+  return {received:received/100,earned:(cents(bank.earned)+(includeManual?cents(manual.income):0))/100,other:bank.other,spent:spent/100,net:(received-spent)/100};
+}
