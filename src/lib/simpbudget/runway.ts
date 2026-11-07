@@ -11,11 +11,30 @@ export function simulateRunway(entities:RunwayEntity[],transfers:RunwayTransfer[
   const cents=(n:number)=>Math.round(n*100);
   const balances=Object.fromEntries(entities.map(e=>[e.id,cents(e.cash!)]));
   const deltas=Object.fromEntries(entities.map(e=>[e.id,cents(e.income*(1-incomeLoss/100))-cents(e.spending*(1-expenseCut/100))]));
-  for(const t of transfers){deltas[t.from]-=cents(t.amount);deltas[t.to]+=cents(t.amount);}
   const firstShortfall:Record<string,number|null>=Object.fromEntries(entities.map(e=>[e.id,null]));
+  const fundingWarnings:Record<string,{firstMonth:number;unfunded:number}>={};
   let combinedShortfall:number|null=null;
-  const rows=Array.from({length:horizon},(_,index)=>{for(const e of entities){balances[e.id]+=deltas[e.id];if(balances[e.id]<0&&firstShortfall[e.id]===null)firstShortfall[e.id]=index+1;}const total=Object.values(balances).reduce((a,b)=>a+b,0);if(total<0&&combinedShortfall===null)combinedShortfall=index+1;return {month:index+1,total:total/100,balances:Object.fromEntries(Object.entries(balances).map(([id,n])=>[id,n/100]))};});
-  return {rows,firstShortfall,combinedShortfall,monthlyNet:Object.values(deltas).reduce((a,b)=>a+b,0)/100};
+  const rows=Array.from({length:horizon},(_,index)=>{
+    for(const e of entities)balances[e.id]+=deltas[e.id];
+    // Snapshot donor capacity before any incoming support: no same-month circular funding.
+    const capacity=Object.fromEntries(entities.map(e=>[e.id,Math.max(0,balances[e.id])]));
+    const paid=transfers.map(()=>0);
+    for(const donor of entities){
+      const outgoing=transfers.map((t,i)=>({t,i,requested:cents(t.amount)})).filter(v=>v.t.from===donor.id);
+      const requested=outgoing.reduce((sum,v)=>sum+v.requested,0),available=Math.min(requested,capacity[donor.id]);
+      if(!requested)continue;
+      const shares=outgoing.map(v=>({...v,exact:available*v.requested/requested}));
+      let remainder=available;
+      for(const share of shares){paid[share.i]=Math.floor(share.exact);remainder-=paid[share.i];}
+      shares.sort((a,b)=>(b.exact-Math.floor(b.exact))-(a.exact-Math.floor(a.exact))||a.i-b.i);
+      for(let i=0;i<remainder;i++)paid[shares[i].i]++;
+    }
+    transfers.forEach((t,i)=>{balances[t.from]-=paid[i];balances[t.to]+=paid[i];const missing=cents(t.amount)-paid[i];if(missing>0){const warning=fundingWarnings[t.to]||{firstMonth:index+1,unfunded:0};warning.unfunded+=missing;fundingWarnings[t.to]=warning;}});
+    for(const e of entities)if(balances[e.id]<0&&firstShortfall[e.id]===null)firstShortfall[e.id]=index+1;
+    const total=Object.values(balances).reduce((a,b)=>a+b,0);if(total<0&&combinedShortfall===null)combinedShortfall=index+1;
+    return {month:index+1,total:total/100,balances:Object.fromEntries(Object.entries(balances).map(([id,n])=>[id,n/100]))};
+  });
+  return {rows,firstShortfall,combinedShortfall,fundingWarnings:Object.fromEntries(Object.entries(fundingWarnings).map(([id,w])=>[id,{...w,unfunded:w.unfunded/100}])),monthlyNet:Object.values(deltas).reduce((a,b)=>a+b,0)/100};
 }
 export function runwayHistory(imports:StatementImport[],accounts:Account[],id:string,asOf:string,recurring:{label:string;amount:string|number}[]){
   const year=Number(asOf.slice(0,4)),month=Number(asOf.slice(5,7));
