@@ -1,3 +1,5 @@
+import SortingQuestions from './SortingQuestions';
+import {applySortingDecisions} from '../../lib/simpbudget/sortingQuestions';
 import TransactionDetails, { type TransactionDetail } from './TransactionDetails';
 import React, { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogPanel, DialogTitle, Description } from '@headlessui/react';
@@ -141,7 +143,7 @@ export default function StatementWorkspace({ user, spaces, year, month, onImport
     }else setPending(null);
     setStagedFiles(files);setPreviewIndex(0);
     const inferred:Record<number,string>={};
-    files.forEach((f,index)=>{const matches=accounts.filter(a=>{const last4=a.name.match(/\b(\d{4})\b/)?.[1];return last4&&f.name.includes(last4);});if(matches.length===1)inferred[index]=matches[0].id;});
+    files.forEach((f,index)=>{const matches=accounts.filter(a=>{const last4=a.type==='card'?a.name.match(/(?:[•*]\s*|ending\s+)(\d{4})\b/i)?.[1]:undefined;return last4&&f.name.includes(last4);});if(matches.length===1)inferred[index]=matches[0].id;});
     setFileAccounts(inferred);
   });
   const upload = (files: File[]) => run(async()=> {
@@ -220,7 +222,7 @@ export default function StatementWorkspace({ user, spaces, year, month, onImport
   const visibleRows = (active?.status==='review' ? (showSorted ? sorted : remaining) : active?.transactions || []).filter(t=>(!suggestionFilter || (suggestionFilter==='none'?!t.suggestedSpaceId:t.suggestedSpaceId===suggestionFilter))&&(!sourceFilter || (t.sourceAccountId||active?.accountId)===sourceFilter)&&(!kindFilter||t.kind===kindFilter));
   const draftTotals = active ? actualTotals([{...active,status:'committed'}]) : {};
   const historyItems=imports.filter((item,index,all)=>!item.batchId || all.findIndex(i=>i.batchId===item.batchId)===index).map(item=>item.batchId?combineStatementImports(imports.filter(i=>i.batchId===item.batchId)):item);
-  const openUpload = () => {setView('upload');setMessage('');setOpen(true);};
+  const openUpload = () => {setDocumentPreview(null);setView('upload');setMessage('');setOpen(true);};
   const rowLabel=(t:StatementTransaction)=>active?.members?`${t.sourceAccountName}, ${t.sourceFileName}, ${t.sourceRow}`:String(t.sourceRow);
   const categoryValue = (t:StatementTransaction) => ['transfer','card_payment','income'].includes(t.kind) ? t.kind : t.category || '';
   const selectCategory = (t:StatementTransaction, value:string) => {
@@ -301,6 +303,19 @@ export default function StatementWorkspace({ user, spaces, year, month, onImport
                 <div className="min-w-0"><p className="truncate text-sm font-medium">{active.fileName}</p><p className="text-xs text-stone-500">{active.members?'Multiple source accounts':accounts.find(a=>a.id===active.accountId)?.name} · {active.transactions.length} transactions</p></div>
                 {active.status==='review'&&<div className="flex items-center gap-3"><span className="text-sm font-semibold">{remaining.length} left</span><button className="text-sm text-stone-600 underline underline-offset-4" onClick={()=>{setShowSorted(!showSorted);setSelected([]);setEditing(null);}}>{showSorted?'Back to unsorted':`View sorted (${sorted.length})`}</button><button className={button} disabled={busy||!undoStack.length} onClick={undoSort}>Undo last sort</button></div>}
               </div>
+              {active.status==='review'&&<details className="mx-5 mt-3 text-xs text-stone-500"><summary className="cursor-pointer">Correct source account</summary><label className="mt-2 block">Correct source for all statements in this review<select aria-label="Correct review source account" className={`${field} ml-2`} disabled={busy} value="" onChange={e=>{
+                const account=accounts.find(a=>a.id===e.target.value);if(!account)return;
+                const members=splitStatementBatch(active),ids=new Set(members.map(m=>m.id));const existing=imports.filter(i=>!ids.has(i.id));
+                const corrected:StatementImport[]=[];
+                for(const member of members){const value={...member,accountId:account.id,transactions:member.transactions.map(t=>({...t,sourceAccountId:account.id,sourceAccountName:account.name}))};const checked=markDuplicates([...existing,...corrected],value);checked.transactions=checked.transactions.map((t,index)=>t.duplicate&&!member.transactions[index].duplicate?{...t,reviewed:false}:t);corrected.push(checked);}
+                setActive(combineStatementImports(corrected));setUndoStack([]);setSelected([]);setSourceFilter('');setMessage(`Source corrected to ${account.name}. Save review to keep this change.`);
+              }}><option value="">Choose only if the source is incorrect</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label></details>}
+              {active.status==='review'&&<SortingQuestions key={active.id} rows={active.transactions} spaces={spaces} busy={busy} interpret={async(rows,answer,suggestedSpaceId)=>{
+                if(lock.current)throw new Error('Wait for the current change to finish.');lock.current=true;setBusy(true);
+                try{const response=await fetch('/.netlify/functions/simpbudget-sort-answer',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${await user.getIdToken()}`},body:JSON.stringify({rows:rows.map(({id,description,date,amount,kind})=>({id,description,date,amount,kind})),answer,suggestedSpaceId,spaceIds:spaces.map(s=>s.id)})});
+                const result=await response.json();if(!response.ok)throw new Error(result.error||'Unable to interpret your answer.');
+                applySortingDecisions(rows,result.decisions,spaces,answer);return result;}finally{lock.current=false;setBusy(false);}
+              }} onApply={(decisions,answer)=>{try{updateRows(applySortingDecisions(active.transactions,decisions,spaces,answer));setSelected([]);setMessage(`${decisions.length} transactions sorted from your answer. Use Undo last sort to reverse.`);}catch(error){setMessage(error instanceof Error?error.message:'Please review this group again.');}}}/>}
               <div className="flex flex-wrap gap-3 px-5 py-3"><label className="text-xs text-stone-500">Source<select aria-label="Filter source" className={`${field} ml-2`} value={sourceFilter} onChange={e=>{setSourceFilter(e.target.value);setSelected([]);}}><option value="">All cards</option>{accounts.filter(a=>active.transactions.some(t=>(t.sourceAccountId||active.accountId)===a.id)).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></label><label className="text-xs text-stone-500">Suggested budget<select aria-label="Filter suggested budget" className={`${field} ml-2`} value={suggestionFilter} onChange={e=>{setSuggestionFilter(e.target.value);setSelected([]);}}><option value="">All suggestions</option><option value="none">Needs a decision</option>{spaces.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label className="text-xs text-stone-500">Type<select aria-label="Filter transaction type" className={`${field} ml-2`} value={kindFilter} onChange={e=>{setKindFilter(e.target.value);setSelected([]);}}><option value="">All types</option>{Object.entries(kindLabels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><span className="self-center text-xs text-stone-500">{visibleRows.length} shown</span></div>
               {active.warnings.length>0&&<details className="mx-5 mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-950"><summary className="cursor-pointer font-medium">Statement checks ({active.warnings.length})</summary>{active.warnings.map((w,i)=><p className="mt-2" key={i}>{w}</p>)}</details>}
               {active.status==='review'&&visibleRows.length>0&&<div className="flex items-center gap-3 px-5 py-3 sm:px-7"><button className="text-sm font-medium underline underline-offset-4" disabled={busy} onClick={()=>setSelected(visibleRows.map(t=>t.id))}>Select all</button>{selected.length>0&&<><span className="text-sm text-stone-500">{selected.length} selected</span><button className="text-sm underline underline-offset-4" onClick={()=>setSelected([])}>Clear selection</button><button className="ml-auto text-sm text-stone-600 underline underline-offset-4" disabled={busy} onClick={()=>{updateRows(active.transactions.map(t=>selected.includes(t.id)?{...t,excluded:true,reviewed:true}:t));setSelected([]);setMessage('Selected transactions set aside. Use Undo last sort to bring them back.');}}>Exclude selected</button></>}</div>}

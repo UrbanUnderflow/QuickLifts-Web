@@ -15,6 +15,8 @@ const {Simulate} = require('react-dom/test-utils');
 const {createRoot} = require('react-dom/client');
 const compile = (path,requireFn = require) => {const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true,target:ts.ScriptTarget.ES2020}}).outputText)(requireFn,m,m.exports);return m.exports;};
 const domain=compile('src/lib/simpbudget/statements.ts');
+const sorting=compile('src/lib/simpbudget/sortingQuestions.ts');
+const Questions=compile('src/components/simpbudget/SortingQuestions.tsx',name=>name.includes('sortingQuestions')?sorting:require(name)).default;
 const row=(extra={})=>({id:'r1',date:'2026-11-01',description:'Home Depot',amount:100,kind:'expense',spaceId:'',reason:'Review',sourceRow:2,reviewed:false,excluded:false,duplicate:false,splits:[],...extra});
 const statement=(extra={})=>({id:'s1',accountId:'a',fileName:'existing.csv',fingerprint:'hash',guidance:'',createdAt:'2026-11-01',status:'review',revision:1,transactions:[row()],warnings:[],...extra});
 async function harness(initial=[]) {
@@ -24,7 +26,7 @@ async function harness(initial=[]) {
   const writes=[];
   let failLoad=false;
   const firebase={collection:(_db,...path)=>path.join('/'),doc:(path,id)=>`${path}/${id}`,getDocs:async path=>{if(failLoad)throw Error('offline');return {docs:[...data].filter(([key])=>key.startsWith(path+'/')).map(([,value])=>({data:()=>structuredClone(value)}))};},setDoc:async(path,value)=>{data.set(path,structuredClone(value));writes.push(value);},runTransaction:async(_db,fn)=>{const staged=[];await fn({get:async path=>({exists:()=>data.has(path),data:()=>structuredClone(data.get(path))}),set:(path,value)=>staged.push([path,structuredClone(value)])});for(const [path,value]of staged){data.set(path,value);writes.push(value);}}};
-  const Component=compile('src/components/simpbudget/StatementWorkspace.tsx',name=>name==='firebase/firestore'?firebase:name.includes('simpBudgetConfig')?{simpBudgetDb:{}}:name.includes('/statements')?domain:name==='./TransactionDetails'?compile('src/components/simpbudget/TransactionDetails.tsx'):require(name)).default;
+  const Component=compile('src/components/simpbudget/StatementWorkspace.tsx',name=>name==='firebase/firestore'?firebase:name.includes('simpBudgetConfig')?{simpBudgetDb:{}}:name.includes('/statements')?domain:name==='./SortingQuestions'?{__esModule:true,default:Questions}:name.includes('sortingQuestions')?sorting:name==='./TransactionDetails'?compile('src/components/simpbudget/TransactionDetails.tsx'):require(name)).default;
   const root=createRoot(document.getElementById('root'));
   await act(async()=>root.render(React.createElement(Component,{user:{uid:'u',getIdToken:async()=> 'test-token'},spaces:[{id:'personal',name:'Personal'},{id:'pulse',name:'Pulse'},{id:'tres',name:'TresProperties'}],year:2026,month:11})));
   const button=(text)=>[...document.querySelectorAll('button')].find(b=>b.textContent===text||b.getAttribute('aria-label')===text);
@@ -147,4 +149,14 @@ test('transaction details distinguishes self-reported entries and opens the exac
   assert.match(document.body.textContent,/Extracted from a document/);assert.match(document.body.textContent,/Page 2 row 3/);assert.match(document.body.textContent,/This budget’s share/);
   await act(async()=>Simulate.click([...document.querySelectorAll('button')].find(b=>b.textContent==='View source document')));assert.equal(opened,'statement-42');
  }finally{await act(async()=>root.unmount());}
+});
+test('sorting questions accept Yes, No alternatives and preserve undo',async()=>{
+ const h=await harness([statement({transactions:[row({suggestedSpaceId:'pulse'})]})]);try{await h.open();assert.match(h.text(),/Should these 1 transactions go to Pulse/);await h.click('No');await h.click('Personal');assert.equal(h.input('Select row 2'),null);await h.click('Undo last sort');assert.ok(h.input('Select row 2'));await h.click('Yes');await h.click('Save for later');assert.equal(h.writes.at(-1).transactions[0].spaceId,'pulse');assert.match(h.writes.at(-1).transactions[0].reason,/Sorting answer/);}finally{await h.close();}
+});
+test('source correction preserves sorted rows and original linkage',async()=>{
+ const h=await harness([statement({transactions:[row({reviewed:true,spaceId:'pulse',sourceImportId:'s1',sourceAccountId:'wrong'})]})]);try{await h.open();await h.change('Correct review source account','a');await h.click('Save for later');const r=h.writes.at(-1).transactions[0];assert.equal(r.sourceAccountId,'a');assert.equal(r.sourceImportId,'s1');assert.equal(r.spaceId,'pulse');assert.equal(r.reviewed,true);}finally{await h.close();}
+});
+test('written exceptions are previewed before applying and can be undone',async()=>{
+ const prior=globalThis.fetch;globalThis.fetch=async(url,options)=>url.includes('sort-answer')?{ok:true,json:async()=>({decisions:[{id:'r1',spaceId:'personal',exclude:false}],clarification:''})}:prior(url,options);
+ const h=await harness([statement({transactions:[row({suggestedSpaceId:'pulse'})]})]);try{await h.open();await h.change('Sorting answer','No, this is Personal');await h.click('Send response');assert.ok(h.input('Select row 2'));assert.match(h.text(),/Check the proposed changes/);assert.equal(h.writes.length,0);await h.click('Apply these changes');assert.equal(h.input('Select row 2'),null);await h.click('Undo last sort');assert.ok(h.input('Select row 2'));}finally{await h.close();globalThis.fetch=prior;}
 });
