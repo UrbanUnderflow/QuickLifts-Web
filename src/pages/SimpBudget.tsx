@@ -608,10 +608,6 @@ const SimpBudgetPage: React.FC = () => {
   const comparableBaseline = JSON.stringify(buildComparableDraft(baselineDraft));
   const hasUnsavedChanges = selectedView !== 'all' && comparableDraft !== comparableBaseline;
 
-  const selectedMonthRecords = records.filter(
-    (record) => record.year === selectedYear && record.month === selectedMonth
-  );
-
   const [acceptedRecurringId,setAcceptedRecurringId]=useState<string|null>(null);
   const recurringCandidates=recurringSuggestions(statementImports,selectedView,selectedYear,selectedMonth,draft.recurringExpenses);
   const [showCreateSpace, setShowCreateSpace] = useState(false);
@@ -628,9 +624,8 @@ const SimpBudgetPage: React.FC = () => {
   const draftTotals = calculateDraftTotals(draft);
   const allTotals = activeSpaces.reduce(
     (accumulator, space) => {
-      const record = selectedMonthRecords.find((candidate) => candidate.budgetSpaceId === space.id);
       const totals = calculateDraftTotals(
-        record ? cloneDraft(record) : createEmptyDraft(space.id, selectedYear, selectedMonth)
+        selectDraftForSpaceMonth(records, space.id, selectedYear, selectedMonth).draft
       );
 
       accumulator.monthlyIncome += totals.monthlyIncome;
@@ -1841,9 +1836,8 @@ const SimpBudgetPage: React.FC = () => {
                   <div className="grid gap-4 lg:grid-cols-2">
                     {visibleSpaces.map((space) => {
                       const Icon = getSpaceIcon(space.icon);
-                      const record = selectedMonthRecords.find((candidate) => candidate.budgetSpaceId === space.id);
-                      const totals = calculateDraftTotals(
-                        record ? cloneDraft(record) : createEmptyDraft(space.id, selectedYear, selectedMonth)
+                                      const totals = calculateDraftTotals(
+                        selectDraftForSpaceMonth(records, space.id, selectedYear, selectedMonth).draft
                       );
 
                       return (
