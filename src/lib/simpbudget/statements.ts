@@ -3,6 +3,7 @@ export type TransactionKind = 'expense' | 'refund' | 'transfer' | 'card_payment'
 export interface Account { id: string; name: string; type: 'bank' | 'card'; defaultSpaceId: string }
 export interface Rule { id: string; contains: string; spaceId: string }
 export interface StatementTransaction {
+  category?: string;
   id: string; date: string; description: string; amount: number; kind: TransactionKind;
   spaceId: string; suggestedSpaceId?: string; reason: string; sourceRow: number | string;
   reviewed: boolean; excluded: boolean; duplicate: boolean; splits: { spaceId: string; amount: number }[];

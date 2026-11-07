@@ -1750,7 +1750,7 @@ const SimpBudgetPage: React.FC = () => {
                       className={`${pillButtonClassName} bg-stone-900 text-white hover:bg-stone-800`}
                     >
                       {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownToLine className="h-4 w-4" />}
-                      Import founder budget
+                      Copy saved admin budgets
                     </button>
                   </div>
                   <div className="mt-4">
@@ -1762,12 +1762,13 @@ const SimpBudgetPage: React.FC = () => {
           ) : (
             <>
               {isMigrationOwner && (
-                <section className="rounded-lg border border-stone-200 bg-white p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <details className="rounded-lg border border-stone-200 bg-white p-4">
+                  <summary className="cursor-pointer text-sm font-medium text-stone-500">Legacy budget migration</summary>
+                  <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
-                      <div className="text-sm font-semibold text-stone-950">QuickLifts admin data migration</div>
+                      <div className="text-sm font-semibold text-stone-950">Copy saved admin budgets</div>
                       <div className="mt-1 text-sm text-stone-500">
-                        Re-run this after admin edits if you need to refresh migrated Business and Personal months.
+                        Copies saved planned budget months from the QuickLifts admin dashboard. Use Import statement above for PDFs, screenshots and CSVs.
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1786,14 +1787,14 @@ const SimpBudgetPage: React.FC = () => {
                         className={`${pillButtonClassName} bg-stone-900 text-white hover:bg-stone-800`}
                       >
                         {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowDownToLine className="h-4 w-4" />}
-                        Import data
+                        Copy saved admin budgets
                       </button>
                     </div>
                   </div>
                   <div className="mt-3">
                     <MessageBanner message={migrationMessage} />
                   </div>
-                </section>
+                </details>
               )}
 
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

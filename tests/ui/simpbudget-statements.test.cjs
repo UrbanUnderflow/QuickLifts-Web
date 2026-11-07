@@ -5,7 +5,8 @@ const ts = require('typescript');
 const { JSDOM } = require('jsdom');
 const crypto = require('node:crypto').webcrypto;
 const dom = new JSDOM('<!doctype html><div id="root"></div>', {url:'http://localhost',pretendToBeVisual:true});
-for (const [key,value] of Object.entries({window:dom.window,document:dom.window.document,navigator:dom.window.navigator,HTMLElement:dom.window.HTMLElement,HTMLInputElement:dom.window.HTMLInputElement,Node:dom.window.Node,IS_REACT_ACT_ENVIRONMENT:true,crypto})) Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});
+for (const [key,value] of Object.entries({window:dom.window,document:dom.window.document,navigator:dom.window.navigator,HTMLElement:dom.window.HTMLElement,HTMLInputElement:dom.window.HTMLInputElement,HTMLButtonElement:dom.window.HTMLButtonElement,Element:dom.window.Element,Node:dom.window.Node,MutationObserver:dom.window.MutationObserver,getComputedStyle:dom.window.getComputedStyle,requestAnimationFrame:dom.window.requestAnimationFrame.bind(dom.window),cancelAnimationFrame:dom.window.cancelAnimationFrame.bind(dom.window),ResizeObserver:class{observe(){}disconnect(){}unobserve(){}},IntersectionObserver:class{observe(){}disconnect(){}unobserve(){}},IS_REACT_ACT_ENVIRONMENT:true,crypto})) Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});
+dom.window.matchMedia=()=>({matches:false,addEventListener(){},removeEventListener(){}});
 const React = require('react');
 const {act} = React;
 const {Simulate} = require('react-dom/test-utils');
@@ -24,64 +25,76 @@ async function harness(initial=[]) {
   const Component=compile('src/components/simpbudget/StatementWorkspace.tsx',name=>name==='firebase/firestore'?firebase:name.includes('simpBudgetConfig')?{simpBudgetDb:{}}:name.includes('/statements')?domain:require(name)).default;
   const root=createRoot(document.getElementById('root'));
   await act(async()=>root.render(React.createElement(Component,{user:{uid:'u',getIdToken:async()=> 'test-token'},spaces:[{id:'personal',name:'Personal'},{id:'pulse',name:'Pulse'},{id:'tres',name:'TresProperties'}],year:2026,month:11})));
-  const button=(text)=>[...document.querySelectorAll('button')].find(b=>b.textContent===text);
+  const button=(text)=>[...document.querySelectorAll('button')].find(b=>b.textContent===text||b.getAttribute('aria-label')===text);
   const click=async(text)=>{const b=button(text);assert.ok(b,`Missing button: ${text}`);await act(async()=>Simulate.click(b));};
   const input=label=>document.querySelector(`[aria-label="${label}"]`);
   const change=async(label,value)=>{const el=input(label);assert.ok(el,label);await act(async()=>Simulate.change(el,{target:{value,checked:value}}));};
-  await click('Open statement workspace');
-  return {data,writes,click,button,input,change,close:async()=>act(async()=>root.unmount()),text:()=>document.body.textContent,open:async(value=initial[0])=>click(`${value.fileName} · ${value.status} · ${value.transactions.length} rows`)};
+  await click('Import statement');
+  return {data,writes,click,button,input,change,close:async()=>act(async()=>root.unmount()),text:()=>document.body.textContent,open:async(value=initial[0])=>{await click('Close statement modal');await click('Import history');const b=[...document.querySelectorAll('button')].find(b=>b.textContent.includes(value.fileName));await act(async()=>Simulate.click(b));}};
 }
-test('statement UI loads saved account/history, requires review, commits and undoes actuals',async()=>{
+test('modal sorts selected rows, removes them from inbox, undoes, persists categories, commits and undoes import',async()=>{
   const h=await harness([statement()]);try{
-    assert.match(h.text(),/existing.csv · review · 1 rows/);assert.match(h.input('Statement account').textContent,/Checking/);
-    await h.open();await h.click('Commit reviewed transactions');assert.match(h.text(),/Review this transaction/);assert.equal(h.writes.length,0);
-    await h.click('Select all');await h.change('Bulk bucket','personal');await h.click('Assign selected & review');
-    await h.click('Save review');assert.equal(h.writes.at(-1).revision,2);assert.equal(h.writes.at(-1).transactions[0].reviewed,true);
-    await h.click('Commit reviewed transactions');assert.equal(h.writes.at(-1).status,'committed');assert.match(h.text(),/\$100.00/);
-    await h.click('Undo import');assert.equal(h.writes.at(-1).status,'undone');assert.match(h.text(),/history is retained/);assert.equal(h.button('Commit reviewed transactions'),undefined);
+    await h.open();assert.ok(document.querySelector('[role="dialog"][aria-modal="true"]'));assert.equal(h.button('Finish import').disabled,true);
+    await h.change('Category row 2','Supplies & materials');await h.change('Select row 2',true);await h.click('Assign to Personal');
+    assert.equal(h.input('Select row 2'),null);assert.match(h.text(),/All transactions sorted/);assert.equal(h.writes.length,0);
+    await h.click('Undo last sort');assert.ok(h.input('Select row 2'));assert.equal(h.input('Category row 2').value,'Supplies & materials');
+    await h.click('Select all');await h.click('Assign to Pulse');await h.click('Save for later');
+    assert.equal(h.writes.at(-1).transactions[0].category,'Supplies & materials');assert.equal(h.writes.at(-1).transactions[0].spaceId,'pulse');
+    await h.click('Finish import');assert.equal(h.writes.at(-1).status,'committed');assert.deepEqual(domain.actualTotals([h.writes.at(-1)]),{pulse:100});
+    await h.click('Undo import');assert.equal(h.writes.at(-1).status,'undone');assert.deepEqual(domain.actualTotals([h.writes.at(-1)]),{});
+    assert.equal(h.input('Category row 2'),null);
   }finally{await h.close();}
 });
-test('CSV upload exposes mapping, guidance suggestion, and creates durable review without committing',async()=>{
+test('CSV upload opens transaction modal with suggestions and creates only a review',async()=>{
   const h=await harness();try{
-    await h.change('Statement account','a');await h.change('Upload guidance','Home Depot transactions this month are likely for TresProperties');
-    const csv='Date,Merchant,Amount\n2026-11-01,Home Depot,12.50';
-    const file={name:'statement.csv',size:csv.length,type:'text/csv',arrayBuffer:async()=>new TextEncoder().encode(csv).buffer,text:async()=>csv};
+    const csv='Date,Merchant,Amount\n2026-11-01,Home Depot,12.50';const file={name:'statement.csv',size:csv.length,type:'text/csv',arrayBuffer:async()=>new TextEncoder().encode(csv).buffer,text:async()=>csv};
     await act(async()=>Simulate.change(h.input('Upload statements'),{target:{files:[file],value:'fake'}}));
-    assert.match(h.text(),/Map columns · statement.csv/);assert.equal(h.writes.length,0);
-    await h.click('Create review');const saved=h.writes.at(-1);assert.equal(saved.status,'review');assert.equal(saved.transactions[0].amount,12.5);assert.equal(saved.transactions[0].suggestedSpaceId,'tres');assert.equal(saved.transactions[0].reviewed,false);assert.equal(saved.transactions[0].spaceId,'');assert.equal(saved.revision,1);
-    assert.match(h.text(),/Suggested: TresProperties/);
+    assert.match(h.text(),/Match CSV columns/);assert.equal(h.writes.length,0);await h.change('Statement account','a');await h.change('Upload guidance','Home Depot transactions this month are likely for TresProperties');await h.click('Analyze');const saved=h.writes.at(-1);
+    assert.equal(saved.status,'review');assert.equal(saved.transactions[0].suggestedSpaceId,'tres');assert.equal(saved.transactions[0].reviewed,false);assert.equal(saved.transactions[0].spaceId,'');
+    assert.match(h.text(),/Sort your transactions/);assert.ok(h.input('Select row 2'));assert.equal(h.input('Upload statements'),null);
   }finally{await h.close();}
 });
-test('bulk selection only changes selected rows and splits enforce exact total before commit',async()=>{
-  const h=await harness([statement({transactions:[row(),row({id:'r2',sourceRow:3,amount:30})]})]);try{
-    await h.open(statement({transactions:[row(),row({id:'r2',sourceRow:3,amount:30})]}));
-    await h.change('Select row 2',true);await h.change('Bulk bucket','pulse');await h.click('Assign selected & review');await h.click('Save review');
-    assert.equal(h.writes.at(-1).transactions[0].spaceId,'pulse');assert.equal(h.writes.at(-1).transactions[1].reviewed,false);
-    await act(async()=>Simulate.click([...document.querySelectorAll('button')].find(b=>b.textContent==='Split transaction')));
-    await h.change('Split 1 amount row 2','70');await h.change('Split 2 amount row 2','20');
-    const reviewed=[...document.querySelectorAll('label')].find(l=>l.textContent.trim()==='Reviewed').querySelector('input');
-    await act(async()=>Simulate.change(reviewed,{target:{checked:true}}));await h.click('Commit reviewed transactions');assert.match(h.text(),/Split amounts must equal/);
-    await h.change('Split 2 amount row 2','30');await act(async()=>Simulate.change(reviewed,{target:{checked:true}}));
-    await h.change('Select row 2',false);await h.change('Select row 3',true);await h.click('Exclude selected');await h.click('Commit reviewed transactions');assert.equal(h.writes.at(-1).status,'committed');assert.deepEqual(domain.actualTotals([h.writes.at(-1)]),{personal:70,pulse:30});
+test('dragging one row moves only that row; dragging a selected row moves the selection and undo restores it',async()=>{
+  const value=statement({transactions:[row(),row({id:'r2',sourceRow:3,amount:30}),row({id:'r3',sourceRow:4,amount:20})]});const h=await harness([value]);try{
+    await h.open();const transfer={setData(){},effectAllowed:''};
+    await act(async()=>Simulate.dragStart(h.input('Select row 2').closest('tr'),{dataTransfer:transfer}));
+    await act(async()=>Simulate.drop(h.button('Assign to Pulse'),{preventDefault(){}}));
+    assert.equal(h.input('Select row 2'),null);assert.ok(h.input('Select row 3'));
+    await h.change('Select row 3',true);await h.change('Select row 4',true);
+    await act(async()=>Simulate.dragStart(h.input('Select row 3').closest('tr'),{dataTransfer:transfer}));
+    await act(async()=>Simulate.drop(h.button('Assign to TresProperties'),{preventDefault(){}}));
+    assert.match(h.text(),/All transactions sorted/);await h.click('Undo last sort');assert.ok(h.input('Select row 3'));assert.ok(h.input('Select row 4'));assert.equal(h.input('Select row 2'),null);
+    await h.click('Save for later');assert.equal(h.writes.at(-1).transactions[0].spaceId,'pulse');assert.equal(h.writes.at(-1).transactions[1].spaceId,'');
+  }finally{await h.close();}
+});
+test('transfer classification removes a row from spending and can be undone',async()=>{
+  const h=await harness([statement()]);try{await h.open();await h.change('Category row 2','card_payment');assert.equal(h.input('Select row 2'),null);await h.click('Undo last sort');assert.ok(h.input('Select row 2'));await h.change('Category row 2','card_payment');await h.click('Finish import');assert.deepEqual(domain.actualTotals([h.writes.at(-1)]),{});}finally{await h.close();}
+});
+test('split correction requires exact totals and disappears only after confirming the split',async()=>{
+  const h=await harness([statement()]);try{
+    await h.open();await h.click('Edit row 2');await h.click('Split transaction');await h.change('Split 1 amount row 2','70');await h.change('Split 2 amount row 2','20');await h.click('Confirm split');assert.match(h.text(),/Split amounts must equal/);assert.ok(h.input('Select row 2'));
+    await h.change('Split 2 amount row 2','30');await h.click('Confirm split');assert.equal(h.input('Select row 2'),null);await h.click('Finish import');assert.deepEqual(domain.actualTotals([h.writes.at(-1)]),{personal:70,pulse:30});
   }finally{await h.close();}
 });
 test('optimistic revision prevents overwriting newer review from another tab',async()=>{
-  const h=await harness([statement()]);try{
-    await h.open();h.data.set('simpbudget-users/u/statementImports/s1',statement({revision:2}));
-    await h.click('Save review');assert.match(h.text(),/changed in another tab/);assert.equal(h.writes.length,0);assert.equal(h.data.get('simpbudget-users/u/statementImports/s1').revision,2);
-  }finally{await h.close();}
+  const h=await harness([statement()]);try{await h.open();h.data.set('simpbudget-users/u/statementImports/s1',statement({revision:2}));await h.click('Save for later');assert.match(h.text(),/changed in another tab/);assert.equal(h.writes.length,0);}finally{await h.close();}
 });
-test('reopening current history item retains edits and a usable revision',async()=>{
-  const h=await harness([statement()]);try{
-    await h.open();await h.change('Description row 2','Corrected merchant');await h.open();
-    assert.equal(h.input('Description row 2').value,'Corrected merchant');
-    await h.click('Save review');assert.doesNotMatch(h.text(),/changed in another tab/);assert.equal(h.writes.at(-1).transactions[0].description,'Corrected merchant');
-  }finally{await h.close();}
+test('closing the modal saves the draft and returning preserves assignments',async()=>{
+  const h=await harness([statement()]);try{await h.open();await h.click('Select all');await h.click('Assign to Personal');await h.click('Close statement modal');assert.equal(document.querySelector('[role="dialog"]'),null);assert.equal(h.writes.at(-1).status,'review');assert.equal(h.writes.at(-1).transactions[0].spaceId,'personal');await h.click('Import history');await h.open();assert.match(h.text(),/All transactions sorted/);}finally{await h.close();}
 });
-test('repeated commit clicks issue one transaction and preserve one actual record',async()=>{
-  const h=await harness([statement({transactions:[row({reviewed:true,spaceId:'personal'})]})]);try{
-    await h.open();const button=h.button('Commit reviewed transactions');
-    await act(async()=>{Simulate.click(button);Simulate.click(button);});
-    assert.equal(h.writes.length,1);assert.equal(h.writes[0].status,'committed');assert.deepEqual(domain.actualTotals([...h.data].filter(([k])=>k.includes('/statementImports/')).map(([,v])=>v)),{personal:100});
-  }finally{await h.close();}
+test('repeated finish clicks issue one transaction',async()=>{
+  const h=await harness([statement({transactions:[row({reviewed:true,spaceId:'personal'})]})]);try{await h.open();const b=h.button('Finish import');await act(async()=>{Simulate.click(b);Simulate.click(b);});assert.equal(h.writes.length,1);assert.equal(h.writes[0].status,'committed');}finally{await h.close();}
+});
+test('PDF selection stays local until Analyze sends the staged document and prompt',async()=>{
+  const previousFetch=globalThis.fetch, previousReader=globalThis.FileReader;
+  const calls=[];
+  globalThis.fetch=async(url,options)=>{calls.push({url,body:JSON.parse(options.body)});return{ok:true,json:async()=>({transactions:[{date:'2026-11-01',description:'Synthetic purchase',amount:12,kind:'expense',reason:'Needs review',sourceRow:'Page 1 row 1'}],warnings:[]})};};
+  globalThis.FileReader=class{readAsDataURL(file){file.arrayBuffer().then(bytes=>{this.result='data:application/pdf;base64,'+Buffer.from(bytes).toString('base64');this.onload();});}};
+  const h=await harness();try{
+    const file=Object.assign(new Blob(['%PDF-1.7 synthetic'],{type:'application/pdf'}),{name:'synthetic.pdf'});
+    await act(async()=>Simulate.change(h.input('Upload statements'),{target:{files:[file],value:'fake'}}));
+    assert.equal(calls.length,0);assert.equal(h.writes.length,0);assert.ok(document.querySelector('object[aria-label="Statement PDF preview"]'));
+    await h.change('Upload guidance','Hardware is for Pulse');await h.change('Statement account','a');assert.equal(calls.length,0);
+    await h.click('Analyze');assert.equal(calls.length,1);assert.equal(calls[0].body.guidance,'Hardware is for Pulse');assert.equal(calls[0].body.fileName,'synthetic.pdf');assert.equal(h.writes.at(-1).status,'review');assert.match(h.text(),/Sort your transactions/);
+  }finally{await h.close();globalThis.fetch=previousFetch;globalThis.FileReader=previousReader;}
 });

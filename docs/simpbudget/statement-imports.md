@@ -4,6 +4,10 @@ Statements live under the signed-in SimpBudget user, in `statementAccounts`, `st
 
 ## Import and review
 
+The main Import statement button opens a modal. Dropping or browsing for a file stages it locally and shows a preview. The prompt and account selection appear after staging. Only Analyze sends PDFs/images and the prompt to the extractor; CSV analysis remains local. The separate legacy admin-budget copy action is collapsed and explicitly labeled.
+
+The review modal shows transaction rows with category dropdowns. Drag a row to a budget tile, or select multiple rows and click a tile. Successfully assigned rows leave the unsorted list; Undo last sort restores the previous draft state. View sorted allows inspection and reassignment. Transfers, card payments, and income can be set aside through the category menu. Optional Edit controls preserve corrections and exact-cent splits. Finish import commits the draft; Save for later and closing the modal save review state. The in-modal undo stack is session-local; reopening a saved review still allows reassignment through View sorted. Categories are optional transaction metadata and do not change existing planned-budget records.
+
 - CSV: one file at a time, browser-local parsing, explicit column and amount-sign mapping. ISO dates or US MM/DD/YYYY; invalid rows fail the import with row errors instead of disappearing.
 - PDF (including scans), PNG, JPEG, WebP: authenticated Netlify extraction via OpenAI. Original files are held only for the extraction request and not saved by this workflow. Extracted transaction descriptions, provenance, and upload guidance are persisted in the owner's Firestore account.
 - Limits: 4 MB and 500 rows per file; PDF/image extraction has a transactional 20-attempt/hour owner quota. Large or unclear documents should be split or exported as CSV.
