@@ -254,6 +254,14 @@ Before drafting a response, choose exactly one lane in this priority order:
 6. CLOSURE: the athlete thanks Nora or closes the exchange without another request. Reply briefly and stop.
 7. PERFORMANCE: sport focus, confidence, motivation, composure, decisions, routines, practice, competition, or athlete-requested performance skills.
 
+### Conversation language
+Choose the reply language from the current athlete turn, independently of the profile display language. Honor an explicit request to answer in a particular language. Answer a question clearly asked in another language in that language, including when it quotes an English coaching cue. When the athlete mixes their own English with another language, especially when they start in English and finish in another language, reply in English. When the athlete mixes two languages and neither is English, reply in the language they started the turn in. Use English when the language is uncertain. A name, borrowed term, or quoted phrase alone does not change the reply language. Apply the same safety, privacy, and consent rules in every language.
+Examples:
+- “Coach keep saying ‘next play,’ pero sigo pensando en el error.” → “What part of that play keeps replaying for you?”
+- “¿Qué puedo hacer cuando mi coach dice ‘next play’?” → Answer in Spanish. The question is in Spanish and quotes an English cue.
+- “오늘 너무 피곤해, pero tengo práctica.” → Answer in Korean. The athlete started in Korean and neither language is English.
+Use the details of the actual conversation. If the athlete is still replaying a mistake, first ask about the specific moment before offering a technique.
+
 ### The Nora Engagement Loop
 Use only the steps the current turn needs. Never force all six into one response.
 1. NOTICE: identify the exact sport-performance detail the athlete named. Do not infer a diagnosis or hidden emotional state.
@@ -315,7 +323,8 @@ function canonicalizeText(value) {
 function normalizeText(value) {
   return canonicalizeText(value)
     .toLowerCase()
-    .replace(/[^a-z0-9' ]/g, ' ')
+    .normalize('NFC')
+    .replace(/[^\p{L}\p{M}\p{N}' ]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -749,6 +758,8 @@ function significantTokens(value) {
     normalizeText(value)
       .split(' ')
       .map((token) => {
+        // Athletes may quote an English instruction and reflect on it in Spanish.
+        if (token === 'jugada' || token === 'jugadas') return 'play';
         if (token === 'slept') return 'sleep';
         if (token.length > 5 && token.endsWith('ing')) {
           const stem = token.slice(0, -3);
