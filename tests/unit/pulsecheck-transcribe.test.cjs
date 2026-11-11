@@ -31,6 +31,8 @@ test('sends the audio for automatic language detection and returns the text as s
   // No fixed language: the model detects it per recording.
   assert.equal(sent.options.body.get('language'), null);
   assert.match(sent.options.body.get('prompt'), /Do not translate/);
+  // The coach's name is spelled out so it is not heard as "Laura".
+  assert.match(sent.options.body.get('prompt'), /"Nora"/);
 });
 
 test('a provider failure surfaces as an error so the app keeps its own transcript', async () => {

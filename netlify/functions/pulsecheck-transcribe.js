@@ -18,7 +18,8 @@ const ALLOWED_TYPES = new Map([
   ['audio/aac', 'turn.m4a'],
   ['audio/wav', 'turn.wav'],
 ]);
-const PROMPT = 'An athlete talking with a mental performance coach. They may switch languages mid-sentence. '
+const PROMPT = 'An athlete talking with Nora, a mental performance coach. They often address her by name, "Nora". '
+  + 'They may switch languages mid-sentence. '
   + 'Write each word in the language and script it was spoken in. Do not translate.';
 
 function requestHeader(event, name) {
