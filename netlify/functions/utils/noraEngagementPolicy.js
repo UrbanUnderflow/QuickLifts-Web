@@ -744,6 +744,9 @@ function buildNoraEngagementFallback({
   }
 
   if (groundingMessages.some(m => hasAny(CROSS_ATHLETE_DATA_REQUEST_PATTERNS, canonicalizeText(m))) && /\b(?:exception|share|told|said|their|teammate)\b/i.test(lowered)) return "I can help with your own performance question. Another athlete’s private conversation stays private.";
+  const languageRequest = requestedConversationLanguage(athleteMessage);
+  if (languageRequest) return languageRequest.reply;
+  if (isTopiclessTurn(athleteMessage)) return 'Hi. What would you like to talk about today?';
   if (lane === NoraConversationLane.Performance && /\b(?:practice|rehearse|try)\b/i.test(lowered) && /\b(?:cue|that|it)\b/i.test(lowered)) {
     const serving = /\b(?:serve|serving|volleyball)\b/i.test([athleteMessage, ...groundingMessages].join(' '));
     return serving
@@ -751,6 +754,56 @@ function buildNoraEngagementFallback({
       : 'To practice your focus cue, say it silently, picture the next play, and bring your attention back to the cue whenever it wanders. Try that once now.';
   }
   return buildGroundedConversationFallback(athleteMessage);
+}
+
+// Requests to switch the conversation language ("let's talk in Korean"). Nora answers in that
+// language, so the reply cannot share English topic words with the request.
+const LANGUAGE_SWITCH_TARGETS = [
+  { code: 'ko', pattern: /\bkorean\b|한국어|한국말/i, reply: '좋아요, 한국어로 이야기해요. 오늘은 어떤 이야기를 하고 싶어요?' },
+  { code: 'zh', pattern: /\b(?:mandarin|chinese)\b|中文|普通话|汉语/i, reply: '好的，我们用中文聊。你今天想聊些什么？' },
+  { code: 'ja', pattern: /\bjapanese\b|日本語/i, reply: 'はい、日本語で話しましょう。今日は何について話したいですか？' },
+  { code: 'es', pattern: /\bspanish\b|\bespañol\b/i, reply: 'Claro, podemos hablar en español. ¿De qué quieres hablar hoy?' },
+  { code: 'fr', pattern: /\bfrench\b|\bfrançais\b/i, reply: 'Bien sûr, on peut parler en français. De quoi veux-tu parler aujourd’hui ?' },
+  { code: 'pt', pattern: /\bportuguese\b|\bportuguês\b/i, reply: 'Claro, podemos conversar em português. Sobre o que você quer falar hoje?' },
+  { code: 'en', pattern: /\benglish\b|영어|英语|英文|英語/i, reply: 'Sure, we can talk in English. What would you like to talk about today?' },
+];
+const LANGUAGE_SWITCH_VERB = /\b(?:talk|speak|chat|reply|respond|answer|write|continue|switch|use|say|go)\b|이야기|얘기|말해|말하|대화|说|講|讲|聊|話/i;
+
+function requestedConversationLanguage(message) {
+  const text = canonicalizeText(message);
+  if (text.length > 120 || !LANGUAGE_SWITCH_VERB.test(text)) return null;
+  return LANGUAGE_SWITCH_TARGETS.find((target) => target.pattern.test(text)) || null;
+}
+
+// Which writing system most of the letters use. Topic words cannot overlap across scripts.
+function dominantScript(value) {
+  const counts = new Map();
+  const scripts = [['latin', /\p{Script=Latin}/u], ['hangul', /\p{Script=Hangul}/u], ['han', /\p{Script=Han}/u],
+    ['kana', /[\p{Script=Hiragana}\p{Script=Katakana}]/u], ['cyrillic', /\p{Script=Cyrillic}/u],
+    ['arabic', /\p{Script=Arabic}/u], ['other', /\p{L}/u]];
+  for (const char of String(value || '')) {
+    const match = scripts.find(([, pattern]) => pattern.test(char));
+    if (match) counts.set(match[0], (counts.get(match[0]) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+}
+
+function denseScriptPairs(value) {
+  const pairs = new Set();
+  for (const run of String(value || '').match(/[\p{Script=Hangul}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]{2,}/gu) || []) {
+    const chars = [...run];
+    for (let index = 0; index < chars.length - 1; index += 1) pairs.add(chars[index] + chars[index + 1]);
+  }
+  return pairs;
+}
+
+const GREETING_PATTERN = /^(?:hey|hi|hello|yo|hiya|good (?:morning|afternoon|evening))\b/i;
+
+// "Hey Nora", "Laura", "hi there coach": too short to carry a topic.
+function isTopiclessTurn(message) {
+  const normalized = normalizeText(message);
+  const words = normalized.split(' ').filter(Boolean);
+  return words.length <= 3 || (words.length <= 5 && GREETING_PATTERN.test(normalized));
 }
 
 function significantTokens(value) {
@@ -774,6 +827,21 @@ function significantTokens(value) {
 }
 
 function sharesTopic(athleteMessage, response) {
+  // A request to change languages, a greeting, or a two or three word turn ("Hey Nora") gives no
+  // topic to stay on. A reply in another script cannot share words with the athlete's turn.
+  if (requestedConversationLanguage(athleteMessage)) return true;
+  if (isTopiclessTurn(athleteMessage)) return true;
+  const athleteScript = dominantScript(athleteMessage);
+  const responseScript = dominantScript(response);
+  if (athleteScript && responseScript && athleteScript !== responseScript) return true;
+  // Korean endings change and Chinese and Japanese have no spaces, so whole words rarely match.
+  // Two-character pieces ("연습", "训练") carry the topic instead.
+  if (['hangul', 'han', 'kana'].includes(athleteScript)) {
+    const athletePairs = denseScriptPairs(athleteMessage);
+    if (!athletePairs.size) return true;
+    const responsePairs = denseScriptPairs(response);
+    return [...athletePairs].some((pair) => responsePairs.has(pair));
+  }
   const athleteTokens = significantTokens(athleteMessage);
   const responseTokens = significantTokens(response);
   if (!athleteTokens.size) return true;
@@ -951,6 +1019,17 @@ function hasHardNoraEngagementFailure(evaluation) {
   return (evaluation?.failures || []).some((failure) => hardDimensions.has(failure.id));
 }
 
+// The grounded fallback is fixed, reviewed copy. If it only misses on topic overlap or wording,
+// sending it beats showing the athlete an error. Safety and truthfulness failures still block it.
+function isDeliverableNoraFallback(evaluation) {
+  if (!evaluation) return false;
+  if ([NoraConversationLane.CriticalSafety, NoraConversationLane.ClinicalCare].includes(evaluation.lane)) {
+    return evaluation.passed === true;
+  }
+  const softDimensions = new Set(['lane_fit', 'topic_continuity', 'no_repetition', 'plain_language', 'food_plan_topic_fit']);
+  return (evaluation.failures || []).every((failure) => softDimensions.has(failure.id));
+}
+
 module.exports = {
   NORA_CONTRACT_VERSION,
   NORA_ENGAGEMENT_MODEL_PROMPT,
@@ -962,6 +1041,8 @@ module.exports = {
   classifyNoraConversationLane,
   evaluateNoraEngagementResponse,
   hasHardNoraEngagementFailure,
+  isDeliverableNoraFallback,
+  requestedConversationLanguage,
   isClinicalCareRequest,
   isMedicalCareRequest,
   isConversationClosure,

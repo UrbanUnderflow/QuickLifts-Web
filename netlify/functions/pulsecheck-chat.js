@@ -41,6 +41,7 @@ const {
   isCoachHandoffRequest,
   isCoachIdentityQuestion,
   isConversationClosure,
+  isDeliverableNoraFallback,
 } = require('./utils/noraEngagementPolicy');
 const {
   runtimeHelpers: escalationRuntime,
@@ -3116,7 +3117,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
                 { role: 'assistant', content: assistantMessage },
                 {
                   role: 'user',
-                  content: `Rewrite Nora's last response so every engagement dimension passes.\nFailed dimensions:\n${failedDimensions}\nReturn only the revised athlete-facing response.`,
+                  content: `Rewrite Nora's last response so every engagement dimension passes.\nFailed dimensions:\n${failedDimensions}\nApply the Conversation language rules to the original athlete turn, ignoring the language of these editing instructions. Return only the revised athlete-facing response.`,
                 },
               ],
               temperature: 0.2,
@@ -3190,7 +3191,13 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       });
     }
 
-    if (!engagementEvaluation.passed) {
+    if (!engagementEvaluation.passed && isDeliverableNoraFallback(engagementEvaluation)) {
+      // Fixed fallback copy that only misses on topic overlap still beats an error screen.
+      console.warn('[pulsecheck-chat] Delivering grounded Nora fallback despite soft rubric misses', {
+        lane: conversationLane,
+        failures: engagementEvaluation.failures.map((failure) => failure.id),
+      });
+    } else if (!engagementEvaluation.passed) {
       console.error('[pulsecheck-chat] Grounded Nora fallback failed the engagement rubric', {
         lane: conversationLane,
         failures: engagementEvaluation.failures.map((failure) => failure.id),
@@ -3582,7 +3589,7 @@ async function classifyEscalation(db, userId, message, recentMessages, conversat
 
   // Build classification prompt
   console.log('[classifyEscalation] [STEP 4] Building classification prompt...');
-  const systemPrompt = `You are a clinical safety classifier for PulseCheck.
+  const systemPrompt = `You are a clinical safety classifier for PulseCheck. Interpret the meaning across all languages used in the turn, including code-switching and quoted speech. Apply the same escalation thresholds regardless of language.
 
 ESCALATION TIERS:
 - Tier 0 (None): Normal conversation

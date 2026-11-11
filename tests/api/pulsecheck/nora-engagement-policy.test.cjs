@@ -36,6 +36,7 @@ test('scope gate applies the canonical seven-lane priority', () => {
     ['Thank you, that helps.', NoraConversationLane.Closure],
     ['Got it, thanks.', NoraConversationLane.Closure],
     ['Okay, I want to discuss confidence.', NoraConversationLane.Performance],
+    ['OK, でも試合のことで相談したい。', NoraConversationLane.Performance],
   ];
 
   for (const [message, expectedLane] of cases) {
@@ -641,4 +642,77 @@ test('polite thanks does not discard a substantive check-in or question', () => 
   for (const message of ['Thanks so much Nora', 'Thank you, that really helps.', 'Got it, thanks.']) {
     assert.equal(policy.isConversationClosure(message), true, message);
   }
+});
+
+test('mixed coaching turns support an English reply and Spanish questions support Spanish replies', () => {
+  const cases = [
+    ['Coach keep saying “next play,” pero sigo pensando en el error.', 'What part of that play keeps replaying for you?'],
+    ['¿Qué puedo hacer cuando mi coach dice “next play”?', '¿Qué parte de esa jugada se te sigue repitiendo?'],
+  ];
+  for (const [athleteMessage, response] of cases) {
+    const result = evaluateNoraEngagementResponse({
+      athleteMessage, response, lane: classifyNoraConversationLane(athleteMessage),
+    });
+    assert.equal(result.lane, NoraConversationLane.Performance);
+    assert.deepEqual(result.failures, []);
+  }
+});
+
+// Tester video 2026-11-11: each of these turns returned "Nora could not process that message"
+// because the fallback reply failed the same topic check that the draft failed.
+test('short, greeting and language-switch turns always get a fallback that passes', () => {
+  const groundingMessages = [
+    'Audit Kuwait',
+    'Are you looking to reflect on your performance in Kuwait or something specific about that experience?',
+    'Ive been talking in korean',
+    'Got it! If you want to continue in Korean or have something specific to discuss, just let me know!',
+  ];
+  for (const athleteMessage of ['Lets talk in korean', 'Laura', 'Laura Hey Nora', 'Hey Nora', '한국어로 얘기하자', 'Can you speak Spanish with me?']) {
+    const lane = classifyNoraConversationLane(athleteMessage);
+    const response = buildNoraEngagementFallback({ athleteMessage, lane, groundingMessages, noraChatActions: true });
+    const result = evaluateNoraEngagementResponse({ athleteMessage, response, lane, groundingMessages });
+    assert.deepEqual(result.failures.map((failure) => failure.id), [], `${athleteMessage} -> ${response}`);
+  }
+  assert.match(buildNoraEngagementFallback({ athleteMessage: 'Lets talk in korean' }), /한국어/);
+  assert.match(buildNoraEngagementFallback({ athleteMessage: 'Can you speak Spanish with me?' }), /español/);
+});
+
+test('a reply in the requested or spoken language is not failed for missing English topic words', () => {
+  const ko = evaluateNoraEngagementResponse({ athleteMessage: 'Lets talk in korean', response: '좋아요! 한국어로 이야기해요. 오늘 어떤 이야기를 하고 싶어요?' });
+  assert.deepEqual(ko.failures, []);
+  const mixed = evaluateNoraEngagementResponse({
+    athleteMessage: '오늘 연습이 너무 힘들었어요 그리고 자신감이 없어요',
+    response: '연습이 힘들었다고 했어요. 어떤 순간을 먼저 보고 싶어요?',
+  });
+  assert.deepEqual(mixed.failures, []);
+});
+
+test('longer turns that open with a greeting still have to stay on topic', () => {
+  const result = evaluateNoraEngagementResponse({
+    athleteMessage: 'hey I keep missing my free throws in the fourth quarter',
+    response: 'What would be most useful right now: a mental cue or help with a specific question?',
+  });
+  assert.ok(result.failures.some((failure) => failure.id === 'topic_continuity'));
+});
+
+test('a fallback that only misses on topic is delivered, but safety misses still block it', () => {
+  const soft = { lane: NoraConversationLane.Performance, passed: false, failures: [{ id: 'topic_continuity' }, { id: 'lane_fit' }] };
+  assert.equal(policy.isDeliverableNoraFallback(soft), true);
+  for (const id of ['scope_boundary', 'question_discipline', 'non_shaming', 'action_truthfulness', 'relationship_boundary', 'consent_and_tracking', 'health_data_pull_only']) {
+    assert.equal(policy.isDeliverableNoraFallback({ ...soft, failures: [{ id }] }), false, id);
+  }
+  assert.equal(policy.isDeliverableNoraFallback({ lane: NoraConversationLane.CriticalSafety, passed: false, failures: [{ id: 'lane_fit' }] }), false);
+});
+
+test('Korean and Mandarin replies that drift off topic are still caught', () => {
+  const offTopic = evaluateNoraEngagementResponse({
+    athleteMessage: '오늘 연습이 너무 힘들었어요 그리고 자신감이 없어요',
+    response: '다음 경기 일정은 어떻게 되나요?',
+  });
+  assert.ok(offTopic.failures.some((failure) => failure.id === 'topic_continuity'));
+  const zh = evaluateNoraEngagementResponse({
+    athleteMessage: '今天训练很累，我对比赛没有信心',
+    response: '你说今天训练很累。你想先看哪个时刻？',
+  });
+  assert.deepEqual(zh.failures, []);
 });
