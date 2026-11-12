@@ -2696,7 +2696,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     const languageChoice = journalAnalysis
       ? { code: null, changed: false }
       : noraLanguage.resolveConversationLanguage({ chosen: chosenConversationLanguage, message });
-    const conversationLanguageSection = noraLanguage.buildConversationLanguageSection(languageChoice.code);
+    const conversationLanguageSection = noraLanguage.buildConversationLanguageSection(languageChoice.code, { switched: languageChoice.changed });
 
     // Today's goal: set in the morning, talked through in the evening. Optional context only.
     let dailyGoalState = null;

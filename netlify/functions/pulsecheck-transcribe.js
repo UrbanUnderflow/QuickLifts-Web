@@ -63,7 +63,7 @@ function parseAudioRequest(body) {
 /** The athlete's chosen language is a hint, not a lock, so a spoken request to switch still comes through. */
 function promptFor(language) {
   const name = CONVERSATION_LANGUAGES[language];
-  return name ? `${PROMPT} They have chosen to talk in ${name}, so most of what they say will be in ${name}.` : PROMPT;
+  return name ? `${PROMPT} They have been talking in ${name}, but may switch to another language at any time.` : PROMPT;
 }
 
 async function transcribe({ audio, fileName, mimeType, language }, apiKey, fetchImpl = fetch) {

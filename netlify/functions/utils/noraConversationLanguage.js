@@ -29,27 +29,78 @@ function normalizeConversationLanguage(value) {
   return Object.prototype.hasOwnProperty.call(CONVERSATION_LANGUAGES, code) ? code : null;
 }
 
+// Function words that mark a language. Words shared across Spanish, French and Portuguese
+// ("que", "de", "como") are left out so the sets do not vote for each other.
+const MARKERS = {
+  en: new Set(['i', "i'm", 'im', 'the', 'and', 'my', 'to', 'is', 'but', 'it', 'you', 'what', 'was', 'have', 'this', 'that', 'me', 'of', 'in', 'with', 'for', 'am', 'are', "don't", 'just', 'so', 'not', 'can', 'how', 'we', 'be', 'at', 'on', 'really', 'feel', 'feeling', 'want', 'need', 'about', 'did', 'do', 'had', 'has', 'been', 'after', 'before', 'today', 'tonight', 'they', 'he', 'she', 'our', 'your', 'there', 'when', 'why', 'if', 'will', 'would', 'should', 'could', 'got', 'get', 'went', 'game', 'practice', 'went', 'think', 'know']),
+  es: new Set(['el', 'los', 'las', 'y', 'pero', 'estoy', 'tengo', 'muy', 'hoy', 'cómo', 'qué', 'también', 'quiero', 'puedo', 'hola', 'gracias', 'eso', 'esto', 'yo', 'mucho', 'nada', 'cuando', 'está', 'siento', 'entrenamiento', 'partido', 'necesito', 'mañana', 'hablar', 'hablemos', 'sí']),
+  fr: new Set(['je', 'suis', 'le', 'les', 'et', 'mais', 'mon', 'ma', 'est', 'pas', 'très', "aujourd'hui", "j'ai", "c'est", 'avec', 'pour', 'bonjour', 'salut', 'merci', 'entraînement', 'quoi', 'comment', 'pourquoi', 'aussi', 'veux', 'peux', 'ne', 'nous', 'vous', 'tu', 'il', 'elle', 'oui']),
+  pt: new Set(['eu', 'estou', 'não', 'muito', 'hoje', 'mas', 'meu', 'minha', 'é', 'um', 'uma', 'com', 'para', 'você', 'treino', 'jogo', 'obrigado', 'obrigada', 'olá', 'oi', 'quero', 'posso', 'tô', 'tá', 'isso', 'sim', 'falar', 'estava']),
+};
+// One of these alone is enough ("hola", "merci").
+const STRONG = { es: ['hola', 'gracias'], fr: ['bonjour', 'salut', 'merci'], pt: ['olá', 'obrigado', 'obrigada'] };
+
 /**
- * The language for this turn: an explicit request in the message wins over the app's choice.
- * Returns { code, changed } where code is null for automatic.
+ * The language a message is written in, by the athlete's rules: English mixed with another
+ * language counts as English, two other languages count as the one they started in.
+ * Returns a code, or null when the message is too short or unclear to tell.
+ */
+function detectMessageLanguage(message) {
+  const text = String(message || '').toLowerCase().replace(/[’]/g, "'");
+  const hasKana = /[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text);
+  const sequence = [];
+  const counts = { en: 0, es: 0, fr: 0, pt: 0, ko: 0, zh: 0, ja: 0 };
+  let strong = null;
+  for (const [unit] of text.matchAll(/[\p{Script=Latin}']+|\p{Script=Hangul}|\p{Script=Han}|[\p{Script=Hiragana}\p{Script=Katakana}]/gu)) {
+    let code = null;
+    if (/\p{Script=Hangul}/u.test(unit)) code = 'ko';
+    else if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(unit)) code = 'ja';
+    else if (/\p{Script=Han}/u.test(unit)) code = hasKana ? 'ja' : 'zh';
+    else {
+      const word = unit.replace(/^'+|'+$/g, '');
+      code = Object.keys(MARKERS).find((language) => MARKERS[language].has(word)) || null;
+      for (const [language, words] of Object.entries(STRONG)) if (words.includes(word)) strong = strong || language;
+    }
+    if (code) { counts[code] += 1; sequence.push(code); }
+  }
+  const dense = (code) => counts[code] >= 2;
+  const latin = (code) => counts[code] >= 2 || strong === code;
+  const present = ['ko', 'zh', 'ja'].filter(dense).concat(['es', 'fr', 'pt'].filter(latin));
+  if (counts.en >= 2 && present.length) return 'en';
+  if (present.length > 1) return sequence.find((code) => present.includes(code)) || null;
+  if (present.length === 1) return present[0];
+  return counts.en >= 2 ? 'en' : null;
+}
+
+/**
+ * The language for this turn. Without a choice from the app (older builds) Nora keeps her
+ * per-turn rules. With one, an explicit request or a message clearly in another language
+ * switches it. Returns { code, changed, detected }: code null means per-turn rules.
  */
 function resolveConversationLanguage({ chosen, message }) {
   const current = normalizeConversationLanguage(chosen);
   const requested = requestedConversationLanguage(message || '');
-  if (requested && requested.code !== current) return { code: requested.code, changed: true };
-  return { code: current, changed: false };
+  if (requested && requested.code !== current) return { code: requested.code, changed: true, detected: false };
+  if (!current) return { code: null, changed: false, detected: false };
+  const spoken = requested ? null : detectMessageLanguage(message);
+  if (spoken && spoken !== current) return { code: spoken, changed: true, detected: true };
+  return { code: current, changed: false, detected: false };
 }
 
-function buildConversationLanguageSection(code) {
+function buildConversationLanguageSection(code, { switched = false } = {}) {
   const name = CONVERSATION_LANGUAGES[code];
   if (!name) return '';
-  return `\n\n### Chosen conversation language\nThe athlete chose ${name} for this conversation. Write every reply in ${name}, whatever language their message is written in. This overrides the Conversation language rules above. Keep a quoted coaching cue in its original words inside quotation marks if that helps, but write everything around it in ${name}. If the athlete asks to talk in another language, switch to it.`;
+  const acknowledge = switched
+    ? ` The athlete just switched to ${name}. Start with a few words in ${name} that show you noticed and are switching with them, then answer what they said.`
+    : '';
+  return `\n\n### Conversation language\nReply in ${name}.${acknowledge} Write every reply in ${name}; this overrides the per-turn language rules above. Keep a quoted coaching cue in its original words inside quotation marks if that helps, but write everything around it in ${name}.`;
 }
 
 module.exports = {
   CONVERSATION_LANGUAGES,
   TOPICLESS_GREETING,
   normalizeConversationLanguage,
+  detectMessageLanguage,
   resolveConversationLanguage,
   buildConversationLanguageSection,
 };
