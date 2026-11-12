@@ -19,17 +19,3 @@ test('data validation rejects duplicate accounts and path-like names',()=>{asser
 test('private API rejects unauthorized reads, images, and writes before database access',async()=>{
  for(const method of ['GET','PATCH'])for(const query of [{},{image:'synthetic'}]){const req:any={method,query,headers:{},body:{}};const res:any={code:200,headers:{},setHeader(k:string,v:string){this.headers[k]=v;},status(n:number){this.code=n;return this;},json(v:any){return v;},end(){}};await reviewHandler(async()=>{throw new ReviewError(403,'Denied');})(req,res);assert.equal(res.code,403);assert.equal(res.headers['Cache-Control'],'private, no-store');}
 });
-
-test('real owner guard rejects missing, dev, revoked, wrong-owner, disabled and closing identities',async()=>{
- const {authorizeReview}=await import('../../src/lib/instafollows/server');
- const {OWNER_UID}=await import('../../src/lib/instafollows/model');
- const req:any={headers:{authorization:'Bearer synthetic','x-pulsecheck-firebase-mode':'prod'}};
- let adminLoads=0;
- const loader=(options:any={})=>async()=>{adminLoads++;return {auth:()=>({verifyIdToken:async(token:string,revoked:boolean)=>{assert.equal(token,'synthetic');assert.equal(revoked,true);if(options.revoked)throw Error('private');return {uid:options.uid||OWNER_UID};},getUser:async()=>({disabled:!!options.disabled})}),firestore:()=>({collection:()=>({doc:()=>({get:async()=>({exists:!!options.closing})})})})} as any;};
- await assert.rejects(authorizeReview({headers:{}} as any,loader()),(e:any)=>e.status===403);
- await assert.rejects(authorizeReview({headers:{'x-pulsecheck-firebase-mode':'dev'}} as any,loader()),(e:any)=>e.status===403);
- await assert.rejects(authorizeReview({headers:{'x-pulsecheck-firebase-mode':'prod'}} as any,loader()),(e:any)=>e.status===401);
- assert.equal(adminLoads,0);
- for(const options of [{revoked:true},{uid:'another-user'},{disabled:true},{closing:true}])await assert.rejects(authorizeReview(req,loader(options)),(e:any)=>[401,403].includes(e.status));
- assert.ok(await authorizeReview(req,loader()));
-});

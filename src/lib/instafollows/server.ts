@@ -1,21 +1,13 @@
 import type {NextApiRequest,NextApiResponse} from 'next';
+import {productionDb,requireSession} from './pin';
 import type {firestore} from 'firebase-admin';
 import {OWNER_UID,ROOT_COLLECTION,ROOT_DOCUMENT,ReviewError,validUsername,accountKey,changeMark} from './model';
 export const reviewRoot=(db:firestore.Firestore)=>db.collection(ROOT_COLLECTION).doc(ROOT_DOCUMENT);
-export async function authorizeReview(req: NextApiRequest, loadApp = async () => { const {getFirebaseAdminApp}=await import('../firebase-admin'); return getFirebaseAdminApp(false); }) {
-  if(req.headers['x-pulsecheck-firebase-mode']!=='prod')throw new ReviewError(403,'Use the production owner account.');
-  const bearer=req.headers.authorization;
-  if(typeof bearer!=='string'||!bearer.startsWith('Bearer '))throw new ReviewError(401,'Sign in to continue.');
-  const app=await loadApp();
-  let token;
-  try{token=await app.auth().verifyIdToken(bearer.slice(7),true);}catch{throw new ReviewError(401,'Sign in again.');}
-  if(token.uid!==OWNER_UID)throw new ReviewError(403,'This dashboard is private to its owner.');
-  const [user,closure]=await Promise.all([app.auth().getUser(token.uid),app.firestore().collection('account-closure-jobs').doc(token.uid).get()]);
-  if(user.disabled||closure.exists)throw new ReviewError(403,'Account unavailable.');
-  return app.firestore();
+export async function authorizeReview(req: NextApiRequest) {
+  const db=await productionDb();await requireSession(db,req);return db;
 }
 export function reviewHandler(authorize=authorizeReview){return async(req:NextApiRequest,res:NextApiResponse)=>{
-  res.setHeader('Cache-Control','private, no-store');res.setHeader('Vary','Authorization');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
+  res.setHeader('Cache-Control','private, no-store');res.setHeader('Vary','Cookie');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
   if(!['GET','PATCH'].includes(req.method||'')){res.setHeader('Allow','GET, PATCH');return res.status(405).end();}
   try{
     const db=await authorize(req),root=reviewRoot(db),meta=(await root.get()).data();
