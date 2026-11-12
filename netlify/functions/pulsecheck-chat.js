@@ -2200,6 +2200,7 @@ exports.handler = async (event, context) => {
   const requestStartedAt = Date.now();
   const budgetLeftMs = () => REQUEST_BUDGET_MS - (Date.now() - requestStartedAt);
   const stageTimes = {};
+  let engagementRevisionCount = 0;
   const markStage = (name) => { stageTimes[name] = Date.now() - requestStartedAt; };
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
@@ -2468,6 +2469,7 @@ exports.handler = async (event, context) => {
     let currentStateSnapshot = null;
     let conversationSignalEvent = null;
     let newConvoId = conversationId || convo?.id || convoRef.id;
+    markStage('setup');
     // The assignment context and the state-signal read do not depend on the safety
     // checks, so they run alongside them. Their results are only used once the
     // checks pass, and nothing is written before then.
@@ -2984,6 +2986,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       }
 
       openAiMessages.push({ role: 'user', content: message });
+      markStage('promptReady');
 
       // Call OpenAI
       // Support both environment variable names for compatibility
@@ -3160,6 +3163,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           const failedDimensions = engagementEvaluation.failures
             .map((failure) => `${failure.id}: ${failure.detail}`)
             .join('\n');
+          engagementRevisionCount += 1;
           const revisionRes = await fetch('https://api.openai.com/v1/chat/completions', {
             signal: requestSignal,
             method: 'POST',
@@ -3227,6 +3231,8 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       }
     }
 
+    markStage('engagement');
+    stageTimes.revisions = engagementRevisionCount;
     if (!engagementEvaluation.passed) {
       assistantMessage = buildNoraEngagementFallback({
         athleteMessage: message,
@@ -3328,7 +3334,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     }
     aiMsg.chatActions = chatActions;
     markStage('goalRead');
-    console.log('[pulsecheck-chat] Turn timing (ms since start)', stageTimes);
+    console.metrics('pulsecheck-chat-timing', { ...stageTimes, total: Date.now() - requestStartedAt });
 
     // The live safety classification completed, so this turn is eligible to be
     // stored and returned. Persistence remains non-blocking for chat delivery.
@@ -3538,6 +3544,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     const errorMessage = error.message || 'Unknown error';
     const isDevelopment = process.env.NETLIFY_DEV === 'true' || process.env.NODE_ENV === 'development';
     const responseTimedOut = error.name === 'TimeoutError' || error.name === 'AbortError';
+    console.metrics('pulsecheck-chat-timing', { ...stageTimes, failedAt: Date.now() - requestStartedAt, timedOut: responseTimedOut ? 1 : 0 });
     
     return { 
       statusCode: responseTimedOut ? 504 : 500,
