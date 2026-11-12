@@ -140,3 +140,35 @@ test('Telnyx queue accepts once, routes replies privately and STOP blocks the ne
  await receiveSms(db as any,{...reply,MessageSid:`telnyx_${eventId}`,Body:'STOP'});
  await assert.rejects(enqueueBatch(db as any,'coach','team',{requestId:'blocked-after-stop',athleteIds:['a'],text:'Synthetic next message'}));assert.equal(calls,1);
 });
+
+test('send diagnostics retain only bounded metadata and distinguish failure stages',async()=>{
+ settings();const original=globalThis.fetch;
+ const args={to:'+12025550100',body:'private message',jobId};
+ try {
+  globalThis.fetch=(async()=>new Response(JSON.stringify({errors:[{code:'10001',detail:'private provider body'}]}),{status:401,headers:{'x-request-id':eventId}})) as any;
+  assert.deepEqual(await sendTelnyxSms(args),{state:'failed',diagnostics:{failureStage:'http',httpStatus:401,providerErrorCode:'10001',requestId:eventId}});
+  globalThis.fetch=(async()=>new Response(JSON.stringify({errors:[{code:'Bearer secret'}]}),{status:503,headers:{'x-request-id':'private header'}})) as any;
+  assert.deepEqual(await sendTelnyxSms(args),{state:'unknown',diagnostics:{failureStage:'http',httpStatus:503}});
+  globalThis.fetch=(async()=>new Response('not json',{status:200})) as any;
+  assert.deepEqual(await sendTelnyxSms(args),{state:'unknown',diagnostics:{failureStage:'response',httpStatus:200}});
+  globalThis.fetch=(async()=>{throw new Error('secret transport details');}) as any;
+  assert.deepEqual(await sendTelnyxSms(args),{state:'unknown',diagnostics:{failureStage:'transport'}});
+  globalThis.fetch=(async()=>{assert.fail('preflight must not send');}) as any;
+  assert.deepEqual(await sendTelnyxSms({...args,to:'invalid'}),{state:'failed',diagnostics:{failureStage:'preflight'}});
+ }finally{globalThis.fetch=original;}
+});
+
+test('queue sanitizes diagnostics on failed and unknown jobs without exposing them in messages or resending',async()=>{
+ settings();
+ for(const state of ['failed','unknown'] as const) {
+  const db=fixture();await enqueueBatch(db as any,'coach','team',{requestId:'diagnostic-'+state,athleteIds:['a'],text:'Synthetic only'});
+  const [path,job]=[...db.data.entries()].find(([p])=>p.includes('/jobs/'))!;
+  let calls=0;
+  const send=async()=>{calls++;return {state,diagnostics:{failureStage:'http' as const,httpStatus:503,providerErrorCode:'123456789',requestId:'secret',rawBody:'private',authorization:'secret'}};};
+  await processJob(db as any,job.id,send);
+  assert.deepEqual(db.data.get(path).providerDiagnostics,{failureStage:'http',httpStatus:503});
+  assert.equal(db.data.get(path).state,state);
+  for(const [p,value] of db.data) if(p!==path) assert.equal(value.providerDiagnostics,undefined);
+  await processJob(db as any,job.id,send);assert.equal(calls,1);
+ }
+});

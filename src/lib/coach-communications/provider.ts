@@ -40,8 +40,27 @@ export function telnyxDeliveryForm(event: any, jobId: unknown): Record<string, s
   const status = event.event_type === 'message.sent' ? (['queued', 'sent'].includes(p?.to?.[0]?.status) ? 'sent' : null) : event.event_type === 'message.finalized' ? states[p?.to?.[0]?.status] : null;
   return status ? { From: p.from.phone_number, To: p.to[0].phone_number, MessageSid: `telnyx_${p.id}`, MessageStatus: status } : null;
 }
-export async function sendTelnyxSms({ to, body, jobId }: { to: string; body: string; jobId: string }): Promise<{ state: 'accepted' | 'failed' | 'unknown'; providerId?: string }> {
-  if (smsProvider() !== 'telnyx' || !providerConfigured() || !phone(to) || !/^[a-f0-9]{64}$/.test(jobId)) return { state: 'failed' };
+export type ProviderDiagnostics = {
+  failureStage: 'preflight' | 'transport' | 'http' | 'response';
+  httpStatus?: number;
+  providerErrorCode?: string;
+  requestId?: string;
+};
+/** Allowlist structured metadata only; never retain provider prose or exception details. */
+export function sanitizeProviderDiagnostics(value: unknown): ProviderDiagnostics | undefined {
+  if (!value || typeof value !== 'object') return;
+  const input = value as Record<string, unknown>;
+  if (!['preflight', 'transport', 'http', 'response'].includes(input.failureStage as string)) return;
+  return {
+    failureStage: input.failureStage as ProviderDiagnostics['failureStage'],
+    ...(typeof input.httpStatus === 'number' && Number.isInteger(input.httpStatus) && input.httpStatus >= 100 && input.httpStatus <= 599 ? { httpStatus: input.httpStatus } : {}),
+    ...(typeof input.providerErrorCode === 'string' && /^\d{1,8}$/.test(input.providerErrorCode) ? { providerErrorCode: input.providerErrorCode } : {}),
+    ...(uuid(input.requestId) ? { requestId: input.requestId } : {}),
+  };
+}
+export type SmsSendResult = { state: 'accepted' | 'failed' | 'unknown'; providerId?: string; diagnostics?: ProviderDiagnostics };
+export async function sendTelnyxSms({ to, body, jobId }: { to: string; body: string; jobId: string }): Promise<SmsSendResult> {
+  if (smsProvider() !== 'telnyx' || !providerConfigured() || !phone(to) || !/^[a-f0-9]{64}$/.test(jobId)) return { state: 'failed', diagnostics: { failureStage: 'preflight' } };
   const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 5000);
   try {
     const response = await fetch('https://api.telnyx.com/v2/messages', {
@@ -52,7 +71,13 @@ export async function sendTelnyxSms({ to, body, jobId }: { to: string; body: str
     const result = await response.json().catch(() => ({}));
     const accepted = result?.data;
     if (response.ok && uuid(accepted?.id) && accepted.direction === 'outbound' && accepted.type === 'SMS' && accepted.messaging_profile_id === communicationSetting('TELNYX_MESSAGING_PROFILE_ID') && accepted.from?.phone_number === smsSender() && Array.isArray(accepted.to) && accepted.to.length === 1 && accepted.to[0]?.phone_number === to) return { state: 'accepted', providerId: `telnyx_${accepted.id}` };
-    return { state: response.ok || response.status >= 500 || [408, 409].includes(response.status) ? 'unknown' : 'failed' };
-  } catch { return { state: 'unknown' }; }
+    return {
+      state: response.ok || response.status >= 500 || [408, 409].includes(response.status) ? 'unknown' : 'failed',
+      diagnostics: sanitizeProviderDiagnostics({
+        failureStage: response.ok ? 'response' : 'http', httpStatus: response.status,
+        providerErrorCode: result?.errors?.[0]?.code, requestId: response.headers.get('x-request-id'),
+      }),
+    };
+  } catch { return { state: 'unknown', diagnostics: { failureStage: 'transport' } }; }
   finally { clearTimeout(timeout); }
 }

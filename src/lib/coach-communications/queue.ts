@@ -1,4 +1,4 @@
-import { smsSender, smsProvider, sendTelnyxSms } from './provider';
+import { smsSender, smsProvider, sendTelnyxSms, sanitizeProviderDiagnostics, type SmsSendResult } from './provider';
 import type { firestore } from 'firebase-admin';
 import { validateRequest } from 'twilio';
 import { DashboardAccessError, validTeamId } from '../coach-dashboard/access';
@@ -64,7 +64,9 @@ export async function enqueueBatch(db: firestore.Firestore, uid: string, teamId:
   return queued;
 }
 
-async function transition(db: firestore.Firestore, id: string, state: string, providerId?: string) {
+async function transition(db: firestore.Firestore, id: string, state: string, providerId?: string, diagnostics?: unknown) {
+  const safeDiagnostics = sanitizeProviderDiagnostics(diagnostics);
+  const diagnosticUpdate = safeDiagnostics ? { providerDiagnostics: safeDiagnostics } : {};
   const ref = rootFor(db).collection('jobs').doc(id);
   await db.runTransaction(async tx => {
     const snapshot = await tx.get(ref); if (!snapshot.exists) return;
@@ -72,7 +74,7 @@ async function transition(db: firestore.Firestore, id: string, state: string, pr
     const message = await tx.get(messageRef(db, job, id));
     // Drain orphaned or closed-account work without recreating erased records.
     if (state === 'blocked' && job.state === 'queued' || state === 'unknown' && job.state === 'sending') {
-      tx.set(ref, { state, updatedAtMs: Date.now() }, { merge: true });
+      tx.set(ref, { state, ...diagnosticUpdate, updatedAtMs: Date.now() }, { merge: true });
       if (message.exists) tx.set(messageRef(db, job, id), { status: state }, { merge: true });
       if (b) tx.set(batch, { states: { ...(b.states || {}), [id]: state } }, { merge: true });
       return;
@@ -85,14 +87,14 @@ async function transition(db: firestore.Firestore, id: string, state: string, pr
     } catch (e) { if (e instanceof DashboardAccessError) return; throw e; }
     if (state === 'blocked' && job.state !== 'queued') return;
     if (terminal.has(job.state) || ranks[state] < ranks[job.state] || job.providerId && providerId && job.providerId !== providerId) return;
-    const update = { state, ...(providerId ? { providerId } : {}), updatedAtMs: Date.now() };
+    const update = { state, ...diagnosticUpdate, ...(providerId ? { providerId } : {}), updatedAtMs: Date.now() };
     tx.set(ref, update, { merge: true });
     tx.set(messageRef(db, job, id), { status: state, ...(providerId ? { providerId } : {}) }, { merge: true });
     tx.set(batch, { states: { ...(b?.states || {}), [id]: state } }, { merge: true });
   });
 }
 
-export type Transport = (args: { to: string; body: string; jobId: string }) => Promise<{ state: 'accepted' | 'failed' | 'unknown'; providerId?: string }>;
+export type Transport = (args: { to: string; body: string; jobId: string }) => Promise<SmsSendResult>;
 /** One durable job can cross the provider boundary only once, including concurrent workers. */
 export async function processJob(db: firestore.Firestore, id: string, send: Transport, now = Date.now()) {
   const ref = rootFor(db).collection('jobs').doc(id), snap = await ref.get();
@@ -130,8 +132,8 @@ export async function processJob(db: firestore.Firestore, id: string, send: Tran
   if (!claimed) return;
   let result: Awaited<ReturnType<Transport>>;
   try { result = await send({ to: entry.contact.phone, body: job.text, jobId: id }); }
-  catch { result = { state: 'unknown' }; }
-  await transition(db, id, result.state, result.providerId);
+  catch { result = { state: 'unknown', diagnostics: { failureStage: 'transport' } }; }
+  await transition(db, id, result.state, result.providerId, result.diagnostics);
 }
 
 export async function processQueue(db: firestore.Firestore, send: Transport, now = Date.now()) {
