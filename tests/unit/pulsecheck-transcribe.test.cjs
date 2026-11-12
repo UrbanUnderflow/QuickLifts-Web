@@ -39,3 +39,15 @@ test('a provider failure surfaces as an error so the app keeps its own transcrip
   const parsed = _test.parseAudioRequest({ audio, mimeType: 'audio/m4a' });
   await assert.rejects(_test.transcribe(parsed, 'test-key', async () => ({ ok: false, status: 500 })), /returned 500/);
 });
+
+test('a chosen language is a hint in the prompt, never a lock, so a spoken switch still comes through', async () => {
+  let sent;
+  const fetchImpl = async (url, options) => { sent = options; return { ok: true, json: async () => ({ text: '오늘 연습 힘들었어' }) }; };
+  const parsed = _test.parseAudioRequest({ audio, mimeType: 'audio/m4a', language: 'ko-KR' });
+  assert.equal(parsed.language, 'ko');
+  await _test.transcribe(parsed, 'test-key', fetchImpl);
+  assert.match(sent.body.get('prompt'), /chosen to talk in Korean/);
+  assert.equal(sent.body.get('language'), null);
+  assert.equal(_test.parseAudioRequest({ audio, mimeType: 'audio/m4a', language: 'auto' }).language, null);
+  assert.equal(_test.parseAudioRequest({ audio, mimeType: 'audio/m4a', language: 'xx' }).language, null);
+});

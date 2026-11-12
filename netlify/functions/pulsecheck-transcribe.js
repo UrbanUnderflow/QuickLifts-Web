@@ -8,6 +8,7 @@
 const { initializeFirebaseAdmin, getFirebaseAdminApp, headers } = require('./config/firebase');
 const { assertAccountOpen } = require('./lib/account-closure-guard');
 const console = require('./utils/noraSafeLogger');
+const { CONVERSATION_LANGUAGES, normalizeConversationLanguage } = require('./utils/noraConversationLanguage');
 
 const TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 // About two minutes of compressed speech. A single turn is far shorter.
@@ -56,15 +57,21 @@ function parseAudioRequest(body) {
   const audio = Buffer.from(encoded, 'base64');
   if (audio.length === 0) return { error: 'Missing audio.' };
   if (audio.length > MAX_AUDIO_BYTES) return { error: 'This recording is too long.' };
-  return { audio, fileName, mimeType };
+  return { audio, fileName, mimeType, language: normalizeConversationLanguage(body?.language) };
 }
 
-async function transcribe({ audio, fileName, mimeType }, apiKey, fetchImpl = fetch) {
+/** The athlete's chosen language is a hint, not a lock, so a spoken request to switch still comes through. */
+function promptFor(language) {
+  const name = CONVERSATION_LANGUAGES[language];
+  return name ? `${PROMPT} They have chosen to talk in ${name}, so most of what they say will be in ${name}.` : PROMPT;
+}
+
+async function transcribe({ audio, fileName, mimeType, language }, apiKey, fetchImpl = fetch) {
   const form = new FormData();
   form.append('file', new Blob([audio], { type: mimeType }), fileName);
   form.append('model', TRANSCRIPTION_MODEL);
   form.append('response_format', 'json');
-  form.append('prompt', PROMPT);
+  form.append('prompt', promptFor(language));
   const response = await fetchImpl('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -119,4 +126,4 @@ exports.handler = async (event) => {
   }
 };
 
-exports._test = { parseAudioRequest, transcribe, MAX_AUDIO_BYTES, TRANSCRIPTION_MODEL };
+exports._test = { parseAudioRequest, transcribe, promptFor, MAX_AUDIO_BYTES, TRANSCRIPTION_MODEL };
