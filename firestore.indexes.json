@@ -321,6 +321,20 @@
       ]
     },
     {
+      "collectionGroup": "coach-athlete-messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "conversationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "coach-athlete-conversations",
       "queryScope": "COLLECTION",
       "fields": [
