@@ -2189,10 +2189,18 @@ function classifyResponseContext(userMessage, lastNoraResponseLength) {
   };
 }
 
+const REQUEST_BUDGET_MS = 14000;
+// A rewrite costs a full model call, so it only starts with this much budget left.
+const REVISION_MIN_BUDGET_MS = 5500;
+
 exports.handler = async (event, context) => {
   // A single budget covers every model stage, including validation and repairs.
   // Leave time for transport/persistence before the native client's 30s HTTP deadline.
-  const requestSignal = AbortSignal.timeout(14000);
+  const requestSignal = AbortSignal.timeout(REQUEST_BUDGET_MS);
+  const requestStartedAt = Date.now();
+  const budgetLeftMs = () => REQUEST_BUDGET_MS - (Date.now() - requestStartedAt);
+  const stageTimes = {};
+  const markStage = (name) => { stageTimes[name] = Date.now() - requestStartedAt; };
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
@@ -2460,6 +2468,35 @@ exports.handler = async (event, context) => {
     let currentStateSnapshot = null;
     let conversationSignalEvent = null;
     let newConvoId = conversationId || convo?.id || convoRef.id;
+    // The assignment context and the state-signal read do not depend on the safety
+    // checks, so they run alongside them. Their results are only used once the
+    // checks pass, and nothing is written before then.
+    const contextPromise = (async () => {
+      const loaded = { assignment: null, progress: null, snapshot: null };
+      try {
+        [loaded.assignment, loaded.progress] = await Promise.all([
+          getTodaysNoraAssignment(db, userId),
+          getAthleteMentalProgress(db, userId),
+        ]);
+        loaded.snapshot = await getCurrentStateSnapshot(db, userId, loaded.assignment);
+      } catch (contextError) {
+        console.warn('[pulsecheck-chat] Failed to load Nora assignment context (non-blocking):', contextError?.message || contextError);
+      }
+      return loaded;
+    })();
+    const signalAnalysisPromise = journalAnalysis ? Promise.resolve(null) : contextPromise
+      .then(({ assignment, snapshot }) => deriveConversationSignalAnalysis({
+        signal: requestSignal,
+        message,
+        recentMessages,
+        snapshot,
+        assignment,
+      }))
+      .catch((signalError) => {
+        console.warn('[pulsecheck-chat] Chat-derived signal read failed (non-blocking):', signalError?.message || signalError);
+        return null;
+      });
+
     // These independent checks inspect the same authenticated input. Overlap
     // their network waits, then fail closed before drafting or changing state.
     const [storagePolicy, escalation] = await Promise.all([
@@ -2484,16 +2521,13 @@ exports.handler = async (event, context) => {
       };
     }
 
+    markStage('safetyChecks');
     let assignmentRefreshApplied = false;
-    try {
-      [todaysNoraAssignment, athleteMentalProgress] = await Promise.all([
-        getTodaysNoraAssignment(db, userId),
-        getAthleteMentalProgress(db, userId),
-      ]);
-      currentStateSnapshot = await getCurrentStateSnapshot(db, userId, todaysNoraAssignment);
-    } catch (contextError) {
-      console.warn('[pulsecheck-chat] Failed to load Nora assignment context (non-blocking):', contextError?.message || contextError);
-    }
+    ({
+      assignment: todaysNoraAssignment,
+      progress: athleteMentalProgress,
+      snapshot: currentStateSnapshot,
+    } = await contextPromise);
 
     const nowSec = Math.floor(Date.now() / 1000);
     const userMsg = {
@@ -2506,13 +2540,8 @@ exports.handler = async (event, context) => {
     };
 
     try {
-      const signalAnalysis = journalAnalysis || storagePolicy.restricted ? null : await deriveConversationSignalAnalysis({
-        signal: requestSignal,
-        message,
-        recentMessages,
-        snapshot: currentStateSnapshot,
-        assignment: todaysNoraAssignment,
-      });
+      const signalAnalysis = journalAnalysis || storagePolicy.restricted ? null : await signalAnalysisPromise;
+      markStage('signalAnalysis');
 
       if (!requestSignal.aborted && signalAnalysis?.shouldCreateEvent && currentStateSnapshot) {
         const eventRef = db.collection(CONVERSATION_SIGNAL_EVENTS_COLLECTION).doc();
@@ -3041,6 +3070,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       }
 
       const completion = await completionRes.json();
+      markStage('draft');
       assistantMessage = completion.choices?.[0]?.message?.content?.trim();
       if (!assistantMessage) {
         throw new Error('OpenAI did not return a live assistant message.');
@@ -3125,7 +3155,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
 
     if (!engagementEvaluation.passed && !handledOnboarding) {
       const apiKey = process.env.OPEN_AI_SECRET_KEY;
-      for (let attempt = 1; apiKey && !requestSignal.aborted && attempt <= 2 && !engagementEvaluation.passed; attempt += 1) {
+      for (let attempt = 1; apiKey && !requestSignal.aborted && attempt <= 2 && !engagementEvaluation.passed && budgetLeftMs() > REVISION_MIN_BUDGET_MS; attempt += 1) {
         try {
           const failedDimensions = engagementEvaluation.failures
             .map((failure) => `${failure.id}: ${failure.detail}`)
@@ -3274,11 +3304,13 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
     }
 
     const chatActions = buildNoraChatActions({message, reply:assistantMessage, recentMessages, enabled:!journalAnalysis && clientCapabilities?.noraChatActions === true, escalationTier:escalation.tier}).map(action => ({...action, messageId: aiMsg.id}));
-    if (dailyGoalState && ['setup', 'review'].includes(dailyGoalState.phase) && escalation.tier < 1) {
+    markStage('reply');
+    // Reading a goal from the turn is extra; it never pushes the reply past the budget.
+    if (dailyGoalState && ['setup', 'review'].includes(dailyGoalState.phase) && escalation.tier < 1 && budgetLeftMs() > 2500) {
       const goalUpdate = await noraDailyGoal.extractDailyGoalUpdate({
         phase: dailyGoalState.phase, goal: dailyGoalState.goal, recentMessages, message,
         reply: assistantMessage, apiKey: process.env.OPEN_AI_SECRET_KEY,
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(Math.min(5000, budgetLeftMs() - 1500)),
       });
       if (goalUpdate?.kind === 'declined') {
         // Not today: Nora stops offering for the rest of the day. Preference only, no goal content.
@@ -3295,6 +3327,8 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       if (goalAction) chatActions.push({ ...goalAction, messageId: aiMsg.id });
     }
     aiMsg.chatActions = chatActions;
+    markStage('goalRead');
+    console.log('[pulsecheck-chat] Turn timing (ms since start)', stageTimes);
 
     // The live safety classification completed, so this turn is eligible to be
     // stored and returned. Persistence remains non-blocking for chat delivery.
