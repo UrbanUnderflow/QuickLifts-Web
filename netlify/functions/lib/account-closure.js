@@ -18,6 +18,7 @@ const QUERY_TARGETS = [
   ['state-snapshots','athleteId'], ['conversation-derived-signal-events','athleteId'],
   ['pulsecheck-morning-checkins','athleteUserId'], ['mental-exercise-assignments','athleteUserId'],
   ['sim-assignments','athleteUserId'], ['pulsecheck-training-plans','athleteId'],
+  ['pulsecheck-daily-goals','userId'],
 ];
 async function requestClosure({db,auth,uid,now}) {
   const ref = db.collection(JOBS).doc(uid);

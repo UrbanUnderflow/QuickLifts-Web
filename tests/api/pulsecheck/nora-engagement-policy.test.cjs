@@ -716,3 +716,31 @@ test('Korean and Mandarin replies that drift off topic are still caught', () => 
   });
   assert.deepEqual(zh.failures, []);
 });
+
+test('goal setting replies follow Nora\'s last step without repeating the athlete\'s words', () => {
+  const steps = [
+    ['I have a bio lab due, practice at 3, and I need to call my mom', 'If you only got one of those done today, which would matter most, or feel the most satisfying?', "What's on your plate today?"],
+    ['study hall at 1', 'What could get in the way?', 'What needs to happen to get it done, and when can you do it?'],
+    ['I want to win my game tonight', 'Winning depends on more than you. What is one thing you control that gives you the best shot?', 'What is on your plate today?'],
+    ['tengo examen de biología y práctica', 'Si solo pudieras terminar una de esas cosas hoy, ¿cuál sería la más importante?', '¿Qué tienes hoy?'],
+    ['我有考试和训练', '如果今天只能完成一件事，哪一件最重要？', '你今天有什么安排？'],
+    ['연습이랑 숙제가 있어요', '그중에 하나만 한다면 오늘 뭐가 제일 중요해요?', '오늘 할 일이 뭐예요?'],
+  ];
+  for (const [athleteMessage, response, previous] of steps) {
+    const evaluation = policy.evaluateNoraEngagementResponse({ athleteMessage, response, previousAssistantMessages: [previous], dailyGoalFlow: true });
+    assert.deepEqual(evaluation.failures.map((f) => f.id), [], athleteMessage);
+  }
+  // Without today's goal in play the same reply is still held to the athlete's topic.
+  const plain = policy.evaluateNoraEngagementResponse({ athleteMessage: steps[0][0], response: steps[0][1], previousAssistantMessages: [steps[0][2]] });
+  assert.ok(plain.failures.some((f) => f.id === 'topic_continuity'));
+});
+
+test('goal setting never excuses a reply that leaves the athlete\'s topic', () => {
+  for (const [response, previous] of [
+    ['Have you thought about your nutrition plan for the season?', 'What is on your plate today?'],
+    ['What does your nutrition look like before games?', 'What could get in the way today?'],
+  ]) {
+    const evaluation = policy.evaluateNoraEngagementResponse({ athleteMessage: 'I keep freezing at the line', response, previousAssistantMessages: [previous], dailyGoalFlow: true });
+    assert.ok(evaluation.failures.some((f) => f.id === 'topic_continuity'), response);
+  }
+});

@@ -826,6 +826,22 @@ function significantTokens(value) {
   );
 }
 
+const DAILY_GOAL_STEP_PATTERN = /\b(?:goal|on your plate|matters? most|satisf\w*|get (?:it|that|this) done|in the way|backup|in your control|you control|how did it go|what helped)\b/i;
+
+// Spanish, French, Portuguese, Chinese and Korean versions of the same goal steps.
+const DAILY_GOAL_STEP_PATTERN_INTL = /(?:m[aá]s importante|objetivo|\bmeta\b|plan b|c[oó]mo te fue|qu[eé] te ayud[oó]|te puede frenar|le plus important|objectif|comment [cç]a s'est pass[eé]|ce qui t'a aid[eé]|o mais importante|como foi|o que te ajudou|最重要|目标|进展怎么样|목표|제일 중요|가장 중요|어땠어)/i;
+
+// Unlike sharesTopic, a question with nothing to compare never counts as a match.
+function continuesPreviousQuestion(previous, response) {
+  if (['hangul', 'han', 'kana'].includes(dominantScript(previous))) {
+    const previousPairs = denseScriptPairs(previous);
+    const responsePairs = denseScriptPairs(response);
+    return [...previousPairs].some((pair) => responsePairs.has(pair));
+  }
+  const responseTokens = significantTokens(response);
+  return [...significantTokens(previous)].some((token) => responseTokens.has(token));
+}
+
 function sharesTopic(athleteMessage, response) {
   // A request to change languages, a greeting, or a two or three word turn ("Hey Nora") gives no
   // topic to stay on. A reply in another script cannot share words with the athlete's turn.
@@ -890,6 +906,7 @@ function evaluateNoraEngagementResponse({
   forbiddenTerms = [],
   confirmedExternalAction = false,
   noraChatActions = false,
+  dailyGoalFlow = false,
 } = {}) {
   const text = canonicalizeText(response).trim();
   const lowered = text.toLowerCase();
@@ -914,6 +931,12 @@ function evaluateNoraEngagementResponse({
     && internalRoutingLeakFree
     && !introducesUngroundedState;
   const mealCardReply = supportsMealCard(athleteMessage, noraChatActions) && /\blog\b/i.test(text) && /\bcard\b/i.test(text) && /\b(?:confirm|review)\b/i.test(text);
+  // Setting or reviewing today's goal: the athlete is answering Nora's last step, so the reply
+  // follows the goal steps or her previous question rather than repeating the athlete's words.
+  const goalStepReply = dailyGoalFlow
+    && lane === NoraConversationLane.Performance
+    && (DAILY_GOAL_STEP_PATTERN.test(text) || DAILY_GOAL_STEP_PATTERN_INTL.test(text)
+      || previousAssistantMessages.slice(-1).some((previous) => continuesPreviousQuestion(previous, text)));
   const laneFit = internalRoutingLeakFree && (lane === NoraConversationLane.CriticalSafety
     ? /\b911\b/.test(text) && /\b988\b/.test(text)
     : lane === NoraConversationLane.ClinicalCare
@@ -935,8 +958,8 @@ function evaluateNoraEngagementResponse({
             )
             : lane === NoraConversationLane.AppSupport
               ? /\b(?:app|coach|staff|account|pulsecheck|confirm|connected|connection|assigned|primary|settings|subscription|notification|circle)\b/i.test(text)
-              : mealCardReply || PERFORMANCE_CONTEXT_PATTERN.test(`${athleteMessage} ${text}`) || sharesTopic(athleteMessage, text));
-  const topicContinuity = mealCardReply || [NoraConversationLane.ClinicalCare, NoraConversationLane.CriticalSafety, NoraConversationLane.Closure]
+              : mealCardReply || goalStepReply || PERFORMANCE_CONTEXT_PATTERN.test(`${athleteMessage} ${text}`) || sharesTopic(athleteMessage, text));
+  const topicContinuity = mealCardReply || goalStepReply || [NoraConversationLane.ClinicalCare, NoraConversationLane.CriticalSafety, NoraConversationLane.Closure]
     .includes(lane)
     || (healthRequested && [...healthDomainsIn(athleteMessage)].some(domain => healthDomainsIn(text).has(domain)))
     || sharesTopic(athleteMessage, text)
