@@ -2,6 +2,7 @@ import Head from 'next/head';
 import {useEffect,useState,useCallback,useRef} from 'react';
 import type {Account,Decision,Decisions,Flag} from '../lib/instafollows/model';
 import styles from '../styles/instafollows.module.css';
+import {reviewOperationId} from '../lib/instafollows/client';
 const keyFor=(name:string)=>btoa(name.toLowerCase()).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
 type Undo={username:string;flag:Flag;value:boolean;revision:number};
 function Photo({account,request}:{account:Account;request:(path:string,options?:RequestInit)=>Promise<Response>}){
@@ -26,7 +27,7 @@ export default function InstaFollows(){
  const visible=accounts.filter(a=>(`${a.username} ${a.full_name}`.toLowerCase().includes(query.toLowerCase()))&&(filter==='all'||filter==='pending'&&!mark(a,'reviewed')?.value||filter==='done'&&mark(a,'reviewed')?.value||filter==='keep'&&mark(a,'dontUnfollow')?.value));
  const pages=Math.max(1,Math.ceil(visible.length/50)),current=Math.min(page,pages),rows=visible.slice((current-1)*50,current*50);
  async function save(username:string,flag:Flag,value:boolean,revision:number,undo=false,retryOperation?:string){
-  const epoch=generation.current;const operationId=retryOperation||crypto.randomUUID();setPending({username,flag,value,revision,undo,operationId});setBusy(true);setError('');try{const r=await request('/api/instafollows',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,flag,value,expectedRevision:revision,operationId})});const data=await r.json();if(epoch!==generation.current)return;if(!r.ok){if(r.status===409)await load();throw Error(data.error||'Save failed.');}setEntries(old=>({...old,[data.key]:data.decision}));if(undo)setHistory(old=>old.slice(0,-1));else setHistory(old=>[...old.slice(-49),{username,flag,value:!value,revision:data.decision[flag].revision}]);setPending(null);setStatus('Saved.');}catch(e){if(epoch===generation.current)setError(e instanceof Error?e.message:'Save failed.');}finally{if(epoch===generation.current)setBusy(false);}
+  const epoch=generation.current;setBusy(true);setError('');setStatus('');try{const operationId=retryOperation||reviewOperationId();setPending({username,flag,value,revision,undo,operationId});const r=await request('/api/instafollows',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,flag,value,expectedRevision:revision,operationId})});const data=await r.json();if(epoch!==generation.current)return;if(!r.ok){if(r.status===409)await load();throw Error(data.error||'Save failed.');}setEntries(old=>({...old,[data.key]:data.decision}));if(undo)setHistory(old=>old.slice(0,-1));else setHistory(old=>[...old.slice(-49),{username,flag,value:!value,revision:data.decision[flag].revision}]);setPending(null);setStatus('Saved.');}catch(e){if(epoch===generation.current)setError(e instanceof Error?e.message:'Save failed.');}finally{if(epoch===generation.current)setBusy(false);}
  }
  const numbers=[...new Set([1,pages,...Array.from({length:5},(_,i)=>current-2+i).filter(n=>n>0&&n<=pages)])].sort((a,b)=>a-b);
  function go(n:number){setPage(n);setJump(String(n));}
