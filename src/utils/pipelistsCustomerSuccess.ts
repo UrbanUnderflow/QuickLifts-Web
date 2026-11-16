@@ -1,3 +1,5 @@
+import { stampPipeListTextChanges } from './pipelistsText';
+
 export const UNIVERSITY_CUSTOMER_SUCCESS_SCHEMA_VERSION = 1 as const;
 
 export type PilotPhase =
@@ -190,6 +192,7 @@ const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 
 const asText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
+const editableName = (value: unknown) => (typeof value === 'string' ? value : '');
 
 const normalizeKey = (value: unknown) =>
   asText(value)
@@ -288,6 +291,37 @@ export const normalizeMetricMeasurement = (value: unknown): MetricMeasurement =>
   };
 };
 
+// Editable text can contain intentional leading spaces or an unfinished
+// sentence. Preserve its character identities through display normalization.
+function sharedPlanText(input: Record<string, unknown>, fields: string[]) {
+  const runs = asRecord(input.textRuns);
+  const tracked = fields.filter(key => runs[key] && typeof input[key] === 'string');
+  if (!tracked.length) return {};
+  return {
+    ...Object.fromEntries(tracked.map(key => [key, input[key]])),
+    textRuns: Object.fromEntries(tracked.map(key => [key, runs[key]])),
+  };
+}
+
+export function stampSuccessPlanText(before: UniversityCustomerSuccess, after: UniversityCustomerSuccess): UniversityCustomerSuccess {
+  const stampRows = <T extends { id: string }>(prior: T[], next: T[]) => {
+    const byId = new Map(prior.map(row => [row.id, row]));
+    return next.map(row => {
+      const original = byId.get(row.id);
+      return original && original !== row ? stampPipeListTextChanges(original, row) : row;
+    });
+  };
+  return {
+    ...after,
+    health: stampPipeListTextChanges(before.health, after.health),
+    ownership: stampPipeListTextChanges(before.ownership, after.ownership),
+    renewal: stampPipeListTextChanges(before.renewal, after.renewal),
+    nextAction: stampPipeListTextChanges(before.nextAction, after.nextAction),
+    launchChecklist: stampRows(before.launchChecklist, after.launchChecklist),
+    successMeasures: stampRows(before.successMeasures, after.successMeasures),
+  };
+}
+
 const normalizeLaunchChecklist = (value: unknown): UniversityLaunchChecklistItem[] => {
   if (!Array.isArray(value)) return createDefaultUniversityLaunchChecklist();
 
@@ -295,7 +329,7 @@ const normalizeLaunchChecklist = (value: unknown): UniversityLaunchChecklistItem
   return value.flatMap((candidate, index) => {
     const input = asRecord(candidate);
     const label = asText(input.label);
-    if (!label) return [];
+    if (!label && !asRecord(input.textRuns).label) return [];
     const requestedId = stableId(input.id, `launch-step-${index + 1}`);
     const id = usedIds.has(requestedId) ? `${requestedId}-${index + 1}` : requestedId;
     usedIds.add(id);
@@ -306,9 +340,10 @@ const normalizeLaunchChecklist = (value: unknown): UniversityLaunchChecklistItem
       label,
       status,
       required: input.required !== false,
-      owner: asText(input.owner),
+      owner: editableName(input.owner),
       dueDate: normalizeDateOnly(input.dueDate),
       completedAt: status === 'complete' ? normalizeTimestampOrDate(input.completedAt) : '',
+      ...sharedPlanText(input, ['label']),
     }];
   });
 };
@@ -320,7 +355,7 @@ const normalizeSuccessMeasures = (value: unknown): UniversitySuccessMeasure[] =>
   return value.flatMap((candidate, index) => {
     const input = asRecord(candidate);
     const label = asText(input.label);
-    if (!label) return [];
+    if (!label && !asRecord(input.textRuns).label) return [];
     const requestedId = stableId(input.id, `success-measure-${index + 1}`);
     const id = usedIds.has(requestedId) ? `${requestedId}-${index + 1}` : requestedId;
     usedIds.add(id);
@@ -334,9 +369,10 @@ const normalizeSuccessMeasures = (value: unknown): UniversitySuccessMeasure[] =>
       latestResult: normalizeMetricMeasurement(input.latestResult),
       source: asText(input.source),
       sourceKind: SOURCE_KINDS.has(rawSourceKind) ? rawSourceKind : 'manual',
-      owner: asText(input.owner),
+      owner: editableName(input.owner),
       deadline: normalizeDateOnly(input.deadline),
       notes: asText(input.notes),
+      ...sharedPlanText(input, ['label', 'unit', 'source', 'notes']),
     }];
   });
 };
@@ -372,12 +408,14 @@ export const normalizeUniversityCustomerSuccess = (
       reason: asText(health.reason),
       updatedAt: normalizeTimestampOrDate(health.updatedAt),
       updatedBy: asText(health.updatedBy),
+      ...sharedPlanText(health, ['reason']),
     },
     ownership: {
-      accountOwner: asText(ownership.accountOwner) || asText(legacy.owner),
+      accountOwner: editableName(ownership.accountOwner) || editableName(legacy.owner),
       customerSuccessOwner: asText(ownership.customerSuccessOwner),
       executiveSponsor: asText(ownership.executiveSponsor),
       champion: asText(ownership.champion),
+      ...sharedPlanText(ownership, ['customerSuccessOwner', 'executiveSponsor', 'champion']),
     },
     pilot: {
       startDate: normalizeDateOnly(pilot.startDate) || normalizeDateOnly(legacy.pilotStart),
@@ -387,9 +425,10 @@ export const normalizeUniversityCustomerSuccess = (
     successMeasures,
     nextAction: {
       summary: asText(nextAction.summary) || asText(legacy.nextStep),
-      owner: asText(nextAction.owner) || asText(legacy.owner),
+      owner: typeof nextAction.owner === 'string' ? nextAction.owner : editableName(legacy.owner),
       dueDate: normalizeDateOnly(nextAction.dueDate) || normalizeDateOnly(legacy.dueDate),
       status: asText(nextAction.status) === 'complete' ? 'complete' : 'open',
+      ...sharedPlanText(nextAction, ['summary']),
     },
     lastSuccessUpdateAt:
       normalizeTimestampOrDate(input.lastSuccessUpdateAt) || latestSuccessEvidenceAt(successMeasures),
@@ -398,10 +437,11 @@ export const normalizeUniversityCustomerSuccess = (
       contractStartDate: normalizeDateOnly(renewal.contractStartDate),
       contractEndDate: normalizeDateOnly(renewal.contractEndDate),
       decisionDate: normalizeDateOnly(renewal.decisionDate),
-      owner: asText(renewal.owner),
+      owner: editableName(renewal.owner),
       outcome: RENEWAL_OUTCOMES.has(rawRenewalOutcome) ? rawRenewalOutcome : 'unknown',
       outcomeDate: normalizeDateOnly(renewal.outcomeDate),
       notes: asText(renewal.notes),
+      ...sharedPlanText(renewal, ['notes']),
     },
     linkage: {
       organizationId: asText(linkage.organizationId),

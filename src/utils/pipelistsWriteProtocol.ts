@@ -1,3 +1,4 @@
+import { isPipeListTextField, isPipeListSelection } from './pipelistsText';
 import { pipeListSnapshotsEqual } from './pipelistsCollaboration';
 
 // Monotonic document revision is enforced by Firestore rules. Wall-clock item
@@ -13,7 +14,7 @@ export function nextPipeListsRevision(data?: { revision?: unknown; writeProtocol
 
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const keyed = (value: unknown): value is { id: string }[] => Array.isArray(value) && value.every(entry => record(entry) && typeof entry.id === 'string');
-const metadata = new Set(['updatedAt', 'createdAt', 'lastEditedBy', 'mergeRevisions']);
+const metadata = new Set(['updatedAt', 'createdAt', 'lastEditedBy', 'mergeRevisions', 'textRuns']);
 
 export function pipeListWriteConflicts(base: unknown, remote: unknown, local: unknown, path = ''): string[] {
   if (pipeListSnapshotsEqual(remote, base) || pipeListSnapshotsEqual(local, base) || pipeListSnapshotsEqual(remote, local)) return [];
@@ -28,7 +29,11 @@ export function pipeListWriteConflicts(base: unknown, remote: unknown, local: un
   if (remote === undefined || local === undefined) return [];
   if (record(remote) && record(local)) {
     const b = record(base) ? base : {};
-    return [...new Set([...Object.keys(remote), ...Object.keys(local)])].filter(key => !metadata.has(key))
+    return [...new Set([...Object.keys(remote), ...Object.keys(local)])].filter(key => {
+      if (metadata.has(key)) return false;
+      const mergeable = isPipeListTextField(key) || isPipeListSelection(key);
+      return !mergeable || typeof remote[key] !== 'string' || typeof local[key] !== 'string';
+    })
       .flatMap(key => pipeListWriteConflicts(b[key], remote[key], local[key], `${path}/${key}`));
   }
   return [path];

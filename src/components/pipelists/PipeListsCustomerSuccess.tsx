@@ -1,3 +1,4 @@
+import PipeListsTextField from './PipeListsTextField';
 import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -364,6 +365,7 @@ export default function PipeListsCustomerSuccess({
 }
 
 type PipeListsSuccessPlanEditorProps = {
+  live?: boolean;
   value: UniversityCustomerSuccess;
   editorName: string;
   onChange: (value: UniversityCustomerSuccess) => void;
@@ -408,7 +410,7 @@ const inputClassName =
   'h-10 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white';
 const labelClassName = 'mb-1.5 block text-xs font-semibold uppercase text-stone-400';
 
-export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: PipeListsSuccessPlanEditorProps) {
+export function PipeListsSuccessPlanEditor({ value, editorName, onChange, live }: PipeListsSuccessPlanEditorProps) {
   const setSuccess = (recipe: (current: UniversityCustomerSuccess) => UniversityCustomerSuccess) => onChange(recipe(value));
 
   const updateMeasure = (measureId: string, recipe: (measure: UniversitySuccessMeasure) => UniversitySuccessMeasure) => {
@@ -474,12 +476,12 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
         ].map(([key, label, placeholder]) => (
           <label key={key} className="block">
             <span className={labelClassName}>{label}</span>
-            <input
+            <PipeListsTextField
               value={value.ownership[key as keyof UniversityCustomerSuccess['ownership']]}
-              onChange={(event) =>
+              onValueChange={(text) =>
                 setSuccess((current) => ({
                   ...current,
-                  ownership: { ...current.ownership, [key]: event.target.value },
+                  ownership: { ...current.ownership, [key]: text },
                 }))
               }
               className={inputClassName}
@@ -501,13 +503,13 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
 
         <label className="block md:col-span-2 xl:col-span-4" htmlFor="success-health-reason">
           <span className={labelClassName}>Health context</span>
-          <textarea
+          <PipeListsTextField multiline
             id="success-health-reason"
             value={value.health.reason}
-            onChange={(event) =>
+            onValueChange={(text) =>
               setSuccess((current) => ({
                 ...current,
-                health: { ...current.health, reason: event.target.value },
+                health: { ...current.health, reason: text },
               }))
             }
             className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
@@ -521,12 +523,12 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <label className="block md:col-span-2">
             <span className={labelClassName}>Action</span>
-            <input
+            <PipeListsTextField
               value={value.nextAction.summary}
-              onChange={(event) =>
+              onValueChange={(text) =>
                 setSuccess((current) => ({
                   ...current,
-                  nextAction: { ...current.nextAction, summary: event.target.value, status: 'open' },
+                  nextAction: { ...current.nextAction, summary: text, status: 'open' },
                 }))
               }
               className={inputClassName}
@@ -535,12 +537,12 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
           </label>
           <label className="block">
             <span className={labelClassName}>Responsible owner</span>
-            <input
+            <PipeListsTextField
               value={value.nextAction.owner}
-              onChange={(event) =>
+              onValueChange={(text) =>
                 setSuccess((current) => ({
                   ...current,
-                  nextAction: { ...current.nextAction, owner: event.target.value },
+                  nextAction: { ...current.nextAction, owner: text },
                 }))
               }
               className={inputClassName}
@@ -597,13 +599,13 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
         <div className="mt-3 space-y-2">
           {value.launchChecklist.map((item) => (
             <div key={item.id} className="grid gap-2 rounded-md border border-stone-100 bg-[#FAFAF7] p-2 md:grid-cols-[minmax(220px,1fr)_150px_160px_150px]">
-              <input
+              <PipeListsTextField
                 value={item.label}
-                onChange={(event) =>
+                onValueChange={(text) =>
                   setSuccess((current) => ({
                     ...current,
                     launchChecklist: current.launchChecklist.map((entry) =>
-                      entry.id === item.id ? { ...entry, label: event.target.value } : entry,
+                      entry.id === item.id ? { ...entry, label: text } : entry,
                     ),
                   }))
                 }
@@ -631,13 +633,13 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
                 <option value="complete">Complete</option>
                 <option value="not-applicable">N/A</option>
               </select>
-              <input
+              <PipeListsTextField
                 value={item.owner}
-                onChange={(event) =>
+                onValueChange={(text) =>
                   setSuccess((current) => ({
                     ...current,
                     launchChecklist: current.launchChecklist.map((entry) =>
-                      entry.id === item.id ? { ...entry, owner: event.target.value } : entry,
+                      entry.id === item.id ? { ...entry, owner: text } : entry,
                     ),
                   }))
                 }
@@ -674,7 +676,7 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
           </div>
           <button
             type="button"
-            onClick={() => setSuccess((current) => ({ ...current, successMeasures: [...current.successMeasures, newSuccessMeasure()] }))}
+            onClick={() => setSuccess((current) => ({ ...current, successMeasures: [...current.successMeasures, { ...newSuccessMeasure(), label: live ? 'New measure' : '' }] }))}
             className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-stone-200 px-3 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:text-stone-950"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -705,27 +707,27 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                   <label className="block md:col-span-2">
                     <span className={labelClassName}>Outcome or behavior</span>
-                    <input
+                    <PipeListsTextField
                       value={measure.label}
-                      onChange={(event) => updateMeasure(measure.id, (current) => ({ ...current, label: event.target.value }))}
+                      onValueChange={(text) => updateMeasure(measure.id, (current) => ({ ...current, label: text }))}
                       className={inputClassName}
                       placeholder="Weekly athlete check-in rate"
                     />
                   </label>
                   <label className="block">
                     <span className={labelClassName}>Unit</span>
-                    <input
+                    <PipeListsTextField
                       value={measure.unit}
-                      onChange={(event) => updateMeasure(measure.id, (current) => ({ ...current, unit: event.target.value }))}
+                      onValueChange={(text) => updateMeasure(measure.id, (current) => ({ ...current, unit: text }))}
                       className={inputClassName}
                       placeholder="%, count, score"
                     />
                   </label>
                   <label className="block">
                     <span className={labelClassName}>Measure owner</span>
-                    <input
+                    <PipeListsTextField
                       value={measure.owner}
-                      onChange={(event) => updateMeasure(measure.id, (current) => ({ ...current, owner: event.target.value }))}
+                      onValueChange={(text) => updateMeasure(measure.id, (current) => ({ ...current, owner: text }))}
                       className={inputClassName}
                       placeholder="Owner"
                     />
@@ -794,9 +796,9 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
                   </label>
                   <label className="block md:col-span-2">
                     <span className={labelClassName}>Evidence source</span>
-                    <input
+                    <PipeListsTextField
                       value={measure.source}
-                      onChange={(event) => updateMeasure(measure.id, (current) => ({ ...current, source: event.target.value }))}
+                      onValueChange={(text) => updateMeasure(measure.id, (current) => ({ ...current, source: text }))}
                       className={inputClassName}
                       placeholder="Customer report, roster export, PulseCheck aggregate"
                     />
@@ -867,9 +869,9 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
             ))}
             <label className="block">
               <span className={labelClassName}>Renewal owner</span>
-              <input
+              <PipeListsTextField
                 value={value.renewal.owner}
-                onChange={(event) => setSuccess((current) => ({ ...current, renewal: { ...current.renewal, owner: event.target.value } }))}
+                onValueChange={(text) => setSuccess((current) => ({ ...current, renewal: { ...current.renewal, owner: text } }))}
                 className={inputClassName}
                 placeholder="Owner"
               />
@@ -897,9 +899,9 @@ export function PipeListsSuccessPlanEditor({ value, editorName, onChange }: Pipe
           </div>
           <label className="mt-3 block">
             <span className={labelClassName}>Renewal notes</span>
-            <textarea
+            <PipeListsTextField multiline
               value={value.renewal.notes}
-              onChange={(event) => setSuccess((current) => ({ ...current, renewal: { ...current.renewal, notes: event.target.value } }))}
+              onValueChange={(text) => setSuccess((current) => ({ ...current, renewal: { ...current.renewal, notes: text } }))}
               className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
               placeholder="Decision criteria, expansion path, blockers"
             />

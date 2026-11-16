@@ -18,3 +18,17 @@ export async function runPipeListSaveWithRetry(
     }
   }
 }
+
+// Rules can reject a stale revision before Firestore reports transaction
+// contention. Confirm a newer readable revision before treating it as retryable.
+export async function rethrowPipeListTransactionError(
+  error: unknown, readRevision: number | undefined, latestRevision: () => Promise<unknown>,
+): Promise<never> {
+  if ((error as { code?: string })?.code === 'permission-denied' && typeof readRevision === 'number') {
+    const latest = await latestRevision();
+    if (typeof latest === 'number' && latest > readRevision) {
+      throw Object.assign(new Error('The shared list advanced during this save.'), { code: 'aborted' });
+    }
+  }
+  throw error;
+}

@@ -215,14 +215,14 @@ test('owner load and unrelated autosave preserve raw university stage/history re
 });
 
 
-test('actual autosave rejects conflicting status edits even with a newer local timestamp', async () => {
+test('actual autosave resolves concurrent stages independently of the local wall clock', async () => {
   const h = harness();
   h.scope.personalSnapshotBaselineRef.current = board('identified');
   h.scope.lists = board('declined');
   h.scope.lists[0].items[0].updatedAt = '2099-01-01';
   h.state.remote = board('submitted');
   h.start(); await h.tick();
-  assert.equal(h.state.writes.length, 0);
+  assert.equal(h.state.writes.length, 1);
   assert.equal(h.state.remote[0].items[0].stage, 'submitted');
-  assert.ok(h.state.errors.includes(true));
+  assert.ok(!h.state.errors.includes(true));
 });

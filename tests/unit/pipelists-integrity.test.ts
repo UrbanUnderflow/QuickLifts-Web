@@ -1,3 +1,4 @@
+import { stripPipeListTextMetadata } from '../../src/utils/pipelistsText';
 import { nextPipeListsRevision, assertPipeListWriteSafe } from '../../src/utils/pipelistsWriteProtocol';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -137,7 +138,7 @@ test('actual public-link revocation touches only the active list and its lead li
 
 test('public snapshots exclude complete private merge revisions', () => {
   const code = source.slice(source.indexOf('const publicSafePipeListSnapshot ='), source.indexOf('const pipeListRequiresAccountAccess ='));
-  const fn = new Function('collaboratorSafePipeListSnapshot', ts.transpile(code + '\nreturn publicSafePipeListSnapshot;'))((list: any) => list);
+  const fn = new Function('collaboratorSafePipeListSnapshot', 'stripPipeListTextMetadata', ts.transpile(code + '\nreturn publicSafePipeListSnapshot;'))((list: any) => list, stripPipeListTextMetadata);
   const list = { ...grants, items: [{ ...item(), mergeRevisions: [{ customerSuccess: { secret: true } }] }] };
   assert.equal(fn(list).items[0].mergeRevisions, undefined);
   assert.equal(list.items[0].mergeRevisions.length, 1);

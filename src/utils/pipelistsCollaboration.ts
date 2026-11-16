@@ -1,3 +1,5 @@
+import { isPipeListSelection, mergePipeListRecordText } from './pipelistsText';
+
 export const pipeListSnapshotsEqual = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
   if (Array.isArray(left) && Array.isArray(right)) {
@@ -28,11 +30,18 @@ function mergeKeyedArrays(base: unknown[], remote: unknown[], local: unknown[], 
   const localEntries = new Map(
     (isKeyedRecordArray(local) ? local : []).map((entry) => [entry.id, entry] as const),
   );
-  const order = Array.from(new Set([
-    ...localEntries.keys(),
-    ...remoteEntries.keys(),
-    ...baseEntries.keys(),
-  ]));
+  const baseIds = [...baseEntries.keys()];
+  const remoteIds = [...remoteEntries.keys()];
+  const localIds = [...localEntries.keys()];
+  // A listener must accept an acknowledged order. Competing inserts or
+  // reorders use the same tie break on both replicas, including history rows.
+  const useRemoteOrder = remoteIds.length !== localIds.length
+    ? remoteIds.length > localIds.length
+    : valuesEqual(localIds, baseIds) ||
+      (!valuesEqual(remoteIds, baseIds) && JSON.stringify(remoteIds) < JSON.stringify(localIds));
+  const primary = useRemoteOrder ? remoteIds : localIds;
+  const secondary = useRemoteOrder ? localIds : remoteIds;
+  const order = Array.from(new Set([...primary, ...secondary, ...baseIds]));
 
   return order.flatMap((id) => {
     const merged = mergeCollaborativeValue(
@@ -85,12 +94,18 @@ function mergeCollaborativeValue(base: unknown, remote: unknown, local: unknown,
   if (isRecord(remote) && isRecord(local)) {
     const baseRecord = isRecord(base) ? base : {};
     const keys = new Set([...Object.keys(baseRecord), ...Object.keys(remote), ...Object.keys(local)]);
-    return Object.fromEntries(
-      Array.from(keys).flatMap((key) => {
+    const result = Object.fromEntries(
+      Array.from(keys).filter(key => key !== 'textRuns').flatMap((key) => {
+        if (isPipeListSelection(key) && typeof local[key] === 'string' && typeof remote[key] === 'string' &&
+            local[key] !== baseRecord[key] && remote[key] !== baseRecord[key]) {
+          return [[key, local[key] < remote[key] ? remote[key] : local[key]]];
+        }
         const merged = mergeCollaborativeValue(baseRecord[key], remote[key], local[key], key === 'items', ignoreTimestampOrder);
         return merged === undefined ? [] : [[key, merged]];
       }),
     );
+    mergePipeListRecordText(baseRecord, remote, local, result);
+    return result;
   }
 
   return local;

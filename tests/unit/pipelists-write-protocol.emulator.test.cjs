@@ -71,3 +71,63 @@ test('enabled public and protected shares require revisions while keeping member
  await assertFails(updateDoc(protectedRef,{ownerUid:'member',revision:5,lastEditedBy:actor}));
  await assertFails(updateDoc(doc(member,'pipeListShares/owner-unrelated'),{editorEmails:['outsider@example.test']}));
 });
+
+test('owner and editor transactions converge after concurrent typing, scalar edits and offline changes', async () => {
+  require('tsx/cjs');
+  const assert = require('node:assert/strict');
+  const { runTransaction, disableNetwork, enableNetwork, getDocFromServer } = require('firebase/firestore');
+  const { stampPipeListTextChanges } = require('../../src/utils/pipelistsText.ts');
+  const { mergePipeListSnapshotsThreeWay } = require('../../src/utils/pipelistsCollaboration.ts');
+  const { assertPipeListWriteSafe, nextPipeListsRevision } = require('../../src/utils/pipelistsWriteProtocol.ts');
+  const ownerDb = owner();
+  const editorDb = env.authenticatedContext('member', { email: 'member@example.test' }).firestore();
+  const path = 'pipeListProtectedShares/owner-unrelated';
+  const initial = { ...list, items: [{ ...list.items[0], notes: 'Call Sam', owner: '', weeklyLogs: [] }] };
+  await env.withSecurityRulesDisabled(async c => {
+    await updateDoc(doc(c.firestore(), path), { list: initial, revision: 1, writeProtocol: 2 });
+  });
+
+  const read = async db => (await getDocFromServer(doc(db, path))).data().list;
+  async function save(db, uid, base, local) {
+    const { runPipeListSaveWithRetry, rethrowPipeListTransactionError } = require('../../src/utils/pipelistsAutosave.ts');
+    let revision;
+    await runPipeListSaveWithRetry(() => runTransaction(db, async tx => {
+      const ref = doc(db, path);
+      const data = (await tx.get(ref)).data();
+      revision = data.revision;
+      assertPipeListWriteSafe(base, data.list, local);
+      tx.update(ref, {
+        ...nextPipeListsRevision(data),
+        list: mergePipeListSnapshotsThreeWay(base, data.list, local, true),
+        lastEditedBy: { uid, email: uid + '@example.test' },
+      });
+    }).catch(error => rethrowPipeListTransactionError(error, revision, async () =>
+      (await getDocFromServer(doc(db, path))).data()?.revision,
+    )), () => true);
+  }
+  function edit(base, changes, uid) {
+    const item = base.items[0];
+    return { ...base, items: [stampPipeListTextChanges(item, {
+      ...item, ...changes, weeklyLogs: [...item.weeklyLogs, { id: uid, summary: uid + ' assigned ' + changes.owner }],
+    })] };
+  }
+  const [ownerBase, editorBase] = await Promise.all([read(ownerDb), read(editorDb)]);
+  const left = edit(ownerBase, { notes: 'Please Call Sam', owner: 'Casey', stage: 'ready' }, 'owner');
+  const right = edit(editorBase, { notes: 'Call Sam today', owner: 'Avery', title: 'Meeting' }, 'member');
+  await Promise.all([save(ownerDb, 'owner', ownerBase, left), save(editorDb, 'member', editorBase, right)]);
+  const [first, second] = await Promise.all([read(ownerDb), read(editorDb)]);
+  assert.deepEqual(first, second);
+  assert.equal(first.items[0].notes, 'Please Call Sam today');
+  assert.equal(first.items[0].owner, 'Casey');
+  assert.equal(first.items[0].stage, 'ready');
+  assert.equal(first.items[0].title, 'Meeting');
+  assert.deepEqual(first.items[0].weeklyLogs.map(log => log.id).sort(), ['member', 'owner']);
+
+  await disableNetwork(editorDb);
+  const offline = edit(second, { notes: 'Please Call Sam today!' }, 'offline');
+  await save(ownerDb, 'owner', first, edit(first, { notes: 'Please Call Dr. Sam today' }, 'connected'));
+  await enableNetwork(editorDb);
+  await save(editorDb, 'member', second, offline);
+  assert.equal((await read(ownerDb)).items[0].notes, 'Please Call Dr. Sam today!');
+  assert.deepEqual(await read(ownerDb), await read(editorDb));
+});

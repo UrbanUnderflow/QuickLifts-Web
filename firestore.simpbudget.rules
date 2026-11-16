@@ -194,6 +194,26 @@ service cloud.firestore {
           'writeProtocol'
         ]);
       allow delete: if isProtectedShareOwner() && pipeListsClientDelete();
+
+      match /presence/{sessionId} {
+        function mayOpenList() {
+          return isSignedIn() && !sourceShare().get('retired', false)
+            && (isProtectedShareOwner() || isProtectedShareViewer());
+        }
+
+        function validHeartbeat() {
+          let data = request.resource.data;
+          return data.keys().hasOnly(['uid', 'initials', 'seenAt'])
+            && data.uid == request.auth.uid && data.initials is string
+            && data.initials.size() > 0 && data.initials.size() <= 4
+            && data.seenAt == request.time;
+        }
+
+        allow read: if mayOpenList();
+        allow create: if mayOpenList() && validHeartbeat();
+        allow update: if mayOpenList() && resource.data.uid == request.auth.uid && validHeartbeat();
+        allow delete: if mayOpenList() && resource.data.uid == request.auth.uid;
+      }
     }
 
     match /pipeLeadShares/{shareId} {

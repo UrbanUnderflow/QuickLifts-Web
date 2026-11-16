@@ -1,3 +1,5 @@
+import { stampPipeListTextChanges, stripPipeListTextMetadata } from '../utils/pipelistsText';
+import PipeListsTextField from '../components/pipelists/PipeListsTextField';
 import { nextPipeListsRevision, assertPipeListWriteSafe, pipeListWriteConflicts } from '../utils/pipelistsWriteProtocol';
 import { isArchived, mergeArchiveMarkers, visiblePipeLists, reconcilePipeLists, mergeMovedLead, removeListMember, type ArchivedPipeList } from '../utils/pipelistsIntegrity';
 import { APPLICABLE_COMPANIES, normalizeApplicableCompanies, matchesApplicableCompany } from '../utils/pipelistsCompanies';
@@ -11,7 +13,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { NextPage } from 'next';
 import PipeListsSaveStatus, { saveFailureDetails, type SaveFailure } from '../components/pipelists/PipeListsSaveStatus';
 import PipeListsReadableText from '../components/pipelists/PipeListsReadableText';
-import { runPipeListSaveWithRetry } from '../utils/pipelistsAutosave';
+import { rethrowPipeListTransactionError, runPipeListSaveWithRetry } from '../utils/pipelistsAutosave';
 import PipeListsEmailSequence from '../components/pipelists/PipeListsEmailSequence';
 import PipeListsEmailTracking, { EmailTrackingBadge } from '../components/pipelists/PipeListsEmailTracking';
 import Link from 'next/link';
@@ -33,6 +35,7 @@ import {
   deleteField,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   onSnapshot,
   query as firestoreQuery,
@@ -91,6 +94,7 @@ import {
   X,
 } from 'lucide-react';
 import PageHead from '../components/PageHead';
+import PipeListPresence, { pipeListInitials } from '../components/PipeListPresence';
 import { auth as quickLiftsAuth, db as quickLiftsDb } from '../api/firebase/config';
 import { simpBudgetAuth, simpBudgetDb, simpBudgetStorage } from '../api/firebase/simpBudgetConfig';
 import {
@@ -106,6 +110,7 @@ import PipeListsCustomerSuccess, {
 } from '../components/pipelists/PipeListsCustomerSuccess';
 import {
   isUniversityCustomerSuccessStage,
+  stampSuccessPlanText,
   normalizeUniversityCustomerSuccess,
   type UniversityCustomerSuccess,
 } from '../utils/pipelistsCustomerSuccess';
@@ -291,7 +296,7 @@ type ActivityLog = {
   metricSource?: string;
   notes: string;
   createdAt: string;
-  systemAction?: 'item-created' | 'item-deleted' | 'item-restored' | 'item-moved' | 'email-sent';
+  systemAction?: 'item-created' | 'item-deleted' | 'item-restored' | 'item-moved' | 'email-sent' | 'field-changed';
   relatedItemId?: string;
   restorableUntil?: string;
 };
@@ -365,6 +370,7 @@ type PipelineItem = {
   customerSuccess?: UniversityCustomerSuccess;
   createdAt: string;
   updatedAt: string;
+  textRuns?: Record<string, unknown>;
   mergeRevisions?: Record<string, unknown>[];
   deletedAt?: string;
   deletedByLogId?: string;
@@ -373,6 +379,7 @@ type PipelineItem = {
 };
 
 type PipeList = {
+  textRuns?: Record<string, unknown>;
   publicLinksDisabled?: boolean;
   id: string;
   name: string;
@@ -406,6 +413,7 @@ type PipeListShare = {
     email: string;
     displayName: string;
     photoURL: string;
+    writeId?: string;
   };
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -618,6 +626,7 @@ const updateLogDraftType = (current: ActivityLogDraft, type: ActivityLogType): A
 const followUpDateLabel = (_nextStep: string) => 'Next Action Required Date';
 
 const logDisplayLabel = (log: ActivityLog) => {
+  if (log.systemAction === 'field-changed') return 'Field changed';
   if (log.systemAction === 'item-created') return 'Item Added';
   if (log.systemAction === 'item-deleted') return 'Item Deleted';
   if (log.systemAction === 'item-restored') return 'Item Restored';
@@ -1397,6 +1406,20 @@ const shareDocumentIdForList = (ownerUid: string, listId: string) => `${ownerUid
 const shareDocumentIdForLead = (ownerUid: string, listId: string, itemId: string) =>
   `${ownerUid}-${listId}-${itemId}`;
 
+const editablePipeListItem = (item: PipelineItem): ItemDraft => {
+  const { id, createdAt, updatedAt, weeklyLogs, deletedAt, deletedByLogId, restorableUntil, movedToListId, linkedLeadIds, ...editableItem } = item;
+  void id;
+  void createdAt;
+  void updatedAt;
+  void weeklyLogs;
+  void deletedAt;
+  void deletedByLogId;
+  void restorableUntil;
+  void movedToListId;
+  void linkedLeadIds;
+  return editableItem;
+};
+
 const defaultDraft = (stage = generalStages[0].id): ItemDraft => ({
   title: '',
   organization: '',
@@ -2158,12 +2181,13 @@ const collaboratorSafePipeListSnapshot = (list: PipeList): PipeList => ({
 });
 
 const publicSafePipeListSnapshot = (list: PipeList): PipeList => {
-  const snapshot = collaboratorSafePipeListSnapshot(list);
+  const snapshot = stripPipeListTextMetadata(collaboratorSafePipeListSnapshot(list));
   return {
     ...snapshot,
     items: snapshot.items.map((item) => {
       const publicItem = { ...item };
       delete publicItem.mergeRevisions;
+      if (Array.isArray(publicItem.weeklyLogs)) publicItem.weeklyLogs = publicItem.weeklyLogs.filter((log) => log.systemAction !== 'field-changed');
       if (list.templateKey !== 'university-pilot' && !item.customerSuccess) return publicItem;
       delete publicItem.customerSuccess;
       if (Array.isArray(publicItem.weeklyLogs)) publicItem.weeklyLogs = publicItem.weeklyLogs.filter((log) => log.type !== 'metrics');
@@ -2455,7 +2479,7 @@ const normalizeAttachment = (attachment: Partial<LeadAttachment>, stableDisplay?
 const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[], stableTimestamp?: string): PipelineItem => {
   const now = stableTimestamp || new Date().toISOString();
   const stage = normalizeStageId(item.stage || listStages[0]?.id || 'sourced', listStages, true);
-  const title = item.title || 'Untitled opportunity';
+  const title = item.textRuns?.title ? item.title ?? '' : item.title || 'Untitled opportunity';
   const organization = item.organization || '';
   return {
     ...createItem(defaultDraft(stage), item.id || makeId()),
@@ -2469,7 +2493,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[], s
     contactEmails: normalizeContactEmails(item.contactEmails),
     contactPhone: item.contactPhone || '',
     linkedLeadIds: normalizeLinkedLeadIds(item.linkedLeadIds, item.id || ''),
-    linkedinUrl: normalizeLinkedInProfileUrlForLead(item.linkedinUrl || '', title, organization),
+    linkedinUrl: item.textRuns?.linkedinUrl ? item.linkedinUrl ?? '' : normalizeLinkedInProfileUrlForLead(item.linkedinUrl || '', title, organization),
     emailStatus: item.emailStatus || '',
     lastEmailType: item.lastEmailType || '',
     lastEmailEvent: item.lastEmailEvent || item.emailStatus || '',
@@ -2488,7 +2512,7 @@ const normalizeItem = (item: Partial<PipelineItem>, listStages: StageConfig[], s
     deadlineSource: item.deadlineSource || '',
     deadlineEmailNotificationsEnabled: item.deadlineEmailNotificationsEnabled === true,
     nextStep: item.nextStep || '',
-    notes: cleanDealNotes(item.notes),
+    notes: item.textRuns?.notes ? item.notes ?? '' : cleanDealNotes(item.notes),
     sourceUrl: item.sourceUrl || '',
     segment: item.segment || '',
     decisionMaker: item.decisionMaker || '',
@@ -2582,12 +2606,12 @@ const normalizeList = (list: Partial<PipeList>, index: number): PipeList => {
   const normalizedList: PipeList = {
     ...list,
     id: list.id || (templateKey === 'university-pilot' ? `display-university-list-${index}` : makeId()),
-    name: list.name || template.defaultName,
-    description: list.description || template.description,
-    objective: list.objective || defaultListObjective(templateKey, list.name || template.defaultName),
-    leadDefinition: list.leadDefinition || defaultLeadDefinition(templateKey),
+    name: list.textRuns?.name ? list.name ?? '' : list.name || template.defaultName,
+    description: list.textRuns?.description ? list.description ?? '' : list.description || template.description,
+    objective: list.textRuns?.objective ? list.objective ?? '' : list.objective || defaultListObjective(templateKey, list.name || template.defaultName),
+    leadDefinition: list.textRuns?.leadDefinition ? list.leadDefinition ?? '' : list.leadDefinition || defaultLeadDefinition(templateKey),
     researchBrief:
-      list.researchBrief ||
+      list.textRuns?.researchBrief ? list.researchBrief ?? '' : list.researchBrief ||
       defaultResearchBriefForList({
         templateKey,
         name: list.name || template.defaultName,
@@ -2800,9 +2824,11 @@ const persistCollaborativePipeList = async ({
   const localSnapshot = collaboratorSafePipeListSnapshot(normalizeList(list, 0));
   let mergedList = localSnapshot;
 
+  let readRevision: number | undefined;
   await runPipeListSaveWithRetry(() => runTransaction(simpBudgetDb, async (transaction) => {
     if (!isCurrent()) return;
     const snapshot = await transaction.get(canonicalRef);
+    readRevision = snapshot.data()?.writeProtocol === 2 ? snapshot.data()?.revision : undefined;
     const publicSnapshot = isProtected && actor.uid === ownerUid ? await transaction.get(publicShareRef) : snapshot;
     if (snapshot.data()?.retired || publicSnapshot.data()?.retired) throw new Error('This list has been transferred or retired. Reload your workspace.');
     if (!isCurrent()) return;
@@ -2813,7 +2839,7 @@ const persistCollaborativePipeList = async ({
       if (!data.list) throw new Error('This shared PipeList is no longer available.');
       const remoteList = collaboratorSafePipeListSnapshot(purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0]);
       mergedList = collaboratorSafePipeListSnapshot(normalizeList(
-        reconcilePipeListSnapshotsForWrite(remoteList, localSnapshot, baseList ? normalizeList(baseList, 0) : undefined, snapshot.data()?.writeProtocol === 2), 0,
+        reconcilePipeListSnapshotsForWrite(remoteList, localSnapshot, baseList ? normalizeList(baseList, 0) : undefined, isProtected || snapshot.data()?.writeProtocol === 2), 0,
       ));
       if (pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch && data.protectedDetails === protectedDetails && !isProtected) return;
       if (isProtected && pipeListSnapshotsEqual(remoteList, mergedList) && !publicSharePatch) return;
@@ -2857,7 +2883,9 @@ const persistCollaborativePipeList = async ({
         { merge: true },
       );
     }
-  }), isCurrent);
+  }).catch(error => rethrowPipeListTransactionError(error, readRevision, async () =>
+    (await getDocFromServer(canonicalRef)).data()?.revision,
+  )), isCurrent);
 
   return normalizeList(mergedList, 0);
 };
@@ -3466,6 +3494,15 @@ const PipelinePage: NextPage = () => {
   const [personalSyncConflict, setPersonalSyncConflict] = useState(false);
   const directShareBaselineRef = useRef('');
   const protectedShareBaselinesRef = useRef<Record<string, PipeList>>({});
+  const submittedShareEdits = useRef(new Map<string, { writeId: string; list: PipeList }>());
+  const sharedSaveInFlight = useRef(new Set<string>());
+  const sharedSaveDueAt = useRef(0);
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
+  useEffect(() => {
+    const retry = () => setConnectionEpoch(epoch => epoch + 1);
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, []);
   const protectedShareRevisionsRef = useRef<Record<string, number>>({});
   const [activeListId, setActiveListId] = useState(initialLists[0].id);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -3499,7 +3536,9 @@ const PipelinePage: NextPage = () => {
     leadDefinition: '',
     researchBrief: '',
   });
-  const [draft, setDraft] = useState<ItemDraft>(defaultDraft(initialLists[0].stages[0].id));
+  const [localDraft, setDraft] = useState<ItemDraft>(defaultDraft(initialLists[0].stages[0].id));
+  const openedDraft = useRef<ItemDraft | null>(null);
+  const ownerEdit = useRef<{ itemId: string; before: string; logId: string } | null>(null);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [itemSaveError, setItemSaveError] = useState('');
@@ -3719,7 +3758,25 @@ const PipelinePage: NextPage = () => {
       shareDoc.ownerEmail.toLowerCase() === normalizedUserEmail ||
       shareDoc.viewerEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail) ||
       shareDoc.editorEmails.map((email) => email.toLowerCase()).includes(normalizedUserEmail));
-  const canModify = Boolean(user) && lists.some(list => list.id === activeList.id) && (isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id));
+  const editingShare = isSharedView ? shareDoc : activeDashboardShare || (shareDoc?.list.id === activeList.id ? shareDoc : null);
+  const protectedListReady = !editingShare || !pipeListShareRequiresAccountAccess(editingShare) || Boolean(protectedShareLists[editingShare.id]);
+  const canModify = Boolean(user) && lists.some(list => list.id === activeList.id) && (isSharedView ? canEditShared : !sharedListIds.has(activeList.id) || editableListIds.has(activeList.id)) && protectedListReady;
+  const collaborativeShare = editingShare ||
+    (shareDoc?.list.id === activeList.id ? shareDoc : ownerShareDocs.find(share => share.list.id === activeList.id));
+  const collaborativeEditor = Boolean(canModify && !isLeadSharedView && collaborativeShare && pipeListShareRequiresAccountAccess(collaborativeShare));
+  const sharedEditingItem = collaborativeEditor && isEditorOpen
+    ? activeList.items.find(item => item.id === editingItemId && !item.deletedAt && !item.movedToListId)
+    : undefined;
+  const previousDetail = detailSnapshotRef.current;
+  const editorRecord = sharedEditingItem || (collaborativeEditor && isEditorOpen && previousDetail?.list.id === activeList.id &&
+    previousDetail.item.id === editingItemId ? previousDetail.item : undefined);
+  // Primary fields come from the same optimistic record as the board and its
+  // listeners. Preserve explicit form-only edits such as an uploaded image.
+  const draft: ItemDraft = editorRecord ? {
+    ...editablePipeListItem(editorRecord),
+    ...Object.fromEntries(Object.entries(localDraft).filter(([key, value]) =>
+      openedDraft.current && !pipeListSnapshotsEqual(value, openedDraft.current[key as keyof ItemDraft]))),
+  } : localDraft;
   const canManageWorkspace = !isSharedView && Boolean(user);
   const runbookAvailable = !isSharedView && Boolean(user) && (isOwner || editableListIds.size > 0);
   const canManageActiveList = canManageWorkspace && lists.some(list => list.id === activeList.id) && !sharedListIds.has(activeList.id);
@@ -3961,8 +4018,13 @@ const PipelinePage: NextPage = () => {
         ...Array.from(viewerShares.entries()),
         ...Array.from(editorShares.entries()),
       ]);
-      const nextShares = Array.from(sharesById.values());
-      setAccessibleShareDocs(nextShares);
+      // A dashboard row is keyed by list ID, which can be reused by a
+      // different owner. Never combine or publish edits across those shares.
+      const dashboardShares = new Map<string, PipeListShare>();
+      for (const share of [...sharesById.values()].sort((a, b) => a.id.localeCompare(b.id))) {
+        if (!dashboardShares.has(share.list.id)) dashboardShares.set(share.list.id, share);
+      }
+      setAccessibleShareDocs([...dashboardShares.values()]);
     };
 
     const unsubscribeViewerShares = onSnapshot(
@@ -4017,44 +4079,60 @@ const PipelinePage: NextPage = () => {
     };
   }, [dataReady, isOwner, isSharedView, normalizedUserEmail, user]);
 
+  // The protected document is authoritative. A public projection omits private
+  // fields and cannot serve as a merge baseline, even for an invited account.
+  const receiveProtectedList = (
+    id: string, data: Partial<PipeListProtectedShare>, ownerBase?: PipeList,
+  ) => {
+    if (!data.list || data.retired) return;
+    if (data.writeProtocol === 2 && (data.revision || 0) < (protectedShareRevisionsRef.current[id] || 0)) return;
+    const remote = normalizeList(data.list, 0);
+    const writeId = data.lastEditedBy?.writeId;
+    const submitted = submittedShareEdits.current.get(id);
+    const ack = submitted && submitted.writeId === writeId ? submitted.list : undefined;
+    const base = ack || protectedShareBaselinesRef.current[id] || ownerBase;
+    if (ack) submittedShareEdits.current.delete(id);
+    protectedShareBaselinesRef.current[id] = remote;
+    if (data.writeProtocol === 2) protectedShareRevisionsRef.current[id] = data.revision || 0;
+    setProtectedShareLists(current => ({ ...current, [id]: remote }));
+    setLists(current => {
+      const existing = current.find(list => list.id === remote.id);
+      if (!existing) return current;
+      const next = base ? mergePipeListSnapshotsThreeWay(base, remote, existing, true) : remote;
+      if (ownerBase) {
+        const privateItems = new Map(existing.items.map(item => [item.id, item]));
+        next.items = next.items.map(item => {
+          const linkage = privateItems.get(item.id)?.customerSuccess?.linkage;
+          return linkage && item.customerSuccess
+            ? { ...item, customerSuccess: { ...item.customerSuccess, linkage } } : item;
+        });
+      }
+      return pipeListSnapshotsEqual(existing, next) ? current : current.map(list => list.id === next.id ? next : list);
+    });
+  };
+
   useEffect(() => {
     if (isSharedView || isOwner || !user || !dataReady) return undefined;
 
-    const protectedShares = baseAccessibleShareDocs.filter(pipeListShareRequiresAccountAccess);
+    const protectedShares = baseAccessibleShareDocs.filter(share => pipeListShareRequiresAccountAccess(share) && !personalListsRef.current.some(list => list.id === share.list.id));
     const activeShareIds = new Set(protectedShares.map((share) => share.id));
+    for (const id of Object.keys(protectedShareBaselinesRef.current)) {
+      if (!activeShareIds.has(id) && !personalListsRef.current.some(list => shareDocumentIdForList(user.uid, list.id) === id)) {
+        delete protectedShareBaselinesRef.current[id];
+        delete protectedShareRevisionsRef.current[id];
+        submittedShareEdits.current.delete(id);
+      }
+    }
     setProtectedShareLists((current) =>
-      Object.fromEntries(Object.entries(current).filter(([shareId]) => activeShareIds.has(shareId))),
+      Object.fromEntries(Object.entries(current).filter(([shareId]) => activeShareIds.has(shareId) || personalListsRef.current.some(list => shareDocumentIdForList(user.uid, list.id) === shareId))),
     );
 
     const unsubscribes = protectedShares.map((share) =>
       onSnapshot(
         doc(simpBudgetDb, PIPELIST_PROTECTED_SHARES_COLLECTION, share.id),
+        { includeMetadataChanges: true },
         (snapshot) => {
-          setProtectedShareLists((current) => {
-            if (!snapshot.exists()) {
-              if (!current[share.id]) return current;
-              const next = { ...current };
-              delete next[share.id];
-              return next;
-            }
-            const data = snapshot.data() as Partial<PipeListProtectedShare>;
-            if (!data.list) return current;
-            if (data.writeProtocol === 2 && (data.revision || 0) < (protectedShareRevisionsRef.current[share.id] || 0)) return current;
-            const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
-            const localList = liveListsRef.current.find((list) => list.id === remoteList.id);
-            const previousBase = protectedShareBaselinesRef.current[share.id];
-            if (localList && pipeListWriteConflicts(previousBase, remoteList, localList).length) {
-              setAppMessage({ type: 'error', text: 'Shared edits conflict with another session. Export your changes and reload before editing again.' });
-              return current;
-            }
-            const nextList = localList
-              ? reconcilePipeListSnapshotsForWrite(remoteList, localList, previousBase, data.writeProtocol === 2)
-              : remoteList;
-            if (data.writeProtocol === 2) protectedShareRevisionsRef.current[share.id] = data.revision || 0;
-            protectedShareBaselinesRef.current[share.id] = remoteList;
-            if (JSON.stringify(current[share.id]) === JSON.stringify(nextList)) return current;
-            return { ...current, [share.id]: nextList };
-          });
+          if (!snapshot.metadata.fromCache && snapshot.exists()) receiveProtectedList(share.id, snapshot.data());
         },
         (error) => {
           console.error('Unable to load protected PipeList success data:', error);
@@ -4077,7 +4155,14 @@ const PipelinePage: NextPage = () => {
         .filter((share) => !isArchived(archivedListsRef.current[share.list.id]) && !personalListsRef.current.some((personalList) => personalList.id === share.list.id))
         .map((share) => share.list),
     ];
-    setLists((current) => (JSON.stringify(current) === JSON.stringify(nextLists) ? current : nextLists));
+    setLists(current => {
+      const next = nextLists.map(list => {
+        const share = accessibleShareDocs.find(entry => entry.list.id === list.id);
+        return (!share || (pipeListShareRequiresAccountAccess(share) && protectedShareLists[share.id]))
+          ? current.find(existing => existing.id === list.id) || list : list;
+      });
+      return pipeListSnapshotsEqual(current, next) ? current : next;
+    });
     setActiveListId((currentId) =>
       nextLists.some((list) => list.id === currentId) ? currentId : nextLists[0]?.id || initialLists[0].id,
     );
@@ -4147,7 +4232,7 @@ const PipelinePage: NextPage = () => {
           personalListsRef.current = mergedPersonalLists;
           const mergedLists = [
             ...mergedPersonalLists,
-            ...nextLists.filter((list) => !nextPersonalLists.some((personalList) => personalList.id === list.id)),
+            ...nextLists.filter((list) => !nextPersonalLists.some((personalList) => personalList.id === list.id)).map(list => currentLists.find(current => current.id === list.id) || list),
           ];
           if (pipeListSnapshotsEqual(currentLists, mergedLists)) return currentLists;
           return mergedLists;
@@ -4166,7 +4251,10 @@ const PipelinePage: NextPage = () => {
     if (!shareId || !authReady) return;
 
     directShareBaselineRef.current = '';
+    protectedShareRevisionsRef.current = {};
+    submittedShareEdits.current.clear();
 
+    let disposed = false;
     const loadShare = async () => {
       setDataReady(false);
       setShareMessage(null);
@@ -4179,6 +4267,7 @@ const PipelinePage: NextPage = () => {
       try {
         const shareRef = doc(simpBudgetDb, PIPELIST_SHARES_COLLECTION, shareId);
         const snapshot = await getDoc(shareRef);
+        if (disposed) return;
         if (!snapshot.exists()) {
           setShareMessage({ type: 'error', text: 'This PipeLists share link was not found.' });
           setDataReady(true);
@@ -4223,6 +4312,7 @@ const PipelinePage: NextPage = () => {
         setLogDraft(defaultLogDraft(normalizedList.templateKey));
         setDataReady(true);
       } catch (error) {
+        if (disposed) return;
         console.error('Unable to load shared PipeList:', error);
         setShareMessage({
           type: 'error',
@@ -4235,7 +4325,8 @@ const PipelinePage: NextPage = () => {
       }
     };
 
-    loadShare();
+    void loadShare();
+    return () => { disposed = true; };
   }, [authReady, shareId, user?.uid]);
 
   useEffect(() => {
@@ -4527,7 +4618,7 @@ const PipelinePage: NextPage = () => {
   }, [dataReady, isOwner, isSharedView, lists, personalStateReady, sharedListIds, user]);
 
   useEffect(() => {
-    if (!shareId || !shareDoc || !dataReady || !canEditShared) return;
+    if (!shareId || !shareDoc || pipeListShareRequiresAccountAccess(shareDoc) || !dataReady || !canEditShared) return;
 
     let cancelled = false;
 
@@ -4562,7 +4653,6 @@ const PipelinePage: NextPage = () => {
         });
         if (cancelled) return;
         directShareBaselineRef.current = JSON.stringify(mergedList);
-        if (shareDoc.protectedDetails) protectedShareBaselinesRef.current[shareId] = mergedList;
 
         if (!cancelled) {
           setLists([mergedList]);
@@ -4590,84 +4680,15 @@ const PipelinePage: NextPage = () => {
     };
   }, [canEditShared, dataReady, lists, profile, shareDoc?.id, shareId, user]);
 
-  useEffect(() => {
-    if (isSharedView || isOwner || !user || !dataReady || accessibleShareDocs.length === 0) return;
-
-    const editableShares = accessibleShareDocs.filter((share) => !personalListsRef.current.some(list => list.id === share.list.id) && share.editorEmails.includes(normalizedUserEmail));
-    if (editableShares.length === 0) return;
-    const changedShares = editableShares.filter((share) => {
-      const nextList = lists.find((list) => list.id === share.list.id);
-      return Boolean(nextList && JSON.stringify(nextList) !== JSON.stringify(share.list));
-    });
-    if (changedShares.length === 0) return;
-
-    let cancelled = false;
-
-    const saveAccessibleSharedLists = async () => {
-      if (cancelled) return;
-      setSavingToCloud(true);
-
-      try {
-        const actor: PipeListShareActor = {
-          uid: user.uid,
-          email: user.email || '',
-          displayName: profile?.displayName || user.displayName || '',
-          photoURL: profile?.photoURL || user.photoURL || '',
-        };
-        const savedShares = await Promise.all(
-          changedShares.map(async (share) => {
-            const nextList = lists.find((list) => list.id === share.list.id);
-            if (!nextList) return null;
-            const mergedList = await persistCollaborativePipeList({
-              shareId: share.id,
-              ownerUid: share.ownerUid,
-              ownerEmail: share.ownerEmail,
-              list: nextList,
-              actor,
-              isCurrent: () => !cancelled,
-              protectedDetails: share.protectedDetails,
-              baseList: protectedShareBaselinesRef.current[share.id] || share.list,
-            });
-            if (cancelled) return null;
-            if (share.protectedDetails) protectedShareBaselinesRef.current[share.id] = mergedList;
-            return { shareId: share.id, list: mergedList, protectedDetails: share.protectedDetails };
-          }),
-        );
-
-        if (cancelled) return;
-        setProtectedShareLists((current) => {
-          const next = { ...current };
-          savedShares.forEach((saved) => {
-            if (saved && (saved.protectedDetails || pipeListRequiresAccountAccess(saved.list))) {
-              next[saved.shareId] = saved.list;
-            }
-          });
-          return next;
-        });
-
-        if (!cancelled) setAppMessage(null);
-      } catch (error) {
-        console.error('Unable to save collaborator PipeLists:', error);
-        if (!cancelled) {
-          setAppMessage({
-            type: 'error',
-            text: readFirestoreError(error, 'Unable to save shared PipeList changes.'),
-          });
-        }
-      } finally {
-        if (!cancelled) setSavingToCloud(false);
-      }
-    };
-
-    const saveTimer = setTimeout(() => { void saveAccessibleSharedLists(); }, 300);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(saveTimer);
-    };
-  }, [accessibleShareDocs, dataReady, isOwner, isSharedView, lists, normalizedUserEmail, profile, user]);
-
   const ownerShareId = !isSharedView && user ? shareDocumentIdForList(user.uid, activeList.id) : '';
+  const currentPresenceShare = activeDashboardShare || shareDoc;
+  const expectedPresenceShareId = isSharedView ? shareId : activeDashboardShare?.id || ownerShareId;
+  const presenceShareId = !isLeadSharedView && !hasInviteAccountMismatch && dataReady && user &&
+    currentPresenceShare?.id === expectedPresenceShareId && currentPresenceShare?.list.id === activeList.id &&
+    (!isSharedView || !currentPresenceShare.publicRead) &&
+    (currentPresenceShare.ownerUid === user.uid || currentPresenceShare.editorEmails.includes(normalizedUserEmail)
+      || currentPresenceShare.viewerEmails.includes(normalizedUserEmail)) ? currentPresenceShare.id : '';
+
 
   useEffect(() => {
     if (isSharedView || !user || !canManageActiveList || !dataReady || !activeList?.id) return;
@@ -4745,50 +4766,25 @@ const PipelinePage: NextPage = () => {
         ? ownerShareId
         : '';
     if (!protectedShareId) return undefined;
+    const ownerBase = !isSharedView ? personalSnapshotBaselineRef.current.find(list => list.id === activeList.id) : undefined;
 
     return onSnapshot(
       doc(simpBudgetDb, PIPELIST_PROTECTED_SHARES_COLLECTION, protectedShareId),
+      { includeMetadataChanges: true },
       (snapshot) => {
-        if (!snapshot.exists()) return;
+        if (snapshot.metadata.fromCache || !snapshot.exists()) return;
         const data = snapshot.data() as Partial<PipeListProtectedShare>;
         if (!data.list) return;
-        const remoteList = purgeExpiredDeletedItems([normalizeList(data.list, 0)])[0];
-        if (data.writeProtocol === 2 && (data.revision || 0) < (protectedShareRevisionsRef.current[protectedShareId] || 0)) return;
-        const currentList = liveListsRef.current.find((list) => list.id === remoteList.id);
-        const storedBase = protectedShareBaselinesRef.current[protectedShareId];
-        const directBase =
-          isSharedView && directShareBaselineRef.current
-            ? normalizeList(JSON.parse(directShareBaselineRef.current) as Partial<PipeList>, 0)
-            : undefined;
-        const baseList = storedBase || directBase;
-        if (currentList && pipeListWriteConflicts(baseList, remoteList, currentList).length) {
-          setAppMessage({ type: 'error', text: 'Shared edits conflict with another session. Export your changes and reload before editing again.' });
-          return;
-        }
-        const nextList = currentList
-          ? baseList
-            ? reconcilePipeListSnapshotsForWrite(remoteList, currentList, baseList, data.writeProtocol === 2)
-            : mergeCollaboratorListSnapshot(currentList, remoteList)
-          : remoteList;
-        if (data.writeProtocol === 2) protectedShareRevisionsRef.current[protectedShareId] = data.revision || 0;
-        protectedShareBaselinesRef.current[protectedShareId] = remoteList;
-        setProtectedShareLists((current) => ({ ...current, [protectedShareId]: nextList }));
-
-        if (isSharedView) {
-          directShareBaselineRef.current = JSON.stringify(remoteList);
-          setProtectedDirectShareUid(user.uid);
-          setLists([nextList]);
-          setShareDoc((current) => (current ? { ...current, list: nextList } : current));
-          return;
-        }
-
-        if (data.lastEditedBy?.uid && data.lastEditedBy.uid !== user.uid) {
-          setLists((currentLists) =>
-            currentLists.map((list) => (list.id === nextList.id ? nextList : list)),
-          );
-        }
+        receiveProtectedList(protectedShareId, data, ownerBase);
+        if (isSharedView) setProtectedDirectShareUid(user.uid);
       },
       (error) => {
+        if (error.code === 'permission-denied' && isSharedView) {
+          setShareDoc(null);
+          setLists([]);
+          setProtectedShareLists({});
+          delete protectedShareBaselinesRef.current[protectedShareId];
+        }
         console.error('Unable to load protected PipeList success data:', error);
         setShareMessage({
           type: 'error',
@@ -4799,7 +4795,52 @@ const PipelinePage: NextPage = () => {
   }, [canReadShared, dataReady, isLeadSharedView, canManageActiveList, isSharedView, ownerShareId, shareDoc?.id, shareDoc?.protectedDetails, shareId, user]);
 
   useEffect(() => {
-    if (isSharedView || !user || !canManageActiveList || !dataReady || !shareDoc || shareDoc.id !== ownerShareId) return;
+    if (!user || !dataReady || isLeadSharedView) return;
+    const targets = isSharedView
+      ? (shareDoc && shareDoc.id === shareId && canEditShared ? [shareDoc] : [])
+      : [...accessibleShareDocs.filter(share => share.editorEmails.includes(normalizedUserEmail) && !personalListsRef.current.some(list => list.id === share.list.id)),
+          ...(shareDoc?.id === ownerShareId ? [shareDoc] : [])];
+    let cancelled = false;
+    const saves = targets.flatMap(share => {
+      if (!pipeListShareRequiresAccountAccess(share)) return [];
+      const base = protectedShareLists[share.id];
+      const local = lists.find(list => list.id === share.list.id);
+      if (!base || !local || base !== protectedShareBaselinesRef.current[share.id]) return [];
+      const snapshot = collaboratorSafePipeListSnapshot(local);
+      if (pipeListSnapshotsEqual(snapshot, collaboratorSafePipeListSnapshot(base))) return [];
+      return [{ share, base, snapshot }];
+    });
+    if (!saves.length) { sharedSaveDueAt.current = 0; return; }
+    // Publish during uninterrupted typing as well as after a pause.
+    sharedSaveDueAt.current ||= Date.now() + 1000;
+    const timer = setTimeout(() => {
+      sharedSaveDueAt.current = 0;
+      void Promise.all(saves.map(async ({ share, base, snapshot }) => {
+        if (sharedSaveInFlight.current.has(share.id)) return;
+        sharedSaveInFlight.current.add(share.id);
+        const writeId = crypto.randomUUID();
+        submittedShareEdits.current.set(share.id, { writeId, list: snapshot });
+        try {
+          await persistCollaborativePipeList({
+            shareId: share.id, ownerUid: share.ownerUid, ownerEmail: share.ownerEmail,
+            protectedDetails: true, list: snapshot, baseList: collaboratorSafePipeListSnapshot(base),
+            actor: { uid: user.uid, email: user.email || '', displayName: user.displayName || '', photoURL: user.photoURL || '', writeId },
+            isCurrent: () => simpBudgetAuth.currentUser?.uid === user.uid,
+          });
+        } catch (error) {
+          submittedShareEdits.current.delete(share.id);
+          if (!cancelled) setAppMessage({ type: 'error', text: readFirestoreError(error, 'Shared edits are pending. Reconnect to save them.') });
+        } finally {
+          sharedSaveInFlight.current.delete(share.id);
+          if (cancelled) setConnectionEpoch(epoch => epoch + 1);
+        }
+      }));
+    }, Math.max(0, Math.min(300, sharedSaveDueAt.current - Date.now())));
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [lists, protectedShareLists, accessibleShareDocs, dataReady, user, isSharedView, isLeadSharedView, shareId, canEditShared, shareDoc, ownerShareId, normalizedUserEmail, connectionEpoch]);
+
+  useEffect(() => {
+    if (isSharedView || !user || !canManageActiveList || !dataReady || !shareDoc || pipeListShareRequiresAccountAccess(shareDoc) || shareDoc.id !== ownerShareId) return;
     const sharedBaseline = protectedShareBaselinesRef.current[shareDoc.id];
     if (sharedBaseline && pipeListSnapshotsEqual(
       collaboratorSafePipeListSnapshot(normalizeList(activeList, 0)),
@@ -5529,6 +5570,8 @@ const PipelinePage: NextPage = () => {
 
   const resetEditor = () => {
     setItemSaveError('');
+    openedDraft.current = null;
+    ownerEdit.current = null;
     setDraft(defaultDraft(activeList.stages[0]?.id));
     setContactEmailInput('');
     setContactEmailError('');
@@ -7651,43 +7694,7 @@ Rules:
       setSelectedDetailItemId(nextItem.id);
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
-      setDraft({
-        ...defaultDraft(nextItem.stage),
-        title: nextItem.title,
-        organization: nextItem.organization,
-        description: nextItem.description,
-        owner: nextItem.owner,
-        contactEmails: nextItem.contactEmails,
-        stage: nextItem.stage,
-        priority: nextItem.priority,
-        amount: nextItem.amount,
-        dueDate: nextItem.dueDate,
-        nextStep: nextItem.nextStep,
-        notes: nextItem.notes,
-        sourceUrl: nextItem.sourceUrl,
-        segment: nextItem.segment,
-        decisionMaker: nextItem.decisionMaker,
-        acv: nextItem.acv,
-        expectedCloseDate: nextItem.expectedCloseDate,
-        contractTerm: nextItem.contractTerm,
-        pilotScope: nextItem.pilotScope,
-        athleteCount: nextItem.athleteCount,
-        pilotStart: nextItem.pilotStart,
-        pilotEnd: nextItem.pilotEnd,
-        conversionLikelihood: nextItem.conversionLikelihood,
-        grossMargin: nextItem.grossMargin,
-        partnerCost: nextItem.partnerCost,
-        hardwareCost: nextItem.hardwareCost,
-        lossReason: nextItem.lossReason,
-        expansionPath: nextItem.expansionPath,
-        imageUrl: nextItem.imageUrl,
-        imageName: nextItem.imageName,
-        imageContentType: nextItem.imageContentType,
-        imageSize: nextItem.imageSize,
-        attachments: nextItem.attachments,
-      });
-      setEditingItemId(nextItem.id);
-      setIsEditorOpen(true);
+      handleEditItem(nextItem);
       setLeadUrl('');
       setLeadExtractMessage(null);
       setIsLeadUrlModalOpen(false);
@@ -7795,43 +7802,7 @@ Rules:
       setSelectedDetailItemId(nextItem.id);
       setSelectedLogItemId(nextItem.id);
       setDetailModalMode('details');
-      setDraft({
-        ...defaultDraft(nextItem.stage),
-        title: nextItem.title,
-        organization: nextItem.organization,
-        description: nextItem.description,
-        owner: nextItem.owner,
-        contactEmails: nextItem.contactEmails,
-        stage: nextItem.stage,
-        priority: nextItem.priority,
-        amount: nextItem.amount,
-        dueDate: nextItem.dueDate,
-        nextStep: nextItem.nextStep,
-        notes: nextItem.notes,
-        sourceUrl: nextItem.sourceUrl,
-        segment: nextItem.segment,
-        decisionMaker: nextItem.decisionMaker,
-        acv: nextItem.acv,
-        expectedCloseDate: nextItem.expectedCloseDate,
-        contractTerm: nextItem.contractTerm,
-        pilotScope: nextItem.pilotScope,
-        athleteCount: nextItem.athleteCount,
-        pilotStart: nextItem.pilotStart,
-        pilotEnd: nextItem.pilotEnd,
-        conversionLikelihood: nextItem.conversionLikelihood,
-        grossMargin: nextItem.grossMargin,
-        partnerCost: nextItem.partnerCost,
-        hardwareCost: nextItem.hardwareCost,
-        lossReason: nextItem.lossReason,
-        expansionPath: nextItem.expansionPath,
-        imageUrl: nextItem.imageUrl,
-        imageName: nextItem.imageName,
-        imageContentType: nextItem.imageContentType,
-        imageSize: nextItem.imageSize,
-        attachments: nextItem.attachments,
-      });
-      setEditingItemId(nextItem.id);
-      setIsEditorOpen(true);
+      handleEditItem(nextItem);
       setLeadUrl('');
       setViewMode('pipeline');
     } catch (error) {
@@ -8034,18 +8005,29 @@ Rules:
     setIsListProfileModalOpen(true);
   };
 
+  const profileValues = collaborativeEditor ? { ...activeList, templateKey: listProfileDraft.templateKey } : listProfileDraft;
+  const changeProfileText = (key: 'name' | 'description' | 'objective' | 'leadDefinition' | 'researchBrief', value: string) => {
+    if (!collaborativeEditor) {
+      setListProfileDraft(current => ({ ...current, [key]: value }));
+      return;
+    }
+    const before = activeList;
+    const after = stampPipeListTextChanges(before, { ...before, [key]: value });
+    setLists(current => current.map(list => list === before ? after : list.id === before.id ? mergePipeListSnapshotsThreeWay(before, list, after, true) : list));
+  };
+
   const handleSaveListProfile = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canModify) return;
 
-    const templateKey = canManageActiveList && activeList.items.length === 0 ? listProfileDraft.templateKey : activeList.templateKey;
-    const name = listProfileDraft.name.trim();
+    const templateKey = canManageActiveList && activeList.items.length === 0 ? profileValues.templateKey : activeList.templateKey;
+    const name = profileValues.name.trim();
     if (!name) return;
-    const description = listProfileDraft.description.trim() || templateCatalog[templateKey].description;
-    const objective = listProfileDraft.objective.trim() || defaultListObjective(templateKey, activeList.name);
-    const leadDefinition = listProfileDraft.leadDefinition.trim() || defaultLeadDefinition(templateKey);
+    const description = profileValues.description.trim() || templateCatalog[templateKey].description;
+    const objective = profileValues.objective.trim() || defaultListObjective(templateKey, activeList.name);
+    const leadDefinition = profileValues.leadDefinition.trim() || defaultLeadDefinition(templateKey);
     const researchBrief =
-      listProfileDraft.researchBrief.trim() ||
+      profileValues.researchBrief.trim() ||
       defaultResearchBriefForList({
         ...activeList,
         templateKey,
@@ -8054,22 +8036,21 @@ Rules:
         leadDefinition,
       });
 
-    setLists((currentLists) =>
-      currentLists.map((list) =>
-        list.id === activeList.id
-          ? {
-              ...list,
-              templateKey: list.items.length === 0 ? templateKey : list.templateKey,
-              stages: list.items.length === 0 ? templateCatalog[templateKey].stages : list.stages,
-              name,
-              description,
-              objective,
-              leadDefinition,
-              researchBrief,
-            }
-          : list,
-      ),
-    );
+    const submitted = {
+      ...activeList,
+      templateKey,
+      stages: activeList.items.length === 0 ? templateCatalog[templateKey].stages : activeList.stages,
+      name,
+      description,
+      objective,
+      leadDefinition,
+      researchBrief,
+    };
+    const after = collaborativeEditor ? stampPipeListTextChanges(activeList, submitted) : submitted;
+    setLists(current => current.map(list => {
+      if (list.id !== activeList.id) return list;
+      return list === activeList ? after : mergePipeListSnapshotsThreeWay(activeList, list, after, true);
+    }));
     setLeadResearchPrompt(researchBrief);
     setIsListProfileModalOpen(false);
     setToastMessage({ type: 'success', text: 'PipeList profile saved.' });
@@ -8153,7 +8134,7 @@ Rules:
       contactEmails: normalizedContactEmails,
       tags: normalizeLeadTags(draft.tags),
       applicableCompanies: normalizeApplicableCompanies(draft.applicableCompanies),
-      notes: cleanDealNotes(draft.notes),
+      notes: currentEditingItem?.textRuns?.notes ? draft.notes : cleanDealNotes(draft.notes),
       ...(customerSuccessToSave
         ? {
             customerSuccess: customerSuccessToSave,
@@ -8179,13 +8160,15 @@ Rules:
 
         if (editingItemId && editingSnapshot) {
           const currentItem = list.items.find((item) => item.id === editingItemId) || editingSnapshot;
-          const savedItem: PipelineItem = {
-            ...currentItem,
+          const edited: PipelineItem = {
+            ...editingSnapshot,
             ...draftToSave,
             title: draftToSave.title.trim() || currentItem.title,
             organization: draftToSave.organization.trim(),
             updatedAt: new Date().toISOString(),
           };
+          const submitted = editingSnapshot.textRuns ? stampPipeListTextChanges(editingSnapshot, edited) : edited;
+          const savedItem = currentItem === editingSnapshot ? submitted : mergePipeListSnapshotsThreeWay(editingSnapshot, currentItem, submitted, true);
           return {
             ...list,
             // Keep an explicitly saved edit when a sync snapshot temporarily omitted its lead.
@@ -8236,17 +8219,51 @@ Rules:
     }));
   };
 
+  const fieldHistory = (item: PipelineItem, label: string, before: string, after: string) =>
+    createSystemLog(item, 'field-changed', `${profile?.displayName || user?.displayName || user?.email || 'Editor'} changed ${label} from “${before || 'Unassigned'}” to “${after || 'Unassigned'}”.`);
+
+  const changeItemField = (key: keyof ItemDraft, value: string | boolean, selectionLabel?: string) => {
+    if (!sharedEditingItem) {
+      setDraft(current => ({ ...current, [key]: value }));
+      return;
+    }
+    if (value === sharedEditingItem[key]) return;
+    const before = sharedEditingItem;
+    const after = stampPipeListTextChanges(before, { ...before, [key]: value, updatedAt: new Date().toISOString() });
+    if (selectionLabel) {
+      const label = (raw: string) => key === 'stage' ? getStage(activeList, raw).label : raw;
+      after.weeklyLogs = [fieldHistory(before, selectionLabel, label(String(before[key] ?? '')), label(String(value))), ...before.weeklyLogs];
+    }
+    if (key === 'owner' && typeof value === 'string') {
+      const session = ownerEdit.current?.itemId === before.id ? ownerEdit.current : null;
+      const original = session?.before ?? before.owner;
+      const log = fieldHistory(before, 'owner', original, value);
+      if (session) log.id = session.logId;
+      ownerEdit.current = { itemId: before.id, before: original, logId: log.id };
+      after.weeklyLogs = [log, ...before.weeklyLogs.filter(entry => entry.id !== log.id)];
+    }
+    setLists(current => current.map(list => list.id !== activeList.id ? list : {
+      ...list,
+      items: list.items.map(item => item.id === before.id && !item.deletedAt && !item.movedToListId
+        ? (item === before ? after : mergePipeListSnapshotsThreeWay(before, item, after, true)) : item),
+    }));
+  };
+
   const handleKanbanDrop = (event: React.DragEvent<HTMLElement>, stageId: string) => {
     event.preventDefault();
     clearKanbanDrag();
     if (!canModify || isBulkSelectionMode || draggedKanbanItem?.listId !== activeList.id) return;
     const itemId = draggedKanbanItem.itemId;
+    const moved = activeList.items.find(item => item.id === itemId);
+    const log = collaborativeEditor && moved && moved.stage !== stageId
+      ? fieldHistory(moved, 'stage', getStage(activeList, moved.stage).label, getStage(activeList, stageId).label)
+      : undefined;
     setLists((currentLists) => currentLists.map((list) => {
       if (list.id !== activeList.id || !list.stages.some((stage) => stage.id === stageId)) return list;
       return {
         ...list,
         items: list.items.map((item) => item.id === itemId && !item.deletedAt && item.stage !== stageId
-          ? { ...item, stage: stageId, updatedAt: new Date().toISOString() }
+          ? { ...item, stage: stageId, ...(log ? { weeklyLogs: [log, ...item.weeklyLogs] } : {}), updatedAt: new Date().toISOString() }
           : item),
       };
     }));
@@ -8255,17 +8272,8 @@ Rules:
   const handleEditItem = (item: PipelineItem) => {
     if (!canModify) return;
     setItemSaveError('');
-    const { id, createdAt, updatedAt, weeklyLogs, deletedAt, deletedByLogId, restorableUntil, movedToListId, linkedLeadIds, ...editableItem } = item;
-    void id;
-    void createdAt;
-    void updatedAt;
-    void weeklyLogs;
-    void deletedAt;
-    void deletedByLogId;
-    void restorableUntil;
-    void movedToListId;
-    void linkedLeadIds;
-    setDraft({
+    const editableItem = editablePipeListItem(item);
+    const initialDraft = {
       ...editableItem,
       contactEmails: normalizeContactEmails(editableItem.contactEmails),
       notes: cleanDealNotes(editableItem.notes),
@@ -8273,7 +8281,10 @@ Rules:
       (Boolean(item.customerSuccess) || isUniversityCustomerSuccessStage(item.stage))
         ? { customerSuccess: customerSuccessForItem(item) }
         : {}),
-    });
+    };
+    openedDraft.current = initialDraft;
+    ownerEdit.current = null;
+    setDraft(initialDraft);
     setContactEmailInput('');
     setContactEmailError('');
     setEditingItemId(item.id);
@@ -10107,6 +10118,7 @@ Rules:
       onChange={() => setItemSaveError('')}
       className="space-y-4"
     >
+      {sharedEditingItem && <p className="text-sm text-stone-500">Text and selection changes are shared as you edit.</p>}
       <PipeListsCompanies value={draft.applicableCompanies} onChange={(applicableCompanies) => setDraft((current) => ({ ...current, applicableCompanies }))} />
       <label className="block" htmlFor="pipe-lead-tags">
         <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Tags</span>
@@ -10165,16 +10177,12 @@ Rules:
             ]).map(([key, label, placeholder]) => (
           <label key={key} className={key === 'sourceUrl' || key === 'linkedinUrl' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
             <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
-            <input
+            <PipeListsTextField
               id={`pipe-${key}`}
+              onBlur={key === 'owner' ? () => { ownerEdit.current = null; } : undefined}
               type={placeholder === 'date' ? 'date' : key === 'sourceUrl' || key === 'linkedinUrl' ? 'url' : 'text'}
               value={String(draft[key as keyof ItemDraft] || '')}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  [key]: event.target.value,
-                }))
-              }
+              onValueChange={value => changeItemField(key as keyof ItemDraft, value)}
               className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
               placeholder={placeholder === 'date' ? undefined : placeholder}
             />
@@ -10187,12 +10195,7 @@ Rules:
             <select
               id="pipe-email-status"
               value={normalizeContactEmailStatusInput(draft.emailStatus || draft.lastEmailEvent)}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  emailStatus: event.target.value,
-                }))
-              }
+              onChange={event => changeItemField('emailStatus', event.target.value, 'email status')}
               className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
             >
               {contactEmailStatusOptions.map((status) => (
@@ -10208,7 +10211,7 @@ Rules:
             <select
               id="pipe-stage"
               value={draft.stage}
-              onChange={(event) => setDraft((current) => ({ ...current, stage: event.target.value }))}
+              onChange={event => changeItemField('stage', event.target.value, 'stage')}
               className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
             >
               {activeList.stages.map((stage) => (
@@ -10226,12 +10229,7 @@ Rules:
             <select
               id="pipe-email-status"
               value={normalizeContactEmailStatusInput(draft.emailStatus || draft.lastEmailEvent)}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  emailStatus: event.target.value,
-                }))
-              }
+              onChange={event => changeItemField('emailStatus', event.target.value, 'email status')}
               className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
             >
               {contactEmailStatusOptions.map((status) => (
@@ -10248,9 +10246,7 @@ Rules:
           <select
             id="pipe-priority"
             value={draft.priority}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, priority: event.target.value as PipelinePriority }))
-            }
+            onChange={event => changeItemField('priority', event.target.value, 'ease of contact')}
             className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm capitalize outline-none transition focus:border-stone-400 focus:bg-white"
           >
             <option value="low">Easy</option>
@@ -10266,7 +10262,7 @@ Rules:
               id="pipe-dueDate"
               type="date"
               value={draft.dueDate}
-              onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))}
+              onChange={event => changeItemField('dueDate', event.target.value, 'due date')}
               className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
             />
           </label>
@@ -10276,12 +10272,7 @@ Rules:
           <input
             type="checkbox"
             checked={draft.deadlineEmailNotificationsEnabled}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                deadlineEmailNotificationsEnabled: event.target.checked,
-              }))
-            }
+            onChange={event => changeItemField('deadlineEmailNotificationsEnabled', event.target.checked, 'deadline email notifications')}
             className="h-4 w-4 rounded border-stone-300 text-stone-950 focus:ring-stone-400"
           />
           <span>Email deadline notifications</span>
@@ -10292,14 +10283,25 @@ Rules:
         <PipeListsSuccessPlanEditor
           value={draftCustomerSuccess}
           editorName={profile?.displayName || user?.displayName || user?.email || ''}
-          onChange={(customerSuccess) =>
-            setDraft((current) => ({
-              ...current,
-              customerSuccess,
+          live={Boolean(sharedEditingItem)}
+          onChange={(customerSuccess) => {
+            const changes = {
+              customerSuccess: sharedEditingItem ? stampSuccessPlanText(draftCustomerSuccess, customerSuccess) : customerSuccess,
               nextStep: customerSuccess.nextAction.summary,
               dueDate: customerSuccess.nextAction.dueDate,
-            }))
-          }
+            };
+            if (!sharedEditingItem) {
+              setDraft(current => ({ ...current, ...changes }));
+              return;
+            }
+            const before = sharedEditingItem;
+            const after = stampPipeListTextChanges(before, { ...before, ...changes, updatedAt: new Date().toISOString() });
+            setLists(current => current.map(list => list.id !== activeList.id ? list : {
+              ...list,
+              items: list.items.map(item => item === before ? after : item.id === before.id && !item.deletedAt
+                ? mergePipeListSnapshotsThreeWay(before, item, after, true) : item),
+            }));
+          }}
         />
       )}
 
@@ -10440,15 +10442,10 @@ Rules:
         ].map(([key, label, placeholder]) => (
           <label key={key} className={key === 'description' || key === 'notes' ? 'block md:col-span-2' : 'block'} htmlFor={`pipe-${key}`}>
             <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">{label}</span>
-            <textarea
+            <PipeListsTextField multiline
               id={`pipe-${key}`}
               value={String(draft[key as keyof ItemDraft] || '')}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  [key]: event.target.value,
-                }))
-              }
+              onValueChange={value => changeItemField(key as keyof ItemDraft, value)}
               className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm outline-none transition focus:border-stone-400 focus:bg-white"
               placeholder={placeholder}
             />
@@ -10998,6 +10995,13 @@ Rules:
                 <h2 className="truncate text-3xl font-bold tracking-normal text-stone-950 md:text-4xl">
                   {viewMode === 'runbook' ? 'Sales Runbook' : activeList.name}
                 </h2>
+                {viewMode !== 'runbook' && presenceShareId && user && (
+                  <div className="mt-2">
+                    <PipeListPresence key={presenceShareId + ':' + user.uid} db={simpBudgetDb}
+                      shareId={presenceShareId} uid={user.uid}
+                      initials={pipeListInitials(profile?.displayName || user.displayName || user.email?.split('@')[0] || '')} />
+                  </div>
+                )}
                 {viewMode === 'runbook' ? (
                   <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-500">
                     The team's editable source for sales strategy, messaging, resources, and operating cadence.
@@ -13337,14 +13341,15 @@ Rules:
             </div>
 
             <div className="space-y-4">
+              {collaborativeEditor && <p className="text-sm text-stone-500">Text changes are shared as you edit.</p>}
               <label className="block" htmlFor="pipe-list-profile-name">
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">List name</span>
-                <input
+                <PipeListsTextField
                   id="pipe-list-profile-name"
-                  value={listProfileDraft.name}
+                  value={profileValues.name}
                   required
                   maxLength={160}
-                  onChange={(event) => setListProfileDraft((current) => ({ ...current, name: event.target.value }))}
+                  onValueChange={value => changeProfileText('name', value)}
                   className="h-11 w-full rounded-md border border-stone-200 bg-[#FAFAF7] px-3 text-sm outline-none focus:border-stone-400 focus:bg-white"
                 />
               </label>
@@ -13354,6 +13359,10 @@ Rules:
                   <select id="pipe-list-profile-template" value={listProfileDraft.templateKey}
                     onChange={(event) => {
                       const templateKey = event.target.value as TemplateKey;
+                      if (collaborativeEditor) {
+                        setListProfileDraft(current => ({ ...current, templateKey }));
+                        return;
+                      }
                       setListProfileDraft((current) => ({ ...current, templateKey,
                         description: templateCatalog[templateKey].description,
                         objective: defaultListObjective(templateKey, current.name),
@@ -13366,10 +13375,10 @@ Rules:
               )}
               <label className="block" htmlFor="pipe-list-profile-description">
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Short description</span>
-                <textarea
+                <PipeListsTextField multiline
                   id="pipe-list-profile-description"
-                  value={listProfileDraft.description}
-                  onChange={(event) => setListProfileDraft((current) => ({ ...current, description: event.target.value }))}
+                  value={profileValues.description}
+                  onValueChange={value => changeProfileText('description', value)}
                   className="min-h-20 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                   placeholder={templateCatalog[activeList.templateKey].description}
                 />
@@ -13377,10 +13386,10 @@ Rules:
 
               <label className="block" htmlFor="pipe-list-profile-objective">
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Objective</span>
-                <textarea
+                <PipeListsTextField multiline
                   id="pipe-list-profile-objective"
-                  value={listProfileDraft.objective}
-                  onChange={(event) => setListProfileDraft((current) => ({ ...current, objective: event.target.value }))}
+                  value={profileValues.objective}
+                  onValueChange={value => changeProfileText('objective', value)}
                   className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                   placeholder={defaultListObjective(activeList.templateKey, activeList.name)}
                 />
@@ -13390,10 +13399,10 @@ Rules:
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">
                   {isTaskListActive ? 'Ideal task definition' : 'Ideal lead definition'}
                 </span>
-                <textarea
+                <PipeListsTextField multiline
                   id="pipe-list-profile-lead-definition"
-                  value={listProfileDraft.leadDefinition}
-                  onChange={(event) => setListProfileDraft((current) => ({ ...current, leadDefinition: event.target.value }))}
+                  value={profileValues.leadDefinition}
+                  onValueChange={value => changeProfileText('leadDefinition', value)}
                   className="min-h-24 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                   placeholder={defaultLeadDefinition(activeList.templateKey)}
                 />
@@ -13401,10 +13410,10 @@ Rules:
 
               <label className="block" htmlFor="pipe-list-profile-research-brief">
                 <span className="mb-1.5 block text-xs font-semibold uppercase text-stone-400">Default research brief</span>
-                <textarea
+                <PipeListsTextField multiline
                   id="pipe-list-profile-research-brief"
-                  value={listProfileDraft.researchBrief}
-                  onChange={(event) => setListProfileDraft((current) => ({ ...current, researchBrief: event.target.value }))}
+                  value={profileValues.researchBrief}
+                  onValueChange={value => changeProfileText('researchBrief', value)}
                   className="min-h-36 w-full resize-y rounded-md border border-stone-200 bg-[#FAFAF7] px-3 py-2 text-sm leading-6 outline-none transition placeholder:text-stone-400 focus:border-stone-400 focus:bg-white"
                   placeholder={defaultResearchBriefForList(activeList)}
                 />
@@ -13417,7 +13426,7 @@ Rules:
                 onClick={() => setIsListProfileModalOpen(false)}
                 className="inline-flex h-10 items-center justify-center rounded-full border border-stone-200 bg-white px-4 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
               >
-                Cancel
+                {collaborativeEditor ? 'Close' : 'Cancel'}
               </button>
               <button
                 type="submit"
@@ -14421,7 +14430,7 @@ Rules:
                         onClick={resetEditor}
                         className="inline-flex h-9 items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-600 transition hover:text-stone-950"
                       >
-                        Cancel
+                        {sharedEditingItem ? 'Close' : 'Cancel'}
                       </button>
                       <button
                         type={itemResearchResult ? 'button' : 'submit'}

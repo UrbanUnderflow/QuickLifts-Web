@@ -94,7 +94,7 @@ test('the first release stays visibly unconnected and does not expose product ID
   assert.match(rulesSource, /allow read: if isProtectedShareOwner\(\) \|\| isProtectedShareViewer\(\)/);
   assert.match(rulesSource, /request\.resource\.data\.lastEditedBy\.uid == request\.auth\.uid/);
   assert.match(rulesSource, /affectedKeys\(\)\.hasOnly\(\[[\s\S]*'list',[\s\S]*'lastEditedBy',[\s\S]*'updatedAt'/);
-  assert.match(pageSource, /const nextShares = Array\.from\(sharesById\.values\(\)\)/);
+  assert.match(pageSource, /setAccessibleShareDocs\(\[\.\.\.dashboardShares\.values\(\)\]\)/);
   assert.match(pageSource, /protectedShareLists\[share\.id\]/);
   assert.match(pageSource, /doc\(simpBudgetDb, PIPELIST_PROTECTED_SHARES_COLLECTION, share\.id\)/);
   assert.match(pageSource, /organizationId: ''[\s\S]*teamId: ''[\s\S]*pilotId: ''/);
@@ -116,7 +116,7 @@ test('owner and collaborator list snapshots reconcile without a remote-write ech
   assert.match(pageSource, /!item\.movedToListId/);
   assert.match(pageSource, /linkage: personalItem\.customerSuccess\.linkage/);
   assert.match(pageSource, /: personalItem\.customerSuccess/);
-  assert.match(pageSource, /JSON\.stringify\(nextList\) !== JSON\.stringify\(share\.list\)/);
+  assert.match(pageSource, /pipeListSnapshotsEqual\(snapshot, collaboratorSafePipeListSnapshot\(base\)\)/);
   assert.match(pageSource, /lastEditedBy:[\s\S]*uid: user\.uid/);
 });
 

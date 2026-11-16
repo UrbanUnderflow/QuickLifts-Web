@@ -36,6 +36,9 @@ export function applyPipeListViewEdits<T>(stored: T, displayed: unknown, edited:
     for (const key of new Set([...Object.keys(displayed), ...Object.keys(edited)])) {
       if (pipeListSnapshotsEqual(displayed[key], edited[key])) continue;
       if (!(key in edited)) delete result[key];
+      // Character runs are an ordered encoding of the visible text. They
+      // have already been merged by character identity and replace as a unit.
+      else if (key === 'textRuns') result[key] = edited[key];
       else result[key] = applyPipeListViewEdits(result[key], displayed[key], edited[key]);
     }
     return result as T;

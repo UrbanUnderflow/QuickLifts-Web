@@ -75,3 +75,39 @@ test('editor saves multiple companies and allows clearing without changing spons
     assert.deepEqual(stored.weeklyLogs, original.weeklyLogs);
   }
 });
+
+test('independent owner and editor selectors retain both actors and group one typed assignment', async () => {
+  const { stampPipeListTextChanges } = await import('../../src/utils/pipelistsText');
+  const { mergePipeListSnapshotsThreeWay } = await import('../../src/utils/pipelistsCollaboration');
+  const changeHandler = source.slice(source.indexOf('  const fieldHistory ='), source.indexOf('  const handleKanbanDrop ='));
+  const base = { id: 'pipeline', items: [{ id: 'lead', owner: 'Previous', stage: 'draft', weeklyLogs: [] as {id: string; summary: string}[] }] };
+  const edit = (actor: string, changes: string[][]) => {
+    let list = structuredClone(base);
+    let sequence = 0;
+    const ownerEdit = { current: null };
+    for (const [field, value, label] of changes) {
+      const scope = {
+        stampPipeListTextChanges, mergePipeListSnapshotsThreeWay, ownerEdit,
+        sharedEditingItem: list.items[0], activeList: list, profile: { displayName: actor }, user: null,
+        createSystemLog: (_item: unknown, _action: string, summary: string) => ({ id: actor + ++sequence, summary }),
+        getStage: (_list: unknown, id: string) => ({ label: id }),
+        setLists: (update: (lists: typeof base[]) => typeof base[]) => { list = update([list])[0]; },
+      };
+      const change = new Function(...Object.keys(scope), ts.transpile(changeHandler + '\nreturn changeItemField;', { target: ts.ScriptTarget.ES2020 }))(...Object.values(scope));
+      change(field, value, label);
+    }
+    return list;
+  };
+  const first = edit('Owner', [['owner', 'S'], ['owner', 'Sam'], ['stage', 'review', 'stage']]);
+  const second = edit('Editor', [['stage', 'approved', 'stage']]);
+  for (const [remote, local] of [[first, second], [second, first]]) {
+    const item = mergePipeListSnapshotsThreeWay(base, remote, local, true).items[0];
+    assert.equal(item.owner, 'Sam');
+    assert.equal(item.stage, 'review');
+    assert.deepEqual(item.weeklyLogs.map(log => log.summary).sort(), [
+      'Editor changed stage from “draft” to “approved”.',
+      'Owner changed owner from “Previous” to “Sam”.',
+      'Owner changed stage from “draft” to “review”.',
+    ]);
+  }
+});

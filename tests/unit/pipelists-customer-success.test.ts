@@ -358,3 +358,17 @@ test('invalid or reversed reporting periods remain explicit', () => {
     null,
   );
 });
+
+test('normalization retains collaborative health text whitespace and concurrent edits', async () => {
+  const { stampSuccessPlanText } = await import('../../src/utils/pipelistsCustomerSuccess');
+  const { mergePipeListSnapshotsThreeWay } = await import('../../src/utils/pipelistsCollaboration');
+  const base = normalizeUniversityCustomerSuccess({ health: { reason: 'baseline' } });
+  const edit = (reason: string) => normalizeUniversityCustomerSuccess(stampSuccessPlanText(base, {
+    ...base, health: { ...base.health, reason },
+  }));
+  const left = edit('baseline next ');
+  const right = edit('first baseline');
+  assert.equal(left.health.reason, 'baseline next ');
+  const merged = mergePipeListSnapshotsThreeWay(base, right, left, true);
+  assert.equal(normalizeUniversityCustomerSuccess(merged).health.reason, 'first baseline next ');
+});
