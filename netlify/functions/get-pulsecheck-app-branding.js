@@ -8,6 +8,13 @@ const forbidden = () => Object.assign(new Error('This team is not available to y
 
 async function loadAppBranding(db, uid, teamId) {
   if ((await db.collection('account-closure-jobs').doc(uid).get()).exists) throw forbidden();
+  if (teamId?.startsWith('legacy:')) {
+    if (teamId !== `legacy:${uid}`) throw forbidden();
+    const coach = (await db.collection('coaches').doc(uid).get()).data();
+    if (!active(coach) || coach.disabled === true || coach.isActive === false ||
+        (coach.userId && coach.userId !== uid) || (coach.userType && coach.userType !== 'coach')) throw forbidden();
+    teamId = undefined;
+  }
   let query = db.collection('pulsecheck-team-memberships').where('userId', '==', uid);
   if (teamId) query = query.where('teamId', '==', teamId);
   const memberships = await query.limit(101).get();
@@ -43,7 +50,7 @@ function createHandler(deps = {}) {
     const token = (event.headers?.authorization || event.headers?.Authorization || '').match(/^Bearer\s+(\S+)$/i)?.[1];
     if (!token) return respond(401, { error: 'Sign in to load app branding.' });
     const teamId = event.queryStringParameters?.teamId;
-    if (teamId != null && !validId(teamId)) return respond(400, { error: 'Choose a valid team.' });
+    if (teamId != null && !validId(teamId) && !(typeof teamId === 'string' && teamId.startsWith('legacy:') && validId(teamId.slice(7)))) return respond(400, { error: 'Choose a valid team.' });
     let identity;
     try { identity = await (deps.authorize || authorize)(event, token); if (!identity?.uid) throw new Error('No user'); }
     catch { return respond(401, { error: 'Sign in to load app branding.' }); }

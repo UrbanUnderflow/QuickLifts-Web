@@ -57,3 +57,18 @@ test('every organization reports Clay regardless of any stored appearance',async
  await db.collection('account-closure-jobs').doc('user').set({status:'pending'});
  await assert.rejects(loadAppBranding(db,'user','team'),e=>e.statusCode===403);
 });
+
+test('legacy coach appearance accepts only the signed-in active coach and inherits authorized branding', async () => {
+  const db = fixture();
+  await db.collection('coaches').doc('user').set({ userId: 'user', userType: 'coach', status: 'active' });
+  const handler = createHandler({ authorize: async () => ({ uid: 'user', db }) });
+  const request = teamId => handler({ httpMethod: 'GET', headers: { authorization: 'Bearer test' }, queryStringParameters: { teamId } });
+  const response = await request('legacy:user');
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(JSON.parse(response.body), { appExperience: clay, appBranding: { pulsecheck: 'athleticmind', athleticmind: 'athleticmind' } });
+  assert.equal((await request('legacy:other')).statusCode, 403);
+  await db.collection('coaches').doc('user').set({ userId: 'user', status: 'inactive' });
+  assert.equal((await request('legacy:user')).statusCode, 403);
+  await db.collection('coaches').doc('user').set({ userId: 'other', status: 'active' });
+  assert.equal((await request('legacy:user')).statusCode, 403);
+});
