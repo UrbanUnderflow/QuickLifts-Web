@@ -5,7 +5,7 @@ import { latestAssignedSkill, skillCompletion } from './skillParticipation';
 import { hasMorningCheckIn, hasEveningCheckIn } from '../../../netlify/functions/utils/teamShowingUpScore';
 import { scheduledParticipationDates, coverageForDays, loadCurrentLinearSkill, loadWearableParticipation, loadWearableLifecycle, normalizeWearableFamily } from './participationSources';
 import type { firestore } from 'firebase-admin';
-import { activeRecord, DashboardAccessError, loadTeamAccess, validTeamId, visibleAthlete } from './access';
+import { activeRecord, DashboardAccessError, loadTeamAccess, loadLegacyParticipationAccess, validTeamId, visibleAthlete } from './access';
 import { trainerSharingChoices, TRAINER_SHARING_FIELDS, type CurrentSkill, type CoverageMetric, type TeamParticipation, type TeamWellbeing, type WellbeingCard } from './types';
 const DAY = 86400000;
 export const MIN_CONTRIBUTORS = 1;
@@ -23,7 +23,14 @@ export function aggregateCard(rows: Array<Record<string, number>>, eligible: num
   return { status: values.length ? 'available' : 'insufficient_responses', contributors, eligible, source, asOf, values };
 }
 export async function loadDashboard(db: firestore.Firestore, uid: string, teamId: string, view: 'participation' | 'wellbeing', now = Date.now(), historicalSkills = false): Promise<TeamParticipation | TeamWellbeing> {
-  const { membership, team, access } = await loadTeamAccess(db, uid, teamId);
+  const workspaceId = teamId;
+  const legacyWorkspace = teamId.startsWith('legacy:');
+  if (legacyWorkspace && view !== 'participation') throw new DashboardAccessError(403, 'Team trainer permission is required.');
+  const context = legacyWorkspace
+    ? await loadLegacyParticipationAccess(db, uid, teamId)
+    : { ...await loadTeamAccess(db, uid, teamId), teamId };
+  const { membership, team, access } = context;
+  teamId = context.teamId;
   if (!(view === 'wellbeing' ? access.wellbeing : access.participation)) throw new DashboardAccessError(403, view === 'wellbeing' ? 'An explicit athletic trainer permission is required.' : 'Team participation access is required.');
   // Fixed seven completed UTC dates prevent caller-controlled windows / differencing queries.
   const to = new Date(now - DAY).toISOString().slice(0,10); const from = new Date(now - DAY * 7).toISOString().slice(0,10);
@@ -115,5 +122,5 @@ export async function loadDashboard(db: firestore.Firestore, uid: string, teamId
   if(view==='wellbeing') return {teamId,asOf,minimumContributors:MIN_CONTRIBUTORS,mood:aggregateCard(moodRows,athletes.length,'Reported check-ins',asOf,{'Reported mood':'/5'}),recovery:aggregateCard(recoveryRows,athletes.length,'Self-reported check-ins',asOf,{'Reported recovery':'/5'}),wearables:aggregateCard(wearableRows,athletes.length,'Consented connected wearable records',asOf,{'Sleep duration':'hours','Resting heart rate':'bpm'}),journaling:aggregateCard(journalRows,athletes.length,'Journal activity counts only',asOf,{'Entries per sharing athlete':'entries'})};
   const skills:TeamParticipation['skills']=[]; for(const athlete of result) if(athlete.currentSkill){let group=skills.find(s=>s.id===athlete.currentSkill!.id);if(!group){group={...athlete.currentSkill,athleteCount:0,phases:{},progress:{completed:0,expected:0,rate:null}};skills.push(group);}group.athleteCount++;if(athlete.currentSkill.progress&&group.progress){group.progress.completed+=athlete.currentSkill.progress.completed;group.progress.expected+=athlete.currentSkill.progress.expected;group.progress.rate=group.progress.expected?Math.round(group.progress.completed/group.progress.expected*100):null;}const phase=athlete.currentSkill.phase||'Unknown';group.phases[phase]=(group.phases[phase]||0)+1;}
   const curriculum=await loadCoachCurriculumOutline(db,result);
-  return {curriculum,teamId,asOf,from,to,canViewWellbeing:access.wellbeing,athletes:result,adherence:{checkIns:metric(result.reduce((s,a)=>s+a.checkIns.completed,0),result.reduce((s,a)=>s+(a.checkIns.expected||0),0)),skillTraining:metric(result.reduce((s,a)=>s+a.skillTraining.completed,0),result.reduce((s,a)=>s+(a.skillTraining.expected||0),0)),wearables:metric(result.reduce((s,a)=>s+a.wearables.completed,0),result.some(a=>a.wearables.expected!==null)?result.reduce((s,a)=>s+(a.wearables.expected||0),0):null,'Measured days among verified connected sources; unavailable connections are excluded.')},daily,skills:skills.sort((a,b)=>b.athleteCount-a.athleteCount),limitations:['Seven completed UTC days.','Daily check-in schedule starts at account activation or team joining.','Wearable coverage excludes unavailable and disconnected sources; missing sync remains separate from completion.']};
+  return {curriculum,teamId:workspaceId,asOf,from,to,canViewWellbeing:access.wellbeing,athletes:result,adherence:{checkIns:metric(result.reduce((s,a)=>s+a.checkIns.completed,0),result.reduce((s,a)=>s+(a.checkIns.expected||0),0)),skillTraining:metric(result.reduce((s,a)=>s+a.skillTraining.completed,0),result.reduce((s,a)=>s+(a.skillTraining.expected||0),0)),wearables:metric(result.reduce((s,a)=>s+a.wearables.completed,0),result.some(a=>a.wearables.expected!==null)?result.reduce((s,a)=>s+(a.wearables.expected||0),0):null,'Measured days among verified connected sources; unavailable connections are excluded.')},daily,skills:skills.sort((a,b)=>b.athleteCount-a.athleteCount),limitations:['Seven completed UTC days.','Daily check-in schedule starts at account activation or team joining.','Wearable coverage excludes unavailable and disconnected sources; missing sync remains separate from completion.']};
 }
