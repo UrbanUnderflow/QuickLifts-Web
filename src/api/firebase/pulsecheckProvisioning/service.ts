@@ -271,7 +271,7 @@ const normalizeTeamCommercialConfig = (value: unknown): PulseCheckTeamCommercial
   return {
     commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
     teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
-    youthTrack: normalizeYouthTrack(candidate.youthTrack ?? defaults.youthTrack),
+    youthTrack: normalizeYouthTrack(candidate.youthTrack ?? 'junior'),
     experienceAudience: normalizeExperienceAudience(
       candidate.experienceAudience ?? defaults.experienceAudience
     ),
@@ -3232,8 +3232,8 @@ export const pulseCheckProvisioningService = {
   async createOrganization(input: CreatePulseCheckOrganizationInput, operationId = crypto.randomUUID()): Promise<string> {
     const payload = {
       ...(typeof input.healthBaselineEnabled === 'boolean' ? { healthBaselineEnabled: input.healthBaselineEnabled } : {}),
-      productBrand: validateProductBrand(input.productBrand),
-      appBranding: normalizeAppBranding(input.appBranding),
+      productBrand: validateProductBrand(input.productBrand === undefined ? 'athleticmind' : input.productBrand),
+      appBranding: normalizeAppBranding(input.appBranding === undefined ? { pulsecheck: 'athleticmind', athleticmind: 'athleticmind' } : input.appBranding),
       signInPolicy: normalizeSignInPolicy(input.signInPolicy),
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
@@ -3325,7 +3325,7 @@ export const pulseCheckProvisioningService = {
 
   async createTeam(input: CreatePulseCheckTeamInput, operationId = crypto.randomUUID()): Promise<string> {
     const configuredProductBrand = await readConfiguredOrganizationProduct(normalizeString(input.organizationId));
-    const commercialConfig = normalizeTeamCommercialConfig(input.commercialConfig);
+    const commercialConfig = normalizeTeamCommercialConfig({ ...input.commercialConfig, youthTrack: input.commercialConfig?.youthTrack ?? 'pro' });
     const defaultEscalationRoute = normalizeTeamEscalationRoute(input.defaultEscalationRoute);
     const normalizedImplementationMetadata = input.implementationMetadata
       ? normalizeTeamImplementationMetadata(input.implementationMetadata, input.defaultInvitePolicy)

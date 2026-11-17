@@ -63,7 +63,7 @@ function normalizeTeamCommercialConfig(value) {
   return {
     commercialModel: commercialModel === 'team-plan' ? 'team-plan' : 'athlete-pay',
     teamPlanStatus: teamPlanStatus === 'active' ? 'active' : 'inactive',
-    youthTrack: youthTrack === 'pro' || youthTrack === 'rookie' ? youthTrack : 'junior',
+    youthTrack: candidate.youthTrack === undefined || youthTrack === 'pro' ? 'pro' : youthTrack === 'rookie' ? 'rookie' : 'junior',
     experienceAudience:
       experienceAudience === 'all-performers' ? 'all-performers' : 'athletes',
     referralKickbackEnabled: Boolean(candidate.referralKickbackEnabled),
@@ -192,8 +192,8 @@ function buildProvisioningPayload(input) {
   );
 
   const organizationPayload = {
-    productBrand: validateProductBrand(input.organization.productBrand),
-    appBranding: normalizeAppBranding(input.organization.appBranding),
+    productBrand: validateProductBrand(input.organization.productBrand === undefined ? 'athleticmind' : input.organization.productBrand),
+    appBranding: normalizeAppBranding(input.organization.appBranding === undefined ? { pulsecheck: 'athleticmind', athleticmind: 'athleticmind' } : input.organization.appBranding),
     signInPolicy: normalizeSignInPolicy(input.organization.signInPolicy),
     displayName: normalizeString(input.organization.displayName),
     legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
@@ -402,8 +402,8 @@ async function upsertPulseCheckOrganization({ adminApp, input }) {
   }
 
   const organizationPayload = {
-    productBrand: validateProductBrand(input.organization.productBrand),
-    appBranding: normalizeAppBranding(input.organization.appBranding),
+    productBrand: validateProductBrand(input.organization.productBrand === undefined ? 'athleticmind' : input.organization.productBrand),
+    appBranding: normalizeAppBranding(input.organization.appBranding === undefined ? { pulsecheck: 'athleticmind', athleticmind: 'athleticmind' } : input.organization.appBranding),
     signInPolicy: normalizeSignInPolicy(input.organization.signInPolicy),
     displayName: normalizeString(input.organization.displayName),
     legalName: normalizeString(input.organization.legalName) || normalizeString(input.organization.displayName),
@@ -533,6 +533,12 @@ async function provisionPulseCheckOrganizationAndTeam({ adminApp, input }) {
 
     const teamWrite = {
       ...teamPayload,
+      commercialConfig: {
+        ...teamPayload.commercialConfig,
+        youthTrack: input.team.commercialConfig?.youthTrack === undefined && teamExists
+          ? (teamData.commercialConfig?.youthTrack || 'junior')
+          : teamPayload.commercialConfig.youthTrack,
+      },
       implementationMetadata: {
         ...teamPayload.implementationMetadata,
         provisionedAt: teamData?.implementationMetadata?.provisionedAt || now,

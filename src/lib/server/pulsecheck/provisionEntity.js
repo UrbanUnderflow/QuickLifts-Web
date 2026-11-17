@@ -9,10 +9,13 @@ async function provisionEntity(db, { kind, operationId, actor, actorUid, payload
   delete data.createdAt; delete data.updatedAt;
   if (data.implementationMetadata) data.implementationMetadata = { ...data.implementationMetadata, provisionedAt: timestamp };
   if (kind === 'organization') {
-    data.productBrand = validateProductBrand(data.productBrand);
-    data.appBranding = normalizeAppBranding(data.appBranding);
+    data.productBrand = validateProductBrand(data.productBrand === undefined ? 'athleticmind' : data.productBrand);
+    data.appBranding = normalizeAppBranding(data.appBranding === undefined ? { pulsecheck: 'athleticmind', athleticmind: 'athleticmind' } : data.appBranding);
     delete data.appExperience;
     data.signInPolicy = normalizeSignInPolicy(data.signInPolicy);
+  }
+  if (kind === 'team' && data.commercialConfig?.youthTrack === undefined) {
+    data.commercialConfig = { ...data.commercialConfig, youthTrack: 'pro' };
   }
   const id = createHash('sha256').update(`${actorUid || actor.toLowerCase()}:${kind}:${operationId}`).digest('hex');
   const ref = db.collection(kind === 'organization' ? 'pulsecheck-organizations' : 'pulsecheck-teams').doc(id);

@@ -103,8 +103,8 @@ import {
 } from '../../utils/pulsecheckCommercialization';
 
 const defaultOrganizationForm: CreatePulseCheckOrganizationInput = {
-  productBrand: undefined,
-  appBranding: { pulsecheck: 'pulsecheck', athleticmind: 'athleticmind' },
+  productBrand: 'athleticmind',
+  appBranding: { pulsecheck: 'athleticmind', athleticmind: 'athleticmind' },
   displayName: '',
   legalName: '',
   organizationType: 'athletic-department',

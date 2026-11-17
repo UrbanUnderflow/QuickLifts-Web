@@ -154,7 +154,7 @@ export interface PulseCheckTeamCommercialSnapshot extends PulseCheckTeamCommerci
 export const getDefaultPulseCheckTeamCommercialConfig = (): PulseCheckTeamCommercialConfig => ({
   commercialModel: 'athlete-pay',
   teamPlanStatus: 'inactive',
-  youthTrack: 'junior',
+  youthTrack: 'pro',
   experienceAudience: 'athletes',
   referralKickbackEnabled: false,
   referralRevenueSharePct: 0,
