@@ -51,3 +51,9 @@ test('an explicit empty CC mapping clears previously saved CCs', async () => {
   assert.equal(res.statusCode, 200);
   assert.deepEqual(f.getDocument('coach-team-insight-reports/delivery/configs/team').recipientCc, {});
 });
+test('older dashboards preserve report SMS destinations and remove stale CC texts',async()=>{
+ const saved={...config,smsRecipientUids:['coach','removed'],recipientSmsPhones:{coach:'+15555551111',removed:'+15555552222'},recipientCc:{coach:[{email:'copy@example.test'}]},recipientSmsCc:{coach:[{email:'copy@example.test',phone:'+15555553333'}]}};
+ const a=await call({saved,patch:{sendHour:9}});assert.equal(a.res.statusCode,200);
+ const result=a.f.getDocument('coach-team-insight-reports/delivery/configs/team');assert.deepEqual(result.smsRecipientUids,['coach']);assert.deepEqual(result.recipientSmsPhones,{coach:'+15555551111'});assert.deepEqual(result.recipientSmsCc,saved.recipientSmsCc);
+ const b=await call({saved,patch:{recipientCc:{}}});assert.equal(b.res.statusCode,200);assert.deepEqual(b.f.getDocument('coach-team-insight-reports/delivery/configs/team').recipientSmsCc,{coach:[]});
+});

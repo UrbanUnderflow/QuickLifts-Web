@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { verifyTelnyxEvent, telnyxIncomingForm, telnyxDeliveryForm } from '../../../../lib/coach-communications/provider';
 import { receiveSms } from '../../../../lib/coach-communications/service';
 import { recordDelivery } from '../../../../lib/coach-communications/queue';
+import { recordReportSmsDelivery } from '../../../../lib/coach-dashboard/reportSmsDelivery';
 export const config = { api: { bodyParser: false } };
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   res.setHeader('Cache-Control', 'no-store');
@@ -22,7 +23,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { getFirebaseAdminApp } = await import('../../../../lib/firebase-admin');
     const db = getFirebaseAdminApp(false).firestore();
     if (incoming) await receiveSms(db, incoming);
-    else if (delivery) await recordDelivery(db, String(req.query.job), delivery, 'telnyx');
+    else if (delivery) { await recordDelivery(db, String(req.query.job), delivery, 'telnyx'); await recordReportSmsDelivery(db, String(req.query.job), delivery); }
     return res.status(204).end();
   } catch { return res.status(503).end(); }
 }

@@ -4,8 +4,10 @@ import { loadTeamAccess, validTeamId, visibleAthlete, activeRecord } from './acc
 import { loadDashboard } from './data';
 import type { TeamParticipation } from './types';
 export type ReportCcRecipient={email:string;name?:string};
-export type DeliveryConfig={teamId:string;dailyEnabled:boolean;weeklyEnabled:boolean;timeZone:string;sendHour:number;startDate:string;recipientUids:string[];recipientCc?:Record<string,ReportCcRecipient[]>};
+export type DeliveryConfig={teamId:string;dailyEnabled:boolean;weeklyEnabled:boolean;timeZone:string;sendHour:number;startDate:string;recipientUids:string[];recipientCc?:Record<string,ReportCcRecipient[]>;smsRecipientUids?:string[];recipientSmsPhones?:Record<string,string>;recipientSmsCc?:Record<string,Array<{email:string;phone:string}>>};
 export type ReportKind='daily'|'weekly';
+export type ReportRun={teamId:string;uid:string;kind:ReportKind;reportDate:string};
+export function reportRunDue(config:DeliveryConfig,now:Date,run?:ReportRun){return run?(run.teamId===config.teamId&&config.recipientUids.includes(run.uid)?[{kind:run.kind,reportDate:run.reportDate}]:[]):dueReports(config,now);}
 const DAY=86400000;
 export function validateDeliveryConfig(v:any):DeliveryConfig{
  if(!v||!validTeamId(v.teamId)||typeof v.dailyEnabled!=='boolean'||typeof v.weeklyEnabled!=='boolean'||!Number.isInteger(v.sendHour)||v.sendHour<0||v.sendHour>23)throw new Error('Choose a team, report types, and valid delivery hour.');
@@ -15,6 +17,8 @@ export function validateDeliveryConfig(v:any):DeliveryConfig{
  if(!Array.isArray(v.recipientUids)||v.recipientUids.length>30||v.recipientUids.some((id:unknown)=>!validTeamId(id)))throw new Error('Choose valid team recipients.');
  const recipientUids=[...new Set<string>(v.recipientUids)];
  if((v.dailyEnabled||v.weeklyEnabled)&&!recipientUids.length)throw new Error('Choose at least one authorized recipient.');
+ const smsRecipientUids=v.smsRecipientUids===undefined?[]:v.smsRecipientUids;
+ if(!Array.isArray(smsRecipientUids)||smsRecipientUids.some((uid:unknown)=>typeof uid!=='string'||!recipientUids.includes(uid)))throw new Error('Text recipients must be selected report recipients.');
  const recipientCc:Record<string,ReportCcRecipient[]>={};
  if(v.recipientCc!==undefined){
   if(!v.recipientCc||typeof v.recipientCc!=='object'||Array.isArray(v.recipientCc))throw new Error('Choose valid CC recipients.');
@@ -30,7 +34,15 @@ export function validateDeliveryConfig(v:any):DeliveryConfig{
    if(normalized.length)recipientCc[uid]=normalized;
   }
  }
- return {teamId:v.teamId,dailyEnabled:v.dailyEnabled,weeklyEnabled:v.weeklyEnabled,timeZone:v.timeZone,sendHour:v.sendHour,startDate:v.startDate,recipientUids,recipientCc};
+ const recipientSmsPhones:Record<string,string>={},recipientSmsCc:Record<string,Array<{email:string;phone:string}>>={};
+ for(const field of ['recipientSmsPhones','recipientSmsCc'])if(v[field]!==undefined&&(!v[field]||typeof v[field]!=='object'||Array.isArray(v[field])))throw new Error('Choose valid report text destinations.');
+ for(const [uid,phone]of Object.entries(v.recipientSmsPhones||{})){if(!smsRecipientUids.includes(uid)||typeof phone!=='string'||!/^\+[1-9]\d{9,14}$/.test(phone))throw new Error('Choose valid report text destinations.');recipientSmsPhones[uid]=phone;}
+ for(const [uid,entries]of Object.entries(v.recipientSmsCc||{})){
+  if(!recipientUids.includes(uid)||!Array.isArray(entries)||entries.length>20)throw new Error('Choose valid text CC destinations.');
+  const selected=new Set((recipientCc[uid]||[]).map(p=>p.email));const seen=new Set<string>();
+  for(const entry of entries){const email=String(entry?.email||'').trim().toLowerCase();if(!selected.has(email)||typeof entry.phone!=='string'||!/^\+[1-9]\d{9,14}$/.test(entry.phone)||seen.has(email))throw new Error('Text CC recipients must match selected email CC recipients.');seen.add(email);(recipientSmsCc[uid]||=[]).push({email,phone:entry.phone});}
+ }
+ return {teamId:v.teamId,dailyEnabled:v.dailyEnabled,weeklyEnabled:v.weeklyEnabled,timeZone:v.timeZone,sendHour:v.sendHour,startDate:v.startDate,recipientUids,recipientCc,smsRecipientUids:[...new Set<string>(smsRecipientUids)],recipientSmsPhones,recipientSmsCc};
 }
 export async function resolveReportRecipients(db:firestore.Firestore,teamId:string,uids:string[]){
  const results=[];

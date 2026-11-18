@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!(await db.collection('pulsecheck-teams').doc(teamId).get()).exists) return res.status(404).json({ error: 'Team not found.' });
     const configRef = db.collection('coach-team-insight-reports').doc('delivery').collection('configs').doc(teamId);
     if (req.method === 'POST') {
-      const allowed = new Set(['teamId', 'dailyEnabled', 'weeklyEnabled', 'timeZone', 'sendHour', 'startDate', 'recipientUids', 'recipientCc']);
+      const allowed = new Set(['teamId', 'dailyEnabled', 'weeklyEnabled', 'timeZone', 'sendHour', 'startDate', 'recipientUids', 'recipientCc', 'smsRecipientUids', 'recipientSmsPhones', 'recipientSmsCc']);
       if (Object.keys(req.body || {}).some(key => !allowed.has(key))) return res.status(400).json({ error: 'Unsupported report setting.' });
       const requested = validateDeliveryConfig(req.body);
       await resolveReportRecipients(db, teamId, requested.recipientUids);
@@ -33,7 +33,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const recipientCc = Object.prototype.hasOwnProperty.call(req.body, 'recipientCc')
           ? requested.recipientCc
           : Object.fromEntries(Object.entries(saved?.recipientCc || {}).filter(([uid]) => requested.recipientUids.includes(uid)));
-        const next = validateDeliveryConfig({ ...requested, recipientCc });
+        const smsRecipientUids=Object.prototype.hasOwnProperty.call(req.body,'smsRecipientUids')?requested.smsRecipientUids:(saved?.smsRecipientUids||[]).filter((uid:string)=>requested.recipientUids.includes(uid));
+        const recipientSmsPhones=Object.prototype.hasOwnProperty.call(req.body,'recipientSmsPhones')?requested.recipientSmsPhones:Object.fromEntries(Object.entries(saved?.recipientSmsPhones||{}).filter(([uid])=>smsRecipientUids?.includes(uid)));
+        const recipientSmsCc=Object.prototype.hasOwnProperty.call(req.body,'recipientSmsCc')?requested.recipientSmsCc:Object.fromEntries(Object.entries(saved?.recipientSmsCc||{}).filter(([uid])=>requested.recipientUids.includes(uid)).map(([uid,entries])=>[uid,(entries as Array<{email:string;phone:string}>).filter(p=>(recipientCc?.[uid] as Array<{email:string}>|undefined)?.some(c=>c.email===p.email))]));
+        const next = validateDeliveryConfig({ ...requested, recipientCc, smsRecipientUids, recipientSmsPhones, recipientSmsCc });
         transaction.set(configRef, { ...next, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: actor.uid });
         return next;
       });
@@ -50,7 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }));
     const recipients = candidates.flat().sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email));
     const stored = saved.data();
-    const config = stored ? { teamId, dailyEnabled: stored.dailyEnabled === true, weeklyEnabled: stored.weeklyEnabled === true, timeZone: stored.timeZone, sendHour: stored.sendHour, startDate: stored.startDate, recipientUids: stored.recipientUids || [], recipientCc: stored.recipientCc || {} } : {
+    const config = stored ? { teamId, dailyEnabled: stored.dailyEnabled === true, weeklyEnabled: stored.weeklyEnabled === true, timeZone: stored.timeZone, sendHour: stored.sendHour, startDate: stored.startDate, recipientUids: stored.recipientUids || [], recipientCc: stored.recipientCc || {}, smsRecipientUids:stored.smsRecipientUids||[],recipientSmsPhones:stored.recipientSmsPhones||{},recipientSmsCc:stored.recipientSmsCc||{} } : {
       teamId, dailyEnabled: false, weeklyEnabled: false, timeZone: 'America/New_York', sendHour: 8,
       startDate: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()), recipientUids: [], recipientCc: {},
     };
