@@ -1,3 +1,4 @@
+import { issueReportLink } from './reportLinks';
 import type { firestore } from 'firebase-admin';
 import { randomUUID } from 'node:crypto';
 import { validateDeliveryConfig, dueReports, deliveryId, resolveReportRecipients, prepareParticipationReport, assertReportAudience, reportRunDue, type ReportRun } from './reportDelivery';
@@ -27,7 +28,7 @@ export async function runReportDeliveries(db:firestore.Firestore,now=new Date(),
     if(!latest.recipientUids.includes(uid)||!reportRunDue(latest,now,deps.run).some(d=>d.kind===due.kind&&d.reportDate===due.reportDate))throw new Error('Delivery settings changed.');
     const cc=(latest.recipientCc?.[uid]||[]).filter(person=>person.email!==recipient.email);
     await ref.set({senderName:report.senderName||null,cc,subject:report.subject,contentHtml:report.contentHtml,athleteIds:report.athleteIds,from:report.from,to:report.to,recipientEmail:recipient.email,status:'sending',updatedAt:Date.now()},{merge:true});
-    const sent=await(deps.send||sendBrevoTransactionalEmail)({sender:report.senderName?{name:report.senderName}:undefined,toEmail:recipient.email,toName:recipient.name,cc,checkAllRecipientSuppression:true,subject:report.subject,htmlContent:report.html,tags:['coach-participation-report',due.kind],bypassDailyRecipientLimit:true,idempotencyKey:'coach-participation-'+id,idempotencyMetadata:{teamId:config.teamId,uid,kind:due.kind,reportDate:due.reportDate},failClosedOnSuppressionError:true});
+    const sent=await(deps.send||sendBrevoTransactionalEmail)({sender:report.senderName?{name:report.senderName}:undefined,toEmail:recipient.email,toName:recipient.name,cc,checkAllRecipientSuppression:true,subject:report.subject,htmlContent:report.html.replaceAll(`https://fitwithpulse.ai/coach/participation-report?id=${id}`,await issueReportLink(db,id,recipient.email)),tags:['coach-participation-report',due.kind],bypassDailyRecipientLimit:true,idempotencyKey:'coach-participation-'+id,idempotencyMetadata:{teamId:config.teamId,uid,kind:due.kind,reportDate:due.reportDate},failClosedOnSuppressionError:true});
     if(!sent.success||sent.skipped&&!sent.messageId&&!sent.suppressed)throw new Error(sent.error||'Delivery deferred by email limits or an active send lock.');
     await ref.set({status:sent.suppressed?'suppressed':'sent',messageId:sent.messageId||null,sentAt:sent.suppressed?null:Date.now(),lastError:sent.suppressionReason||null,leaseUntil:0,updatedAt:Date.now()},{merge:true});
     if(sent.suppressed)result.skipped++;else result.sent++;
