@@ -9,6 +9,7 @@ import { COLLECTION, ROOT, tokenDigest } from '../coachSurveys/service';
 
 const root = (db:firestore.Firestore) => db.collection('coach-team-insight-reports').doc('delivery');
 export const reportSmsId = (reportId:string,ccEmail='') => createHash('sha256').update(`coach-report-sms:${reportId}${ccEmail?':'+ccEmail:''}`).digest('hex');
+export const correctedReportSmsId = (reportId:string,ccEmail='') => createHash('sha256').update(`${reportSmsId(reportId,ccEmail)}:link-v1`).digest('hex');
 export async function resolveReportSmsRecipient(db:firestore.Firestore,teamId:string,uid:string,overridePhone?:string){
  await resolveReportRecipients(db,teamId,[uid]);
  const profile=(await db.collection('users').doc(uid).get()).data()||{};
@@ -31,7 +32,8 @@ export async function runReportSmsDeliveries(db:firestore.Firestore,now=new Date
   let config;try{config=validateDeliveryConfig(configDoc.data());if(config.teamId!==configDoc.id)continue;}catch{continue;}
   for(const due of reportRunDue(config,now,deps.run))for(const uid of config.recipientUids.filter(uid=>!deps.run||uid===deps.run.uid))for(const target of [...(config.smsRecipientUids?.includes(uid)?[{email:''}]:[]),...(config.recipientSmsCc?.[uid]||[])]){
    if(Date.now()-started>(deps.budgetMs??12000))return result;
-   const reportId=deliveryId(config.teamId,uid,due.kind,due.reportDate),id=reportSmsId(reportId,target.email)+(deps.resendLinks?'_link_v1':''),ref=root(db).collection('sms-deliveries').doc(id);
+   const reportId=deliveryId(config.teamId,uid,due.kind,due.reportDate),id=deps.resendLinks?correctedReportSmsId(reportId,target.email):reportSmsId(reportId,target.email),ref=root(db).collection('sms-deliveries').doc(id);
+   if(deps.resendLinks){const legacy=(await root(db).collection('sms-deliveries').doc(reportSmsId(reportId,target.email)+'_link_v1').get()).data?.();if(legacy&&!(legacy.status==='failed'&&!legacy.providerId&&legacy.diagnostics?.failureStage==='preflight')){result.skipped++;continue;}}
    const prior=(await ref.get()).data?.();
    // A lost response or interrupted send may already have reached the provider.
    // Never automatically resend these records, including after a worker restart.
@@ -76,7 +78,7 @@ export async function runReportSmsDeliveries(db:firestore.Firestore,now=new Date
 
 /** Input has already passed Telnyx signature/profile validation in the webhook. */
 export async function recordReportSmsDelivery(db:firestore.Firestore,id:string,form:Record<string,string>){
- if(!/^[a-f0-9]{64}(?:_link_v1)?$/.test(id))return;
+ if(!/^[a-f0-9]{64}$/.test(id))return;
  const ref=root(db).collection('sms-deliveries').doc(id);
  await db.runTransaction(async tx=>{const record=(await tx.get(ref)).data();
   if(!record||record.phoneHash!==tokenDigest(form.To||'')||record.sender!==form.From||record.providerId&&record.providerId!==form.MessageSid)return;
