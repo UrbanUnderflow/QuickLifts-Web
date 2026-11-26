@@ -37,7 +37,7 @@ const UpdateListPage: React.FC = () => {
 
   return (<>
 <Head><title>Stay connected | AthleticMind</title><meta name="description" content="Get occasional AthleticMind updates on mental skills, athlete wellbeing, and ways to get involved. No donation required." /><meta name="theme-color" content="#F3EDE3" /><link rel="canonical" href="https://theathleticmind.ai/updatelist" /></Head>
-<main className="updates"><div className="shell"><header className="top"><a className="wordmark" href="https://theathleticmind.ai" aria-label="AthleticMind home">AthleticMind</a></header>
+<main className="updates"><div className="shell"><header className="top"><p className="presenters"><a href="https://alfreedaarise.org" target="_blank" rel="noopener noreferrer">Alfreeda Goff Foundation</a><span>and</span><a href="https://48andforward.org" target="_blank" rel="noopener noreferrer">48 &amp; Forward</a></p><span className="present">present</span><a className="wordmark" href="https://theathleticmind.ai" aria-label="AthleticMind home">AthleticMind</a></header>
 <section className="hero">
 <div><h1>Strong bodies.<br />Strong <em>minds.</em></h1><p className="intro">AthleticMind helps athletes build mental skills and find support, in sport and in life. Daily practice develops focus, confidence, and ways to handle pressure.</p>
 
@@ -48,12 +48,15 @@ const UpdateListPage: React.FC = () => {
 <label className="consent"><input type="checkbox" required checked={consented} onChange={event => setConsented(event.target.checked)} /><span>Email me AthleticMind updates. Unsubscribe anytime. <a href="https://theathleticmind.ai/privacy">Privacy policy</a>.</span></label>
 {state === 'error' && <p className="error" role="alert"><span aria-hidden="true">! </span>{error}</p>}
 <button type="submit" disabled={state === 'submitting'}>{state === 'submitting' ? 'Adding you…' : 'Join the email list'}</button></form></>}</section>
-</section><footer className="partners"><p className="eyebrow">Our partners</p><nav className="partner-links" aria-label="Partner organizations"><a href="https://alfreedaarise.org" target="_blank" rel="noopener noreferrer">Alfreeda Goff Foundation ↗</a><a href="https://48andforward.org" target="_blank" rel="noopener noreferrer">48 &amp; Forward ↗</a></nav></footer></div></main><style jsx>{`
+</section></div></main><style jsx>{`
 .updates{min-height:100vh;background:#F3EDE3;color:#193E33;font-family:Arial,Helvetica,sans-serif}
 .updates *{box-sizing:border-box}
 .shell{max-width:1280px;margin:auto;padding:0 48px}
-.top{display:flex;align-items:center;justify-content:space-between;gap:32px;padding:16px 0;border-bottom:1px solid #827A6D55}
-.wordmark{font:bold 28px Georgia,'Times New Roman',serif;letter-spacing:-1px;color:#000;text-decoration:none;padding:18px 0}
+.top{display:flex;flex-direction:column;align-items:center;gap:10px;padding:32px 0;border-bottom:1px solid #827A6D55;text-align:center}
+.presenters{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:6px 12px;margin:0;font-size:16px;line-height:1.5}
+.presenters a{color:#193E33;font-weight:700;text-underline-offset:5px;min-height:44px;display:inline-flex;align-items:center}
+.present{font-size:14px;line-height:1.5}
+.wordmark{font:bold 36px Georgia,'Times New Roman',serif;letter-spacing:-1px;color:#000;text-decoration:none;margin:12px 0;padding:0}
 .back{font-size:14px;color:#193E33;text-underline-offset:5px;min-height:44px;display:flex;align-items:center}
 .hero{display:grid;grid-template-columns:1.15fr 1fr;gap:48px;padding:40px 0;align-items:start}
 .eyebrow{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin:0 0 20px}
@@ -82,13 +85,8 @@ button:disabled{opacity:.65;cursor:wait}
 .error{color:#6B2939;font-size:14px;line-height:1.5;margin:0}
 .success{padding:24px 0}
 .check{font-size:28px;margin:0 0 20px}
-.partners{display:flex;flex-wrap:wrap;align-items:center;gap:24px;border-top:1px solid #827A6D55;padding:28px 0 36px}
-.partners .eyebrow{margin:0 0 8px}
-.partners p{font-size:14px;line-height:1.5;margin:0}
-.partner-links{display:flex;gap:24px;flex-wrap:wrap}
-.partner-links a{font-size:15px;font-weight:700;color:#193E33;text-underline-offset:5px;min-height:44px;display:inline-flex;align-items:center}
-@media(max-width:900px){.shell{padding:0 24px}.hero{gap:32px}.signup{padding:26px}h1{font-size:48px}.partners{grid-template-columns:1fr}}
-@media(max-width:680px){.top{padding:16px 0;gap:16px}.wordmark{font-size:25px}.back{font-size:13px}.hero{grid-template-columns:1fr;padding:32px 0;gap:28px}h1{font-size:44px;letter-spacing:-1.7px}.intro{font-size:17px}.signup{padding:26px 22px}.scene figcaption{padding:14px 18px}.partner-links{gap:6px 24px}}
+@media(max-width:900px){.shell{padding:0 24px}.hero{gap:32px}.signup{padding:26px}h1{font-size:48px}}
+@media(max-width:680px){.top{padding:24px 0;gap:8px}.presenters{font-size:15px;gap:0 10px}.wordmark{font-size:32px}.back{font-size:13px}.hero{grid-template-columns:1fr;padding:32px 0;gap:28px}h1{font-size:44px;letter-spacing:-1.7px}.intro{font-size:17px}.signup{padding:26px 22px}.scene figcaption{padding:14px 18px}}
 `}</style></>);
 };
 export default UpdateListPage;
