@@ -4,8 +4,8 @@ const LegacyJuniorCurriculumRoute = () => null;
 
 export const getServerSideProps: GetServerSideProps = async () => ({
   redirect: {
-    destination: '/curriculum-outline',
-    permanent: true,
+    destination: 'https://theathleticmind.ai/internal/skill-curriculum?view=content&track=junior',
+    permanent: false,
   },
 });
 

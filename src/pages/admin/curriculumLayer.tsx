@@ -5,10 +5,10 @@ export const getServerSideProps: GetServerSideProps = async ({ query }) => {
   const tab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
   const settings = ['pillar', 'mapping', 'engine', 'transparency'];
   const destination = tab === 'rollups'
-    ? '/curriculum-outline?view=reports&tab=rollups'
+    ? 'https://theathleticmind.ai/internal/skill-curriculum?view=reports&tab=rollups'
     : tab && settings.includes(tab)
-      ? `/curriculum-outline?view=settings&tab=${tab}`
-      : '/curriculum-outline?view=sequence';
+      ? `https://theathleticmind.ai/internal/skill-curriculum?view=settings&tab=${tab}`
+      : 'https://theathleticmind.ai/internal/skill-curriculum?view=sequence';
   return { redirect: { destination, permanent: false } };
 };
 

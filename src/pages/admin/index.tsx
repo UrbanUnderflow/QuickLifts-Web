@@ -133,10 +133,10 @@ const adminCardsData = [
     link: "/admin/sportsIntelligenceReports"
   },
   {
-    title: "Curriculum Outline",
-    description: "Skill sequence, Rookie/Junior/Pro tracks, lesson previews, assignment settings, and athlete reports.",
+    title: "Skill Curriculum",
+    description: "Skill sequence, track lessons, previews, assignment settings, and reports in AthleticMind Internal.",
     icon: <GraduationCap className="w-5 h-5" />,
-    link: "/curriculum-outline"
+    link: "https://theathleticmind.ai/internal/skill-curriculum"
   },
   {
     title: "Adaptation Framing Layer",

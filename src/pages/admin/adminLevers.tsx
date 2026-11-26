@@ -930,7 +930,7 @@ const PulseCheckSmokeLeversCard: React.FC = () => {
         <a href="/admin/noraGuard" className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800">
           Nora Guard
         </a>
-        <a href="/curriculum-outline?view=settings" className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800">
+        <a href="https://theathleticmind.ai/internal/skill-curriculum?view=settings" className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800">
           Curriculum Outline
         </a>
       </div>

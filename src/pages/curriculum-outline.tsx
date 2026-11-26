@@ -1239,6 +1239,7 @@ const JuniorCurriculumPage: React.FC = () => {
       <div className="min-h-screen bg-[#FAFAF7] text-stone-900">
         <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
           <header className="mb-6">
+            <p className="mb-4 rounded-lg border border-stone-200 bg-white p-4 text-sm leading-6 text-stone-700">The curriculum workspace is moving to <a className="font-semibold underline underline-offset-2" href="https://theathleticmind.ai/internal/skill-curriculum">AthleticMind Internal</a>. To carry over a draft saved in this browser, choose Export JSON here, then Import JSON in the new workspace. Your original draft remains available on this page.</p>
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Curriculum administration</p>
             <h1 className="mt-2 text-3xl font-bold text-stone-950">Curriculum Outline</h1>
             <p className="mt-2 text-sm leading-6 text-stone-600">Review the skill sequence, explore track content, and manage daily assignments.</p>
