@@ -35,155 +35,60 @@ const UpdateListPage: React.FC = () => {
     }
   };
 
-  return (
-    <>
-      <Head>
-        <title>Stay connected | AthleticMind</title>
-        <meta
-          name="description"
-          content="Get thoughtful updates from AthleticMind on mental performance, athlete wellbeing, and building strong minds."
-        />
-        <meta name="theme-color" content="#08251e" />
-        <meta property="og:title" content="Stay connected | AthleticMind" />
-        <meta
-          property="og:description"
-          content="Strong bodies. Strong minds. Get thoughtful updates from AthleticMind."
-        />
-        <link rel="canonical" href="https://theathleticmind.ai/updatelist" />
-      </Head>
-
-      <main className="relative min-h-screen overflow-hidden bg-[#08251e] text-[#f8f3e7]">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div className="absolute -right-48 -top-48 h-[34rem] w-[34rem] rounded-full border border-[#d99a4e]/20" />
-          <div className="absolute -right-28 -top-28 h-[25rem] w-[25rem] rounded-full border border-[#d99a4e]/15" />
-          <div className="absolute inset-x-0 top-0 h-[34rem] bg-gradient-to-b from-[#123b2e]/75 via-[#0b2b22]/35 to-transparent" />
-          <div className="absolute -bottom-64 -left-36 h-[36rem] w-[36rem] rounded-full bg-[#c96e35]/10 blur-3xl" />
-        </div>
-
-        <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-6 pb-8 pt-7 sm:px-10 lg:px-16">
-          <header className="flex items-center justify-between border-b border-white/10 pb-6">
-            <a href="https://theathleticmind.ai" className="inline-flex items-center gap-3" aria-label="AthleticMind home">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#d99a4e]/70 text-lg font-semibold text-[#e8a34e]">
-                AM
-              </span>
-              <span className="text-sm font-semibold tracking-[0.22em] text-[#f8f3e7] sm:text-base">
-                ATHLETICMIND
-              </span>
-            </a>
-            <span className="hidden text-xs font-medium uppercase tracking-[0.18em] text-[#d9cdb5] sm:block">
-              Strong bodies. Strong minds.
-            </span>
-          </header>
-
-          <section className="grid flex-1 items-center gap-14 py-14 lg:grid-cols-[1.1fr_0.9fr] lg:gap-20 lg:py-20">
-            <div className="max-w-2xl">
-              <p className="mb-6 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.24em] text-[#e6a04a]">
-                <span className="h-px w-10 bg-[#e6a04a]" />
-                Stay connected
-              </p>
-              <h1 className="font-serif text-5xl font-semibold leading-[1.04] tracking-[-0.035em] sm:text-6xl lg:text-7xl">
-                Strong bodies.
-                <span className="mt-1 block text-[#e8a34e]">Strong minds.</span>
-              </h1>
-              <p className="mt-7 max-w-xl text-lg leading-8 text-[#e2ddcf] sm:text-xl">
-                Follow the work behind a stronger future for athletes. Get occasional notes on mental performance,
-                wellbeing, and the people and ideas moving the game forward.
-              </p>
-              <div className="mt-9 flex items-center gap-4">
-                <span className="h-px w-12 bg-[#e8a34e]" />
-                <p className="text-sm font-medium text-[#d9cdb5]">No donation required. Just stay in the conversation.</p>
-              </div>
-            </div>
-
-            <div className="relative mx-auto w-full max-w-lg">
-              <div aria-hidden="true" className="absolute -inset-3 rounded-[2rem] border border-[#d99a4e]/25" />
-              <div className="relative rounded-[1.75rem] border border-white/10 bg-[#f8f3e7] p-7 text-[#102c23] shadow-2xl shadow-black/20 sm:p-9">
-                {state === 'success' ? (
-                  <div role="status" aria-live="polite" className="flex min-h-[22rem] flex-col justify-center">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a65c2b]">You’re on the list</p>
-                    <h2 className="mt-4 font-serif text-4xl font-semibold leading-tight">Thanks for staying connected.</h2>
-                    <p className="mt-4 text-base leading-7 text-[#42544b]">
-                      We’ll send occasional AthleticMind updates to your inbox. You can unsubscribe from any email.
-                    </p>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#a65c2b]">AthleticMind updates</p>
-                    <h2 className="mt-3 font-serif text-3xl font-semibold leading-tight sm:text-4xl">
-                      Keep the conversation going.
-                    </h2>
-                    <p className="mt-3 text-base leading-7 text-[#42544b]">
-                      Sign up for occasional updates, stories, and ways to support athlete wellbeing.
-                    </p>
-
-                    <form onSubmit={handleSubmit} className="mt-7 space-y-5">
-                      <div>
-                        <label htmlFor="updates-email" className="mb-2 block text-sm font-semibold">
-                          Email address
-                        </label>
-                        <input
-                          id="updates-email"
-                          name="email"
-                          type="email"
-                          autoComplete="email"
-                          required
-                          value={email}
-                          onChange={(event) => setEmail(event.target.value)}
-                          placeholder="you@example.com"
-                          className="w-full rounded-xl border border-[#c9c5b8] bg-white px-4 py-3.5 text-base text-[#102c23] outline-none transition placeholder:text-[#8b9189] focus:border-[#a65c2b] focus:ring-2 focus:ring-[#a65c2b]/20"
-                        />
-                      </div>
-
-                      <label className="flex cursor-pointer items-start gap-3 text-sm leading-6 text-[#42544b]">
-                        <input
-                          type="checkbox"
-                          required
-                          checked={consented}
-                          onChange={(event) => setConsented(event.target.checked)}
-                          className="mt-1 h-4 w-4 shrink-0 accent-[#174434]"
-                        />
-                        <span>
-                          I agree to receive occasional email updates from AthleticMind. I can unsubscribe at any time.
-                          Read our <a href="/privacy" className="font-semibold underline underline-offset-2">Privacy Policy</a>.
-                        </span>
-                      </label>
-
-                      {state === 'error' && (
-                        <p role="alert" className="text-sm font-medium text-red-800">{error}</p>
-                      )}
-
-                      <button
-                        type="submit"
-                        disabled={state === 'submitting'}
-                        className="flex w-full items-center justify-center rounded-full bg-[#10372b] px-6 py-4 text-sm font-bold uppercase tracking-[0.12em] text-[#f8f3e7] transition hover:bg-[#194d3a] focus:outline-none focus:ring-2 focus:ring-[#a65c2b] focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
-                      >
-                        {state === 'submitting' ? 'Adding you…' : 'Get AthleticMind updates'}
-                      </button>
-                    </form>
-                    <p className="mt-5 text-center text-xs text-[#647268]">
-                      Your inbox, your choice. No spam and no donation required.
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <footer className="flex flex-col gap-5 border-t border-white/10 pt-6 text-sm text-[#d9cdb5] sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs uppercase tracking-[0.14em] text-[#bcb8a9]">Built for athletes. Shaped by practice.</p>
-            <nav aria-label="Partner organizations" className="flex flex-wrap gap-x-6 gap-y-2">
-              <a className="transition hover:text-[#e8a34e]" href="https://alfreedaarise.org" target="_blank" rel="noreferrer">
-                Alfreeda Goff Foundation <span aria-hidden="true">↗</span>
-              </a>
-              <a className="transition hover:text-[#e8a34e]" href="https://48andforward.org" target="_blank" rel="noreferrer">
-                48 &amp; Forward <span aria-hidden="true">↗</span>
-              </a>
-            </nav>
-          </footer>
-        </div>
-      </main>
-    </>
-  );
+  return (<>
+<Head><title>Stay connected | AthleticMind</title><meta name="description" content="Get occasional AthleticMind updates on mental skills, athlete wellbeing, and ways to get involved. No donation required." /><meta name="theme-color" content="#F3EDE3" /><link rel="canonical" href="https://theathleticmind.ai/updatelist" /></Head>
+<main className="updates"><div className="shell"><header className="top"><a className="wordmark" href="https://theathleticmind.ai" aria-label="AthleticMind home">AthleticMind</a><a className="back" href="https://theathleticmind.ai">Explore AthleticMind ↗</a></header>
+<section className="hero">
+<div><p className="eyebrow">Stay connected</p><h1>Strong bodies.<br />Strong <em>minds.</em></h1>
+<p className="intro">Mental skills. Real support. Life beyond the game. Get occasional AthleticMind updates and ways to support athletes as whole people.</p>
+<figure className="scene"><img src="https://theathleticmind.ai/brand-guide/images/s06-support.jpg" alt="Sculpted clay athlete talking with a clinician seated at equal eye level." /><figcaption><span>Room to grow.<br />People to grow with.</span><em>Shaped by practice.</em></figcaption></figure></div>
+<section className="signup" aria-label="Join the AthleticMind email list">{state === 'success' ? <div className="success" role="status" aria-live="polite"><p className="check" aria-hidden="true">✓</p><h2>You’re on the list.</h2><p className="copy">Thanks for staying connected. You’ll receive occasional AthleticMind updates, with a link to unsubscribe in every email.</p></div> : <><p className="eyebrow">AthleticMind updates</p><h2>Keep in touch.</h2><p className="copy">Follow the work, hear what’s next, and find ways to get involved. No donation required.</p>
+<form onSubmit={handleSubmit} aria-busy={state === 'submitting'}>
+<label className="email-label" htmlFor="updates-email">Email address<input className="email-input" id="updates-email" name="email" type="email" autoComplete="email" required maxLength={254} value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" /></label>
+<label className="consent"><input type="checkbox" required checked={consented} onChange={event => setConsented(event.target.checked)} /><span>I agree to receive email updates from AthleticMind. I can unsubscribe at any time. <a href="https://theathleticmind.ai/privacy">Privacy policy</a>.</span></label>
+{state === 'error' && <p className="error" role="alert"><span aria-hidden="true">! </span>{error}</p>}
+<button type="submit" disabled={state === 'submitting'}>{state === 'submitting' ? 'Adding you…' : 'Get updates'}</button></form><p className="small">An occasional note. You can leave the list whenever you choose.</p></>}</section>
+</section><footer className="partners"><div><p className="eyebrow">Meet our partners</p><p>Learn more about the organizations alongside us.</p></div><nav className="partner-links" aria-label="Partner organizations"><a href="https://alfreedaarise.org" target="_blank" rel="noopener noreferrer">Alfreeda Goff Foundation ↗</a><a href="https://48andforward.org" target="_blank" rel="noopener noreferrer">48 &amp; Forward ↗</a></nav></footer></div></main><style jsx>{`
+.updates{min-height:100vh;background:#F3EDE3;color:#193E33;font-family:Arial,Helvetica,sans-serif}
+.updates *{box-sizing:border-box}
+.shell{max-width:1280px;margin:auto;padding:0 48px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:32px;padding:32px 0;border-bottom:1px solid #827A6D55}
+.wordmark{font:bold 28px Georgia,'Times New Roman',serif;letter-spacing:-1px;color:#000;text-decoration:none;padding:18px 0}
+.back{font-size:14px;color:#193E33;text-underline-offset:5px;min-height:44px;display:flex;align-items:center}
+.hero{display:grid;grid-template-columns:1.15fr 1fr;gap:64px;padding:56px 0 48px;align-items:center}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin:0 0 20px}
+h1{font:800 clamp(42px,4.8vw,68px)/1.04 Arial,Helvetica,sans-serif;letter-spacing:-2.4px;margin:0 0 24px}
+h1 em{font-family:Georgia,'Times New Roman',serif;font-weight:400}
+.intro{font-size:18px;line-height:1.55;max-width:48ch;margin:0 0 28px}
+.scene{margin:0;background:#193E33;border-radius:6px;overflow:hidden}
+.scene img{display:block;width:100%;height:auto}
+.scene figcaption{display:flex;justify-content:space-between;gap:16px;padding:18px 22px;color:#F3EDE3;font-size:13px;line-height:1.5}
+.scene figcaption em{font-family:Georgia,serif;font-size:17px}
+.signup{background:#fff;padding:36px;border:1px solid #827A6D44;border-radius:8px}
+h2{font:bold 32px/1.15 Georgia,'Times New Roman',serif;letter-spacing:-.7px;margin:0 0 16px}
+.copy{font-size:17px;line-height:1.55;margin:0 0 24px}
+form{display:grid;gap:20px}
+.email-label{font-size:14px;font-weight:700;display:grid;gap:10px}
+.email-input{font:17px Arial,Helvetica,sans-serif;width:100%;min-height:54px;border:1px solid #827A6D;border-radius:4px;padding:14px;background:#fff;color:#193E33}
+.email-input::placeholder{color:#54655e;opacity:1}
+.consent{display:flex;align-items:flex-start;gap:12px;font-size:14px;line-height:1.55;min-height:44px;cursor:pointer}
+.consent input{accent-color:#193E33;flex-shrink:0;width:18px;height:18px;margin:2px 0 0}
+.consent a{color:#193E33;text-underline-offset:3px}
+button{font:bold 16px Arial,Helvetica,sans-serif;background:#D4EE58;color:#193E33;min-height:54px;border:0;border-radius:4px;padding:15px 24px;cursor:pointer}
+button:hover{box-shadow:inset 0 0 0 2px #193E33}
+button:disabled{opacity:.65;cursor:wait}
+.updates a:focus-visible,.updates input:focus-visible,.updates button:focus-visible{outline:3px solid #193E33;outline-offset:4px}
+.small{font-size:13px;line-height:1.6;margin:18px 0 0}
+.error{color:#6B2939;font-size:14px;line-height:1.5;margin:0}
+.success{padding:24px 0}
+.check{font-size:28px;margin:0 0 20px}
+.partners{display:grid;grid-template-columns:1fr auto;align-items:center;gap:24px;border-top:1px solid #827A6D55;padding:28px 0 36px}
+.partners .eyebrow{margin:0 0 8px}
+.partners p{font-size:14px;line-height:1.5;margin:0}
+.partner-links{display:flex;gap:24px;flex-wrap:wrap}
+.partner-links a{font-size:15px;font-weight:700;color:#193E33;text-underline-offset:5px;min-height:44px;display:inline-flex;align-items:center}
+@media(max-width:900px){.shell{padding:0 24px}.hero{gap:32px}.signup{padding:26px}h1{font-size:48px}.partners{grid-template-columns:1fr}}
+@media(max-width:680px){.top{padding:16px 0;gap:16px}.wordmark{font-size:25px}.back{font-size:13px}.hero{grid-template-columns:1fr;padding:32px 0;gap:28px}h1{font-size:44px;letter-spacing:-1.7px}.intro{font-size:17px}.signup{padding:26px 22px}.scene figcaption{padding:14px 18px}.partner-links{gap:6px 24px}}
+`}</style></>);
 };
-
 export default UpdateListPage;
