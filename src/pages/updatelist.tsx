@@ -37,7 +37,7 @@ const UpdateListPage: React.FC = () => {
 
   return (<>
 <Head><title>Stay connected | AthleticMind</title><meta name="description" content="Get occasional AthleticMind updates on mental skills, athlete wellbeing, and ways to get involved. No donation required." /><meta name="theme-color" content="#F3EDE3" /><link rel="canonical" href="https://theathleticmind.ai/updatelist" /></Head>
-<main className="updates"><div className="shell"><header className="top"><p className="presenters"><a href="https://alfreedaarise.org" target="_blank" rel="noopener noreferrer">Alfreeda Goff Foundation</a><span>and</span><a href="https://48andforward.org" target="_blank" rel="noopener noreferrer">48 &amp; Forward</a></p><span className="present">present</span><a className="wordmark" href="https://theathleticmind.ai" aria-label="AthleticMind home">AthleticMind</a></header>
+<main className="updates"><div className="shell"><header className="top"><p className="presenters"><a href="https://alfreedaarise.org" target="_blank" rel="noopener noreferrer">Alfreeda Goff Foundation</a><span>and</span><a href="https://48andforward.org" target="_blank" rel="noopener noreferrer">48 &amp; Forward</a></p><span className="present">present</span><a className="wordmark" href="https://theathleticmind.ai" aria-label="AthleticMind home">AthleticMind</a><p className="initiative">An initiative supporting athletes in sport and through life beyond competition.</p></header>
 <section className="hero">
 <div><h1>Strong bodies.<br />Strong <em>minds.</em></h1><p className="intro">AthleticMind helps athletes build mental skills and find support, in sport and in life. Daily practice develops focus, confidence, and ways to handle pressure.</p>
 
@@ -48,7 +48,7 @@ const UpdateListPage: React.FC = () => {
 <label className="consent"><input type="checkbox" required checked={consented} onChange={event => setConsented(event.target.checked)} /><span>Email me AthleticMind updates. Unsubscribe anytime. <a href="https://theathleticmind.ai/privacy">Privacy policy</a>.</span></label>
 {state === 'error' && <p className="error" role="alert"><span aria-hidden="true">! </span>{error}</p>}
 <button type="submit" disabled={state === 'submitting'}>{state === 'submitting' ? 'Adding you…' : 'Join the email list'}</button></form></>}</section>
-</section></div></main><style jsx>{`
+</section><footer className="mission" aria-labelledby="mission-title"><p className="eyebrow">Our three pillars</p><h2 id="mission-title">For every chapter of an athlete’s life.</h2><div className="pillars"><section><h3>In sport.</h3><p>Build mental skills, confidence, and wellbeing through the demands of competition.</p></section><section><h3>Beyond competition.</h3><p>Navigate the transition from competitive sport to life’s next chapter with purpose and support.</p></section><section><h3>Thriving in what’s next.</h3><p>Grow into an identity beyond sport, with meaningful connections and new possibilities.</p></section></div><p className="nonprofit">The Alfreeda Goff Foundation is a 501(c)(3) nonprofit organization.</p></footer></div></main><style jsx>{`
 .updates{min-height:100vh;background:#F3EDE3;color:#193E33;font-family:Arial,Helvetica,sans-serif}
 .updates *{box-sizing:border-box}
 .shell{max-width:1280px;margin:auto;padding:0 48px}
@@ -87,6 +87,16 @@ button:disabled{opacity:.65;cursor:wait}
 .check{font-size:28px;margin:0 0 20px}
 @media(max-width:900px){.shell{padding:0 24px}.hero{gap:32px}.signup{padding:26px}h1{font-size:48px}}
 @media(max-width:680px){.top{padding:24px 0;gap:8px}.presenters{font-size:15px;gap:0 10px}.wordmark{font-size:32px}.back{font-size:13px}.hero{grid-template-columns:1fr;padding:32px 0;gap:28px}h1{font-size:44px;letter-spacing:-1.7px}.intro{font-size:17px}.signup{padding:26px 22px}.scene figcaption{padding:14px 18px}}
+
+.initiative{max-width:56ch;font-size:16px;line-height:1.5;margin:0}
+.mission{border-top:1px solid #827A6D55;padding:32px 0 36px}
+.mission .eyebrow{margin-bottom:12px}
+.mission h2{font-size:28px;margin-bottom:28px}
+.pillars{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:32px}
+.pillars h3{font:bold 22px/1.2 Georgia,'Times New Roman',serif;margin:0 0 12px}
+.pillars p{font-size:16px;line-height:1.55;margin:0;max-width:36ch}
+.nonprofit{font-size:13px;line-height:1.5;margin:28px 0 0;padding-top:20px;border-top:1px solid #827A6D55}
+@media(max-width:680px){.pillars{grid-template-columns:1fr;gap:24px}.mission h2{font-size:26px}.initiative{font-size:15px}}
 `}</style></>);
 };
 export default UpdateListPage;
