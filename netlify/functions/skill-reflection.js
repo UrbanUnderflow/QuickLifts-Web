@@ -33,7 +33,7 @@ async function authorize(app, event, preview) {
 async function ask(input) {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${process.env.OPEN_AI_SECRET_KEY}`},signal:AbortSignal.timeout(20000),
-    body:JSON.stringify({model:'gpt-4o-mini',store:false,temperature:0.4,max_tokens:180,messages:[{role:'system',content:contract.PROMPT},{role:'user',content:JSON.stringify({practice:input.context,conversation:input.messages,task:'Ask the next reflection question.'})}]}),
+    body:JSON.stringify({model:'gpt-4o-mini',store:false,temperature:0.4,max_tokens:180,messages:[{role:'system',content:contract.PROMPT},{role:'user',content:JSON.stringify({practice:contract.conversationalContext(input.context),conversation:input.messages,task:'Ask the next reflection question.'})}]}),
   });
   if (!response.ok) throw new Error('model unavailable');
   return (await response.json()).choices?.[0]?.message?.content?.trim();
@@ -66,6 +66,7 @@ exports.handler = async event => {
       const storage=await assessNoraStorage(input.messages.map(m=>({content:m.content,isFromUser:m.role==='user'})));
       if(storage.restricted) return reply(200,{reply:'Let’s leave this out of a practice journal. You can keep the practice completion without saving these words.',stopped:true,preview:input.preview});
     }
+    if(!input.messages.length) return reply(200,{reply:contract.openingQuestion(input.context),preview:input.preview,version:contract.VERSION});
     if(input.action==='draft') return reply(200,{draft:contract.makeDraft(input.messages),preview:input.preview,version:contract.VERSION});
     if(input.messages.length>=8) return reply(200,{reply:'You can review your words now and choose what to keep.',ready:true,preview:input.preview});
     for(let attempt=0;attempt<2;attempt++) {

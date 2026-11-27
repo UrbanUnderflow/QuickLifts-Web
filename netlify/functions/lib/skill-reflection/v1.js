@@ -30,4 +30,13 @@ function makeDraft(messages) {
   return { text: messages.filter(m => m.role === 'user').map(m => m.content).join('\n\n'), source: 'athlete_words', version: VERSION };
 }
 function validReply(text) { return typeof text === 'string' && text.trim().length > 0 && text.length <= 700 && (text.match(/\?/g) || []).length === 1 && !/\b(cue|signal)\b|—/i.test(text); }
-module.exports = { VERSION, PROMPT, validate, makeDraft, validReply };
+function conversationalContext(context) {
+  const skill = /cue word anchoring/i.test(context.skill) ? 'Your reminder word' : /\b(cue|signal)\b/i.test(context.skill) ? 'Your skill' : context.skill;
+  return {...context,skill};
+}
+function openingQuestion(context) {
+  if(context.phase==='use') return 'What happened when you tried the action you chose?';
+  if(context.phase==='learn') return 'When could you try the action you chose?';
+  return 'What was practicing or imagining the action like for you?';
+}
+module.exports = { VERSION, PROMPT, validate, makeDraft, validReply, conversationalContext, openingQuestion };
