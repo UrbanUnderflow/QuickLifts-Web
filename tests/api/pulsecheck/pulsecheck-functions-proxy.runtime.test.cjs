@@ -46,6 +46,33 @@ function loadProxyModule() {
   });
 }
 
+test('native skill reflection forwards its authenticated request and preserves the handler response', async () => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  const payload = { sessionId: '12345678-1234-4234-8234-123456789abc', preview: true, action: 'draft', messages: [] };
+  global.fetch = async (url, options) => {
+    calls.push({ url: String(url), options });
+    return { status: 403, headers: new Headers({ 'content-type': 'application/json', 'cache-control': 'private, no-store' }),
+      async arrayBuffer() { return Buffer.from('{"error":"Preview access required."}'); } };
+  };
+  try {
+    await withPatchedEnv({ NODE_ENV: 'production', NEXT_PUBLIC_SITE_URL: 'https://fitwithpulse.ai' }, async () => {
+      const { default: handler } = loadProxyModule();
+      const response = createResponseRecorder();
+      await handler({ method: 'POST', query: { name: 'skill-reflection' }, body: payload,
+        headers: { authorization: 'Bearer synthetic-native-token', 'x-pulsecheck-firebase-mode': 'dev' } }, response);
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].url, 'https://fitwithpulse.ai/.netlify/functions/skill-reflection');
+      assert.equal(calls[0].options.headers.get('authorization'), 'Bearer synthetic-native-token');
+      assert.equal(calls[0].options.headers.get('x-pulsecheck-firebase-mode'), 'dev');
+      assert.equal(calls[0].options.body, JSON.stringify(payload));
+      assert.equal(response.statusCode, 403);
+      assert.equal(String(response.body), '{"error":"Preview access required."}');
+      assert.equal(response.headers['cache-control'], 'private, no-store');
+    });
+  } finally { global.fetch = originalFetch; }
+});
+
 test('same-deployment phone proxies do not forward a candidate session to the published release or caller host', async () => {
   const originalFetch = global.fetch;
   const calls = [];

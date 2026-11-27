@@ -271,10 +271,11 @@ test('web athlete chat callers attach Firebase bearer tokens and canonical user 
     path.join(repoRoot, 'src/pages/PulseCheckChat.tsx'),
     'utf8'
   );
-  const componentSource = fs.readFileSync(
-    path.join(repoRoot, 'src/components/pulsecheck/Chat.tsx'),
-    'utf8'
-  );
+  // Native/backend checkpoints can ship independently of the companion UI move.
+  const relocatedChat = path.join(repoRoot, 'src/features/pulsecheck/nora/screens/NoraChatScreen.tsx');
+  const componentSource = fs.readFileSync(fs.existsSync(relocatedChat)
+    ? relocatedChat
+    : path.join(repoRoot, 'src/components/pulsecheck/Chat.tsx'), 'utf8');
 
   assert.match(pageSource, /firebaseUser\.uid !== currentUser\.id/);
   assert.match(pageSource, /Authorization: `Bearer \$\{idToken\}`/);
@@ -1173,6 +1174,7 @@ test('downgrades benign performance stress escalation requests before record cre
     assert.equal(body.escalation.tier, 0);
     assert.equal(body.escalation.shouldEscalate, false);
     assert.equal(body.escalation.classificationFamily, 'performance_support');
+    assert.equal(body.conversationLane, 'performance');
     assert.equal(body.escalation.incident.scope, 'same_conversation');
     assert.equal(body.escalation.incident.family, 'performance_support');
     assert.equal(body.escalation.incident.status, 'open');
@@ -1295,6 +1297,7 @@ test('elevates loss-of-function language into a true care escalation', async () 
     assert.equal(response.statusCode, 200);
     assert.equal(body.escalation.tier, 2);
     assert.equal(body.escalation.classificationFamily, 'care_escalation');
+    assert.equal(body.conversationLane, 'clinical_care');
     assert.equal(body.escalation.requiresClinicalHandoff, true);
     assert.equal(body.escalationOutcome.escalationRecordId, 'escalation-1');
     assert.equal(body.escalationOutcome.consentRequired, true);
@@ -1441,6 +1444,7 @@ test('dedupes same-conversation escalation records within the merge window', asy
     assert.match(secondBody.assistantMessage, /988/);
     assert.equal(secondBody.escalation.tier, 3);
     assert.equal(secondBody.escalation.classificationFamily, 'critical_safety');
+    assert.equal(secondBody.conversationLane, 'critical_safety');
     assert.equal(secondBody.escalation.incident.scope, 'same_conversation');
     assert.equal(secondBody.escalation.incident.family, 'critical_safety');
     assert.equal(secondBody.escalation.incident.status, 'open');
@@ -1653,8 +1657,8 @@ test('legacy raw journal sharing cannot bypass the saved entry permission flow',
   assert.equal(runtime.firestoreReads(), 0);
 });
 
-function loadVoiceTurnRuntime() {
-  const fixture = createEscalationFlowDb({ conversations: [{ id: 'voice-turn', userId: 'athlete-1', messages: [] }] });
+function loadVoiceTurnRuntime(options = {}) {
+  const fixture = createEscalationFlowDb({ conversations: [{ id: 'voice-turn', userId: 'athlete-1', messages: [] }], ...options });
   delete require.cache[chatPath];
   require.cache[configPath] = { id: configPath, filename: configPath, loaded: true, exports: {
     initializeFirebaseAdmin: () => {},
@@ -1671,18 +1675,157 @@ const voiceTurnRequest = { httpMethod: 'POST', headers: { authorization: 'Bearer
 }) };
 const modelReply = content => ({ ok: true, status: 200, statusText: 'OK', headers: new Map(), json: async () => ({ choices: [{ message: { content } }] }) });
 
-async function withVoiceTurnTransport(transport, run) {
+async function withVoiceTurnTransport(transport, run, options = {}) {
   const previousFetch = global.fetch;
   const previousKey = process.env.OPEN_AI_SECRET_KEY;
   global.fetch = transport;
   process.env.OPEN_AI_SECRET_KEY = 'test-openai-key';
-  try { await run(loadVoiceTurnRuntime()); }
+  try { await run(loadVoiceTurnRuntime(options)); }
   finally {
     global.fetch = previousFetch;
     if (previousKey === undefined) delete process.env.OPEN_AI_SECRET_KEY;
     else process.env.OPEN_AI_SECRET_KEY = previousKey;
   }
 }
+
+test('native coach selection capability waits for confirmation for primary, sole, named and follow-up coaches', async () => {
+  for (const scenario of [
+    { primaryCoachUserId: 'coach-1', connectedCoaches: ['coach-1', 'coach-2'], message: 'Send this to my coach.' },
+    { connectedCoaches: ['coach-1'], message: 'Send this to my coach.' },
+    { connectedCoaches: ['coach-1', 'coach-2'], message: 'Send this to Coach Alex.' },
+    { connectedCoaches: ['coach-1', 'coach-2'], message: 'Coach Alex', selectionQuestion: 'Which coach should I send this to?' },
+    { connectedCoaches: ['coach-1', 'coach-2'], message: 'Coach Alex', selectionQuestion: 'Which coach should I send this summary to: Coach Alex, Coach Blair?' },
+  ]) {
+    let modelCalls = 0;
+    await withVoiceTurnTransport(async (_url, options) => {
+      modelCalls += 1;
+      const prompt = JSON.parse(options.body).messages[0].content;
+      if (prompt.startsWith('Classify storage')) return modelReply('{"decision":"ordinary"}');
+      if (prompt.startsWith('You are a clinical safety classifier')) return modelReply('{"tier":0,"category":"general","confidence":0.99,"shouldEscalate":false}');
+      throw new Error('Selection must not invoke generation or an external delivery provider.');
+    }, async ({ handler, db }) => {
+      const collection = db.collection.bind(db);
+      const deliveryAccesses = [];
+      db.collection = name => {
+        if (/coach-athlete|notification|message|mail|sms/.test(name)) deliveryAccesses.push(name);
+        return collection(name);
+      };
+      const response = await handler({
+        ...voiceTurnRequest,
+        body: JSON.stringify({ message: scenario.message, conversationId: 'voice-turn',
+          recentMessages: [
+            { isFromUser: true, content: 'I want to discuss my serving cue.' },
+            ...(scenario.selectionQuestion ? [{ isFromUser: false, content: scenario.selectionQuestion }] : []),
+          ],
+          clientCapabilities: { noraCoachHandoffSelection: true } }),
+      });
+      const body = JSON.parse(response.body);
+      assert.equal(response.statusCode, 200, response.body);
+      assert.equal(body.conversationLane, 'coach_handoff');
+      assert.equal(body.coachHandoff.status, 'needs_coach_selection');
+      assert.deepEqual(body.coachHandoff.coachOptions.map(option => option.coachId), scenario.connectedCoaches);
+      assert.match(body.assistantMessage, /which coach/i);
+      assert.deepEqual(deliveryAccesses, []);
+      assert.equal(modelCalls, 2, 'Storage and live safety still run before selection.');
+    }, { userDocs: [
+      { id: 'athlete-1', displayName: 'Fixture Athlete', ...scenario },
+      { id: 'coach-1', displayName: 'Coach Alex' },
+      { id: 'coach-2', displayName: 'Coach Blair' },
+    ] });
+  }
+});
+
+test('native selection follow-up recognition does not enable delivery for existing clients', async () => {
+  await withVoiceTurnTransport(async (_url, options) => {
+    const prompt = JSON.parse(options.body).messages[0].content;
+    if (prompt.startsWith('Classify storage')) return modelReply('{"decision":"ordinary"}');
+    if (prompt.startsWith('You are a clinical safety classifier')) return modelReply('{"tier":0,"category":"general","confidence":0.99,"shouldEscalate":false}');
+    return modelReply('We can leave it here.');
+  }, async ({ handler, db }) => {
+    const collection = db.collection.bind(db);
+    const deliveryAccesses = [];
+    db.collection = name => {
+      if (/coach-athlete|notification|message|mail|sms/.test(name)) deliveryAccesses.push(name);
+      return collection(name);
+    };
+    const response = await handler({
+      ...voiceTurnRequest,
+      body: JSON.stringify({ message: 'Do not send it.', conversationId: 'voice-turn',
+        recentMessages: [{ isFromUser: false, content: 'Which coach should I send this summary to: Coach Alex?' }] }),
+    });
+    const body = JSON.parse(response.body);
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(body.coachHandoff, null);
+    assert.deepEqual(deliveryAccesses, []);
+  }, { userDocs: [
+    { id: 'athlete-1', connectedCoaches: ['coach-1'], primaryCoachUserId: 'coach-1' },
+    { id: 'coach-1', displayName: 'Coach Alex' },
+  ] });
+});
+
+test('native coach selection capability cannot override the classified safety lane', async () => {
+  await withVoiceTurnTransport(async (_url, options) => {
+    const prompt = JSON.parse(options.body).messages[0].content;
+    if (prompt.startsWith('Classify storage')) return modelReply('{"decision":"ordinary"}');
+    if (prompt.startsWith('You are a clinical safety classifier')) return modelReply('{"tier":3,"category":"safety","confidence":0.99,"shouldEscalate":true}');
+    throw new Error('A safety override must not invoke ordinary generation or coach delivery.');
+  }, async ({ handler }) => {
+    const response = await handler({
+      ...voiceTurnRequest,
+      body: JSON.stringify({ message: 'Send this to my coach. I cannot stay safe and need help.',
+        conversationId: 'voice-turn', clientCapabilities: { noraCoachHandoffSelection: true } }),
+    });
+    const body = JSON.parse(response.body);
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(body.conversationLane, 'critical_safety');
+    assert.equal(body.coachHandoff, null);
+    assert.match(body.assistantMessage, /988/);
+  }, { userDocs: [
+    { id: 'athlete-1', connectedCoaches: ['coach-1'], primaryCoachUserId: 'coach-1' },
+    { id: 'coach-1', displayName: 'Coach Alex' },
+  ] });
+});
+
+test('native confirmation preserves text safety and care boundaries when model classifiers return ordinary', async () => {
+  for (const scenario of [
+    { message: 'Send this to my coach. I cannot stay safe and need help.', lane: 'critical_safety', response: /988/ },
+    { message: 'Send this to my coach. I need therapy.', lane: 'clinical_care', response: /licensed mental-health support/ },
+  ]) {
+    let safetyCalls = 0;
+    await withVoiceTurnTransport(async (_url, options) => {
+      const prompt = JSON.parse(options.body).messages[0].content;
+      if (prompt.startsWith('Classify storage')) return modelReply('{"decision":"ordinary"}');
+      if (prompt.startsWith('You are a clinical safety classifier')) {
+        safetyCalls += 1;
+        return modelReply('{"tier":0,"category":"general","confidence":0.99,"shouldEscalate":false}');
+      }
+      throw new Error('Text safety boundaries must not invoke ordinary generation or coach delivery.');
+    }, async ({ handler, db }) => {
+      const collection = db.collection.bind(db);
+      const deliveryAccesses = [];
+      db.collection = name => {
+        if (/coach-athlete|notification|message|mail|sms/.test(name)) deliveryAccesses.push(name);
+        return collection(name);
+      };
+      const response = await handler({
+        ...voiceTurnRequest,
+        body: JSON.stringify({ message: scenario.message, conversationId: 'voice-turn',
+          recentMessages: [{ isFromUser: false, content: 'Which coach should I send this summary to: Coach Alex?' }],
+          clientCapabilities: { noraCoachHandoffSelection: true } }),
+      });
+      const body = JSON.parse(response.body);
+      assert.equal(response.statusCode, 200, response.body);
+      assert.equal(safetyCalls, 1, 'The model actually returned a conflicting ordinary classification.');
+      assert.equal(body.conversationLane, scenario.lane);
+      assert.equal(body.coachHandoff, null);
+      assert.match(body.assistantMessage, scenario.response);
+      assert.deepEqual(deliveryAccesses, []);
+    }, { userDocs: [
+      { id: 'athlete-1', connectedCoaches: ['coach-1'], primaryCoachUserId: 'coach-1' },
+      { id: 'coach-1', displayName: 'Coach Alex' },
+    ] });
+  }
+});
 
 test('voice turn overlaps storage and safety checks and waits for both before drafting', async () => {
   let releaseStorage;

@@ -102,3 +102,39 @@ The adapter invokes the production identity and submission validators. Its final
 baseline write is an explicitly synthetic local ledger, not production API or
 provider delivery proof. Restart a stale local adapter after active jobs finish
 before running this contract; missing account identity must fail this smoke.
+
+### Native protected-save and reflection contracts
+
+`native-contract-adapter.cjs` executes the current `nora-save-conversation` and
+`skill-reflection` handlers with emulator authentication/Firestore and the real
+storage, authorization, closure and reflection contracts. Model transport is an
+explicit deterministic test double; no provider or external delivery is used.
+The health response records this evidence mode and a hash of the adapter plus
+loaded handler sources. This is service-contract coverage, separate from native
+UI evidence and production-model behavior.
+
+Protected saves support native session keys and independent Firestore readback.
+Reflection supports only transient `preview: true` requests and retains the
+handler's verified-email/admin-registry check. Use a manifest-owned synthetic
+registry document for the preview account. Drafts contain the athlete's exact
+words; this route does not write journals. The full chat, session and journal
+routes remain unsupported and return an error.
+
+`POST /__testlab/fault` with `{uid, mode: "fail-skill-reflection-once"}` rejects
+one preview request so native tests can verify preserved input and retry.
+`/__testlab/receipts?uid=...` includes conversation IDs, session keys, message
+counts and storage status without transcript content.
+
+Run the contract tests against the explicitly selected local services:
+
+```sh
+GCLOUD_PROJECT=demo-pulsecheck-ui \
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 \
+FIRESTORE_EMULATOR_HOST=127.0.0.1:18080 \
+ATHLETE_LAB_ORIGIN=http://127.0.0.1:18787 \
+node --test tests/api/pulsecheck/native-contract-adapter.emulator.test.cjs
+```
+
+The emulator config and server port must match those values. Missing services
+fail the tests. Ports 18080/18787 are an example for keeping an unrelated 8080
+service intact; the existing default remains 8080/8787. Browser Auth uses 9099.

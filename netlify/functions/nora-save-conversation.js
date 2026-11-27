@@ -2,6 +2,7 @@ const {accountOpenSet} = require('./lib/account-closure-guard');
 const { getFirebaseAdminApp, headers } = require('./config/firebase');
 const {runtimeHelpers:{verifyPulseCheckCaller}} = require('./pulsecheck-chat');
 const {assessNoraStorage,safeTranscript} = require('./utils/noraStoragePolicy');
+const validSessionKey = value => typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,256}$/.test(value);
 exports.handler = async event => {
   if(event.httpMethod==='OPTIONS') return {statusCode:200,headers,body:''};
   if(event.httpMethod!=='POST') return {statusCode:405,headers,body:'{}'};
@@ -11,6 +12,9 @@ exports.handler = async event => {
     const input=JSON.parse(event.body||'{}');
     const messages=input.messages;
     if(!Array.isArray(messages)||messages.length>300||messages.some(m=>typeof m.content!=='string'||m.content.length>20000)||String(event.body).length>200000) return {statusCode:400,headers,body:JSON.stringify({error:'Conversation is too large or invalid.'})};
+    const hasSessionKey=input.sessionKey!=null;
+    const sessionKey=typeof input.sessionKey==='string'?input.sessionKey.trim():input.sessionKey;
+    if(hasSessionKey&&!validSessionKey(sessionKey)) return {statusCode:400,headers,body:JSON.stringify({error:'Conversation is too large or invalid.'})};
     const db=app.firestore();
     const id=typeof input.id==='string'&&/^[\w-]{1,128}$/.test(input.id)?input.id:null;
     const ref=id?db.collection('conversations').doc(id):db.collection('conversations').doc();
@@ -20,6 +24,10 @@ exports.handler = async event => {
     const storagePolicy=await assessNoraStorage({previous:prior,input});
     const normalized=messages.map(m=>({id:typeof m.id==='string'&&/^[\w-]{1,128}$/.test(m.id)?m.id:ref.id,content:m.content,isFromUser:m.isFromUser===true,timestamp:Number.isFinite(m.timestamp)?m.timestamp:Date.now()/1000,chatActions:(prior.messages||[]).find(saved=>saved.id===m.id)?.chatActions||[]}));
     const safeState={};
+    // Native history resolves this owner-scoped identifier. Older clients omit it;
+    // a transcript replacement must not erase an existing valid history key.
+    if(hasSessionKey) safeState.sessionKey=sessionKey;
+    else if(validSessionKey(prior.sessionKey)) safeState.sessionKey=prior.sessionKey;
     if([0,1,2,3].includes(prior.escalationTier)) safeState.escalationTier=prior.escalationTier;
     if(typeof prior.isInSafetyMode==='boolean') safeState.isInSafetyMode=prior.isInSafetyMode;
     if(['active','resolved','pending'].includes(prior.escalationStatus)) safeState.escalationStatus=prior.escalationStatus;

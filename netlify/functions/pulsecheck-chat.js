@@ -2647,7 +2647,7 @@ exports.handler = async (event, context) => {
     // Detect response context
     const responseContext = classifyResponseContext(message, lastNoraResponseLength);
     const requestedLane = classifyNoraConversationLane(message);
-    const conversationLane = requestedLane === NoraConversationLane.CriticalSafety
+    let conversationLane = requestedLane === NoraConversationLane.CriticalSafety
       || escalation.classificationFamily === EscalationClassificationFamily.CriticalSafety
       ? NoraConversationLane.CriticalSafety
       : escalation.classificationFamily === EscalationClassificationFamily.CareEscalation || escalation.requiresClinicalHandoff
@@ -2896,13 +2896,15 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
       }
     }
 
-    const awaitingCoachHandoffSelection = (recentMessages || [])
+    const priorCoachSelectionPrompt = (recentMessages || [])
       .slice()
       .reverse()
       .find((entry) => entry && !entry.isFromUser && normalizeScopeString(entry.content))
       ?.content
-      ?.toLowerCase()
-      ?.includes('which coach should i send this to') === true;
+      ?.toLowerCase() || '';
+    const awaitingCoachHandoffSelection = priorCoachSelectionPrompt.includes('which coach should i send this to')
+      || (clientCapabilities?.noraCoachHandoffSelection === true
+        && priorCoachSelectionPrompt.includes('which coach should i send this summary to'));
 
     if (!journalAnalysis && !storagePolicy.restricted && !handledOnboarding && (isCoachIdentityQuestion(message) || isCoachHandoffRequest(message) || awaitingCoachHandoffSelection)) {
       const coachContacts = await loadAthleteCoachContacts(db, userId, userDataForPrefs);
@@ -2932,7 +2934,9 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
           });
           const targetCoach = namedCoach || primaryCoach || (coachEligibleContacts.length === 1 ? coachEligibleContacts[0] : null);
 
-          if (!targetCoach) {
+          // Native selection cards retain their explicit confirmation step even
+          // when an authorized primary/named coach can already be resolved.
+          if (!targetCoach || clientCapabilities?.noraCoachHandoffSelection === true) {
             const optionsText = buildCoachOptionsText(coachEligibleContacts);
             assistantMessage = optionsText
               ? `Which coach should I send this summary to: ${optionsText}?`
@@ -2965,6 +2969,12 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
               });
             assistantMessage = coachHandoffOutcome.assistantMessage;
             handledOnboarding = true;
+          }
+          // A coach-name follow-up may classify as ordinary text in isolation.
+          // Review and report the workflow actually handled after safety checks.
+          if (conversationLane !== NoraConversationLane.CriticalSafety
+            && conversationLane !== NoraConversationLane.ClinicalCare) {
+            conversationLane = NoraConversationLane.CoachHandoff;
           }
         }
       }
@@ -3515,6 +3525,7 @@ ${NORA_VOICE_RUBRIC_PROMPT}`;
         // The app shows this in its language switcher; changed means the athlete just asked for it.
         conversationLanguage: languageChoice.code || 'auto',
         conversationLanguageChanged: languageChoice.changed,
+        conversationLane: classifiedBoundaryLane ?? conversationLane,
         chatActions: storagePolicy.restricted ? [] : chatActions,
         noraContractVersion: NORA_CONTRACT_VERSION,
         assistantMessage,

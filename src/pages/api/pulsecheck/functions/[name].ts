@@ -24,6 +24,7 @@ const SUPPORTED_FUNCTIONS = new Set([
   'backfill-pilot-athlete-outcomes',
   'tts-mental-step',
   'pulsecheck-chat',
+  'skill-reflection',
   'nora-save-conversation',
   'nora-save-derived',
   'nora-estimate-meal',
