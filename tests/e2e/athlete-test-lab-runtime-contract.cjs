@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 'use strict';
+const {authEmulatorOrigin}=require('../../scripts/test-lab/emulator-endpoints.cjs');
+const authOrigin=authEmulatorOrigin();
 // Service contract proof, not native UI coverage. All records are isolated emulator fixtures.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {seed,cleanup,client}=require('../../scripts/test-lab/emulator-fixtures.cjs');
-const origin=process.env.ATHLETE_TEST_LAB_ORIGIN||'http://127.0.0.1:8787';
+const origin=process.env.ATHLETE_LAB_ORIGIN||process.env.ATHLETE_TEST_LAB_ORIGIN||'http://127.0.0.1:8787';
 const parsed=new URL(origin);if(parsed.protocol!=='http:'||!['localhost','127.0.0.1'].includes(parsed.hostname))throw Error('Loopback origin required.');
 (async()=>{let manifest;try{
  const out=process.env.ATHLETE_TEST_LAB_OUTPUT||'/tmp/athlete-test-lab-runtime-contract';fs.mkdirSync(out,{recursive:true});
  manifest=await seed({'run-id':'contract-'+Date.now().toString(36),scenario:'existing-member',training:'true',output:path.join(out,'fixture.json')});
- const account=manifest.accounts.athlete,session=await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=lab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...account,returnSecureToken:true})}).then(r=>r.json());assert.equal(session.localId,account.uid);
+ const account=manifest.accounts.athlete,session=await fetch(authOrigin+'/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=lab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...account,returnSecureToken:true})}).then(r=>r.json());assert.equal(session.localId,account.uid);
  const headers={'Content-Type':'application/json',Authorization:'Bearer '+session.idToken};
  const request=async(route,b)=>{const r=await fetch(origin+route,{method:b?'POST':'GET',headers,body:b?JSON.stringify(b):undefined});assert.equal(r.status,200,await r.clone().text());return r.json();};
  const plan=await request('/api/curriculum/plan');assert.equal(plan.enrolled,true);

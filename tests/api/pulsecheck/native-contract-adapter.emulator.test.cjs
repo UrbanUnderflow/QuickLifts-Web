@@ -4,6 +4,7 @@ const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const {client, PROJECT} = require('../../../scripts/test-lab/emulator-fixtures.cjs');
+const {emulatorEndpoints} = require('../../../scripts/test-lab/emulator-endpoints.cjs');
 const origin = process.env.ATHLETE_LAB_ORIGIN || 'http://127.0.0.1:18787';
 const url = new URL(origin);
 if (url.protocol !== 'http:' || !['127.0.0.1','localhost','[::1]'].includes(url.hostname)) throw Error('Loopback Test Lab required.');
@@ -24,7 +25,7 @@ async function signIn(user) {
 before(async()=>{
   ({auth,db}=await client());
   const health=await (await fetch(origin+'/__testlab/health')).json();
-  assert.equal(health.projectId,PROJECT);assert.match(health.nativeContracts,/deterministic-model-transport/);
+  assert.equal(health.projectId,PROJECT);assert.deepEqual(health.emulatorEndpoints,emulatorEndpoints(process.env));assert.match(health.nativeContracts,/deterministic-model-transport/);
   token=await signIn(await auth.createUser({uid,email,password:'SyntheticContract123!',emailVerified:true}));
   otherToken=await signIn(await auth.createUser({uid:other,email:namespace+'-other@example.test',password:'SyntheticContract123!',emailVerified:true}));
 });

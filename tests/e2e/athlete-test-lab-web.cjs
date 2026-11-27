@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 'use strict';
+const {authEmulatorOrigin}=require('../../scripts/test-lab/emulator-endpoints.cjs');
+const authOrigin=authEmulatorOrigin();
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{spawnSync}=require('node:child_process');
 const {chromium}=require('playwright');const {seed,client,cleanup}=require('../../scripts/test-lab/emulator-fixtures.cjs');const questionnaireVersion=require('../../src/content/questionnaires/athlete-starting-point.json').version;
 const args={};for(let i=2;i<process.argv.length;i+=2)args[process.argv[i].replace(/^--/,'')]=process.argv[i+1];
@@ -10,7 +12,7 @@ function record(caseIds,name,status,details={}){results.push({caseIds,name,statu
 async function main(){
  const health=await fetch(origin+'/__testlab/health',{signal:AbortSignal.timeout(5000)}).then(r=>r.json()).catch(()=>{throw Object.assign(Error('Local Test Lab server is unavailable. Start isolated services first.'),{blocked:true})});assert.equal(health.projectId,'demo-pulsecheck-ui');fs.writeFileSync(path.join(output,'runtime-health.json'),JSON.stringify(health,null,2));
  const manifest=await seed({'run-id':'web-'+stamp,scenario:'baseline-required',output:path.join(output,'fixture.json')});const account=manifest.accounts.athlete;
- const authResponse=await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=lab-only',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...account,returnSecureToken:true})});const session=await authResponse.json();assert.equal(authResponse.status,200);assert.equal(session.localId,account.uid);
+ const authResponse=await fetch(authOrigin+'/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=lab-only',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...account,returnSecureToken:true})});const session=await authResponse.json();assert.equal(authResponse.status,200);assert.equal(session.localId,account.uid);
  browser=await chromium.launch({headless:true});context=await browser.newContext({viewport:{width:390,height:844},recordVideo:{dir:path.join(output,'video')}});await context.tracing.start({screenshots:true,snapshots:true});page=await context.newPage();page.setDefaultTimeout(15000);
  let external=0;const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await context.route('**/*',route=>{const u=new URL(route.request().url());if(!['127.0.0.1','localhost'].includes(u.hostname)){external++;return route.abort()}return route.continue()});

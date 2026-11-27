@@ -137,4 +137,8 @@ node --test tests/api/pulsecheck/native-contract-adapter.emulator.test.cjs
 
 The emulator config and server port must match those values. Missing services
 fail the tests. Ports 18080/18787 are an example for keeping an unrelated 8080
-service intact; the existing default remains 8080/8787. Browser Auth uses 9099.
+service intact; the existing default remains 8080/8787. Browser Auth and direct
+web-test Auth requests use the validated `FIREBASE_AUTH_EMULATOR_HOST` port
+(default 9099). Health exposes the bound `emulatorEndpoints.auth` and
+`emulatorEndpoints.firestore`; a runner must compare these before reusing an
+existing adapter with a different service configuration.
